@@ -1,4 +1,4 @@
-# Legal AI Reach Out Platform - Requirements Analysis
+# Legal AI Reach Out Platform
 
 ## Overview
 The Legal AI Reach Out platform is an AI-driven legal outreach service for the Netherlands that simplifies how individuals access legal representation. The platform leverages artificial intelligence and automation to streamline case evaluation, document management, and lawyer outreach.
