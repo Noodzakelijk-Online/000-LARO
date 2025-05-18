@@ -9,6 +9,7 @@ The Legal AI Reach Out platform is an AI-driven legal outreach service for the N
 - Sophisticated AI to analyze user circumstances
 - Automatic determination of appropriate legal fields
 - Natural language processing for accurate case classification
+- Added new line
 
 ### 2. Automated Data Aggregation
 - Integration with email platforms (Outlook, Gmail)
