@@ -1,0 +1,19 @@
+Flask
+requests
+SQLAlchemy
+redis
+google-api-python-client
+google-auth-oauthlib
+google-auth
+msal
+PyPDF2
+python-docx
+beautifulsoup4
+influxdb-client
+psutil
+python-dotenv
+# Development tools
+black
+flake8
+coverage
+

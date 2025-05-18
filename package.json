@@ -1,0 +1,16 @@
+{
+  "name": "legal_ai_platform",
+  "version": "1.0.0",
+  "description": "## Overview The Legal AI Reach Out platform is an AI-driven legal outreach service for the Netherlands that simplifies how individuals access legal representation. The platform leverages artificial intelligence and automation to streamline case evaluation, document management, and lawyer outreach.",
+  "main": "advanced-database-optimizations.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "apollo-server": "^3.13.0",
+    "graphql": "^16.11.0"
+  }
+}
