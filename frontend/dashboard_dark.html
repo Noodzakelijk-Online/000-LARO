@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Legal AI Reach Out | Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="css/dark-theme.css">
+    <style>
+        /* Additional styles specific to dashboard */
+        .dashboard-header {
+            padding: 1.5rem 0;
+            margin-bottom: 2rem;
+            background: linear-gradient(135deg, var(--dark-bg-secondary) 0%, var(--dark-bg-tertiary) 100%);
+            border-radius: 12px;
+        }
+        
+        .dashboard-title {
+            font-size: 1.75rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+        
+        .dashboard-subtitle {
+            color: var(--dark-text-secondary);
+        }
+        
+        .case-summary-card {
+            border-left: 4px solid var(--orange-primary);
+            transition: all 0.3s ease;
+        }
+        
+        .case-summary-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+        }
+        
+        .status-badge {
+            padding: 0.35rem 0.65rem;
+            border-radius: 50rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
+        .status-pending {
+            background-color: rgba(255, 152, 0, 0.2);
+            color: var(--warning);
+        }
+        
+        .status-matched {
+            background-color: rgba(33, 150, 243, 0.2);
+            color: var(--info);
+        }
+        
+        .status-accepted {
+            background-color: rgba(76, 175, 80, 0.2);
+            color: var(--success);
+        }
+        
+        .status-closed {
+            background-color: rgba(158, 158, 158, 0.2);
+            color: var(--dark-text-tertiary);
+        }
+        
+        .document-card {
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            background-color: var(--dark-bg-tertiary);
+            transition: all 0.3s ease;
+        }
+        
+        .document-card:hover {
+            transform: translateX(5px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+        
+        .document-icon {
+            font-size: 2rem;
+            margin-right: 1rem;
+        }
+        
+        .document-pdf {
+            color: #f44336;
+        }
+        
+        .document-doc {
+            color: #2196f3;
+        }
+        
+        .document-email {
+            color: #4caf50;
+        }
+        
+        .document-image {
+            color: #9c27b0;
+        }
+        
+        .document-text {
+            color: var(--dark-text-secondary);
+        }
+        
+        .lawyer-card {
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            background-color: var(--dark-bg-tertiary);
+            transition: all 0.3s ease;
+            border-left: 4px solid transparent;
+        }
+        
+        .lawyer-card:hover {
+            transform: translateX(5px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+        
+        .lawyer-card.accepted {
+            border-left-color: var(--success);
+        }
+        
+        .lawyer-card.declined {
+            border-left-color: var(--error);
+        }
+        
+        .lawyer-card.more-info {
+            border-left-color: var(--info);
+        }
+        
+        .lawyer-card.pending {
+            border-left-color: var(--warning);
+        }
+        
+        .lawyer-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--orange-primary) 0%, var(--orange-secondary) 100%);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 1.25rem;
+            margin-right: 1rem;
+        }
+        
+        .response-badge {
+            padding: 0.35rem 0.65rem;
+            border-radius: 50rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
+        .response-accepted {
+            background-color: rgba(76, 175, 80, 0.2);
+            color: var(--success);
+        }
+        
+        .response-declined {
+            background-color: rgba(244, 67, 54, 0.2);
+            color: var(--error);
+        }
+        
+        .response-more-info {
+            background-color: rgba(33, 150, 243, 0.2);
+            color: var(--info);
+        }
+        
+        .response-pending {
+            background-color: rgba(255, 152, 0, 0.2);
+            color: var(--warning);
+        }
+        
+        .step-indicator {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 2rem;
+            position: relative;
+        }
+        
+        .step-indicator::before {
+            content: '';
+            position: absolute;
+            top: 15px;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background-color: var(--element-border);
+            z-index: 0;
+        }
+        
+        .step {
+            flex: 1;
+            text-align: center;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .step-number {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background-color: var(--element-active);
+            color: var(--dark-text-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 0.5rem;
+            font-weight: 600;
+            position: relative;
+            z-index: 1;
+            transition: all 0.3s ease;
+        }
+        
+        .step.active .step-number {
+            background-color: var(--orange-primary);
+            transform: scale(1.2);
+            box-shadow: 0 0 15px rgba(255, 107, 0, 0.5);
+        }
+        
+        .step.completed .step-number {
+            background-color: var(--success);
+        }
+        
+        .step-label {
+            font-size: 0.85rem;
+            color: var(--dark-text-secondary);
+            transition: all 0.3s ease;
+        }
+        
+        .step.active .step-label {
+            color: var(--orange-primary);
+            font-weight: 600;
+        }
+        
+        .step.completed .step-label {
+            color: var(--success);
+            font-weight: 600;
+        }
+        
+        .resource-usage {
+            background-color: var(--dark-bg-secondary);
+            border-radius: 12px;
+            box-shadow: var(--shadow-sm);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            transition: all 0.3s ease;
+        }
+        
+        .resource-usage:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-md);
+        }
+        
+        .resource-title {
+            font-weight: 600;
+            color: var(--dark-text-primary);
+            margin-bottom: 1.5rem;
+            font-size: 1.25rem;
+        }
+        
+        .resource-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--element-border);
+        }
+        
+        .resource-label {
+            color: var(--dark-text-secondary);
+            display: flex;
+            align-items: center;
+        }
+        
+        .resource-icon {
+            margin-right: 0.75rem;
+            color: var(--orange-primary);
+            font-size: 1.1rem;
+        }
+        
+        .resource-value {
+            font-weight: 600;
+            color: var(--dark-text-primary);
+        }
+        
+        .resource-total {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 1.5rem;
+            padding-top: 1rem;
+            border-top: 2px solid var(--element-border);
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+        
+        .resource-total-value {
+            color: var(--orange-primary);
+        }
+        
+        .analysis-card {
+            background-color: var(--dark-bg-secondary);
+            border-radius: 12px;
+            box-shadow: var(--shadow-sm);
+            transition: all 0.3s ease;
+        }
+        
+        .analysis-card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-md);
+        }
+        
+        .analysis-header {
+            padding: 1.25rem;
+            border-bottom: 1px solid var(--element-border);
+        }
+        
+        .analysis-body {
+            padding: 1.25rem;
+        }
+        
+        .analysis-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 0;
+        }
+        
+        .field-progress {
+            margin-bottom: 1.5rem;
+        }
+        
+        .field-progress-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+        }
+        
+        .field-name {
+            font-weight: 500;
+        }
+        
+        .field-percentage {
+            font-weight: 600;
+        }
+        
+        .progress {
+            height: 8px;
+            background-color: var(--dark-bg-tertiary);
+        }
+        
+        .progress-bar-primary {
+            background: linear-gradient(90deg, var(--orange-primary), var(--orange-secondary));
+        }
+        
+        .complexity-meter {
+            display: flex;
+            align-items: center;
+            margin-top: 1.5rem;
+        }
+        
+        .complexity-progress {
+            flex-grow: 1;
+            margin-right: 1rem;
+        }
+        
+        .complexity-label {
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        
+        .user-dropdown {
+            position: relative;
+        }
+        
+        .user-dropdown-toggle {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
+            transition: all 0.3s ease;
+        }
+        
+        .user-dropdown-toggle:hover {
+            background-color: var(--element-hover);
+        }
+        
+        .user-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--orange-primary) 0%, var(--orange-secondary) 100%);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            margin-right: 0.75rem;
+        }
+        
+        .user-name {
+            font-weight: 500;
+            margin-right: 0.5rem;
+        }
+        
+        .notification-dot {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--orange-primary);
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
+        <div class="container-fluid px-4">
+            <a class="navbar-logo" href="index_dark.html">
+                <h1>Legal AI Reach Out</h1>
+            </a>
+            <div class="d-flex align-items-center">
+                <div class="position-relative me-3">
+                    <i class="fas fa-bell fa-lg cursor-pointer text-secondary"></i>
+                    <span class="notification-dot"></span>
+                </div>
+                <div class="user-dropdown">
+                    <div class="user-dropdown-toggle" id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                        <div class="user-avatar">JD</div>
+                        <span class="user-name d-none d-md-block">John Doe</span>
+                        <i class="fas fa-chevron-down text-secondary"></i>
+                    </div>
+                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                        <li><a class="dropdown-item" href="#"><i class="fas fa-user me-2"></i> Profile</a></li>
+                        <li><a class="dropdown-item" href="#"><i class="fas fa-cog me-2"></i> Settings</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="index_dark.html"><i class="fas fa-sign-out-alt me-2"></i> Logout</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="d-flex">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <ul class="sidebar-menu">
+                <li class="sidebar-item">
+                    <a href="#dashboard" class="sidebar-link active">
+                        <i class="fas fa-tachometer-alt sidebar-icon"></i> Dashboard
+                    </a>
+                </li>
+                <li class="sidebar-item">
+                    <a href="#cases" class="sidebar-link">
+                        <i class="fas fa-briefcase sidebar-icon"></i> My Cases
+                    </a>
+                </li>
+                <li class="sidebar-item">
+                    <a href="#new-case" class="sidebar-link">
+                        <i class="fas fa-plus-circle sidebar-icon"></i> New Case
+                    </a>
+                </li>
+                <li class="sidebar-item">
+                    <a href="#documents" class="sidebar-link">
+                        <i class="fas fa-file-alt sidebar-icon"></i> Documents
+                    </a>
+                </li>
+                <li class="sidebar-item">
+                    <a href="#lawyers" class="sidebar-link">
+                        <i class="fas fa-user-tie sidebar-icon"></i> Lawyers
+                    </a>
+                </li>
+                <li class="sidebar-item">
+                    <a href="#billing" class="sidebar-link">
+                        <i class="fas fa-credit-card sidebar-icon"></i> Billing
+                    </a>
+                </li>
+                <li class="sidebar-item">
+                    <a href="#settings" class="sidebar-link">
+                        <i class="fas fa-cog sidebar-icon"></i> Settings
+                    </a>
+                </li>
+                <li class="sidebar-item">
+                    <a href="#help" class="sidebar-link">
+                        <i class="fas fa-question-circle sidebar-icon"></i> Help
+                    </a>
+                </li>
+            </ul>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <div class="dashboard-header slide-in-up">
+                <div class="container-fluid">
+                    <h2 class="dashboard-title">Welcome back, John</h2>
+                    <p class="dashboard-subtitle">Here's an overview of your active case and recent activity</p>
+                </div>
+            </div>
+            
+            <!-- Case Summary -->
+            <div class="row mb-4 fade-in">
+                <div class="col-md-6">
+                    <div class="card case-summary-card h-100">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <span>Active Case</span>
+                            <span class="status-badge status-matched">Lawyer Matched</span>
+                        </div>
+                        <div class="card-body">
+                            <h5 class="card-title">Employment Discrimination Case</h5>
+                            <p class="card-text">Wrongful termination based on age discrimination after 5 years of employment. Company hired a younger employee for the same position two weeks later.</p>
+                            <div class="d-flex justify-content-between align-items-center mt-3">
+                                <small class="text-tertiary">Created on: April 1, 2025</small>
+                                <a href="#case-details" class="btn btn-primary btn-sm">View Details</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">Case Progress</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="step-indicator">
+                                <div class="step completed">
+                                    <div class="step-number">1</div>
+                                    <div class="step-label">Case Submitted</div>
+                                </div>
+                                <div class="step completed">
+                                    <div class="step-number">2</div>
+                                    <div class="step-label">Documents Collected</div>
+                                </div>
+                                <div class="step active">
+                                    <div class="step-number">3</div>
+                                    <div class="step-label">Lawyer Matched</div>
+                                </div>
+                                <div class="step">
+                                    <div class="step-number">4</div>
+                                    <div class="step-label">Case Accepted</div>
+                                </div>
+                            </div>
+                            <p class="mb-0">Your case has been matched with 3 potential lawyers. Waiting for acceptance.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Lawyer Responses -->
+            <div class="card mb-4 slide-in-up" style="animation-delay: 0.1s;">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Lawyer Responses</h5>
+                </div>
+                <div class="card-body">
+                    <div class="lawyer-card accepted d-flex align-items-center">
+                        <div class="lawyer-avatar">JD</div>
+                        <div class="flex-grow-1">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h5 class="mb-0">Jane Doe</h5>
+                                <span class="response-badge response-accepted">Accepted</span>
+                            </div>
+                            <p class="mb-1">Employment Law Specialist at Amsterdam Legal Partners</p>
+                            <small class="text-tertiary">Responded on: April 1, 2025 at 14:32</small>
+                        </div>
+                    </div>
+                    
+                    <div class="lawyer-card more-info d-flex align-items-center">
+                        <div class="lawyer-avatar">MS</div>
+                        <div class="flex-grow-1">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h5 class="mb-0">Michael Smith</h5>
+                                <span class="response-badge response-more-info">Needs More Info</span>
+                            </div>
+                            <p class="mb-1">Senior Partner at Rotterdam Employment Law Group</p>
+                            <small class="text-tertiary">Responded on: April 1, 2025 at 15:10</small>
+                        </div>
+                    </div>
+                    
+                    <div class="lawyer-card declined d-flex align-items-center">
+                        <div class="lawyer-avatar">AJ</div>
+                        <div class="flex-grow-1">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h5 class="mb-0">Anna Johnson</h5>
+                                <span class="response-badge response-declined">Declined</span>
+                            </div>
+                            <p class="mb-1">Employment and Labor Law at Utrecht Legal Services</p>
+                            <small class="text-tertiary">Responded on: April 1, 2025 at 16:45</small>
+                        </div>
+                    </div>
+                    
+                    <div class="text-center mt-4">
+                        <a href="#all-responses" class="btn btn-outline">View All Responses</a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Documents and Resource Usage -->
+            <div class="row">
+                <div class="col-md-7">
+                    <div class="card slide-in-up" style="animation-delay: 0.2s;">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">Case Documents</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="document-card d-flex align-items-center">
+                                <i class="fas fa-file-pdf document-icon document-pdf"></i>
+                                <div class="flex-grow-1">
+                                    <h5 class="mb-1">Employment Contract.pdf</h5>
+                                    <small class="text-tertiary">Uploaded on: March 30, 2025 • 2.4 MB</small>
+                                </div>
+                                <a href="#view" class="btn btn-sm btn-outline me-2">View</a>
+                            </div>
+                            
+                            <div class="document-card d-flex align-items-center">
+                                <i class="fas fa-file-word document-icon document-doc"></i>
+                                <div class="flex-grow-1">
+                                    <h5 class="mb-1">Performance Reviews.docx</h5>
+                                    <small class="text-tertiary">Uploaded on: March 30, 2025 • 1.8 MB</small>
+                                </div>
+                                <a href="#view" class="btn btn-sm btn-outline me-2">View</a>
+                            </div>
+                            
+                            <div class="document-card d-flex align-items-center">
+                                <i class="fas fa-envelope document-icon document-email"></i>
+                                <div class="flex-grow-1">
+                                    <h5 class="mb-1">Termination Notice Email</h5>
+                                    <small class="text-tertiary">From: hr@company.com • March 15, 2025</small>
+                                </div>
+                                <a href="#view" class="btn btn-sm btn-outline me-2">View</a>
+                            </div>
+                            
+                            <div class="document-card d-flex align-items-center">
+                                <i class="fas fa-file-image document-icon document-image"></i>
+                                <div class="flex-grow-1">
+                                    <h5 class="mb-1">Job Posting Screenshot.jpg</h5>
+                                    <small class="text-tertiary">Uploaded on: March 31, 2025 • 0.8 MB</small>
+                                </div>
+                                <a href="#view" class="btn btn-sm btn-outline me-2">View</a>
+                            </div>
+                            
+                            <div class="text-center mt-4">
+                                <a href="#all-documents" class="btn btn-outline">View All Documents</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-5">
+                    <div class="resource-usage slide-in-up" style="animation-delay: 0.3s;">
+                        <h5 class="resource-title">Resource Usage & Billing</h5>
+                        
+                        <div class="resource-item">
+                            <span class="resource-label">
+                                <i class="fas fa-brain resource-icon"></i>
+                                AI Processing Time
+                            </span>
+                            <span class="resource-value">12 minutes</span>
+                        </div>
+                        
+                        <div class="resource-item">
+                            <span class="resource-label">
+                                <i class="fas fa-database resource-icon"></i>
+                                Storage Used
+                            </span>
+                            <span class="resource-value">125 MB</span>
+                        </div>
+                        
+                        <div class="resource-item">
+                            <span class="resource-label">
+                                <i class="fas fa-paper-plane resource-icon"></i>
+                                Emails Sent
+                            </span>
+                            <span class="resource-value">15 emails</span>
+                        </div>
+                        
+                        <div class="resource-item">
+                            <span class="resource-label">
+                                <i class="fas fa-redo resource-icon"></i>
+                                Follow-ups
+                            </span>
+                            <span class="resource-value">6 follow-ups</span>
+                        </div>
+                        
+                        <div class="resource-total">
+                            <span>Total Cost</span>
+                            <span class="resource-total-value">€24.50</span>
+                        </div>
+                        
+                        <div class="d-grid gap-2 mt-4">
+                            <a href="#billing-details" class="btn btn-primary">View Billing Details</a>
+                        </div>
+                    </div>
+                    
+                    <div class="analysis-card slide-in-up" style="animation-delay: 0.4s;">
+                        <div class="analysis-header">
+                            <h5 class="analysis-title">AI Case Analysis</h5>
+                        </div>
+                        <div class="analysis-body">
+                            <h6 class="mb-3">Legal Fields Identified:</h6>
+                            
+                            <div class="field-progress">
+                                <div class="field-progress-header">
+                                    <span class="field-name">Employment Law</span>
+                                    <span class="field-percentage">92%</span>
+                                </div>
+                                <div class="progress">
+                                    <div class="progress-bar progress-bar-primary" role="progressbar" style="width: 92%;" aria-valuenow="92" aria-valuemin="0" aria-valuemax="100"></div>
+                                </div>
+                            </div>
+                            
+                            <div class="field-progress">
+                                <div class="field-progress-header">
+                                    <span class="field-name">Discrimination Law</span>
+                                    <span class="field-percentage">85%</span>
+                                </div>
+                                <div class="progress">
+                                    <div class="progress-bar progress-bar-primary" role="progressbar" style="width: 85%;" aria-valuenow="85" aria-valuemin="0" aria-valuemax="100"></div>
+                                </div>
+                            </div>
+                            
+                            <div class="field-progress">
+                                <div class="field-progress-header">
+                                    <span class="field-name">Labor Law</span>
+                                    <span class="field-percentage">68%</span>
+                                </div>
+                                <div class="progress">
+                                    <div class="progress-bar progress-bar-primary" role="progressbar" style="width: 68%;" aria-valuenow="68" aria-valuemin="0" aria-valuemax="100"></div>
+                                </div>
+                            </div>
+                            
+                            <h6 class="mb-2 mt-4">Case Complexity:</h6>
+                            <div class="complexity-meter">
+                                <div class="complexity-progress">
+                                    <div class="progress">
+                                        <div class="progress-bar bg-warning" role="progressbar" style="width: 65%;" aria-valuenow="65" aria-valuemin="0" aria-valuemax="100"></div>
+                                    </div>
+                                </div>
+                                <span class="complexity-label">Medium</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Add animation classes on load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add hover effect to sidebar links
+            const sidebarLinks = document.querySelectorAll('.sidebar-link');
+            sidebarLinks.forEach(link => {
+                link.addEventListener('mouseenter', function() {
+                    this.style.transition = 'all 0.3s ease';
+                    this.style.transform = 'translateX(5px)';
+                });
+                
+                link.addEventListener('mouseleave', function() {
+                    this.style.transition = 'all 0.3s ease';
+                    this.style.transform = 'translateX(0)';
+                });
+            });
+            
+            // Add pulse animation to notification dot
+            const notificationDot = document.querySelector('.notification-dot');
+            if (notificationDot) {
+                setInterval(() => {
+                    notificationDot.style.animation = 'none';
+                    setTimeout(() => {
+                        notificationDot.style.animation = 'pulse 1.5s infinite';
+                    }, 10);
+                }, 3000);
+            }
+        });
+        
+        // Add pulse animation
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes pulse {
+                0% {
+                    transform: scale(1);
+                    opacity: 1;
+                }
+                50% {
+                    transform: scale(1.5);
+                    opacity: 0.7;
+                }
+                100% {
+                    transform: scale(1);
+                    opacity: 1;
+                }
+            }
+            
+            .notification-dot {
+                animation: pulse 1.5s infinite;
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>

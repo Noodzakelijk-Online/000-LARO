@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Legal AI Reach Out | Investors</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.css">
+    <style>
+        :root {
+            /* Primary colors - deep blues */
+            --primary-dark: #1a365d;
+            --primary-medium: #2a4a7f;
+            --primary-light: #4a6da7;
+            
+            /* Secondary colors - warm oranges */
+            --secondary-dark: #7b341e;
+            --secondary-medium: #c05621;
+            --secondary-light: #ed8936;
+            
+            /* Neutral colors */
+            --neutral-dark: #1a202c;
+            --neutral-medium: #4a5568;
+            --neutral-light: #a0aec0;
+            --neutral-bg: #f7fafc;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: var(--neutral-dark);
+            background-color: var(--neutral-bg);
+        }
+        
+        .navbar {
+            background-color: var(--primary-dark);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        .navbar-brand {
+            font-weight: 700;
+            color: white !important;
+        }
+        
+        .nav-link {
+            color: rgba(255, 255, 255, 0.85) !important;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        
+        .nav-link:hover {
+            color: white !important;
+        }
+        
+        .nav-link.active {
+            color: var(--secondary-light) !important;
+            font-weight: 600;
+        }
+        
+        .btn-primary {
+            background-color: var(--primary-medium);
+            border-color: var(--primary-medium);
+        }
+        
+        .btn-primary:hover {
+            background-color: var(--primary-dark);
+            border-color: var(--primary-dark);
+        }
+        
+        .btn-secondary {
+            background-color: var(--secondary-medium);
+            border-color: var(--secondary-medium);
+        }
+        
+        .btn-secondary:hover {
+            background-color: var(--secondary-dark);
+            border-color: var(--secondary-dark);
+        }
+        
+        .hero {
+            background: linear-gradient(135deg, var(--primary-dark), var(--primary-medium));
+            color: white;
+            padding: 4rem 0;
+        }
+        
+        .hero h1 {
+            font-weight: 700;
+            font-size: 2.5rem;
+        }
+        
+        .hero p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        
+        .section-title {
+            position: relative;
+            color: var(--primary-dark);
+            font-weight: 700;
+            margin-bottom: 2.5rem;
+            text-align: center;
+        }
+        
+        .section-title:after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80px;
+            height: 4px;
+            background: linear-gradient(to right, var(--primary-medium), var(--secondary-medium));
+        }
+        
+        footer {
+            background-color: var(--primary-dark);
+            color: white;
+            padding: 3rem 0;
+        }
+        
+        footer a {
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+        
+        footer a:hover {
+            color: var(--secondary-light);
+        }
+        
+        .social-icon {
+            font-size: 1.5rem;
+            margin-right: 1rem;
+            color: rgba(255, 255, 255, 0.8);
+            transition: color 0.3s ease;
+        }
+        
+        .social-icon:hover {
+            color: var(--secondary-light);
+        }
+        
+        .text-justify {
+            text-align: justify;
+        }
+        
+        /* Investor specific styles */
+        .auth-form {
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 2rem;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+        
+        .dashboard-card {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            padding: 1.5rem;
+            height: 100%;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .dashboard-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+        }
+        
+        .metric-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--primary-dark);
+        }
+        
+        .metric-label {
+            color: var(--neutral-medium);
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .metric-change {
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+        
+        .metric-change.positive {
+            color: #38a169;
+        }
+        
+        .metric-change.negative {
+            color: #e53e3e;
+        }
+        
+        .tab-content {
+            padding: 2rem 0;
+        }
+        
+        .nav-tabs .nav-link {
+            color: var(--neutral-medium) !important;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            font-weight: 600;
+            border-radius: 0;
+        }
+        
+        .nav-tabs .nav-link.active {
+            color: var(--primary-dark) !important;
+            border-bottom: 3px solid var(--primary-medium);
+            background-color: transparent;
+        }
+        
+        .assumption-card {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            border-left: 4px solid var(--primary-medium);
+        }
+        
+        .assumption-card h4 {
+            color: var(--primary-dark);
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+        }
+        
+        .assumption-card p {
+            color: var(--neutral-medium);
+            margin-bottom: 0.5rem;
+        }
+        
+        .assumption-value {
+            font-weight: 600;
+            color: var(--primary-dark);
+        }
+        
+        /* Hide dashboard initially */
+        #investorDashboard {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
+        <div class="container">
+            <a class="navbar-brand" href="index.html">Legal AI Reach Out</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="index.html">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="how-it-works.html">How It Works</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="pricing.html">Pricing</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="investors.html">Investors</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="contact.html">Contact</a>
+                    </li>
+                    <li class="nav-item ms-lg-3">
+                        <a class="btn btn-secondary" href="login.html">Login</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-lg-8 mx-auto text-center">
+                    <h1>Investor Dashboard</h1>
+                    <p class="my-4">Access real-time performance metrics and business plan assumptions for the Legal AI Reach Out platform.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Authentication Section -->
+    <section class="py-5" id="investorAuth">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+                    <div class="auth-form">
+                        <h3 class="text-center mb-4">Investor Access</h3>
+                        <p class="text-center mb-4">Please enter your email address to access the investor dashboard.</p>
+                        <form id="investorAuthForm">
+                            <div class="mb-3">
+                                <label for="investorEmail" class="form-label">Email Address</label>
+                                <input type="email" class="form-control" id="investorEmail" placeholder="name@example.com" required>
+                                <div class="form-text">Your email must be registered in our investor database.</div>
+                            </div>
+                            <div class="d-grid">
+                                <button type="submit" class="btn btn-primary">Access Dashboard</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Dashboard Section (Hidden initially) -->
+    <section class="py-5" id="investorDashboard">
+        <div class="container">
+            <h2 class="section-title">Performance Dashboard</h2>
+            
+            <!-- Key Metrics -->
+            <div class="row g-4 mb-5">
+                <div class="col-md-3">
+                    <div class="dashboard-card text-center">
+                        <div class="metric-label">Response Rate</div>
+                        <div class="metric-value">42%</div>
+                        <div class="metric-change positive">
+                            <i class="fas fa-arrow-up"></i> 12% vs Target
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="dashboard-card text-center">
+                        <div class="metric-label">Case Acceptance</div>
+                        <div class="metric-value">1.8%</div>
+                        <div class="metric-change positive">
+                            <i class="fas fa-arrow-up"></i> 0.5% vs Baseline
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="dashboard-card text-center">
+                        <div class="metric-label">Avg. Time to Lawyer</div>
+                        <div class="metric-value">3.2h</div>
+                        <div class="metric-change negative">
+                            <i class="fas fa-arrow-up"></i> 1.2h vs Target
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="dashboard-card text-center">
+                        <div class="metric-label">Profit Margin</div>
+                        <div class="metric-value">48%</div>
+                        <div class="metric-change negative">
+                            <i class="fas fa-arrow-down"></i> 2% vs Target
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Tabs for different sections -->
+            <ul class="nav nav-tabs" id="dashboardTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="metrics-tab" data-bs-toggle="tab" data-bs-target="#metrics" type="button" role="tab" aria-controls="metrics" aria-selected="true">Performance Metrics</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="assumptions-tab" data-bs-toggle="tab" data-bs-target="#assumptions" type="button" role="tab" aria-controls="assumptions" aria-selected="false">Business Assumptions</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="projections-tab" data-bs-toggle="tab" data-bs-target="#projections" type="button" role="tab" aria-controls="projections" aria-selected="false">Financial Projections</button>
+                </li>
+            </ul>
+            
+            <div class="tab-content" id="dashboardTabContent">
+                <!-- Performance Metrics Tab -->
+                <div class="tab-pane fade show active" id="metrics" role="tabpanel" aria-labelledby="metrics-tab">
+                    <div class="row g-4">
+                        <div class="col-lg-6">
+                            <div class="dashboard-card">
+                                <h4>Lawyer Response Rates</h4>
+                                <canvas id="responseRateChart" height="250"></canvas>
+                            </div>
+                        </div>
+                        <div class="col-lg-6">
+                            <div class="dashboard-card">
+                                <h4>Case Acceptance Rates</h4>
+                                <canvas id="acceptanceRateChart" height="250"></canvas>
+                            </div>
+                        </div>
+                        <div class="col-lg-6">
+                            <div class="dashboard-card">
+                                <h4>Time to Find Lawyer</h4>
+                                <canvas id="timeToLawyerChart" height="250"></canvas>
+                            </div>
+                        </div>
+                        <div class="col-lg-6">
+                            <div class="dashboard-card">
+                                <h4>Resource Consumption</h4>
+                                <canvas id="resourceConsumptionChart" height="250"></canvas>
+                            </div>
+                        </div>
+                        <div class="col-lg-12">
+                            <div class="dashboard-card">
+                                <h4>Monthly Revenue & Costs</h4>
+                                <canvas id="revenueChart" height="250"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Business Assumptions Tab -->
+                <div class="tab-pane fade" id="assumptions" role="tabpanel" aria-labelledby="assumptions-tab">
+                    <div class="row">
+                        <div class="col-lg-6">
+                            <h4 class="mb-4">Market Assumptions</h4>
+                            
+                            <div class="assumption-card">
+                                <h4>Market Size</h4>
+                                <p>Total registered lawyers in the Netherlands</p>
+                                <p class="assumption-value">18,500+</p>
+                            </div>
+                            
+                            <div class="assumption-card">
+                                <h4>Lawyer Workload</h4>
+                                <p>Percentage of lawyers struggling with high workloads</p>
+                                <p class="assumption-value">Over 50%</p>
+                            </div>
+                            
+                            <div class="assumption-card">
+                                <h4>Initial Response Rate</h4>
+                                <p>Percentage of lawyers responding to initial inquiries</p>
+                                <p class="assumption-value">30%</p>
+                            </div>
+                            
+                            <div class="assumption-card">
+                                <h4>Case Acceptance Rate</h4>
+                                <p>Percentage of lawyers ultimately agreeing to take on cases</p>
+                                <p class="assumption-value">0.1% to 1.3%</p>
+                            </div>
+                        </div>
+                        
+                        <div class="col-lg-6">
+                            <h4 class="mb-4">Business Model Assumptions</h4>
+                            
+                            <div class="assumption-card">
+                                <h4>Revenue Model</h4>
+                                <p>Pay-per-use based on resource consumption</p>
+                                <p class="assumption-value">Resource cost × 2</p>
+                            </div>
+                            
+                            <div class="assumption-card">
+                                <h4>AI Processing Cost</h4>
+                                <p>Cost per minute of AI processing time</p>
+                                <p class="assumption-value">€0.05 per minute</p>
+                            </div>
+                            
+                            <div class="assumption-card">
+                                <h4>Storage Cost</h4>
+                                <p>Cost per GB of cloud storage</p>
+                                <p class="assumption-value">€0.01 per GB</p>
+                            </div>
+                            
+                            <div class="assumption-card">
+                                <h4>Email Outreach Cost</h4>
+                                <p>Cost per email sent (including follow-ups)</p>
+                                <p class="assumption-value">€0.01 per email</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Financial Projections Tab -->
+                <div class="tab-pane fade" id="projections" role="tabpanel" aria-labelledby="projections-tab">
+                    <div class="row g-4">
+                        <div class="col-lg-12">
+                            <div class="dashboard-card">
+                                <h4>Revenue Projections vs. Actual</h4>
+                                <canvas id="revenueProjectionChart" height="250"></canvas>
+                            </div>
+                        </div>
+                        <div class="col-lg-6">
+                            <div class="dashboard-card">
+                                <h4>User Growth</h4>
+                                <canvas id="userGrowthChart" height="250"></canvas>
+                            </div>
+                        </div>
+                        <div class="col-lg-6">
+                            <div class="dashboard-card">
+                                <h4>Case Volume</h4>
+                                <canvas id="caseVolumeChart" height="250"></canvas>
+                            </div>
+                        </div>
+                        <div class="col-lg-12">
+                            <div class="dashboard-card">
+                                <h4>Impact Goals Progress</h4>
+                                <div class="row mt-4">
+                                    <div class="col-md-4">
+                                        <h5>Response Rate Improvement</h5>
+                                        <div class="progress" style="height: 25px;">
+                                            <div class="progress-bar bg-success" role="progressbar" style="width: 42%;" aria-valuenow="42" aria-valuemin="0" aria-valuemax="100">42%</div>
+                                        </div>
+                                        <p class="mt-2 text-muted">Target: 50% increase in one year</p>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <h5>Time Reduction</h5>
+                                        <div class="progress" style="height: 25px;">
+                                            <div class="progress-bar bg-primary" role="progressbar" style="width: 85%;" aria-valuenow="85" aria-valuemin="0" aria-valuemax="100">85%</div>
+                                        </div>
+                                        <p class="mt-2 text-muted">Target: Reduce from weeks to 2 hours</p>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <h5>Access Improvement</h5>
+                                        <div class="progress" style="height: 25px;">
+                                            <div class="progress-bar bg-warning" role="progressbar" style="width: 65%;" aria-valuenow="65" aria-valuemin="0" aria-valuemax="100">65%</div>
+                                        </div>
+                                        <p class="mt-2 text-muted">Target: Improve access for underserved populations</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-4 mb-4 mb-lg-0">
+                    <h5>Legal AI Reach Out</h5>
+                    <p>Revolutionizing how individuals in the Netherlands access legal representation through artificial intelligence and automation.</p>
+                    <div class="mt-3">
+                        <a href="#" class="social-icon"><i class="fab fa-facebook-f"></i></a>
+                        <a href="#" class="social-icon"><i class="fab fa-twitter"></i></a>
+                        <a href="#" class="social-icon"><i class="fab fa-linkedin-in"></i></a>
+                        <a href="#" class="social-icon"><i class="fab fa-instagram"></i></a>
+                    </div>
+                </div>
+                <div class="col-lg-2 col-md-4 mb-4 mb-md-0">
+                    <h5>Quick Links</h5>
+                    <ul class="list-unstyled">
+                        <li class="mb-2"><a href="index.html">Home</a></li>
+                        <li class="mb-2"><a href="how-it-works.html">How It Works</a></li>
+                        <li class="mb-2"><a href="pricing.html">Pricing</a></li>
+                        <li class="mb-2"><a href="contact.html">Contact</a></li>
+                    </ul>
+                </div>
+                <div class="col-lg-2 col-md-4 mb-4 mb-md-0">
+                    <h5>Resources</h5>
+                    <ul class="list-unstyled">
+                        <li class="mb-2"><a href="#">Blog</a></li>
+                        <li class="mb-2"><a href="#">FAQ</a></li>
+                        <li class="mb-2"><a href="#">Privacy Policy</a></li>
+                        <li class="mb-2"><a href="#">Terms of Service</a></li>
+                    </ul>
+                </div>
+                <div class="col-lg-4 col-md-4">
+                    <h5>Contact Us</h5>
+                    <ul class="list-unstyled">
+                        <li class="mb-2"><i class="fas fa-map-marker-alt me-2"></i> Amsterdam, Netherlands</li>
+                        <li class="mb-2"><i class="fas fa-phone me-2"></i> +31 (0)20 123 4567</li>
+                        <li class="mb-2"><i class="fas fa-envelope me-2"></i> info@legalaireach.nl</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="border-top pt-4 mt-4 text-center">
+                <p>&copy; 2025 Legal AI Reach Out. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
+    <script>
+        // Simple investor authentication
+        document.getElementById('investorAuthForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const email = document.getElementById('investorEmail').value;
+            
+            // In a real implementation, this would validate against a database
+            // For demo purposes, we'll accept any email
+            if (email) {
+                document.getElementById('investorAuth').style.display = 'none';
+                document.getElementById('investorDashboard').style.display = 'block';
+                initCharts();
+            }
+        });
+        
+        // Initialize charts
+        function initCharts() {
+            // Response Rate Chart
+            const responseRateCtx = document.getElementById('responseRateChart').getContext('2d');
+            const responseRateChart = new Chart(responseRateCtx, {
+                type: 'line',
+                data: {
+                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+                    datasets: [{
+                        label: 'Actual Response Rate',
+                        data: [32, 35, 38, 40, 42, 45],
+                        borderColor: '#4a6da7',
+                        backgroundColor: 'rgba(74, 109, 167, 0.1)',
+                        tension: 0.3,
+                        fill: true
+                    }, {
+                        label: 'Target Response Rate',
+                        data: [30, 32, 34, 36, 38, 40],
+                        borderColor: '#ed8936',
+                        borderDash: [5, 5],
+                        backgroundColor: 'transparent',
+                        tension: 0.3,
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + '%';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Acceptance Rate Chart
+            const acceptanceRateCtx = document.getElementById('acceptanceRateChart').getContext('2d');
+            const acceptanceRateChart = new Chart(acceptanceRateCtx, {
+                type: 'line',
+                data: {
+                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+                    datasets: [{
+                        label: 'Actual Acceptance Rate',
+                        data: [0.8, 1.0, 1.2, 1.5, 1.7, 1.8],
+                        borderColor: '#4a6da7',
+                        backgroundColor: 'rgba(74, 109, 167, 0.1)',
+                        tension: 0.3,
+                        fill: true
+                    }, {
+                        label: 'Baseline Acceptance Rate',
+                        data: [0.7, 0.7, 0.7, 0.7, 0.7, 0.7],
+                        borderColor: '#ed8936',
+                        borderDash: [5, 5],
+                        backgroundColor: 'transparent',
+                        tension: 0.3,
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + '%';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Time to Lawyer Chart
+            const timeToLawyerCtx = document.getElementById('timeToLawyerChart').getContext('2d');
+            const timeToLawyerChart = new Chart(timeToLawyerCtx, {
+                type: 'line',
+                data: {
+                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+                    datasets: [{
+                        label: 'Average Time (Hours)',
+                        data: [5.8, 5.2, 4.5, 3.8, 3.5, 3.2],
+                        borderColor: '#4a6da7',
+                        backgroundColor: 'rgba(74, 109, 167, 0.1)',
+                        tension: 0.3,
+                        fill: true
+                    }, {
+                        label: 'Target Time (Hours)',
+                        data: [2, 2, 2, 2, 2, 2],
+                        borderColor: '#ed8936',
+                        borderDash: [5, 5],
+                        backgroundColor: 'transparent',
+                        tension: 0.3,
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + 'h';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Resource Consumption Chart
+            const resourceConsumptionCtx = document.getElementById('resourceConsumptionChart').getContext('2d');
+            const resourceConsumptionChart = new Chart(resourceConsumptionCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+                    datasets: [{
+                        label: 'AI Processing',
+                        data: [12, 15, 18, 22, 25, 28],
+                        backgroundColor: '#4a6da7',
+                    }, {
+                        label: 'Storage',
+                        data: [5, 7, 9, 12, 15, 18],
+                        backgroundColor: '#ed8936',
+                    }, {
+                        label: 'Email Outreach',
+                        data: [8, 10, 12, 15, 18, 20],
+                        backgroundColor: '#38a169',
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                        }
+                    },
+                    scales: {
+                        x: {
+                            stacked: true,
+                        },
+                        y: {
+                            stacked: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return '€' + value;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Revenue Chart
+            const revenueCtx = document.getElementById('revenueChart').getContext('2d');
+            const revenueChart = new Chart(revenueCtx, {
+                type: 'line',
+                data: {
+                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+                    datasets: [{
+                        label: 'Revenue',
+                        data: [50, 65, 80, 95, 110, 125],
+                        borderColor: '#38a169',
+                        backgroundColor: 'rgba(56, 161, 105, 0.1)',
+                        tension: 0.3,
+                        fill: true
+                    }, {
+                        label: 'Costs',
+                        data: [25, 32, 40, 48, 55, 65],
+                        borderColor: '#e53e3e',
+                        backgroundColor: 'rgba(229, 62, 62, 0.1)',
+                        tension: 0.3,
+                        fill: true
+                    }, {
+                        label: 'Profit',
+                        data: [25, 33, 40, 47, 55, 60],
+                        borderColor: '#4a6da7',
+                        backgroundColor: 'transparent',
+                        tension: 0.3,
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return '€' + value + 'K';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Revenue Projection Chart
+            const revenueProjectionCtx = document.getElementById('revenueProjectionChart').getContext('2d');
+            const revenueProjectionChart = new Chart(revenueProjectionCtx, {
+                type: 'line',
+                data: {
+                    labels: ['Q1', 'Q2', 'Q3', 'Q4', 'Q1 Next', 'Q2 Next'],
+                    datasets: [{
+                        label: 'Projected Revenue',
+                        data: [150, 250, 400, 600, 850, 1100],
+                        borderColor: '#4a6da7',
+                        borderDash: [5, 5],
+                        backgroundColor: 'transparent',
+                        tension: 0.3,
+                        fill: false
+                    }, {
+                        label: 'Actual Revenue',
+                        data: [160, 270, null, null, null, null],
+                        borderColor: '#38a169',
+                        backgroundColor: 'rgba(56, 161, 105, 0.1)',
+                        tension: 0.3,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return '€' + value + 'K';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // User Growth Chart
+            const userGrowthCtx = document.getElementById('userGrowthChart').getContext('2d');
+            const userGrowthChart = new Chart(userGrowthCtx, {
+                type: 'line',
+                data: {
+                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+                    datasets: [{
+                        label: 'Projected Users',
+                        data: [50, 100, 200, 350, 550, 800],
+                        borderColor: '#4a6da7',
+                        borderDash: [5, 5],
+                        backgroundColor: 'transparent',
+                        tension: 0.3,
+                        fill: false
+                    }, {
+                        label: 'Actual Users',
+                        data: [55, 120, 230, 380, 600, 850],
+                        borderColor: '#38a169',
+                        backgroundColor: 'rgba(56, 161, 105, 0.1)',
+                        tension: 0.3,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+            
+            // Case Volume Chart
+            const caseVolumeCtx = document.getElementById('caseVolumeChart').getContext('2d');
+            const caseVolumeChart = new Chart(caseVolumeCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+                    datasets: [{
+                        label: 'New Cases',
+                        data: [30, 45, 65, 85, 110, 140],
+                        backgroundColor: '#4a6da7',
+                    }, {
+                        label: 'Completed Cases',
+                        data: [10, 25, 40, 60, 85, 115],
+                        backgroundColor: '#38a169',
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>

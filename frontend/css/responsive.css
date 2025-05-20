@@ -1,0 +1,563 @@
+/* Responsive design enhancements for Legal AI Reach Out Platform */
+
+/* Base responsive improvements */
+:root {
+  --mobile-breakpoint: 575px;
+  --tablet-breakpoint: 767px;
+  --laptop-breakpoint: 991px;
+  --desktop-breakpoint: 1200px;
+}
+
+/* Improved container responsiveness */
+.container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+  box-sizing: border-box;
+}
+
+/* Responsive typography */
+html {
+  font-size: 16px; /* Base font size */
+}
+
+@media (max-width: 991px) {
+  html {
+    font-size: 15px;
+  }
+}
+
+@media (max-width: 767px) {
+  html {
+    font-size: 14px;
+  }
+}
+
+/* Responsive headings */
+h1 {
+  font-size: 2.25rem; /* 36px at base font size */
+  line-height: 1.2;
+}
+
+h2 {
+  font-size: 1.75rem; /* 28px at base font size */
+  line-height: 1.3;
+}
+
+h3 {
+  font-size: 1.375rem; /* 22px at base font size */
+  line-height: 1.4;
+}
+
+@media (max-width: 767px) {
+  h1 {
+    font-size: 2rem;
+  }
+  
+  h2 {
+    font-size: 1.5rem;
+  }
+  
+  h3 {
+    font-size: 1.25rem;
+  }
+}
+
+@media (max-width: 575px) {
+  h1 {
+    font-size: 1.75rem;
+  }
+  
+  h2 {
+    font-size: 1.375rem;
+  }
+  
+  h3 {
+    font-size: 1.125rem;
+  }
+}
+
+/* Improved responsive grid system */
+.grid {
+  display: flex;
+  flex-wrap: wrap;
+  margin: -10px; /* Negative margin to offset padding */
+}
+
+.grid-col {
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+.grid-col-1 { width: 8.333%; }
+.grid-col-2 { width: 16.667%; }
+.grid-col-3 { width: 25%; }
+.grid-col-4 { width: 33.333%; }
+.grid-col-5 { width: 41.667%; }
+.grid-col-6 { width: 50%; }
+.grid-col-7 { width: 58.333%; }
+.grid-col-8 { width: 66.667%; }
+.grid-col-9 { width: 75%; }
+.grid-col-10 { width: 83.333%; }
+.grid-col-11 { width: 91.667%; }
+.grid-col-12 { width: 100%; }
+
+/* Tablet responsive grid */
+@media (max-width: 991px) {
+  .grid-col-md-1 { width: 8.333%; }
+  .grid-col-md-2 { width: 16.667%; }
+  .grid-col-md-3 { width: 25%; }
+  .grid-col-md-4 { width: 33.333%; }
+  .grid-col-md-5 { width: 41.667%; }
+  .grid-col-md-6 { width: 50%; }
+  .grid-col-md-7 { width: 58.333%; }
+  .grid-col-md-8 { width: 66.667%; }
+  .grid-col-md-9 { width: 75%; }
+  .grid-col-md-10 { width: 83.333%; }
+  .grid-col-md-11 { width: 91.667%; }
+  .grid-col-md-12 { width: 100%; }
+}
+
+/* Mobile responsive grid */
+@media (max-width: 767px) {
+  .grid-col-sm-1 { width: 8.333%; }
+  .grid-col-sm-2 { width: 16.667%; }
+  .grid-col-sm-3 { width: 25%; }
+  .grid-col-sm-4 { width: 33.333%; }
+  .grid-col-sm-5 { width: 41.667%; }
+  .grid-col-sm-6 { width: 50%; }
+  .grid-col-sm-7 { width: 58.333%; }
+  .grid-col-sm-8 { width: 66.667%; }
+  .grid-col-sm-9 { width: 75%; }
+  .grid-col-sm-10 { width: 83.333%; }
+  .grid-col-sm-11 { width: 91.667%; }
+  .grid-col-sm-12 { width: 100%; }
+}
+
+/* Extra small devices */
+@media (max-width: 575px) {
+  .grid-col-xs-1 { width: 8.333%; }
+  .grid-col-xs-2 { width: 16.667%; }
+  .grid-col-xs-3 { width: 25%; }
+  .grid-col-xs-4 { width: 33.333%; }
+  .grid-col-xs-5 { width: 41.667%; }
+  .grid-col-xs-6 { width: 50%; }
+  .grid-col-xs-7 { width: 58.333%; }
+  .grid-col-xs-8 { width: 66.667%; }
+  .grid-col-xs-9 { width: 75%; }
+  .grid-col-xs-10 { width: 83.333%; }
+  .grid-col-xs-11 { width: 91.667%; }
+  .grid-col-xs-12 { width: 100%; }
+}
+
+/* Enhanced responsive features grid */
+.feature-grid {
+  display: flex;
+  flex-wrap: wrap;
+  margin: -20px;
+  justify-content: center;
+}
+
+.feature-card {
+  flex: 0 0 calc(33.333% - 40px);
+  margin: 20px;
+  background-color: #242424;
+  border-radius: 8px;
+  padding: 30px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+  transition: transform 0.3s;
+}
+
+@media (max-width: 991px) {
+  .feature-grid {
+    margin: -15px;
+  }
+  
+  .feature-card {
+    flex: 0 0 calc(50% - 30px);
+    margin: 15px;
+    padding: 25px;
+  }
+}
+
+@media (max-width: 767px) {
+  .feature-grid {
+    margin: -10px;
+  }
+  
+  .feature-card {
+    flex: 0 0 calc(100% - 20px);
+    margin: 10px;
+    padding: 20px;
+  }
+}
+
+/* Enhanced responsive steps grid */
+.steps-grid {
+  display: flex;
+  flex-wrap: wrap;
+  margin: -20px;
+  justify-content: center;
+}
+
+.step-card {
+  flex: 0 0 calc(25% - 40px);
+  margin: 20px;
+  background-color: #242424;
+  border-radius: 8px;
+  padding: 30px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+  position: relative;
+}
+
+@media (max-width: 991px) {
+  .steps-grid {
+    margin: -15px;
+  }
+  
+  .step-card {
+    flex: 0 0 calc(50% - 30px);
+    margin: 15px;
+    padding: 25px;
+  }
+}
+
+@media (max-width: 767px) {
+  .steps-grid {
+    margin: -10px;
+  }
+  
+  .step-card {
+    flex: 0 0 calc(100% - 20px);
+    margin: 10px;
+    padding: 20px;
+  }
+}
+
+/* Enhanced responsive metrics grid */
+.metrics-grid {
+  display: flex;
+  flex-wrap: wrap;
+  margin: -10px;
+}
+
+.metric-card {
+  flex: 0 0 calc(25% - 20px);
+  margin: 10px;
+  background-color: #242424;
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+}
+
+@media (max-width: 991px) {
+  .metric-card {
+    flex: 0 0 calc(50% - 20px);
+  }
+}
+
+@media (max-width: 575px) {
+  .metric-card {
+    flex: 0 0 calc(100% - 20px);
+  }
+}
+
+/* Improved responsive hero section */
+.hero {
+  display: flex;
+  align-items: center;
+  min-height: 500px;
+}
+
+.hero-content {
+  flex: 1;
+  padding-right: 30px;
+}
+
+.hero-image {
+  flex: 1;
+  text-align: center;
+}
+
+.hero-image img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+}
+
+@media (max-width: 767px) {
+  .hero {
+    flex-direction: column;
+    min-height: auto;
+    padding: 40px 0;
+  }
+  
+  .hero-content {
+    padding-right: 0;
+    margin-bottom: 30px;
+    text-align: center;
+  }
+  
+  .hero-image {
+    width: 100%;
+    max-width: 400px;
+    margin: 0 auto;
+  }
+}
+
+/* Improved responsive navigation */
+.nav-menu {
+  display: flex;
+  list-style: none;
+}
+
+.nav-item {
+  margin-left: 20px;
+}
+
+.menu-toggle {
+  display: none;
+  background: none;
+  border: none;
+  color: #ff6b00;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+@media (max-width: 767px) {
+  .menu-toggle {
+    display: block;
+  }
+  
+  .nav-menu {
+    position: fixed;
+    top: 70px;
+    left: 0;
+    width: 100%;
+    background-color: #1a1a1a;
+    flex-direction: column;
+    padding: 20px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    transform: translateY(-100%);
+    opacity: 0;
+    visibility: hidden;
+    transition: transform 0.3s, opacity 0.3s, visibility 0.3s;
+    z-index: 99;
+  }
+  
+  .nav-menu.active {
+    transform: translateY(0);
+    opacity: 1;
+    visibility: visible;
+  }
+  
+  .nav-item {
+    margin: 10px 0;
+    width: 100%;
+    text-align: center;
+  }
+  
+  .nav-link {
+    display: block;
+    padding: 10px;
+  }
+}
+
+/* Improved responsive tabs */
+.tab-nav {
+  display: flex;
+  background-color: #1a1a1a;
+  border-bottom: 1px solid #333;
+}
+
+.tab-link {
+  padding: 15px 20px;
+  color: #b0b0b0;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+@media (max-width: 767px) {
+  .tab-nav {
+    flex-wrap: wrap;
+  }
+  
+  .tab-link {
+    flex: 0 0 50%;
+    text-align: center;
+    padding: 12px 10px;
+  }
+}
+
+@media (max-width: 575px) {
+  .tab-link {
+    flex: 0 0 100%;
+    padding: 10px;
+  }
+}
+
+/* Improved responsive footer */
+.footer-grid {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.footer-col {
+  flex: 1;
+  min-width: 200px;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 767px) {
+  .footer-col {
+    flex: 0 0 50%;
+    padding: 0 15px;
+  }
+}
+
+@media (max-width: 575px) {
+  .footer-col {
+    flex: 0 0 100%;
+  }
+}
+
+/* Improved responsive auth card */
+.auth-card {
+  background-color: #242424;
+  border-radius: 8px;
+  width: 100%;
+  max-width: 400px;
+  overflow: hidden;
+  box-shadow: 0 15px 30px rgba(0,0,0,0.3);
+}
+
+@media (max-width: 575px) {
+  .auth-card {
+    max-width: 100%;
+    margin: 0 15px;
+  }
+  
+  .auth-body {
+    padding: 15px;
+  }
+}
+
+/* Touch-friendly improvements */
+@media (max-width: 767px) {
+  /* Larger touch targets for mobile */
+  .btn, 
+  .nav-link, 
+  .tab-link, 
+  .form-input, 
+  .auth-btn {
+    min-height: 44px; /* Apple's recommended minimum touch target size */
+  }
+  
+  /* Add more space between interactive elements */
+  .nav-item,
+  .form-group,
+  .footer-links li {
+    margin-bottom: 15px;
+  }
+  
+  /* Increase padding for better touch targets */
+  .btn {
+    padding: 10px 20px;
+  }
+  
+  .form-input {
+    padding: 12px;
+  }
+}
+
+/* Print styles for better printing */
+@media print {
+  body {
+    background-color: white;
+    color: black;
+  }
+  
+  header, 
+  footer, 
+  .menu-toggle, 
+  .btn,
+  .loading-overlay {
+    display: none !important;
+  }
+  
+  main {
+    margin-top: 0;
+  }
+  
+  .container {
+    width: 100%;
+    max-width: none;
+    padding: 0;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    color: black;
+    page-break-after: avoid;
+  }
+  
+  p, h2, h3 {
+    orphans: 3;
+    widows: 3;
+  }
+  
+  .feature-card,
+  .step-card,
+  .metric-card {
+    break-inside: avoid;
+    background-color: white;
+    box-shadow: none;
+    border: 1px solid #ddd;
+  }
+}
+
+/* High-DPI screen optimizations */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* Reduced motion preference support */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Dark mode preference support */
+@media (prefers-color-scheme: dark) {
+  /* Already dark themed, but could add specific adjustments here */
+}
+
+/* Landscape orientation optimizations */
+@media (orientation: landscape) and (max-width: 767px) {
+  .hero {
+    min-height: auto;
+    padding: 30px 0;
+  }
+  
+  .auth-section {
+    padding: 10px;
+  }
+}
+
+/* Viewport height adjustments for mobile browsers */
+@supports (-webkit-touch-callout: none) {
+  /* iOS specific fix for 100vh issue */
+  .auth-section,
+  .dashboard-section {
+    min-height: -webkit-fill-available;
+  }
+}

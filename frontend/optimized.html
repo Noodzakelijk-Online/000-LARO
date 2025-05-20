@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Legal AI Reach Out - AI-driven legal outreach platform connecting individuals with appropriate legal representation in the Netherlands">
+    <title>Legal AI Reach Out Platform</title>
+    <style>
+        /* Critical CSS inlined for faster rendering */
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:Arial,sans-serif;background-color:#121212;color:#e0e0e0;line-height:1.6;padding:0;margin:0}
+        .container{width:100%;max-width:1200px;margin:0 auto;padding:0 20px}
+        header{background-color:#1a1a1a;padding:15px 0;border-bottom:1px solid #333;position:fixed;width:100%;top:0;z-index:100}
+        .header-container{display:flex;justify-content:space-between;align-items:center}
+        .logo{font-size:24px;font-weight:bold;color:#ff6b00;text-decoration:none}
+        .nav-menu{display:flex;list-style:none}
+        .nav-item{margin-left:20px}
+        .nav-link{color:#b0b0b0;text-decoration:none;font-weight:500;transition:color 0.3s}
+        .nav-link:hover,.nav-link.active{color:#ff6b00}
+        .btn{display:inline-block;background-color:#ff6b00;color:white;padding:8px 16px;border-radius:4px;text-decoration:none;font-weight:500;transition:background-color 0.3s}
+        .btn:hover{background-color:#e05e00}
+        main{margin-top:70px;padding:30px 0}
+        
+        /* Non-critical CSS will be loaded asynchronously */
+    </style>
+    <!-- Preload critical assets -->
+    <link rel="preload" href="https://i.ibb.co/Qj1Vz7W/home-dark-mode.jpg" as="image">
+    
+    <!-- Deferred non-critical CSS -->
+    <link rel="stylesheet" href="data:text/css;base64,c2VjdGlvbntw
+YWRkaW5nOjYwcHggMH1zZWN0aW9uOm50aC1jaGlsZChldmVuKXtiYWNrZ3JvdW5kLWNvbG9yOiMxYTFhMWF9aDEsaDIsaDN7Y29sb3I6d2hpdGU7bWFyZ2luLWJvdHRvbToyMHB4fWgxe2ZvbnQtc2l6ZTozNnB4fWgye2ZvbnQtc2l6ZToyOHB4O3RleHQtYWxpZ246Y2VudGVyfWgze2ZvbnQtc2l6ZToyMnB4fXB7bWFyZ2luLWJvdHRvbToxNXB4fS5zZWN0aW9uLWRpdmlkZXJ7d2lkdGg6ODBweDtoZWlnaHQ6NHB4O2JhY2tncm91bmQtY29sb3I6I2ZmNmIwMDttYXJnaW46MCBhdXRvIDMwcHh9Lmhlcm97ZGlzcGxheTpmbGV4O2FsaWduLWl0ZW1zOmNlbnRlcjttaW4taGVpZ2h0OjUwMHB4fS5oZXJvLWNvbnRlbnR7ZmxleDoxO3BhZGRpbmctcmlnaHQ6MzBweH0uaGVyby1pbWFnZXtmbGV4OjE7dGV4dC1hbGlnbjpjZW50ZXJ9Lmhlcm8taW1hZ2UgaW1ne21heC13aWR0aDoxMDAlO2JvcmRlci1yYWRpdXM6OHB4O2JveC1zaGFkb3c6MCAxMHB4IDIwcHggcmdiYSgwLDAsMCwwLjMpfS5mZWF0dXJlc3t0ZXh0LWFsaWduOmNlbnRlcn0uZmVhdHVyZS1ncmlke2Rpc3BsYXk6ZmxleDtmbGV4LXdyYXA6d3JhcDttYXJnaW4tdG9wOjQwcHg7anVzdGlmeS1jb250ZW50OmNlbnRlcn0uZmVhdHVyZS1jYXJke2ZsZXg6MCAwIGNhbGMoMzMuMzMzJSAtIDQwcHgpO21hcmdpbjoyMHB4O2JhY2tncm91bmQtY29sb3I6IzI0MjQyNDtib3JkZXItcmFkaXVzOjhweDtwYWRkaW5nOjMwcHg7Ym94LXNoYWRvdzowIDVweCAxNXB4IHJnYmEoMCwwLDAsMC4yKTt0cmFuc2l0aW9uOnRyYW5zZm9ybSAwLjNzfS5mZWF0dXJlLWNhcmQ6aG92ZXJ7dHJhbnNmb3JtOnRyYW5zbGF0ZVkoLTEwcHgpfS5mZWF0dXJlLWljb257Zm9udC1zaXplOjQ4cHg7Y29sb3I6I2ZmNmIwMDttYXJnaW4tYm90dG9tOjIwcHh9Lmhvdy1pdC13b3Jrc3t0ZXh0LWFsaWduOmNlbnRlcn0uc3RlcHMtZ3JpZHtkaXNwbGF5OmZsZXg7ZmxleC13cmFwOndyYXA7bWFyZ2luLXRvcDo0MHB4O2p1c3RpZnktY29udGVudDpjZW50ZXJ9LnN0ZXAtY2FyZHtmbGV4OjAgMCBjYWxjKDI1JSAtIDQwcHgpO21hcmdpbjoyMHB4O2JhY2tncm91bmQtY29sb3I6IzI0MjQyNDtib3JkZXItcmFkaXVzOjhweDtwYWRkaW5nOjMwcHg7Ym94LXNoYWRvdzowIDVweCAxNXB4IHJnYmEoMCwwLDAsMC4yKTtwb3NpdGlvbjpyZWxhdGl2ZX0uc3RlcC1udW1iZXJ7cG9zaXRpb246YWJzb2x1dGU7dG9wOi0xNXB4O2xlZnQ6LTE1cHg7d2lkdGg6NDBweDtoZWlnaHQ6NDBweDtiYWNrZ3JvdW5kLWNvbG9yOiNmZjZiMDA7Y29sb3I6d2hpdGU7Ym9yZGVyLXJhZGl1czo1MCU7ZGlzcGxheTpmbGV4O2FsaWduLWl0ZW1zOmNlbnRlcjtqdXN0aWZ5LWNvbnRlbnQ6Y2VudGVyO2ZvbnQtd2VpZ2h0OmJvbGQ7Zm9udC1zaXplOjIwcHh9LnN0ZXAtaWNvbntmb250LXNpemU6MzZweDtjb2xvcjojZmY2YjAwO21hcmdpbi1ib3R0b206MjBweH0uYXV0aC1zZWN0aW9ue2Rpc3BsYXk6bm9uZTttaW4taGVpZ2h0OjEwMHZoO2FsaWduLWl0ZW1zOmNlbnRlcjtqdXN0aWZ5LWNvbnRlbnQ6Y2VudGVyO3BhZGRpbmc6MjBweH0uYXV0aC1jYXJke2JhY2tncm91bmQtY29sb3I6IzI0MjQyNDtib3JkZXItcmFkaXVzOjhweDt3aWR0aDoxMDAlO21heC13aWR0aDo0MDBweDtvdmVyZmxvdzpoaWRkZW47Ym94LXNoYWRvdzowIDE1cHggMzBweCByZ2JhKDAsMCwwLDAuMyl9LmF1dGgtaGVhZGVye2JhY2tncm91bmQtY29sb3I6I2ZmNmIwMDtwYWRkaW5nOjIwcHg7dGV4dC1hbGlnbjpjZW50ZXJ9LmF1dGgtdGl0bGV7Y29sb3I6d2hpdGU7bWFyZ2luLWJvdHRvbTo1cHh9LmF1dGgtc3VidGl0bGV7Y29sb3I6cmdiYSgyNTUsMjU1LDI1NSwwLjgpfS5hdXRoLWJvZHl7cGFkZGluZzoyMHB4fS5mb3JtLWdyb3Vwe21hcmdpbi1ib3R0b206MjBweH0uZm9ybS1sYWJlbHtkaXNwbGF5OmJsb2NrO21hcmdpbi1ib3R0b206NXB4O2NvbG9yOndoaXRlfS5mb3JtLWlucHV0e3dpZHRoOjEwMCU7cGFkZGluZzoxMHB4O2JvcmRlcjoxcHggc29saWQgIzQ0NDtib3JkZXItcmFkaXVzOjRweDtiYWNrZ3JvdW5kLWNvbG9yOiMzMzM7Y29sb3I6d2hpdGV9LmZvcm0taW5wdXQ6Zm9jdXN7b3V0bGluZTpub25lO2JvcmRlci1jb2xvcjojZmY2YjAwfS5hdXRoLWJ0bnt3aWR0aDoxMDAlO3BhZGRpbmc6MTJweDtiYWNrZ3JvdW5kLWNvbG9yOiNmZjZiMDA7Y29sb3I6d2hpdGU7Ym9yZGVyOm5vbmU7Ym9yZGVyLXJhZGl1czo0cHg7Zm9udC13ZWlnaHQ6NTAwO2N1cnNvcjpwb2ludGVyfS5hdXRoLWJ0bjpob3ZlcntiYWNrZ3JvdW5kLWNvbG9yOiNlMDVlMDB9LmF1dGgtZm9vdGVye3BhZGRpbmc6MTVweCAyMHB4O3RleHQtYWxpZ246Y2VudGVyO2JhY2tncm91bmQtY29sb3I6IzFlMWUxZTtjb2xvcjojYjBiMGIwfS5hdXRoLWZvb3RlciBhe2NvbG9yOiNmZjZiMDB9LmRhc2hib2FyZC1zZWN0aW9ue2Rpc3BsYXk6bm9uZTttaW4taGVpZ2h0OjEwMHZoO3BhZGRpbmctdG9wOjcwcHh9LmRhc2hib2FyZC1oZWFkZXJ7bWFyZ2luLWJvdHRvbTozMHB4O3BhZGRpbmctYm90dG9tOjE1cHg7Ym9yZGVyLWJvdHRvbToxcHggc29saWQgIzMzM30ubWV0cmljcy1ncmlke2Rpc3BsYXk6ZmxleDtmbGV4LXdyYXA6d3JhcDttYXJnaW4tYm90dG9tOjMwcHh9Lm1ldHJpYy1jYXJke2ZsZXg6MCAwIGNhbGMoMjUlIC0gMjBweCk7bWFyZ2luOjEwcHg7YmFja2dyb3VuZC1jb2xvcjojMjQyNDI0O2JvcmRlci1yYWRpdXM6OHB4O3BhZGRpbmc6MjBweDt0ZXh0LWFsaWduOmNlbnRlcjtib3gtc2hhZG93OjAgNXB4IDE1cHggcmdiYSgwLDAsMCwwLjIpfS5tZXRyaWMtaWNvbntmb250LXNpemU6MjRweDtjb2xvcjojZmY2YjAwO21hcmdpbi1ib3R0b206MTBweH0ubWV0cmljLXZhbHVle2ZvbnQtc2l6ZToyOHB4O2ZvbnQtd2VpZ2h0OmJvbGQ7Y29sb3I6d2hpdGU7bWFyZ2luLWJvdHRvbTo1cHh9Lm1ldHJpYy1sYWJlbHtjb2xvcjojYjBiMGIwO21hcmdpbi1ib3R0b206NXB4fS5tZXRyaWMtY2hhbmdle2ZvbnQtc2l6ZToxNHB4fS5tZXRyaWMtY2hhbmdlLnBvc2l0aXZle2NvbG9yOiM0Y2FmNTB9Lm1ldHJpYy1jaGFuZ2UubmVnYXRpdmV7Y29sb3I6I2Y0NDMzNn0udGFic3tiYWNrZ3JvdW5kLWNvbG9yOiMyNDI0MjQ7Ym9yZGVyLXJhZGl1czo4cHg7b3ZlcmZsb3c6aGlkZGVuO2JveC1zaGFkb3c6MCA1cHggMTVweCByZ2JhKDAsMCwwLDAuMil9LnRhYi1uYXZ7ZGlzcGxheTpmbGV4O2JhY2tncm91bmQtY29sb3I6IzFhMWExYTtib3JkZXItYm90dG9tOjFweCBzb2xpZCAjMzMzfS50YWItbGlua3twYWRkaW5nOjE1cHggMjBweDtjb2xvcjojYjBiMGIwO2ZvbnQtd2VpZ2h0OjUwMDtjdXJzb3I6cG9pbnRlcn0udGFiLWxpbms6aG92ZXJ7Y29sb3I6d2hpdGU7YmFja2dyb3VuZC1jb2xvcjojMmEyYTJhfS50YWItbGluay5hY3RpdmV7Y29sb3I6I2ZmNmIwMDtiYWNrZ3JvdW5kLWNvbG9yOiMyNDI0MjQ7Ym9yZGVyLWJvdHRvbToycHggc29saWQgI2ZmNmIwMH0udGFiLWNvbnRlbnR7cGFkZGluZzoyMHB4O2Rpc3BsYXk6bm9uZX0udGFiLWNvbnRlbnQuYWN0aXZle2Rpc3BsYXk6YmxvY2t9LmNoYXJ0e2JhY2tncm91bmQtY29sb3I6IzFhMWExYTtib3JkZXItcmFkaXVzOjhweDtvdmVyZmxvdzpoaWRkZW47bWFyZ2luLWJvdHRvbToyMHB4fS5jaGFydC1oZWFkZXJ7cGFkZGluZzoxNXB4IDIwcHg7YmFja2dyb3VuZC1jb2xvcjojMjQyNDI0O2Rpc3BsYXk6ZmxleDtqdXN0aWZ5LWNvbnRlbnQ6c3BhY2UtYmV0d2VlbjthbGlnbi1pdGVtczpjZW50ZXI7Ym9yZGVyLWJvdHRvbToxcHggc29saWQgIzMzM30uY2hhcnQtdGl0bGV7bWFyZ2luOjA7Zm9udC1zaXplOjE4cHh9LmNoYXJ0LWJvZHl7cGFkZGluZzoyMHB4O2hlaWdodDoyNTBweDtkaXNwbGF5OmZsZXg7YWxpZ24taXRlbXM6Y2VudGVyO2p1c3RpZnktY29udGVudDpjZW50ZXI7Y29sb3I6I2IwYjBiMH0uY2hhcnQtcGxhY2Vob2xkZXJ7dGV4dC1hbGlnbjpjZW50ZXJ9LmNoYXJ0LWljb257Zm9udC1zaXplOjQ4cHg7Y29sb3I6I2ZmNmIwMDttYXJnaW4tYm90dG9tOjEwcHh9Zm9vdGVye2JhY2tncm91bmQtY29sb3I6IzFhMWExYTtwYWRkaW5nOjQwcHggMCAyMHB4O2JvcmRlci10b3A6MXB4IHNvbGlkICMzMzN9LmZvb3Rlci1ncmlke2Rpc3BsYXk6ZmxleDtmbGV4LXdyYXA6d3JhcH0uZm9vdGVyLWNvbHtmbGV4OjE7bWluLXdpZHRoOjIwMHB4O21hcmdpbi1ib3R0b206MjBweH0uZm9vdGVyLXRpdGxle2NvbG9yOndoaXRlO21hcmdpbi1ib3R0b206MTVweDtmb250LXNpemU6MThweH0uZm9vdGVyLWxpbmtze2xpc3Qtc3R5bGU6bm9uZX0uZm9vdGVyLWxpbmtzIGxpe21hcmdpbi1ib3R0b206MTBweH0uZm9vdGVyLWxpbmtzIGF7Y29sb3I6I2IwYjBiMDt0ZXh0LWRlY29yYXRpb246bm9uZX0uZm9vdGVyLWxpbmtzIGE6aG92ZXJ7Y29sb3I6I2ZmNmIwMH0uZm9vdGVyLWJvdHRvbXt0ZXh0LWFsaWduOmNlbnRlcjttYXJnaW4tdG9wOjMwcHg7cGFkZGluZy10b3A6MjBweDtib3JkZXItdG9wOjFweCBzb2xpZCAjMzMzO2NvbG9yOiM3MDcwNzB9Lm1lbnUtdG9nZ2xle2Rpc3BsYXk6bm9uZTtiYWNrZ3JvdW5kOm5vbmU7Ym9yZGVyOm5vbmU7Y29sb3I6I2ZmNmIwMDtmb250LXNpemU6MjRweDtjdXJzb3I6cG9pbnRlcn0ubG9hZGluZy1vdmVybGF5e3Bvc2l0aW9uOmZpeGVkO3RvcDowO2xlZnQ6MDt3aWR0aDoxMDAlO2hlaWdodDoxMDAlO2JhY2tncm91bmQtY29sb3I6cmdiYSgwLDAsMCwwLjcpO2Rpc3BsYXk6ZmxleDthbGlnbi1pdGVtczpjZW50ZXI7anVzdGlmeS1jb250ZW50OmNlbnRlcjt6LWluZGV4OjEwMDA7b3BhY2l0eTowO3Zpc2liaWxpdHk6aGlkZGVuO3RyYW5zaXRpb246b3BhY2l0eSAwLjNzfS5sb2FkaW5nLW92ZXJsYXkuYWN0aXZle29wYWNpdHk6MTt2aXNpYmlsaXR5OnZpc2libGV9LnNwaW5uZXJ7d2lkdGg6NTBweDtoZWlnaHQ6NTBweDtib3JkZXI6NXB4IHNvbGlkIHJnYmEoMjU1LDEwNywwLDAuMyk7Ym9yZGVyLXJhZGl1czo1MCU7Ym9yZGVyLXRvcC1jb2xvcjojZmY2YjAwO2FuaW1hdGlvbjpzcGluIDFzIGxpbmVhciBpbmZpbml0ZX1Aa2V5ZnJhbWVzIHNwaW57dG97dHJhbnNmb3JtOnJvdGF0ZSgzNjBkZWcpfX0ubG9hZGluZy10ZXh0e2NvbG9yOndoaXRlO21hcmdpbi10b3A6MTVweDtmb250LXdlaWdodDo1MDB9QG1lZGlhIChtYXgtd2lkdGg6OTkxcHgpey5mZWF0dXJlLWNhcmQsLnN0ZXAtY2FyZHtmbGV4OjAgMCBjYWxjKDUwJSAtIDQwcHgpfS5tZXRyaWMtY2FyZHtmbGV4OjAgMCBjYWxjKDUwJSAtIDIwcHgpfX1AbWVkaWEgKG1heC13aWR0aDo3NjdweCl7Lmhlcm97ZmxleC1kaXJlY3Rpb246Y29sdW1ufS5oZXJvLWNvbnRlbnR7cGFkZGluZy1yaWdodDowO21hcmdpbi1ib3R0b206MzBweH0ubWVudS10b2dnbGV7ZGlzcGxheTpibG9ja30ubmF2LW1lbnV7cG9zaXRpb246Zml4ZWQ7dG9wOjcwcHg7bGVmdDowO3dpZHRoOjEwMCU7YmFja2dyb3VuZC1jb2xvcjojMWExYTFhO2ZsZXgtZGlyZWN0aW9uOmNvbHVtbjtwYWRkaW5nOjIwcHg7Ym94LXNoYWRvdzowIDVweCAxNXB4IHJnYmEoMCwwLDAsMC4zKTt0cmFuc2Zvcm06dHJhbnNsYXRlWSgtMTAwJSk7b3BhY2l0eTowO3Zpc2liaWxpdHk6aGlkZGVuO3RyYW5zaXRpb246dHJhbnNmb3JtIDAuM3Msb3BhY2l0eSAwLjNzLHZpc2liaWxpdHkgMC4zc30ubmF2LW1lbnUuYWN0aXZle3RyYW5zZm9ybTp0cmFuc2xhdGVZKDApO29wYWNpdHk6MTt2aXNpYmlsaXR5OnZpc2libGV9Lm5hdi1pdGVte21hcmdpbjoxMHB4IDB9LnRhYi1uYXZ7ZmxleC13cmFwOndyYXB9LnRhYi1saW5re2ZsZXg6MCAwIDUwJTt0ZXh0LWFsaWduOmNlbnRlcn19QG1lZGlhIChtYXgtd2lkdGg6NTc1cHgpey5mZWF0dXJlLWNhcmQsLnN0ZXAtY2FyZCwubWV0cmljLWNhcmR7ZmxleDowIDAgY2FsYygxMDAlIC0gNDBweCl9LnRhYi1saW5re2ZsZXg6MCAwIDEwMCV9fQ==" media="print" onload="this.media='all'">
+</head>
+<body>
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div>
+            <div class="spinner"></div>
+            <p class="loading-text">Loading...</p>
+        </div>
+    </div>
+
+    <!-- Header -->
+    <header>
+        <div class="container header-container">
+            <a href="#" class="logo" id="logoLink" aria-label="Legal AI Reach Out Home">Legal AI Reach Out</a>
+            <button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation menu">☰</button>
+            <ul class="nav-menu" id="navMenu">
+                <li class="nav-item">
+                    <a href="#" class="nav-link active" id="homeLink">Home</a>
+                </li>
+                <li class="nav-item">
+                    <a href="#how-it-works" class="nav-link" id="howItWorksLink">How It Works</a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" id="pricingLink">Pricing</a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" id="investorsLink">Investors</a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" id="contactLink">Contact</a>
+                </li>
+                <li class="nav-item">
+                    <a href="https://danolbza.manus.space/dashboard_dark.html" class="btn" id="getStartedLink">Get Started</a>
+                </li>
+            </ul>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main id="mainContent">
+        <!-- Hero Section -->
+        <section class="hero">
+            <div class="container">
+                <div class="hero">
+                    <div class="hero-content">
+                        <h1>AI-Driven Legal Outreach Platform for the Netherlands</h1>
+                        <p>Revolutionizing how individuals access legal representation through artificial intelligence and automation.</p>
+                        <a href="https://danolbza.manus.space/dashboard_dark.html" class="btn" id="getStartedBtn">Get Started</a>
+                    </div>
+                    <div class="hero-image">
+                        <img src="https://i.ibb.co/Qj1Vz7W/home-dark-mode.jpg" alt="Legal AI Platform Interface" width="500" height="300" loading="lazy">
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Features Section -->
+        <section class="features" id="features">
+            <div class="container">
+                <h2>Key Features</h2>
+                <div class="section-divider"></div>
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <div class="feature-icon" aria-hidden="true">🧠</div>
+                        <h3>AI-Powered Case Matching</h3>
+                        <p>Our platform employs sophisticated artificial intelligence to analyze your circumstances and automatically determine the appropriate legal field(s). Using natural language processing and machine learning, it ensures accurate case classification, eliminating the need to decipher complex legal terminology.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon" aria-hidden="true">📄</div>
+                        <h3>Automated Data Aggregation</h3>
+                        <p>The system seamlessly integrates with email platforms and cloud storage solutions, consolidating all relevant documents and communications into a structured evidence trail. It provides a summarized "red line" thread of your case for legal professionals, eliminating manual compilation while ensuring lawyers receive a concise case summary.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon" aria-hidden="true">✉️</div>
+                        <h3>Intelligent Outreach & Follow-Ups</h3>
+                        <p>Our service automates email outreach to legal professionals throughout the Netherlands registered in the Nederlandse orde van advocaten (NOvA), focusing on those with expertise in the relevant legal field(s). It monitors responses and sends courteous follow-up messages until a lawyer either accepts or declines your case.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- How It Works Section -->
+        <section class="how-it-works" id="how-it-works">
+            <div class="container">
+                <h2>How It Works</h2>
+                <div class="section-divider"></div>
+                <div class="steps-grid">
+                    <div class="step-card">
+                        <div class="step-number" aria-hidden="true">1</div>
+                        <div class="step-icon" aria-hidden="true">💬</div>
+                        <h3>Describe Your Case</h3>
+                        <p>Simply explain your legal situation in your own words. Our AI will analyze your description to identify the appropriate legal field(s) and determine the complexity of your case.</p>
+                    </div>
+                    <div class="step-card">
+                        <div class="step-number" aria-hidden="true">2</div>
+                        <div class="step-icon" aria-hidden="true">🔗</div>
+                        <h3>Connect Your Accounts</h3>
+                        <p>Securely connect your email (Gmail/Outlook) and cloud storage (Google Drive/OneDrive) accounts, or manually upload relevant documents. Our system will organize everything into a structured case file.</p>
+                    </div>
+                    <div class="step-card">
+                        <div class="step-number" aria-hidden="true">3</div>
+                        <div class="step-icon" aria-hidden="true">📨</div>
+                        <h3>AI-Powered Outreach</h3>
+                        <p>Our platform automatically contacts qualified lawyers specializing in your case's legal field(s). It handles all follow-up communications until a lawyer accepts your case.</p>
+                    </div>
+                    <div class="step-card">
+                        <div class="step-number" aria-hidden="true">4</div>
+                        <div class="step-icon" aria-hidden="true">🤝</div>
+                        <h3>Connect With Your Lawyer</h3>
+                        <p>Once a lawyer accepts your case, we facilitate the introduction and provide them with your complete case file, including the organized evidence trail and case summary.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer>
+            <div class="container">
+                <div class="footer-grid">
+                    <div class="footer-col">
+                        <h4 class="footer-title">Legal AI Reach Out</h4>
+                        <p>Revolutionizing how individuals in the Netherlands access legal representation through artificial intelligence and automation.</p>
+                    </div>
+                    <div class="footer-col">
+                        <h4 class="footer-title">Quick Links</h4>
+                        <ul class="footer-links">
+                            <li><a href="#" id="homeFooterLink">Home</a></li>
+                            <li><a href="#how-it-works" id="howItWorksFooterLink">How It Works</a></li>
+                            <li><a href="#" id="pricingFooterLink">Pricing</a></li>
+                            <li><a href="#" id="contactFooterLink">Contact</a></li>
+                        </ul>
+                    </div>
+                    <div class="footer-col">
+                        <h4 class="footer-title">Resources</h4>
+                        <ul class="footer-links">
+                            <li><a href="#" id="blogLink">Blog</a></li>
+                            <li><a href="#" id="faqLink">FAQ</a></li>
+                            <li><a href="#" id="privacyLink">Privacy Policy</a></li>
+                            <li><a href="#" id="termsLink">Terms of Service</a></li>
+                        </ul>
+                    </div>
+                    <div class="footer-col">
+                        <h4 class="footer-title">Contact Us</h4>
+                        <ul class="footer-links">
+                            <li>Amsterdam, Netherlands</li>
+                            <li>+31 (0)20 123 4567</li>
+                            <li>info@legalaireach.nl</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="footer-bottom">
+                    <p>&copy; 2025 Legal AI Reach Out. All rights reserved.</p>
+                </div>
+            </div>
+        </footer>
+    </main>
+
+    <!-- Authentication Section -->
+    <div class="auth-section" id="authSection">
+        <div class="auth-card">
+            <div class="auth-header">
+                <h2 class="auth-title">Investor Dashboard Access</h2>
+                <p class="auth-subtitle">Enter your email to access business metrics and performance data</p>
+            </div>
+            <div class="auth-body">
+                <form id="authForm">
+                    <div class="form-group">
+                        <label for="email" class="form-label">Email Address</label>
+                        <input type="email" id="email" class="form-input" placeholder="investor@example.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="password" class="form-label">Password</label>
+                        <input type="password" id="password" class="form-input" placeholder="••••••••" required>
+                    </div>
+                    <button type="submit" class="auth-btn">Access Dashboard</button>
+                </form>
+            </div>
+            <div class="auth-footer">
+                <p>Need access? <a href="#" id="contactInvestorRelationsLink">Contact our investor relations team</a></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dashboard Section -->
+    <div class="dashboard-section" id="dashboardSection">
+        <div class="container">
+            <div class="dashboard-header">
+                <h2>Investor Dashboard</h2>
+                <p>Real-time performance metrics and business plan assumptions</p>
+            </div>
+
+            <!-- Key Metrics -->
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-icon" aria-hidden="true">📈</div>
+                    <div class="metric-value">42%</div>
+                    <div class="metric-label">Response Rate</div>
+                    <div class="metric-change positive">+12% vs Target</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-icon" aria-hidden="true">✅</div>
+                    <div class="metric-value">1.8%</div>
+                    <div class="metric-label">Case Acceptance</div>
+                    <div class="metric-change positive">+1.1% vs Baseline</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-icon" aria-hidden="true">⏱️</div>
+                    <div class="metric-value">3.2h</div>
+                    <div class="metric-label">Time to Lawyer</div>
+                    <div class="metric-change negative">+1.2h vs Target</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-icon" aria-hidden="true">💰</div>
+                    <div class="metric-value">48%</div>
+                    <div class="metric-label">Profit Margin</div>
+                    <div class="metric-change negative">-2% vs Target</div>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tabs">
+                <div class="tab-nav" role="tablist">
+                    <div class="tab-link active" data-tab="performance" role="tab" aria-selected="true" tabindex="0">Performance Metrics</div>
+                    <div class="tab-link" data-tab="assumptions" role="tab" aria-selected="false" tabindex="-1">Business Assumptions</div>
+                    <div class="tab-link" data-tab="projections" role="tab" aria-selected="false" tabindex="-1">Financial Projections</div>
+                    <div class="tab-link" data-tab="impact" role="tab" aria-selected="false" tabindex="-1">Impact Goals</div>
+                </div>
+
+                <!-- Performance Metrics Tab -->
+                <div class="tab-content active" id="performanceTab" role="tabpanel" aria-labelledby="performance-tab">
+                    <div class="chart">
+                        <div class="chart-header">
+                            <h3 class="chart-title">Response Rate Trend</h3>
+                        </div>
+                        <div class="chart-body">
+                            <div class="chart-placeholder">
+                                <div class="chart-icon" aria-hidden="true">📊</div>
+                                <p>Response Rate Visualization</p>
+                                <small>Showing increasing trend over time</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="chart">
+                        <div class="chart-header">
+                            <h3 class="chart-title">Case Acceptance Trend</h3>
+                        </div>
+                        <div class="chart-body">
+                            <div class="chart-placeholder">
+                                <div class="chart-icon" aria-hidden="true">📈</div>
+                                <p>Case Acceptance Visualization</p>
+                                <small>Showing steady improvement</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Business Assumptions Tab -->
+                <div class="tab-content" id="assumptionsTab" role="tabpanel" aria-labelledby="assumptions-tab">
+                    <h3>Market Assumptions</h3>
+                    <p><strong>Market Size:</strong> Total registered lawyers in the Netherlands - 18,500+</p>
+                    <p><strong>Lawyer Workload:</strong> Percentage of lawyers struggling with high workloads - Over 50%</p>
+                    <p><strong>Initial Response Rate:</strong> Percentage of lawyers responding to initial inquiries - 30%</p>
+                    <p><strong>Case Acceptance Rate:</strong> Percentage of lawyers ultimately agreeing to take on cases - 0.1% to 1.3%</p>
+                    
+                    <h3>Business Model Assumptions</h3>
+                    <p><strong>Revenue Model:</strong> Pay-per-use based on resource consumption - Resource cost × 2</p>
+                    <p><strong>AI Processing Cost:</strong> Cost per minute of AI processing time - €0.05 per minute</p>
+                    <p><strong>Storage Cost:</strong> Cost per GB of cloud storage - €0.01 per GB</p>
+                    <p><strong>Email Outreach Cost:</strong> Cost per email sent (including follow-ups) - €0.01 per email</p>
+                </div>
+
+                <!-- Financial Projections Tab -->
+                <div class="tab-content" id="projectionsTab" role="tabpanel" aria-labelledby="projections-tab">
+                    <div class="chart">
+                        <div class="chart-header">
+                            <h3 class="chart-title">Revenue Projections vs. Actual</h3>
+                        </div>
+                        <div class="chart-body">
+                            <div class="chart-placeholder">
+                                <div class="chart-icon" aria-hidden="true">💶</div>
+                                <p>Revenue Projection Visualization</p>
+                                <small>Comparing projected vs. actual revenue</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <h3>Quarterly Projections</h3>
+                    <p><strong>Q2 2025 Revenue:</strong> €125,000 | <strong>User Growth:</strong> 1,500 | <strong>Case Volume:</strong> 2,500</p>
+                    <p><strong>Q3 2025 Revenue:</strong> €250,000 | <strong>User Growth:</strong> 3,000 | <strong>Case Volume:</strong> 5,000</p>
+                    <p><strong>Q4 2025 Revenue:</strong> €375,000 | <strong>User Growth:</strong> 5,000 | <strong>Case Volume:</strong> 8,000</p>
+                    <p><strong>Q1 2026 Revenue:</strong> €500,000 | <strong>User Growth:</strong> 7,500 | <strong>Case Volume:</strong> 12,000</p>
+                </div>
+
+                <!-- Impact Goals Tab -->
+                <div class="tab-content" id="impactTab" role="tabpanel" aria-labelledby="impact-tab">
+                    <h3>Impact Goals Progress</h3>
+                    <p><strong>Response Rate Improvement:</strong> Goal: Improve lawyer response rates by 50% compared to traditional methods. Current improvement: 42% vs. 30% baseline.</p>
+                    <p><strong>Time Reduction:</strong> Goal: Reduce time to connect with appropriate legal representation by 95%. Current reduction: from 3 weeks to 3.2 hours.</p>
+                    <p><strong>Access Improvement:</strong> Goal: Improve access to legal representation for underserved communities by 100%. Current improvement: 65% increase in successful matches.</p>
+                    <p><strong>Cost Efficiency:</strong> Goal: Reduce cost of finding appropriate legal representation by 80%. Current reduction: 78% lower than traditional methods.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Deferred JavaScript -->
+    <script>
+        // Inline critical JavaScript for faster execution
+        document.addEventListener('DOMContentLoaded', function() {
+            // Elements
+            const mainContent = document.getElementById('mainContent');
+            const authSection = document.getElementById('authSection');
+            const dashboardSection = document.getElementById('dashboardSection');
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            const menuToggle = document.getElementById('menuToggle');
+            const navMenu = document.getElementById('navMenu');
+            
+            // Navigation links
+            const homeLink = document.getElementById('homeLink');
+            const howItWorksLink = document.getElementById('howItWorksLink');
+            const investorsLink = document.getElementById('investorsLink');
+            const logoLink = document.getElementById('logoLink');
+            const homeFooterLink = document.getElementById('homeFooterLink');
+            const howItWorksFooterLink = document.getElementById('howItWorksFooterLink');
+            
+            // Auth form
+            const authForm = document.getElementById('authForm');
+            
+            // Tab navigation
+            const tabLinks = document.querySelectorAll('.tab-link');
+            
+            // Function to show section
+            function showSection(section) {
+                // Show loading overlay
+                loadingOverlay.classList.add('active');
+                
+                // Hide all sections
+                mainContent.style.display = 'none';
+                authSection.style.display = 'none';
+                dashboardSection.style.display = 'none';
+                
+                // Show selected section after a short delay
+                setTimeout(() => {
+                    if (section === 'main') {
+                        mainContent.style.display = 'block';
+                    } else if (section === 'auth') {
+                        authSection.style.display = 'flex';
+                    } else if (section === 'dashboard') {
+                        dashboardSection.style.display = 'block';
+                    }
+                    
+                    // Hide loading overlay
+                    loadingOverlay.classList.remove('active');
+                    
+                    // Scroll to top
+                    window.scrollTo(0, 0);
+                }, 300); // Reduced from 500ms to 300ms for faster transitions
+            }
+            
+            // Mobile menu toggle
+            menuToggle.addEventListener('click', function() {
+                navMenu.classList.toggle('active');
+            });
+            
+            // Navigation click handlers
+            logoLink.addEventListener('click', function(e) {
+                e.preventDefault();
+                showSection('main');
+            });
+            
+            homeLink.addEventListener('click', function(e) {
+                e.preventDefault();
+                showSection('main');
+            });
+            
+            homeFooterLink.addEventListener('click', function(e) {
+                e.preventDefault();
+                showSection('main');
+            });
+            
+            investorsLink.addEventListener('click', function(e) {
+                e.preventDefault();
+                showSection('auth');
+            });
+            
+            // Smooth scroll for How It Works link
+            function smoothScroll(target) {
+                const element = document.querySelector(target);
+                const headerOffset = 70;
+                const elementPosition = element.getBoundingClientRect().top;
+                const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+                
+                window.scrollTo({
+                    top: offsetPosition,
+                    behavior: 'smooth'
+                });
+            }
+            
+            howItWorksLink.addEventListener('click', function(e) {
+                e.preventDefault();
+                smoothScroll('#how-it-works');
+            });
+            
+            howItWorksFooterLink.addEventListener('click', function(e) {
+                e.preventDefault();
+                smoothScroll('#how-it-works');
+            });
+            
+            // Auth form submission
+            authForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                // Show loading state
+                const submitButton = this.querySelector('button[type="submit"]');
+                const originalText = submitButton.innerHTML;
+                submitButton.innerHTML = 'Authenticating...';
+                submitButton.disabled = true;
+                
+                // Simulate authentication (would be a real API call in production)
+                setTimeout(() => {
+                    submitButton.innerHTML = originalText;
+                    submitButton.disabled = false;
+                    
+                    // Show dashboard after successful login
+                    showSection('dashboard');
+                }, 800); // Reduced from 1500ms to 800ms for faster response
+            });
+            
+            // Tab switching
+            tabLinks.forEach(link => {
+                link.addEventListener('click', function() {
+                    // Remove active class from all tabs
+                    tabLinks.forEach(tab => {
+                        tab.classList.remove('active');
+                        tab.setAttribute('aria-selected', 'false');
+                        tab.setAttribute('tabindex', '-1');
+                    });
+                    
+                    // Add active class to clicked tab
+                    this.classList.add('active');
+                    this.setAttribute('aria-selected', 'true');
+                    this.setAttribute('tabindex', '0');
+                    
+                    // Show corresponding content
+                    const tabId = this.getAttribute('data-tab');
+                    document.querySelectorAll('.tab-content').forEach(content => {
+                        content.classList.remove('active');
+                    });
+                    document.getElementById(tabId + 'Tab').classList.add('active');
+                });
+                
+                // Keyboard navigation for tabs
+                link.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        this.click();
+                    }
+                });
+            });
+            
+            // Placeholder links
+            const placeholderLinks = document.querySelectorAll('a:not([id])');
+            placeholderLinks.forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                });
+            });
+            
+            // Contact investor relations link
+            const contactInvestorRelationsLink = document.getElementById('contactInvestorRelationsLink');
+            if (contactInvestorRelationsLink) {
+                contactInvestorRelationsLink.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    alert('This would open a contact form for investor relations.');
+                });
+            }
+            
+            // Add page load performance tracking
+            if (window.performance) {
+                const pageLoadTime = window.performance.timing.domContentLoadedEventEnd - window.performance.timing.navigationStart;
+                console.log('Page load time:', pageLoadTime, 'ms');
+            }
+        });
+        
+        // Lazy load non-critical resources
+        window.addEventListener('load', function() {
+            // Add any additional resources that should be loaded after page load
+            // This could include analytics, additional features, etc.
+        });
+    </script>
+</body>
+</html>

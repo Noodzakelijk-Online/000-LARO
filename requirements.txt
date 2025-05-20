@@ -1,5 +1,9 @@
 Flask
 requests
+nltk
+scikit-learn
+pandas
+numpy
 SQLAlchemy
 redis
 google-api-python-client
@@ -10,10 +14,3 @@ PyPDF2
 python-docx
 beautifulsoup4
 influxdb-client
-psutil
-python-dotenv
-# Development tools
-black
-flake8
-coverage
-

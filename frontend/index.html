@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Legal AI Reach Out | Home</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root {
+            /* Primary colors - deep blues */
+            --primary-dark: #1a365d;
+            --primary-medium: #2a4a7f;
+            --primary-light: #4a6da7;
+            
+            /* Secondary colors - warm oranges */
+            --secondary-dark: #7b341e;
+            --secondary-medium: #c05621;
+            --secondary-light: #ed8936;
+            
+            /* Neutral colors */
+            --neutral-dark: #1a202c;
+            --neutral-medium: #4a5568;
+            --neutral-light: #a0aec0;
+            --neutral-bg: #f7fafc;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: var(--neutral-dark);
+            background-color: var(--neutral-bg);
+        }
+        
+        .navbar {
+            background-color: var(--primary-dark);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        .navbar-brand {
+            font-weight: 700;
+            color: white !important;
+        }
+        
+        .nav-link {
+            color: rgba(255, 255, 255, 0.85) !important;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        
+        .nav-link:hover {
+            color: white !important;
+        }
+        
+        .nav-link.active {
+            color: var(--secondary-light) !important;
+            font-weight: 600;
+        }
+        
+        .btn-primary {
+            background-color: var(--primary-medium);
+            border-color: var(--primary-medium);
+        }
+        
+        .btn-primary:hover {
+            background-color: var(--primary-dark);
+            border-color: var(--primary-dark);
+        }
+        
+        .btn-secondary {
+            background-color: var(--secondary-medium);
+            border-color: var(--secondary-medium);
+        }
+        
+        .btn-secondary:hover {
+            background-color: var(--secondary-dark);
+            border-color: var(--secondary-dark);
+        }
+        
+        .hero {
+            background: linear-gradient(135deg, var(--primary-dark), var(--primary-medium));
+            color: white;
+            padding: 6rem 0;
+        }
+        
+        .hero h1 {
+            font-weight: 700;
+            font-size: 2.8rem;
+        }
+        
+        .hero p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+        
+        .feature-card {
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            height: 100%;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+        }
+        
+        .feature-icon {
+            font-size: 2.5rem;
+            color: var(--primary-medium);
+            margin-bottom: 1rem;
+        }
+        
+        .feature-card h3 {
+            color: var(--primary-dark);
+            font-weight: 600;
+        }
+        
+        .feature-card p {
+            color: var(--neutral-medium);
+        }
+        
+        .cta-section {
+            background: linear-gradient(135deg, var(--secondary-medium), var(--secondary-dark));
+            color: white;
+            padding: 4rem 0;
+        }
+        
+        .section-title {
+            position: relative;
+            color: var(--primary-dark);
+            font-weight: 700;
+            margin-bottom: 2.5rem;
+            text-align: center;
+        }
+        
+        .section-title:after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80px;
+            height: 4px;
+            background: linear-gradient(to right, var(--primary-medium), var(--secondary-medium));
+        }
+        
+        footer {
+            background-color: var(--primary-dark);
+            color: white;
+            padding: 3rem 0;
+        }
+        
+        footer a {
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+        
+        footer a:hover {
+            color: var(--secondary-light);
+        }
+        
+        .social-icon {
+            font-size: 1.5rem;
+            margin-right: 1rem;
+            color: rgba(255, 255, 255, 0.8);
+            transition: color 0.3s ease;
+        }
+        
+        .social-icon:hover {
+            color: var(--secondary-light);
+        }
+        
+        .text-justify {
+            text-align: justify;
+        }
+        
+        /* How it works section */
+        .step-card {
+            position: relative;
+            padding: 2rem;
+            border-radius: 8px;
+            background-color: white;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            margin-bottom: 2rem;
+        }
+        
+        .step-number {
+            position: absolute;
+            top: -20px;
+            left: -20px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary-medium), var(--primary-dark));
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: 700;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
+        <div class="container">
+            <a class="navbar-brand" href="index.html">Legal AI Reach Out</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="index.html">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="how-it-works.html">How It Works</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="pricing.html">Pricing</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="investors.html">Investors</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="contact.html">Contact</a>
+                    </li>
+                    <li class="nav-item ms-lg-3">
+                        <a class="btn btn-secondary" href="login.html">Login</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-lg-6">
+                    <h1>AI-Driven Legal Outreach Platform for the Netherlands</h1>
+                    <p class="my-4">Revolutionizing how individuals access legal representation through artificial intelligence and automation.</p>
+                    <div class="d-flex flex-wrap gap-2">
+                        <a href="signup.html" class="btn btn-secondary btn-lg">Get Started</a>
+                        <a href="how-it-works.html" class="btn btn-outline-light btn-lg">Learn More</a>
+                    </div>
+                </div>
+                <div class="col-lg-6 d-none d-lg-block">
+                    <img src="https://via.placeholder.com/600x400?text=Legal+AI+Platform" alt="Legal AI Platform" class="img-fluid rounded shadow">
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="py-5 my-5">
+        <div class="container">
+            <h2 class="section-title">Key Features</h2>
+            <div class="row g-4">
+                <div class="col-md-4">
+                    <div class="feature-card bg-white p-4">
+                        <div class="feature-icon">
+                            <i class="fas fa-brain"></i>
+                        </div>
+                        <h3>AI-Powered Case Matching</h3>
+                        <p class="text-justify">Our platform employs sophisticated artificial intelligence to analyze your circumstances and automatically determine the appropriate legal field(s). Using natural language processing and machine learning, it ensures accurate case classification, eliminating the need to decipher complex legal terminology.</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="feature-card bg-white p-4">
+                        <div class="feature-icon">
+                            <i class="fas fa-file-alt"></i>
+                        </div>
+                        <h3>Automated Data Aggregation</h3>
+                        <p class="text-justify">The system seamlessly integrates with email platforms and cloud storage solutions, consolidating all relevant documents and communications into a structured evidence trail. It provides a summarized "red line" thread of your case for legal professionals, eliminating manual compilation while ensuring lawyers receive a concise case summary.</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="feature-card bg-white p-4">
+                        <div class="feature-icon">
+                            <i class="fas fa-envelope-open-text"></i>
+                        </div>
+                        <h3>Intelligent Outreach & Follow-Ups</h3>
+                        <p class="text-justify">Our service automates email outreach to legal professionals throughout the Netherlands registered in the Nederlandse orde van advocaten (NOvA), focusing on those with expertise in the relevant legal field(s). It monitors responses and sends courteous follow-up messages until a lawyer either accepts or declines your case.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works Section -->
+    <section class="py-5 bg-light">
+        <div class="container">
+            <h2 class="section-title">How It Works</h2>
+            <div class="row">
+                <div class="col-lg-10 mx-auto">
+                    <div class="step-card">
+                        <div class="step-number">1</div>
+                        <h3>Describe Your Case</h3>
+                        <p class="text-justify">Simply explain your legal situation in your own words. Our AI will analyze your description to identify the appropriate legal field(s) and determine the complexity of your case.</p>
+                    </div>
+                    
+                    <div class="step-card">
+                        <div class="step-number">2</div>
+                        <h3>Connect Your Accounts</h3>
+                        <p class="text-justify">Securely connect your email (Gmail/Outlook) and cloud storage (Google Drive/OneDrive) accounts, or manually upload relevant documents. Our system will organize everything into a structured case file.</p>
+                    </div>
+                    
+                    <div class="step-card">
+                        <div class="step-number">3</div>
+                        <h3>AI-Powered Outreach</h3>
+                        <p class="text-justify">Our platform automatically contacts qualified lawyers specializing in your case's legal field(s). It handles all follow-up communications until a lawyer accepts your case.</p>
+                    </div>
+                    
+                    <div class="step-card">
+                        <div class="step-number">4</div>
+                        <h3>Connect With Your Lawyer</h3>
+                        <p class="text-justify">Once a lawyer accepts your case, we facilitate the introduction and provide them with your complete case file, including the organized evidence trail and case summary.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="text-center mt-4">
+                <a href="how-it-works.html" class="btn btn-primary">Learn More About Our Process</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Why Choose Us Section -->
+    <section class="py-5 my-5">
+        <div class="container">
+            <h2 class="section-title">Why Choose Legal AI Reach Out</h2>
+            <div class="row align-items-center">
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <img src="https://via.placeholder.com/600x400?text=Why+Choose+Us" alt="Why Choose Us" class="img-fluid rounded shadow">
+                </div>
+                <div class="col-lg-6">
+                    <div class="ps-lg-4">
+                        <h3 class="mb-4">Unique Value Proposition</h3>
+                        <div class="d-flex mb-4">
+                            <div class="me-3">
+                                <i class="fas fa-check-circle text-success fa-2x"></i>
+                            </div>
+                            <div>
+                                <h4>Precision</h4>
+                                <p class="text-justify">Advanced AI ensures that only lawyers with expertise relevant to your case are contacted.</p>
+                            </div>
+                        </div>
+                        <div class="d-flex mb-4">
+                            <div class="me-3">
+                                <i class="fas fa-check-circle text-success fa-2x"></i>
+                            </div>
+                            <div>
+                                <h4>Efficiency</h4>
+                                <p class="text-justify">Automation minimizes time spent on repetitive tasks, such as outreach and document management.</p>
+                            </div>
+                        </div>
+                        <div class="d-flex">
+                            <div class="me-3">
+                                <i class="fas fa-check-circle text-success fa-2x"></i>
+                            </div>
+                            <div>
+                                <h4>Accessibility</h4>
+                                <p class="text-justify">By simplifying case preparation and lawyer engagement, our platform empowers individuals who might otherwise face difficulties navigating the legal system.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta-section">
+        <div class="container text-center">
+            <h2 class="mb-4">Ready to Find Your Legal Representation?</h2>
+            <p class="lead mb-4">Our AI-driven platform makes it easy to connect with qualified lawyers in the Netherlands.</p>
+            <a href="signup.html" class="btn btn-light btn-lg">Get Started Today</a>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-4 mb-4 mb-lg-0">
+                    <h5>Legal AI Reach Out</h5>
+                    <p>Revolutionizing how individuals in the Netherlands access legal representation through artificial intelligence and automation.</p>
+                    <div class="mt-3">
+                        <a href="#" class="social-icon"><i class="fab fa-facebook-f"></i></a>
+                        <a href="#" class="social-icon"><i class="fab fa-twitter"></i></a>
+                        <a href="#" class="social-icon"><i class="fab fa-linkedin-in"></i></a>
+                        <a href="#" class="social-icon"><i class="fab fa-instagram"></i></a>
+                    </div>
+                </div>
+                <div class="col-lg-2 col-md-4 mb-4 mb-md-0">
+                    <h5>Quick Links</h5>
+                    <ul class="list-unstyled">
+                        <li class="mb-2"><a href="index.html">Home</a></li>
+                        <li class="mb-2"><a href="how-it-works.html">How It Works</a></li>
+                        <li class="mb-2"><a href="pricing.html">Pricing</a></li>
+                        <li class="mb-2"><a href="contact.html">Contact</a></li>
+                    </ul>
+                </div>
+                <div class="col-lg-2 col-md-4 mb-4 mb-md-0">
+                    <h5>Resources</h5>
+                    <ul class="list-unstyled">
+                        <li class="mb-2"><a href="#">Blog</a></li>
+                        <li class="mb-2"><a href="#">FAQ</a></li>
+                        <li class="mb-2"><a href="#">Privacy Policy</a></li>
+                        <li class="mb-2"><a href="#">Terms of Service</a></li>
+                    </ul>
+                </div>
+                <div class="col-lg-4 col-md-4">
+                    <h5>Contact Us</h5>
+                    <ul class="list-unstyled">
+                        <li class="mb-2"><i class="fas fa-map-marker-alt me-2"></i> Amsterdam, Netherlands</li>
+                        <li class="mb-2"><i class="fas fa-phone me-2"></i> +31 (0)20 123 4567</li>
+                        <li class="mb-2"><i class="fas fa-envelope me-2"></i> info@legalaireach.nl</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="border-top pt-4 mt-4 text-center">
+                <p>&copy; 2025 Legal AI Reach Out. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

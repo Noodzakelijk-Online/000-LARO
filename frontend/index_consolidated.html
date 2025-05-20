@@ -1,0 +1,1075 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Legal AI Reach Out | Home</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="css/dark-theme.css">
+    <style>
+        /* Additional styles for consolidated platform */
+        #authContainer, #dashboardContainer, #mainContent {
+            display: none;
+        }
+        
+        .active-section {
+            display: block !important;
+        }
+        
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        
+        .loading-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .loading-spinner {
+            text-align: center;
+        }
+        
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid rgba(255, 107, 0, 0.3);
+            border-radius: 50%;
+            border-top-color: var(--orange-primary);
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+        
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+        
+        .loading-text {
+            color: white;
+            font-weight: 500;
+        }
+        
+        .page-transition {
+            animation: fadeIn 0.5s ease forwards;
+        }
+        
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner">
+            <div class="spinner"></div>
+            <p class="loading-text">Loading...</p>
+        </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
+        <div class="container-fluid px-4">
+            <a class="navbar-logo" href="#" id="homeLink">
+                <h1>Legal AI Reach Out</h1>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <i class="fas fa-bars text-orange"></i>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-menu ms-auto">
+                    <li class="navbar-item">
+                        <a class="navbar-link active" href="#" id="homeLinkNav">Home</a>
+                    </li>
+                    <li class="navbar-item">
+                        <a class="navbar-link" href="#" id="howItWorksLink">How It Works</a>
+                    </li>
+                    <li class="navbar-item">
+                        <a class="navbar-link" href="#" id="pricingLink">Pricing</a>
+                    </li>
+                    <li class="navbar-item">
+                        <a class="navbar-link" href="#" id="investorsLink">Investors</a>
+                    </li>
+                    <li class="navbar-item">
+                        <a class="navbar-link" href="#" id="contactLink">Contact</a>
+                    </li>
+                    <li class="navbar-item">
+                        <a class="navbar-link" href="#" id="loginLink">Login</a>
+                    </li>
+                    <li class="navbar-item ms-lg-3">
+                        <a class="btn btn-primary" href="#" id="getStartedLink">Get Started</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content Section -->
+    <div id="mainContent" class="active-section">
+        <!-- Hero Section -->
+        <section class="hero-section">
+            <div class="container">
+                <div class="row align-items-center">
+                    <div class="col-lg-6 hero-content">
+                        <h1 class="hero-title slide-in-left">AI-Driven Legal Outreach Platform for the Netherlands</h1>
+                        <p class="hero-subtitle slide-in-left" style="animation-delay: 0.2s;">Revolutionizing how individuals access legal representation through artificial intelligence and automation.</p>
+                        <div class="hero-buttons slide-in-left" style="animation-delay: 0.4s;">
+                            <a href="#" class="btn btn-primary btn-lg me-3 mb-3 mb-md-0" id="getStartedBtn">Get Started</a>
+                            <a href="#how-it-works" class="btn btn-outline btn-lg" id="learnMoreBtn">Learn More</a>
+                        </div>
+                    </div>
+                    <div class="col-lg-6 hero-image slide-in-right">
+                        <img src="https://i.ibb.co/Qj1Vz7W/home-dark-mode.jpg" alt="Legal AI Platform" class="img-fluid">
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Key Features Section -->
+        <section class="features-section" id="features">
+            <div class="container">
+                <div class="section-header text-center">
+                    <h2 class="section-title">Key Features</h2>
+                    <div class="section-divider"></div>
+                </div>
+                <div class="row">
+                    <div class="col-md-4 mb-4 mb-md-0">
+                        <div class="feature-card fade-in">
+                            <div class="feature-icon">
+                                <i class="fas fa-brain"></i>
+                            </div>
+                            <h3 class="feature-title">AI-Powered Case Matching</h3>
+                            <p class="feature-description">
+                                Our platform employs sophisticated artificial intelligence to analyze your circumstances and automatically determine the appropriate legal field(s). Using natural language processing and machine learning, it ensures accurate case classification, eliminating the need to decipher complex legal terminology.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-4 mb-md-0">
+                        <div class="feature-card fade-in" style="animation-delay: 0.2s;">
+                            <div class="feature-icon">
+                                <i class="fas fa-file-alt"></i>
+                            </div>
+                            <h3 class="feature-title">Automated Data Aggregation</h3>
+                            <p class="feature-description">
+                                The system seamlessly integrates with email platforms and cloud storage solutions, consolidating all relevant documents and communications into a structured evidence trail. It provides a summarized "red line" thread of your case for legal professionals, eliminating manual compilation while ensuring lawyers receive a concise case summary.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="feature-card fade-in" style="animation-delay: 0.4s;">
+                            <div class="feature-icon">
+                                <i class="fas fa-envelope"></i>
+                            </div>
+                            <h3 class="feature-title">Intelligent Outreach & Follow-Ups</h3>
+                            <p class="feature-description">
+                                Our service automates email outreach to legal professionals throughout the Netherlands registered in the Nederlandse orde van advocaten (NOvA), focusing on those with expertise in the relevant legal field(s). It monitors responses and sends courteous follow-up messages until a lawyer either accepts or declines your case.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- How It Works Section -->
+        <section class="how-it-works-section" id="how-it-works">
+            <div class="container">
+                <div class="section-header text-center">
+                    <h2 class="section-title">How It Works</h2>
+                    <div class="section-divider"></div>
+                </div>
+                <div class="row">
+                    <div class="col-md-3 mb-4 mb-md-0">
+                        <div class="step-card fade-in">
+                            <div class="step-number">1</div>
+                            <div class="step-icon">
+                                <i class="fas fa-comment-alt"></i>
+                            </div>
+                            <h3 class="step-title">Describe Your Case</h3>
+                            <p class="step-description">
+                                Simply explain your legal situation in your own words. Our AI will analyze your description to identify the appropriate legal field(s) and determine the complexity of your case.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-4 mb-md-0">
+                        <div class="step-card fade-in" style="animation-delay: 0.2s;">
+                            <div class="step-number">2</div>
+                            <div class="step-icon">
+                                <i class="fas fa-link"></i>
+                            </div>
+                            <h3 class="step-title">Connect Your Accounts</h3>
+                            <p class="step-description">
+                                Securely connect your email (Gmail/Outlook) and cloud storage (Google Drive/OneDrive) accounts, or manually upload relevant documents. Our system will organize everything into a structured case file.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-4 mb-md-0">
+                        <div class="step-card fade-in" style="animation-delay: 0.4s;">
+                            <div class="step-number">3</div>
+                            <div class="step-icon">
+                                <i class="fas fa-paper-plane"></i>
+                            </div>
+                            <h3 class="step-title">AI-Powered Outreach</h3>
+                            <p class="step-description">
+                                Our platform automatically contacts qualified lawyers specializing in your case's legal field(s). It handles all follow-up communications until a lawyer accepts your case.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="step-card fade-in" style="animation-delay: 0.6s;">
+                            <div class="step-number">4</div>
+                            <div class="step-icon">
+                                <i class="fas fa-handshake"></i>
+                            </div>
+                            <h3 class="step-title">Connect With Your Lawyer</h3>
+                            <p class="step-description">
+                                Once a lawyer accepts your case, we facilitate the introduction and provide them with your complete case file, including the organized evidence trail and case summary.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div class="text-center mt-5">
+                    <a href="#" class="btn btn-outline" id="learnMoreProcessBtn">Learn More About Our Process</a>
+                </div>
+            </div>
+        </section>
+
+        <!-- Value Proposition Section -->
+        <section class="value-section">
+            <div class="container">
+                <div class="section-header text-center">
+                    <h2 class="section-title">Why Choose Legal AI Reach Out</h2>
+                    <div class="section-divider"></div>
+                    <h3 class="section-subtitle">Unique Value Proposition</h3>
+                </div>
+                <div class="row">
+                    <div class="col-md-4 mb-4 mb-md-0">
+                        <div class="value-card fade-in">
+                            <div class="value-icon">
+                                <i class="fas fa-bullseye"></i>
+                            </div>
+                            <h3 class="value-title">Precision</h3>
+                            <p class="value-description">
+                                Advanced AI ensures that only lawyers with expertise relevant to your case are contacted.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-4 mb-md-0">
+                        <div class="value-card fade-in" style="animation-delay: 0.2s;">
+                            <div class="value-icon">
+                                <i class="fas fa-tachometer-alt"></i>
+                            </div>
+                            <h3 class="value-title">Efficiency</h3>
+                            <p class="value-description">
+                                Automation minimizes time spent on repetitive tasks, such as outreach and document management.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="value-card fade-in" style="animation-delay: 0.4s;">
+                            <div class="value-icon">
+                                <i class="fas fa-universal-access"></i>
+                            </div>
+                            <h3 class="value-title">Accessibility</h3>
+                            <p class="value-description">
+                                By simplifying case preparation and lawyer engagement, our platform empowers individuals who might otherwise face difficulties navigating the legal system.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- CTA Section -->
+        <section class="cta-section">
+            <div class="container">
+                <div class="cta-content text-center">
+                    <h2 class="cta-title">Ready to Find Your Legal Representation?</h2>
+                    <p class="cta-subtitle">Our AI-driven platform makes it easy to connect with qualified lawyers in the Netherlands.</p>
+                    <a href="#" class="btn btn-primary btn-lg mt-4" id="getStartedCtaBtn">Get Started Today</a>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="container">
+                <div class="row">
+                    <div class="col-lg-3 col-md-6 mb-4 mb-lg-0">
+                        <div class="footer-brand">
+                            <h3>Legal AI Reach Out</h3>
+                            <p>Revolutionizing how individuals in the Netherlands access legal representation through artificial intelligence and automation.</p>
+                        </div>
+                    </div>
+                    <div class="col-lg-3 col-md-6 mb-4 mb-lg-0">
+                        <h4 class="footer-title">Quick Links</h4>
+                        <ul class="footer-links">
+                            <li><a href="#" id="homeFooterLink">Home</a></li>
+                            <li><a href="#" id="howItWorksFooterLink">How It Works</a></li>
+                            <li><a href="#" id="pricingFooterLink">Pricing</a></li>
+                            <li><a href="#" id="contactFooterLink">Contact</a></li>
+                        </ul>
+                    </div>
+                    <div class="col-lg-3 col-md-6 mb-4 mb-lg-0">
+                        <h4 class="footer-title">Resources</h4>
+                        <ul class="footer-links">
+                            <li><a href="#" id="blogLink">Blog</a></li>
+                            <li><a href="#" id="faqLink">FAQ</a></li>
+                            <li><a href="#" id="privacyLink">Privacy Policy</a></li>
+                            <li><a href="#" id="termsLink">Terms of Service</a></li>
+                        </ul>
+                    </div>
+                    <div class="col-lg-3 col-md-6">
+                        <h4 class="footer-title">Contact Us</h4>
+                        <ul class="footer-contact">
+                            <li><i class="fas fa-map-marker-alt"></i> Amsterdam, Netherlands</li>
+                            <li><i class="fas fa-phone"></i> +31 (0)20 123 4567</li>
+                            <li><i class="fas fa-envelope"></i> info@legalaireach.nl</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="footer-bottom">
+                    <p>&copy; 2025 Legal AI Reach Out. All rights reserved.</p>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Authentication Section -->
+    <div class="auth-container" id="authContainer">
+        <div class="floating-shape shape-1"></div>
+        <div class="floating-shape shape-2"></div>
+        <div class="auth-card">
+            <div class="auth-header">
+                <h2 class="auth-title">Investor Dashboard Access</h2>
+                <p class="auth-subtitle">Enter your email to access business metrics and performance data</p>
+            </div>
+            <div class="auth-body">
+                <form id="authForm">
+                    <div class="auth-form-group">
+                        <label for="email" class="auth-label">Email Address</label>
+                        <input type="email" id="email" class="auth-input" placeholder="investor@example.com" required>
+                    </div>
+                    <div class="auth-form-group">
+                        <label for="password" class="auth-label">Password</label>
+                        <input type="password" id="password" class="auth-input" placeholder="••••••••" required>
+                    </div>
+                    <button type="submit" class="auth-btn">Access Dashboard</button>
+                </form>
+            </div>
+            <div class="auth-footer">
+                <p>Need access? <a href="#" id="contactInvestorRelationsLink">Contact our investor relations team</a></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dashboard Section -->
+    <div class="dashboard-container" id="dashboardContainer">
+        <!-- Navigation -->
+        <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
+            <div class="container-fluid px-4">
+                <a class="navbar-logo" href="#" id="homeDashboardLink">
+                    <h1>Legal AI Reach Out</h1>
+                </a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                    <i class="fas fa-bars text-orange"></i>
+                </button>
+                <div class="collapse navbar-collapse" id="navbarNav">
+                    <ul class="navbar-menu ms-auto">
+                        <li class="navbar-item">
+                            <a class="navbar-link" href="#" id="homeDashboardNavLink">Home</a>
+                        </li>
+                        <li class="navbar-item">
+                            <a class="navbar-link active" href="#" id="investorsDashboardLink">Investors</a>
+                        </li>
+                        <li class="navbar-item">
+                            <a class="navbar-link" href="#" id="logoutBtn">Logout</a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+
+        <div class="container py-5">
+            <div class="dashboard-header slide-in-up">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h2 class="dashboard-title">Investor Dashboard</h2>
+                        <p class="dashboard-subtitle">Real-time performance metrics and business plan assumptions</p>
+                    </div>
+                    <div class="col-md-4 text-md-end">
+                        <div class="d-flex justify-content-md-end align-items-center">
+                            <span class="me-2 text-secondary">Last updated:</span>
+                            <span class="text-primary">April 1, 2025 - 20:15 CET</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Key Metrics -->
+            <div class="row mb-4">
+                <div class="col-md-3 col-sm-6 mb-4 mb-md-0 fade-in">
+                    <div class="metrics-card">
+                        <div class="metrics-icon">
+                            <i class="fas fa-reply"></i>
+                        </div>
+                        <div class="metrics-value">42%</div>
+                        <div class="metrics-label">Response Rate</div>
+                        <div class="metrics-change positive">+12% vs Target</div>
+                    </div>
+                </div>
+                <div class="col-md-3 col-sm-6 mb-4 mb-md-0 fade-in" style="animation-delay: 0.1s;">
+                    <div class="metrics-card">
+                        <div class="metrics-icon">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <div class="metrics-value">1.8%</div>
+                        <div class="metrics-label">Case Acceptance</div>
+                        <div class="metrics-change positive">+1.1% vs Baseline</div>
+                    </div>
+                </div>
+                <div class="col-md-3 col-sm-6 mb-4 mb-md-0 fade-in" style="animation-delay: 0.2s;">
+                    <div class="metrics-card">
+                        <div class="metrics-icon">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div class="metrics-value">3.2h</div>
+                        <div class="metrics-label">Time to Lawyer</div>
+                        <div class="metrics-change negative">+1.2h vs Target</div>
+                    </div>
+                </div>
+                <div class="col-md-3 col-sm-6 mb-4 mb-md-0 fade-in" style="animation-delay: 0.3s;">
+                    <div class="metrics-card">
+                        <div class="metrics-icon">
+                            <i class="fas fa-chart-line"></i>
+                        </div>
+                        <div class="metrics-value">48%</div>
+                        <div class="metrics-label">Profit Margin</div>
+                        <div class="metrics-change negative">-2% vs Target</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tab-container slide-in-up" style="animation-delay: 0.2s;">
+                <div class="tab-nav">
+                    <div class="tab-link active" data-tab="performance">Performance Metrics</div>
+                    <div class="tab-link" data-tab="assumptions">Business Assumptions</div>
+                    <div class="tab-link" data-tab="projections">Financial Projections</div>
+                    <div class="tab-link" data-tab="impact">Impact Goals</div>
+                </div>
+
+                <!-- Performance Metrics Tab -->
+                <div class="tab-content active" id="performanceTab">
+                    <div class="row">
+                        <div class="col-md-6 mb-4">
+                            <div class="chart-container">
+                                <div class="chart-header">
+                                    <h5 class="chart-title">Response Rate Trend</h5>
+                                    <div class="chart-actions">
+                                        <select class="form-select form-select-sm bg-tertiary text-primary border-0">
+                                            <option>Last 30 Days</option>
+                                            <option>Last Quarter</option>
+                                            <option>Last Year</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="chart-body">
+                                    <div class="chart-placeholder">
+                                        <div class="text-center">
+                                            <i class="fas fa-chart-line fa-3x mb-3 text-orange"></i>
+                                            <p>Response Rate Visualization</p>
+                                            <small>Showing increasing trend over time</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-4">
+                            <div class="chart-container">
+                                <div class="chart-header">
+                                    <h5 class="chart-title">Case Acceptance Trend</h5>
+                                    <div class="chart-actions">
+                                        <select class="form-select form-select-sm bg-tertiary text-primary border-0">
+                                            <option>Last 30 Days</option>
+                                            <option>Last Quarter</option>
+                                            <option>Last Year</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="chart-body">
+                                    <div class="chart-placeholder">
+                                        <div class="text-center">
+                                            <i class="fas fa-chart-bar fa-3x mb-3 text-orange"></i>
+                                            <p>Case Acceptance Visualization</p>
+                                            <small>Showing steady improvement</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-4">
+                            <div class="chart-container">
+                                <div class="chart-header">
+                                    <h5 class="chart-title">Time to Lawyer</h5>
+                                    <div class="chart-actions">
+                                        <select class="form-select form-select-sm bg-tertiary text-primary border-0">
+                                            <option>Last 30 Days</option>
+                                            <option>Last Quarter</option>
+                                            <option>Last Year</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="chart-body">
+                                    <div class="chart-placeholder">
+                                        <div class="text-center">
+                                            <i class="fas fa-chart-area fa-3x mb-3 text-orange"></i>
+                                            <p>Time to Lawyer Visualization</p>
+                                            <small>Showing recent increase in response time</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-4">
+                            <div class="chart-container">
+                                <div class="chart-header">
+                                    <h5 class="chart-title">Profit Margin</h5>
+                                    <div class="chart-actions">
+                                        <select class="form-select form-select-sm bg-tertiary text-primary border-0">
+                                            <option>Last 30 Days</option>
+                                            <option>Last Quarter</option>
+                                            <option>Last Year</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="chart-body">
+                                    <div class="chart-placeholder">
+                                        <div class="text-center">
+                                            <i class="fas fa-chart-pie fa-3x mb-3 text-orange"></i>
+                                            <p>Profit Margin Visualization</p>
+                                            <small>Showing slight decline in recent period</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Business Assumptions Tab -->
+                <div class="tab-content" id="assumptionsTab">
+                    <div class="row">
+                        <div class="col-md-12 mb-4">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="card-title mb-0">Market Assumptions</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="table-responsive">
+                                        <table class="assumptions-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Assumption</th>
+                                                    <th>Description</th>
+                                                    <th>Value</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr>
+                                                    <td>Market Size</td>
+                                                    <td>Total registered lawyers in the Netherlands</td>
+                                                    <td>18,500+</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Lawyer Workload</td>
+                                                    <td>Percentage of lawyers struggling with high workloads</td>
+                                                    <td>Over 50%</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Initial Response Rate</td>
+                                                    <td>Percentage of lawyers responding to initial inquiries</td>
+                                                    <td>30%</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Case Acceptance Rate</td>
+                                                    <td>Percentage of lawyers ultimately agreeing to take on cases</td>
+                                                    <td>0.1% to 1.3%</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-12 mb-4">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="card-title mb-0">Business Model Assumptions</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="table-responsive">
+                                        <table class="assumptions-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Assumption</th>
+                                                    <th>Description</th>
+                                                    <th>Value</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr>
+                                                    <td>Revenue Model</td>
+                                                    <td>Pay-per-use based on resource consumption</td>
+                                                    <td>Resource cost × 2</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>AI Processing Cost</td>
+                                                    <td>Cost per minute of AI processing time</td>
+                                                    <td>€0.05 per minute</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Storage Cost</td>
+                                                    <td>Cost per GB of cloud storage</td>
+                                                    <td>€0.01 per GB</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Email Outreach Cost</td>
+                                                    <td>Cost per email sent (including follow-ups)</td>
+                                                    <td>€0.01 per email</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Financial Projections Tab -->
+                <div class="tab-content" id="projectionsTab">
+                    <div class="row">
+                        <div class="col-md-6 mb-4">
+                            <div class="chart-container">
+                                <div class="chart-header">
+                                    <h5 class="chart-title">Revenue Projections vs. Actual</h5>
+                                </div>
+                                <div class="chart-body">
+                                    <div class="chart-placeholder">
+                                        <div class="text-center">
+                                            <i class="fas fa-euro-sign fa-3x mb-3 text-orange"></i>
+                                            <p>Revenue Projection Visualization</p>
+                                            <small>Comparing projected vs. actual revenue</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-4">
+                            <div class="chart-container">
+                                <div class="chart-header">
+                                    <h5 class="chart-title">User Growth</h5>
+                                </div>
+                                <div class="chart-body">
+                                    <div class="chart-placeholder">
+                                        <div class="text-center">
+                                            <i class="fas fa-users fa-3x mb-3 text-orange"></i>
+                                            <p>User Growth Visualization</p>
+                                            <small>Comparing projected vs. actual user acquisition</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-12 mb-4">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="card-title mb-0">Quarterly Projections</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="table-responsive">
+                                        <table class="assumptions-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Metric</th>
+                                                    <th>Q2 2025 (Projected)</th>
+                                                    <th>Q3 2025 (Projected)</th>
+                                                    <th>Q4 2025 (Projected)</th>
+                                                    <th>Q1 2026 (Projected)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr>
+                                                    <td>Revenue</td>
+                                                    <td>€125,000</td>
+                                                    <td>€250,000</td>
+                                                    <td>€375,000</td>
+                                                    <td>€500,000</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>User Growth</td>
+                                                    <td>1,500</td>
+                                                    <td>3,000</td>
+                                                    <td>5,000</td>
+                                                    <td>7,500</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Case Volume</td>
+                                                    <td>2,500</td>
+                                                    <td>5,000</td>
+                                                    <td>8,000</td>
+                                                    <td>12,000</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Profit Margin</td>
+                                                    <td>45%</td>
+                                                    <td>48%</td>
+                                                    <td>50%</td>
+                                                    <td>52%</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Impact Goals Tab -->
+                <div class="tab-content" id="impactTab">
+                    <div class="row">
+                        <div class="col-md-12 mb-4">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="card-title mb-0">Impact Goals Progress</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="impact-goal">
+                                        <div class="impact-header">
+                                            <span class="impact-title">Response Rate Improvement</span>
+                                            <span class="impact-value">84%</span>
+                                        </div>
+                                        <div class="impact-progress">
+                                            <div class="impact-bar" style="width: 84%;"></div>
+                                        </div>
+                                        <p class="impact-description">Goal: Improve lawyer response rates by 50% compared to traditional methods. Current improvement: 42% vs. 30% baseline.</p>
+                                    </div>
+                                    
+                                    <div class="impact-goal">
+                                        <div class="impact-header">
+                                            <span class="impact-title">Time Reduction</span>
+                                            <span class="impact-value">85%</span>
+                                        </div>
+                                        <div class="impact-progress">
+                                            <div class="impact-bar" style="width: 85%;"></div>
+                                        </div>
+                                        <p class="impact-description">Goal: Reduce time to connect with appropriate legal representation by 95%. Current reduction: from 3 weeks to 3.2 hours.</p>
+                                    </div>
+                                    
+                                    <div class="impact-goal">
+                                        <div class="impact-header">
+                                            <span class="impact-title">Access Improvement</span>
+                                            <span class="impact-value">65%</span>
+                                        </div>
+                                        <div class="impact-progress">
+                                            <div class="impact-bar" style="width: 65%;"></div>
+                                        </div>
+                                        <p class="impact-description">Goal: Improve access to legal representation for underserved communities by 100%. Current improvement: 65% increase in successful matches.</p>
+                                    </div>
+                                    
+                                    <div class="impact-goal">
+                                        <div class="impact-header">
+                                            <span class="impact-title">Cost Efficiency</span>
+                                            <span class="impact-value">78%</span>
+                                        </div>
+                                        <div class="impact-progress">
+                                            <div class="impact-bar" style="width: 78%;"></div>
+                                        </div>
+                                        <p class="impact-description">Goal: Reduce cost of finding appropriate legal representation by 80%. Current reduction: 78% lower than traditional methods.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-12 mb-4">
+                            <div class="chart-container">
+                                <div class="chart-header">
+                                    <h5 class="chart-title">Social Impact Metrics</h5>
+                                </div>
+                                <div class="chart-body">
+                                    <div class="chart-placeholder">
+                                        <div class="text-center">
+                                            <i class="fas fa-hands-helping fa-3x mb-3 text-orange"></i>
+                                            <p>Social Impact Visualization</p>
+                                            <small>Showing improvements in legal access across demographics</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="js/enhanced-ux.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Show loading overlay
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            
+            // Navigation links
+            const homeLink = document.getElementById('homeLink');
+            const homeLinkNav = document.getElementById('homeLinkNav');
+            const howItWorksLink = document.getElementById('howItWorksLink');
+            const pricingLink = document.getElementById('pricingLink');
+            const investorsLink = document.getElementById('investorsLink');
+            const contactLink = document.getElementById('contactLink');
+            const loginLink = document.getElementById('loginLink');
+            const getStartedLink = document.getElementById('getStartedLink');
+            const getStartedBtn = document.getElementById('getStartedBtn');
+            const getStartedCtaBtn = document.getElementById('getStartedCtaBtn');
+            const learnMoreBtn = document.getElementById('learnMoreBtn');
+            const learnMoreProcessBtn = document.getElementById('learnMoreProcessBtn');
+            
+            // Footer links
+            const homeFooterLink = document.getElementById('homeFooterLink');
+            const howItWorksFooterLink = document.getElementById('howItWorksFooterLink');
+            const pricingFooterLink = document.getElementById('pricingFooterLink');
+            const contactFooterLink = document.getElementById('contactFooterLink');
+            const blogLink = document.getElementById('blogLink');
+            const faqLink = document.getElementById('faqLink');
+            const privacyLink = document.getElementById('privacyLink');
+            const termsLink = document.getElementById('termsLink');
+            
+            // Dashboard links
+            const homeDashboardLink = document.getElementById('homeDashboardLink');
+            const homeDashboardNavLink = document.getElementById('homeDashboardNavLink');
+            const investorsDashboardLink = document.getElementById('investorsDashboardLink');
+            const logoutBtn = document.getElementById('logoutBtn');
+            const contactInvestorRelationsLink = document.getElementById('contactInvestorRelationsLink');
+            
+            // Content sections
+            const mainContent = document.getElementById('mainContent');
+            const authContainer = document.getElementById('authContainer');
+            const dashboardContainer = document.getElementById('dashboardContainer');
+            
+            // Auth form
+            const authForm = document.getElementById('authForm');
+            
+            // Tab navigation
+            const tabLinks = document.querySelectorAll('.tab-link');
+            const tabContents = document.querySelectorAll('.tab-content');
+            
+            // Function to show section
+            function showSection(section) {
+                // Show loading overlay
+                loadingOverlay.classList.add('active');
+                
+                // Hide all sections
+                mainContent.classList.remove('active-section');
+                authContainer.classList.remove('active-section');
+                dashboardContainer.classList.remove('active-section');
+                
+                // Update active nav links
+                document.querySelectorAll('.navbar-link').forEach(link => {
+                    link.classList.remove('active');
+                });
+                
+                // Show selected section after a short delay
+                setTimeout(() => {
+                    if (section === 'main') {
+                        mainContent.classList.add('active-section');
+                        homeLinkNav.classList.add('active');
+                    } else if (section === 'auth') {
+                        authContainer.classList.add('active-section');
+                        investorsLink.classList.add('active');
+                    } else if (section === 'dashboard') {
+                        dashboardContainer.classList.add('active-section');
+                        investorsDashboardLink.classList.add('active');
+                    }
+                    
+                    // Hide loading overlay
+                    loadingOverlay.classList.remove('active');
+                    
+                    // Scroll to top
+                    window.scrollTo(0, 0);
+                }, 500);
+            }
+            
+            // Home link click handlers
+            homeLink.addEventListener('click', function(e) {
+                e.preventDefault();
+                showSection('main');
+            });
+            
+            homeLinkNav.addEventListener('click', function(e) {
+                e.preventDefault();
+                showSection('main');
+            });
+            
+            homeFooterLink.addEventListener('click', function(e) {
+                e.preventDefault();
+                showSection('main');
+            });
+            
+            // Investors link click handler
+            investorsLink.addEventListener('click', function(e) {
+                e.preventDefault();
+                showSection('auth');
+            });
+            
+            // Login link click handler
+            loginLink.addEventListener('click', function(e) {
+                e.preventDefault();
+                showSection('auth');
+            });
+            
+            // Get Started buttons click handlers
+            getStartedLink.addEventListener('click', function(e) {
+                e.preventDefault();
+                showSection('auth');
+            });
+            
+            getStartedBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                showSection('auth');
+            });
+            
+            getStartedCtaBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                showSection('auth');
+            });
+            
+            // Learn More buttons click handlers
+            learnMoreBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                const howItWorksSection = document.getElementById('how-it-works');
+                howItWorksSection.scrollIntoView({ behavior: 'smooth' });
+            });
+            
+            learnMoreProcessBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                // This would link to a more detailed page in a real implementation
+                alert('This would navigate to a detailed explanation of our process.');
+            });
+            
+            // How It Works link click handler
+            howItWorksLink.addEventListener('click', function(e) {
+                e.preventDefault();
+                showSection('main');
+                setTimeout(() => {
+                    const howItWorksSection = document.getElementById('how-it-works');
+                    howItWorksSection.scrollIntoView({ behavior: 'smooth' });
+                }, 100);
+            });
+            
+            howItWorksFooterLink.addEventListener('click', function(e) {
+                e.preventDefault();
+                showSection('main');
+                setTimeout(() => {
+                    const howItWorksSection = document.getElementById('how-it-works');
+                    howItWorksSection.scrollIntoView({ behavior: 'smooth' });
+                }, 100);
+            });
+            
+            // Dashboard navigation
+            homeDashboardLink.addEventListener('click', function(e) {
+                e.preventDefault();
+                showSection('main');
+            });
+            
+            homeDashboardNavLink.addEventListener('click', function(e) {
+                e.preventDefault();
+                showSection('main');
+            });
+            
+            // Logout button click handler
+            logoutBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                showSection('main');
+            });
+            
+            // Contact investor relations link click handler
+            contactInvestorRelationsLink.addEventListener('click', function(e) {
+                e.preventDefault();
+                alert('This would open a contact form for investor relations.');
+            });
+            
+            // Auth form submission
+            authForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                // Show loading state
+                const submitButton = this.querySelector('button[type="submit"]');
+                const originalText = submitButton.innerHTML;
+                submitButton.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Authenticating...`;
+                submitButton.disabled = true;
+                
+                // Simulate authentication (would be a real API call in production)
+                setTimeout(() => {
+                    submitButton.innerHTML = originalText;
+                    submitButton.disabled = false;
+                    
+                    // Show dashboard after successful login
+                    showSection('dashboard');
+                }, 1500);
+            });
+            
+            // Tab switching
+            tabLinks.forEach(link => {
+                link.addEventListener('click', function() {
+                    // Remove active class from all tabs
+                    tabLinks.forEach(tab => tab.classList.remove('active'));
+                    tabContents.forEach(content => content.classList.remove('active'));
+                    
+                    // Add active class to clicked tab
+                    this.classList.add('active');
+                    
+                    // Show corresponding content
+                    const tabId = this.getAttribute('data-tab');
+                    document.getElementById(`${tabId}Tab`).classList.add('active');
+                });
+            });
+            
+            // Placeholder links
+            const placeholderLinks = [
+                pricingLink, contactLink, pricingFooterLink, contactFooterLink,
+                blogLink, faqLink, privacyLink, termsLink
+            ];
+            
+            placeholderLinks.forEach(link => {
+                if (link) {
+                    link.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        alert('This would navigate to the ' + this.textContent + ' page in a full implementation.');
+                    });
+                }
+            });
+        });
+    </script>
+</body>
+</html>

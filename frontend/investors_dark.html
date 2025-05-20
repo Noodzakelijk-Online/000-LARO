@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Legal AI Reach Out | Investors</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="css/dark-theme.css">
+    <style>
+        /* Additional styles specific to investors page */
+        .auth-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, var(--dark-bg-primary) 0%, var(--dark-bg-secondary) 100%);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .auth-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 30% 50%, rgba(255, 107, 0, 0.1) 0%, transparent 50%);
+            z-index: 0;
+        }
+        
+        .auth-card {
+            width: 100%;
+            max-width: 450px;
+            background-color: var(--dark-bg-secondary);
+            border-radius: 12px;
+            box-shadow: var(--shadow-lg);
+            overflow: hidden;
+            position: relative;
+            z-index: 1;
+            animation: fadeIn 0.5s ease forwards;
+        }
+        
+        .auth-header {
+            background: linear-gradient(135deg, var(--orange-primary) 0%, var(--orange-secondary) 100%);
+            padding: 2rem;
+            text-align: center;
+            color: white;
+        }
+        
+        .auth-title {
+            font-size: 1.75rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+        
+        .auth-subtitle {
+            opacity: 0.9;
+        }
+        
+        .auth-body {
+            padding: 2rem;
+        }
+        
+        .auth-form-group {
+            margin-bottom: 1.5rem;
+        }
+        
+        .auth-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+        
+        .auth-input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background-color: var(--dark-bg-tertiary);
+            border: 1px solid var(--element-border);
+            border-radius: 6px;
+            color: var(--dark-text-primary);
+            transition: all 0.3s ease;
+        }
+        
+        .auth-input:focus {
+            border-color: var(--orange-primary);
+            box-shadow: 0 0 0 2px rgba(255, 107, 0, 0.25);
+            outline: none;
+        }
+        
+        .auth-btn {
+            width: 100%;
+            padding: 0.75rem;
+            background: linear-gradient(90deg, var(--orange-primary), var(--orange-secondary));
+            border: none;
+            border-radius: 6px;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .auth-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 20px rgba(255, 107, 0, 0.3);
+        }
+        
+        .auth-footer {
+            text-align: center;
+            padding: 1rem 2rem 2rem;
+            color: var(--dark-text-secondary);
+        }
+        
+        .auth-footer a {
+            color: var(--orange-primary);
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+        
+        .auth-footer a:hover {
+            color: var(--orange-secondary);
+        }
+        
+        .floating-shape {
+            position: absolute;
+            opacity: 0.05;
+            z-index: 0;
+        }
+        
+        .shape-1 {
+            top: 10%;
+            left: 5%;
+            width: 300px;
+            height: 300px;
+            border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
+            background-color: var(--orange-primary);
+            animation: float 15s ease-in-out infinite;
+        }
+        
+        .shape-2 {
+            bottom: 10%;
+            right: 5%;
+            width: 200px;
+            height: 200px;
+            border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
+            background-color: var(--orange-secondary);
+            animation: float 12s ease-in-out infinite reverse;
+        }
+        
+        @keyframes float {
+            0% {
+                transform: translate(0, 0) rotate(0deg);
+            }
+            50% {
+                transform: translate(20px, 20px) rotate(10deg);
+            }
+            100% {
+                transform: translate(0, 0) rotate(0deg);
+            }
+        }
+        
+        /* Dashboard styles */
+        .dashboard-container {
+            display: none;
+        }
+        
+        .dashboard-header {
+            padding: 2rem 0;
+            margin-bottom: 2rem;
+            background: linear-gradient(135deg, var(--dark-bg-secondary) 0%, var(--dark-bg-tertiary) 100%);
+            border-radius: 12px;
+        }
+        
+        .dashboard-title {
+            font-size: 1.75rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+        
+        .dashboard-subtitle {
+            color: var(--dark-text-secondary);
+        }
+        
+        .metrics-card {
+            background-color: var(--dark-bg-secondary);
+            border-radius: 12px;
+            box-shadow: var(--shadow-sm);
+            padding: 1.5rem;
+            text-align: center;
+            transition: all 0.3s ease;
+            height: 100%;
+        }
+        
+        .metrics-card:hover {
+            transform: translateY(-10px);
+            box-shadow: var(--shadow-md);
+        }
+        
+        .metrics-icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            color: var(--orange-primary);
+        }
+        
+        .metrics-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(90deg, var(--orange-primary), var(--orange-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .metrics-label {
+            color: var(--dark-text-secondary);
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+        
+        .metrics-change {
+            display: inline-block;
+            font-size: 0.875rem;
+            font-weight: 600;
+            margin-top: 0.5rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+        }
+        
+        .metrics-change.positive {
+            background-color: rgba(76, 175, 80, 0.2);
+            color: var(--success);
+        }
+        
+        .metrics-change.negative {
+            background-color: rgba(244, 67, 54, 0.2);
+            color: var(--error);
+        }
+        
+        .chart-container {
+            background-color: var(--dark-bg-secondary);
+            border-radius: 12px;
+            box-shadow: var(--shadow-sm);
+            margin-bottom: 1.5rem;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .chart-container:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-md);
+        }
+        
+        .chart-header {
+            background-color: var(--dark-bg-tertiary);
+            border-bottom: 1px solid var(--element-border);
+            padding: 1rem 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .chart-title {
+            margin: 0;
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+        
+        .chart-body {
+            padding: 1.5rem;
+            height: 300px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .chart-placeholder {
+            width: 100%;
+            height: 100%;
+            background-color: var(--dark-bg-tertiary);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--dark-text-secondary);
+        }
+        
+        .assumptions-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .assumptions-table th,
+        .assumptions-table td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--element-border);
+        }
+        
+        .assumptions-table th {
+            font-weight: 600;
+            color: var(--dark-text-primary);
+            background-color: var(--dark-bg-tertiary);
+        }
+        
+        .assumptions-table tr:hover {
+            background-color: var(--element-hover);
+        }
+        
+        .assumptions-table td:last-child {
+            font-weight: 600;
+            color: var(--orange-primary);
+        }
+        
+        .tab-container {
+            margin-bottom: 2rem;
+        }
+        
+        .tab-nav {
+            display: flex;
+            border-bottom: 1px solid var(--element-border);
+            margin-bottom: 1.5rem;
+        }
+        
+        .tab-link {
+            padding: 1rem 1.5rem;
+            font-weight: 600;
+            color: var(--dark-text-secondary);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        
+        .tab-link.active {
+            color: var(--orange-primary);
+        }
+        
+        .tab-link.active::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background-color: var(--orange-primary);
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.3s ease forwards;
+        }
+        
+        .impact-goal {
+            margin-bottom: 1.5rem;
+        }
+        
+        .impact-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+        }
+        
+        .impact-title {
+            font-weight: 600;
+        }
+        
+        .impact-value {
+            font-weight: 600;
+        }
+        
+        .impact-progress {
+            height: 8px;
+            background-color: var(--dark-bg-tertiary);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        .impact-bar {
+            height: 100%;
+            background: linear-gradient(90deg, var(--orange-primary), var(--orange-secondary));
+        }
+        
+        .impact-description {
+            margin-top: 0.5rem;
+            color: var(--dark-text-secondary);
+            font-size: 0.875rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- Authentication Section -->
+    <div class="auth-container" id="authContainer">
+        <div class="floating-shape shape-1"></div>
+        <div class="floating-shape shape-2"></div>
+        <div class="auth-card">
+            <div class="auth-header">
+                <h2 class="auth-title">Investor Dashboard Access</h2>
+                <p class="auth-subtitle">Enter your email to access business metrics and performance data</p>
+            </div>
+            <div class="auth-body">
+                <form id="authForm">
+                    <div class="auth-form-group">
+                        <label for="email" class="auth-label">Email Address</label>
+                        <input type="email" id="email" class="auth-input" placeholder="investor@example.com" required>
+                    </div>
+                    <div class="auth-form-group">
+                        <label for="password" class="auth-label">Password</label>
+                        <input type="password" id="password" class="auth-input" placeholder="••••••••" required>
+                    </div>
+                    <button type="submit" class="auth-btn">Access Dashboard</button>
+                </form>
+            </div>
+            <div class="auth-footer">
+                <p>Need access? <a href="#">Contact our investor relations team</a></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dashboard Section -->
+    <div class="dashboard-container" id="dashboardContainer">
+        <!-- Navigation -->
+        <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
+            <div class="container-fluid px-4">
+                <a class="navbar-logo" href="index_dark.html">
+                    <h1>Legal AI Reach Out</h1>
+                </a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                    <i class="fas fa-bars text-orange"></i>
+                </button>
+                <div class="collapse navbar-collapse" id="navbarNav">
+                    <ul class="navbar-menu ms-auto">
+                        <li class="navbar-item">
+                            <a class="navbar-link" href="index_dark.html">Home</a>
+                        </li>
+                        <li class="navbar-item">
+                            <a class="navbar-link active" href="investors.html">Investors</a>
+                        </li>
+                        <li class="navbar-item">
+                            <a class="navbar-link" href="#" id="logoutBtn">Logout</a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+
+        <div class="container py-5">
+            <div class="dashboard-header slide-in-up">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h2 class="dashboard-title">Investor Dashboard</h2>
+                        <p class="dashboard-subtitle">Real-time performance metrics and business plan assumptions</p>
+                    </div>
+                    <div class="col-md-4 text-md-end">
+                        <div class="d-flex justify-content-md-end align-items-center">
+                            <span class="me-2 text-secondary">Last updated:</span>
+                            <span class="text-primary">April 1, 2025 - 20:15 CET</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Key Metrics -->
+            <div class="row mb-4">
+                <div class="col-md-3 col-sm-6 mb-4 mb-md-0 fade-in">
+                    <div class="metrics-card">
+                        <div class="metrics-icon">
+                            <i class="fas fa-reply"></i>
+                        </div>
+                        <div class="metrics-value">42%</div>
+                        <div class="metrics-label">Response Rate</div>
+                        <div class="metrics-change positive">+12% vs Target</div>
+                    </div>
+                </div>
+                <div class="col-md-3 col-sm-6 mb-4 mb-md-0 fade-in" style="animation-delay: 0.1s;">
+                    <div class="metrics-card">
+                        <div class="metrics-icon">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <div class="metrics-value">1.8%</div>
+                        <div class="metrics-label">Case Acceptance</div>
+                        <div class="metrics-change positive">+1.1% vs Baseline</div>
+                    </div>
+                </div>
+                <div class="col-md-3 col-sm-6 mb-4 mb-md-0 fade-in" style="animation-delay: 0.2s;">
+                    <div class="metrics-card">
+                        <div class="metrics-icon">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div class="metrics-value">3.2h</div>
+                        <div class="metrics-label">Time to Lawyer</div>
+                        <div class="metrics-change negative">+1.2h vs Target</div>
+                    </div>
+                </div>
+                <div class="col-md-3 col-sm-6 mb-4 mb-md-0 fade-in" style="animation-delay: 0.3s;">
+                    <div class="metrics-card">
+                        <div class="metrics-icon">
+                            <i class="fas fa-chart-line"></i>
+                        </div>
+                        <div class="metrics-value">48%</div>
+                        <div class="metrics-label">Profit Margin</div>
+                        <div class="metrics-change negative">-2% vs Target</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tab-container slide-in-up" style="animation-delay: 0.2s;">
+                <div class="tab-nav">
+                    <div class="tab-link active" data-tab="performance">Performance Metrics</div>
+                    <div class="tab-link" data-tab="assumptions">Business Assumptions</div>
+                    <div class="tab-link" data-tab="projections">Financial Projections</div>
+                    <div class="tab-link" data-tab="impact">Impact Goals</div>
+                </div>
+
+                <!-- Performance Metrics Tab -->
+                <div class="tab-content active" id="performanceTab">
+                    <div class="row">
+                        <div class="col-md-6 mb-4">
+                            <div class="chart-container">
+                                <div class="chart-header">
+                                    <h5 class="chart-title">Response Rate Trend</h5>
+                                    <div class="chart-actions">
+                                        <select class="form-select form-select-sm bg-tertiary text-primary border-0">
+                                            <option>Last 30 Days</option>
+                                            <option>Last Quarter</option>
+                                            <option>Last Year</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="chart-body">
+                                    <div class="chart-placeholder">
+                                        <div class="text-center">
+                                            <i class="fas fa-chart-line fa-3x mb-3 text-orange"></i>
+                                            <p>Response Rate Visualization</p>
+                                            <small>Showing increasing trend over time</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-4">
+                            <div class="chart-container">
+                                <div class="chart-header">
+                                    <h5 class="chart-title">Case Acceptance Trend</h5>
+                                    <div class="chart-actions">
+                                        <select class="form-select form-select-sm bg-tertiary text-primary border-0">
+                                            <option>Last 30 Days</option>
+                                            <option>Last Quarter</option>
+                                            <option>Last Year</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="chart-body">
+                                    <div class="chart-placeholder">
+                                        <div class="text-center">
+                                            <i class="fas fa-chart-bar fa-3x mb-3 text-orange"></i>
+                                            <p>Case Acceptance Visualization</p>
+                                            <small>Showing steady improvement</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-4">
+                            <div class="chart-container">
+                                <div class="chart-header">
+                                    <h5 class="chart-title">Time to Lawyer</h5>
+                                    <div class="chart-actions">
+                                        <select class="form-select form-select-sm bg-tertiary text-primary border-0">
+                                            <option>Last 30 Days</option>
+                                            <option>Last Quarter</option>
+                                            <option>Last Year</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="chart-body">
+                                    <div class="chart-placeholder">
+                                        <div class="text-center">
+                                            <i class="fas fa-chart-area fa-3x mb-3 text-orange"></i>
+                                            <p>Time to Lawyer Visualization</p>
+                                            <small>Showing recent increase in response time</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-4">
+                            <div class="chart-container">
+                                <div class="chart-header">
+                                    <h5 class="chart-title">Profit Margin</h5>
+                                    <div class="chart-actions">
+                                        <select class="form-select form-select-sm bg-tertiary text-primary border-0">
+                                            <option>Last 30 Days</option>
+                                            <option>Last Quarter</option>
+                                            <option>Last Year</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="chart-body">
+                                    <div class="chart-placeholder">
+                                        <div class="text-center">
+                                            <i class="fas fa-chart-pie fa-3x mb-3 text-orange"></i>
+                                            <p>Profit Margin Visualization</p>
+                                            <small>Showing slight decline in recent period</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Business Assumptions Tab -->
+                <div class="tab-content" id="assumptionsTab">
+                    <div class="row">
+                        <div class="col-md-12 mb-4">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="card-title mb-0">Market Assumptions</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="table-responsive">
+                                        <table class="assumptions-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Assumption</th>
+                                                    <th>Description</th>
+                                                    <th>Value</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr>
+                                                    <td>Market Size</td>
+                                                    <td>Total registered lawyers in the Netherlands</td>
+                                                    <td>18,500+</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Lawyer Workload</td>
+                                                    <td>Percentage of lawyers struggling with high workloads</td>
+                                                    <td>Over 50%</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Initial Response Rate</td>
+                                                    <td>Percentage of lawyers responding to initial inquiries</td>
+                                                    <td>30%</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Case Acceptance Rate</td>
+                                                    <td>Percentage of lawyers ultimately agreeing to take on cases</td>
+                                                    <td>0.1% to 1.3%</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-12 mb-4">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="card-title mb-0">Business Model Assumptions</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="table-responsive">
+                                        <table class="assumptions-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Assumption</th>
+                                                    <th>Description</th>
+                                                    <th>Value</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr>
+                                                    <td>Revenue Model</td>
+                                                    <td>Pay-per-use based on resource consumption</td>
+                                                    <td>Resource cost × 2</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>AI Processing Cost</td>
+                                                    <td>Cost per minute of AI processing time</td>
+                                                    <td>€0.05 per minute</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Storage Cost</td>
+                                                    <td>Cost per GB of cloud storage</td>
+                                                    <td>€0.01 per GB</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Email Outreach Cost</td>
+                                                    <td>Cost per email sent (including follow-ups)</td>
+                                                    <td>€0.01 per email</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Financial Projections Tab -->
+                <div class="tab-content" id="projectionsTab">
+                    <div class="row">
+                        <div class="col-md-6 mb-4">
+                            <div class="chart-container">
+                                <div class="chart-header">
+                                    <h5 class="chart-title">Revenue Projections vs. Actual</h5>
+                                </div>
+                                <div class="chart-body">
+                                    <div class="chart-placeholder">
+                                        <div class="text-center">
+                                            <i class="fas fa-euro-sign fa-3x mb-3 text-orange"></i>
+                                            <p>Revenue Projection Visualization</p>
+                                            <small>Comparing projected vs. actual revenue</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-4">
+                            <div class="chart-container">
+                                <div class="chart-header">
+                                    <h5 class="chart-title">User Growth</h5>
+                                </div>
+                                <div class="chart-body">
+                                    <div class="chart-placeholder">
+                                        <div class="text-center">
+                                            <i class="fas fa-users fa-3x mb-3 text-orange"></i>
+                                            <p>User Growth Visualization</p>
+                                            <small>Comparing projected vs. actual user acquisition</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-12 mb-4">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="card-title mb-0">Quarterly Projections</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="table-responsive">
+                                        <table class="assumptions-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Metric</th>
+                                                    <th>Q2 2025 (Projected)</th>
+                                                    <th>Q3 2025 (Projected)</th>
+                                                    <th>Q4 2025 (Projected)</th>
+                                                    <th>Q1 2026 (Projected)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr>
+                                                    <td>Revenue</td>
+                                                    <td>€125,000</td>
+                                                    <td>€250,000</td>
+                                                    <td>€375,000</td>
+                                                    <td>€500,000</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>User Growth</td>
+                                                    <td>1,500</td>
+                                                    <td>3,000</td>
+                                                    <td>5,000</td>
+                                                    <td>7,500</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Case Volume</td>
+                                                    <td>2,500</td>
+                                                    <td>5,000</td>
+                                                    <td>8,000</td>
+                                                    <td>12,000</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Profit Margin</td>
+                                                    <td>45%</td>
+                                                    <td>48%</td>
+                                                    <td>50%</td>
+                                                    <td>52%</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Impact Goals Tab -->
+                <div class="tab-content" id="impactTab">
+                    <div class="row">
+                        <div class="col-md-12 mb-4">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="card-title mb-0">Impact Goals Progress</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="impact-goal">
+                                        <div class="impact-header">
+                                            <span class="impact-title">Response Rate Improvement</span>
+                                            <span class="impact-value">84%</span>
+                                        </div>
+                                        <div class="impact-progress">
+                                            <div class="impact-bar" style="width: 84%;"></div>
+                                        </div>
+                                        <p class="impact-description">Goal: Improve lawyer response rates by 50% compared to traditional methods. Current improvement: 42% vs. 30% baseline.</p>
+                                    </div>
+                                    
+                                    <div class="impact-goal">
+                                        <div class="impact-header">
+                                            <span class="impact-title">Time Reduction</span>
+                                            <span class="impact-value">85%</span>
+                                        </div>
+                                        <div class="impact-progress">
+                                            <div class="impact-bar" style="width: 85%;"></div>
+                                        </div>
+                                        <p class="impact-description">Goal: Reduce time to connect with appropriate legal representation by 95%. Current reduction: from 3 weeks to 3.2 hours.</p>
+                                    </div>
+                                    
+                                    <div class="impact-goal">
+                                        <div class="impact-header">
+                                            <span class="impact-title">Access Improvement</span>
+                                            <span class="impact-value">65%</span>
+                                        </div>
+                                        <div class="impact-progress">
+                                            <div class="impact-bar" style="width: 65%;"></div>
+                                        </div>
+                                        <p class="impact-description">Goal: Improve access to legal representation for underserved communities by 100%. Current improvement: 65% increase in successful matches.</p>
+                                    </div>
+                                    
+                                    <div class="impact-goal">
+                                        <div class="impact-header">
+                                            <span class="impact-title">Cost Efficiency</span>
+                                            <span class="impact-value">78%</span>
+                                        </div>
+                                        <div class="impact-progress">
+                                            <div class="impact-bar" style="width: 78%;"></div>
+                                        </div>
+                                        <p class="impact-description">Goal: Reduce cost of finding appropriate legal representation by 80%. Current reduction: 78% lower than traditional methods.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-12 mb-4">
+                            <div class="chart-container">
+                                <div class="chart-header">
+                                    <h5 class="chart-title">Social Impact Metrics</h5>
+                                </div>
+                                <div class="chart-body">
+                                    <div class="chart-placeholder">
+                                        <div class="text-center">
+                                            <i class="fas fa-hands-helping fa-3x mb-3 text-orange"></i>
+                                            <p>Social Impact Visualization</p>
+                                            <small>Showing improvements in legal access across demographics</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const authForm = document.getElementById('authForm');
+            const authContainer = document.getElementById('authContainer');
+            const dashboardContainer = document.getElementById('dashboardContainer');
+            const logoutBtn = document.getElementById('logoutBtn');
+            const tabLinks = document.querySelectorAll('.tab-link');
+            const tabContents = document.querySelectorAll('.tab-content');
+            
+            // Handle authentication form submission
+            authForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                // Simple authentication for demo purposes
+                authContainer.style.display = 'none';
+                dashboardContainer.style.display = 'block';
+                
+                // Add animation classes to dashboard elements
+                const fadeElements = document.querySelectorAll('.fade-in');
+                fadeElements.forEach((el, index) => {
+                    el.style.animationDelay = `${0.1 * index}s`;
+                });
+            });
+            
+            // Handle logout
+            logoutBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                
+                dashboardContainer.style.display = 'none';
+                authContainer.style.display = 'flex';
+                
+                // Reset form
+                authForm.reset();
+            });
+            
+            // Handle tab switching
+            tabLinks.forEach(link => {
+                link.addEventListener('click', function() {
+                    // Remove active class from all tabs
+                    tabLinks.forEach(tab => tab.classList.remove('active'));
+                    tabContents.forEach(content => content.classList.remove('active'));
+                    
+                    // Add active class to clicked tab
+                    this.classList.add('active');
+                    
+                    // Show corresponding content
+                    const tabId = this.getAttribute('data-tab');
+                    document.getElementById(`${tabId}Tab`).classList.add('active');
+                });
+            });
+            
+            // Add hover effect to chart containers
+            const chartContainers = document.querySelectorAll('.chart-container');
+            chartContainers.forEach(container => {
+                container.addEventListener('mouseenter', function() {
+                    this.style.transform = 'translateY(-10px)';
+                    this.style.boxShadow = 'var(--shadow-lg)';
+                });
+                
+                container.addEventListener('mouseleave', function() {
+                    this.style.transform = 'translateY(-5px)';
+                    this.style.boxShadow = 'var(--shadow-md)';
+                });
+            });
+        });
+    </script>
+</body>
+</html>
