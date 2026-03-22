@@ -1,0 +1,484 @@
+import { router, publicProcedure } from "../_core/trpc";
+import { z } from "zod";
+import { gapDetectionService } from "../gapDetection";
+import { kvkIntegrationService } from "../kvkIntegration";
+import { rechtspraakIntegrationService } from "../rechtspraakIntegration";
+import { legalDocumentGeneratorService } from "../legalDocumentGenerator";
+import { getDb } from "../db";
+import {
+  communicationGaps,
+  expectedDocuments,
+  suspiciousPatterns,
+  legalInferences,
+  caseStrengthAnalysis,
+} from "../schema";
+import { eq } from "drizzle-orm";
+
+export const gapAnalysisRouter = router({
+  /**
+   * Run gap analysis for a case
+   */
+  analyze: publicProcedure
+    .input(z.object({ caseId: z.string() }))
+    .mutation(async ({ input }) => {
+      const result = await gapDetectionService.analyzeCase(input.caseId);
+      return result;
+    }),
+
+  /**
+   * Get communication gaps for a case
+   */
+  getGaps: publicProcedure
+    .input(z.object({ caseId: z.string() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+
+      const gaps = await db
+        .select()
+        .from(communicationGaps)
+        .where(eq(communicationGaps.caseId, input.caseId));
+
+      return gaps.map((gap) => ({
+        ...gap,
+        precedingEvents: gap.precedingEvents ? JSON.parse(gap.precedingEvents) : [],
+        legalImplications: gap.legalImplications ? JSON.parse(gap.legalImplications) : [],
+      }));
+    }),
+
+  /**
+   * Get expected documents for a case
+   */
+  getExpectedDocuments: publicProcedure
+    .input(z.object({ caseId: z.string() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+
+      return await db
+        .select()
+        .from(expectedDocuments)
+        .where(eq(expectedDocuments.caseId, input.caseId));
+    }),
+
+  /**
+   * Get suspicious patterns for a case
+   */
+  getPatterns: publicProcedure
+    .input(z.object({ caseId: z.string() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+
+      const patterns = await db
+        .select()
+        .from(suspiciousPatterns)
+        .where(eq(suspiciousPatterns.caseId, input.caseId));
+
+      return patterns.map((pattern) => ({
+        ...pattern,
+        evidenceIds: pattern.evidenceIds ? JSON.parse(pattern.evidenceIds) : [],
+      }));
+    }),
+
+  /**
+   * Get legal inferences for a case
+   */
+  getInferences: publicProcedure
+    .input(z.object({ caseId: z.string() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+
+      const inferences = await db
+        .select()
+        .from(legalInferences)
+        .where(eq(legalInferences.caseId, input.caseId));
+
+      return inferences.map((inference) => ({
+        ...inference,
+        supportingEvidence: inference.supportingEvidence
+          ? JSON.parse(inference.supportingEvidence)
+          : [],
+        caselaw: inference.caselaw ? JSON.parse(inference.caselaw) : [],
+      }));
+    }),
+
+  /**
+   * Get case strength analysis
+   */
+  getCaseStrength: publicProcedure
+    .input(z.object({ caseId: z.string() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return null;
+
+      const analysis = await db
+        .select()
+        .from(caseStrengthAnalysis)
+        .where(eq(caseStrengthAnalysis.caseId, input.caseId))
+        .limit(1);
+
+      if (analysis.length === 0) return null;
+
+      const result = analysis[0];
+      return {
+        ...result,
+        strengths: result.strengths ? JSON.parse(result.strengths) : [],
+        weaknesses: result.weaknesses ? JSON.parse(result.weaknesses) : [],
+        recommendations: result.recommendations ? JSON.parse(result.recommendations) : [],
+      };
+    }),
+
+  /**
+   * Get complete gap analysis summary for a case
+   */
+  getSummary: publicProcedure
+    .input(z.object({ caseId: z.string() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) {
+        return {
+          hasAnalysis: false,
+          gapsCount: 0,
+          criticalGapsCount: 0,
+          missingDocsCount: 0,
+          patternsCount: 0,
+          inferencesCount: 0,
+          caseStrength: null,
+        };
+      }
+
+      const [gaps, expectedDocs, patterns, inferences, strength] = await Promise.all([
+        db.select().from(communicationGaps).where(eq(communicationGaps.caseId, input.caseId)),
+        db
+          .select()
+          .from(expectedDocuments)
+          .where(eq(expectedDocuments.caseId, input.caseId)),
+        db
+          .select()
+          .from(suspiciousPatterns)
+          .where(eq(suspiciousPatterns.caseId, input.caseId)),
+        db.select().from(legalInferences).where(eq(legalInferences.caseId, input.caseId)),
+        db
+          .select()
+          .from(caseStrengthAnalysis)
+          .where(eq(caseStrengthAnalysis.caseId, input.caseId))
+          .limit(1),
+      ]);
+
+      return {
+        hasAnalysis: gaps.length > 0 || expectedDocs.length > 0,
+        gapsCount: gaps.length,
+        criticalGapsCount: gaps.filter((g) => g.significance === "critical").length,
+        missingDocsCount: expectedDocs.filter((d) => d.status === "missing").length,
+        patternsCount: patterns.length,
+        inferencesCount: inferences.length,
+        caseStrength: strength.length > 0 ? strength[0] : null,
+      };
+    }),
+
+  /**
+   * Get critical gaps summary for all user's cases (for dashboard alert)
+   */
+  getUserCriticalGaps: publicProcedure
+    .input(z.object({ userId: z.string() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) {
+        return {
+          totalCriticalGaps: 0,
+          totalMissingDocs: 0,
+          casesAffected: 0,
+          topCases: [],
+        };
+      }
+
+      // Get all user's cases
+      const { getAllCases } = await import("../db");
+      const allCases = await getAllCases();
+      const userCases = allCases.filter((c) => c.userId === input.userId);
+
+      if (userCases.length === 0) {
+        return {
+          totalCriticalGaps: 0,
+          totalMissingDocs: 0,
+          casesAffected: 0,
+          topCases: [],
+        };
+      }
+
+      // Get gap analysis for each case
+      const caseAnalyses = await Promise.all(
+        userCases.map(async (caseItem) => {
+          const [gaps, expectedDocs] = await Promise.all([
+            db
+              .select()
+              .from(communicationGaps)
+              .where(eq(communicationGaps.caseId, caseItem.id)),
+            db
+              .select()
+              .from(expectedDocuments)
+              .where(eq(expectedDocuments.caseId, caseItem.id)),
+          ]);
+
+          const criticalGaps = gaps.filter((g) => g.significance === "critical");
+          const missingDocs = expectedDocs.filter((d) => d.status === "missing");
+
+          // Find oldest gap (longest time since last contact)
+          let oldestGapDays: number | null = null;
+          if (criticalGaps.length > 0) {
+            const oldestGap = criticalGaps.reduce((oldest, gap) => {
+              const gapDays = gap.durationDays ? parseInt(gap.durationDays) : 0;
+              const oldestDays = oldest.durationDays ? parseInt(oldest.durationDays) : 0;
+              return gapDays > oldestDays ? gap : oldest;
+            });
+            oldestGapDays = oldestGap.durationDays ? parseInt(oldestGap.durationDays) : null;
+          }
+
+          return {
+            caseId: caseItem.id,
+            caseName: caseItem.clientName || "Unnamed Case",
+            criticalGaps: criticalGaps.length,
+            missingDocs: missingDocs.length,
+            oldestGapDays,
+            totalSeverity: criticalGaps.length * 10 + missingDocs.length * 5,
+          };
+        })
+      );
+
+      // Filter cases with critical issues
+      const casesWithIssues = caseAnalyses.filter(
+        (c) => c.criticalGaps > 0 || c.missingDocs > 0
+      );
+
+      // Sort by severity (most critical first)
+      const sortedCases = casesWithIssues.sort((a, b) => b.totalSeverity - a.totalSeverity);
+
+      return {
+        totalCriticalGaps: casesWithIssues.reduce((sum, c) => sum + c.criticalGaps, 0),
+        totalMissingDocs: casesWithIssues.reduce((sum, c) => sum + c.missingDocs, 0),
+        casesAffected: casesWithIssues.length,
+        topCases: sortedCases.slice(0, 5), // Top 5 most critical cases
+      };
+    }),
+
+  /**
+   * Look up company information via KvK (Dutch business registry)
+   */
+  lookupCompany: publicProcedure
+    .input(
+      z.object({
+        kvkNumber: z.string().optional(),
+        companyName: z.string().optional(),
+        caseText: z.string().optional(), // Extract KvK numbers from case description
+      })
+    )
+    .mutation(async ({ input }) => {
+      // If KvK number provided, look it up directly
+      if (input.kvkNumber) {
+        const result = await kvkIntegrationService.lookupByKvKNumber(input.kvkNumber);
+        
+        // If company name provided, enrich with LinkedIn data
+        if (result.success && input.companyName && result.data) {
+          const enriched = await kvkIntegrationService.enrichWithLinkedIn(
+            input.kvkNumber,
+            input.companyName
+          );
+          result.data = { ...result.data, ...enriched };
+        }
+        
+        return result;
+      }
+
+      // If case text provided, extract KvK numbers
+      if (input.caseText) {
+        const kvkNumbers = kvkIntegrationService.extractKvKNumbers(input.caseText);
+        
+        if (kvkNumbers.length === 0) {
+          return {
+            success: false,
+            error: "No KvK numbers found in case text.",
+          };
+        }
+
+        // Look up first KvK number found
+        const result = await kvkIntegrationService.lookupByKvKNumber(kvkNumbers[0]);
+        
+        // Enrich with LinkedIn if company name provided
+        if (result.success && input.companyName && result.data) {
+          const enriched = await kvkIntegrationService.enrichWithLinkedIn(
+            kvkNumbers[0],
+            input.companyName
+          );
+          result.data = { ...result.data, ...enriched };
+        }
+        
+        return result;
+      }
+
+      return {
+        success: false,
+        error: "Please provide either a KvK number or case text to search.",
+      };
+    }),
+
+  /**
+   * Search court records for opponent's litigation history
+   */
+  searchCourtRecords: publicProcedure
+    .input(
+      z.object({
+        companyName: z.string(),
+        searchType: z.enum(["company_history", "precedents"]).default("company_history"),
+        legalIssue: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      if (input.searchType === "precedents" && input.legalIssue) {
+        return await rechtspraakIntegrationService.searchPrecedents(input.legalIssue);
+      }
+
+      return await rechtspraakIntegrationService.searchByCompany(input.companyName);
+    }),
+
+  /**
+   * Get opponent's complete litigation history
+   */
+  getOpponentHistory: publicProcedure
+    .input(z.object({ companyName: z.string() }))
+    .query(async ({ input }) => {
+      return await rechtspraakIntegrationService.getOpponentHistory(input.companyName);
+    }),
+
+  /**
+   * Generate legal document based on gap analysis
+   */
+  generateDocument: publicProcedure
+    .input(
+      z.object({
+        caseId: z.string(),
+        documentType: z.enum([
+          "discovery_request",
+          "preservation_notice",
+          "spoliation_warning",
+          "demand_letter",
+        ]),
+        demandAmount: z.number().optional(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) {
+        return {
+          success: false,
+          error: "Database not available",
+        };
+      }
+
+      // Get case data
+      const { getCase } = await import("../db");
+      const caseData = await getCase(input.caseId);
+      if (!caseData) {
+        return {
+          success: false,
+          error: "Case not found",
+        };
+      }
+
+      // Get gap analysis data
+      const [gaps, expectedDocs, patterns] = await Promise.all([
+        db
+          .select()
+          .from(communicationGaps)
+          .where(eq(communicationGaps.caseId, input.caseId)),
+        db
+          .select()
+          .from(expectedDocuments)
+          .where(eq(expectedDocuments.caseId, input.caseId)),
+        db
+          .select()
+          .from(suspiciousPatterns)
+          .where(eq(suspiciousPatterns.caseId, input.caseId)),
+      ]);
+
+      // Prepare gap analysis data
+      const gapAnalysisData = {
+        caseId: input.caseId,
+        clientName: caseData.clientName || "Client",
+        opponentName: caseData.opponentName || "Opponent",
+        opponentAddress: caseData.opponentAddress,
+        gaps: gaps.map((g) => ({
+          type: g.type,
+          description: g.description || "",
+          durationDays: g.durationDays ? parseInt(g.durationDays) : undefined,
+        })),
+        missingDocuments: expectedDocs
+          .filter((d) => d.status === "missing")
+          .map((d) => ({
+            type: d.documentType,
+            legalRequirement: d.legalRequirement || undefined,
+            deadline: d.expectedDate || undefined,
+          })),
+        suspiciousPatterns: patterns.map((p) => ({
+          pattern: p.patternType,
+          evidence: p.evidence || "",
+        })),
+      };
+
+      // Check usage limit (if user is authenticated)
+      if (ctx.user) {
+        const { checkUsageLimit } = await import('../usageTracking');
+        const limitCheck = await checkUsageLimit(ctx.user.id, 'document_generation');
+        
+        if (!limitCheck.allowed) {
+          return {
+            success: false,
+            error: `Document generation limit exceeded. You have used ${limitCheck.used} of ${limitCheck.limit} documents this month. Upgrade to Pro for unlimited document generation.`,
+            limitExceeded: true,
+          };
+        }
+      }
+
+      // Generate document
+      let document;
+      switch (input.documentType) {
+        case "discovery_request":
+          document = legalDocumentGeneratorService.generateDiscoveryRequest(gapAnalysisData);
+          break;
+        case "preservation_notice":
+          document = legalDocumentGeneratorService.generatePreservationNotice(gapAnalysisData);
+          break;
+        case "spoliation_warning":
+          document = legalDocumentGeneratorService.generateSpoliationWarning(gapAnalysisData);
+          break;
+        case "demand_letter":
+          document = legalDocumentGeneratorService.generateDemandLetter(
+            gapAnalysisData,
+            input.demandAmount
+          );
+          break;
+      }
+
+      // Track usage (if user is authenticated)
+      if (ctx.user) {
+        const { trackUsage } = await import('../usageTracking');
+        await trackUsage({
+          userId: ctx.user.id,
+          resourceType: 'document_generation',
+          quantity: 1,
+          metadata: {
+            documentType: input.documentType,
+            caseId: input.caseId,
+          },
+          caseId: input.caseId,
+        });
+      }
+
+      return {
+        success: true,
+        document,
+      };
+    }),
+});
+

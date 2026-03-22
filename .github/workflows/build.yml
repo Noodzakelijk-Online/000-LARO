@@ -1,0 +1,111 @@
+name: Build & Release LARO Desktop
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Rebuild better-sqlite3 for Electron
+        run: npx @electron/rebuild -f -w better-sqlite3
+      - name: Build main process
+        run: npm run build:main
+      - name: Build renderer
+        run: npm run build:renderer
+      - name: Package Windows installer
+        run: npx electron-builder --win --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload Windows exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: LARO-Desktop-Windows
+          path: release/*.exe
+          if-no-files-found: error
+
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Rebuild better-sqlite3 for Electron
+        run: npx @electron/rebuild -f -w better-sqlite3
+      - name: Build main process
+        run: npm run build:main
+      - name: Build renderer
+        run: npm run build:renderer
+      - name: Package macOS dmg
+        run: npx electron-builder --mac --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload macOS dmg
+        uses: actions/upload-artifact@v4
+        with:
+          name: LARO-Desktop-Mac
+          path: release/*.dmg
+          if-no-files-found: error
+
+  release:
+    needs: [build-windows, build-mac]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: LARO-Desktop-Windows
+          path: release/windows
+      - name: Download Mac artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: LARO-Desktop-Mac
+          path: release/mac
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: LARO Desktop ${{ github.ref_name }}
+          body: |
+            ## LARO Desktop ${{ github.ref_name }}
+
+            | Platform | Download |
+            |----------|----------|
+            | Windows 10/11 (64-bit) | `LARO Desktop Setup.exe` |
+            | macOS | `LARO Desktop.dmg` |
+
+            ### Windows installation
+            1. Download `LARO Desktop Setup.exe`
+            2. Double-click to install
+            3. Open LARO Desktop from Start Menu or Desktop shortcut
+            4. Log in with your existing LARO account
+            5. Use **Evidence > Scan Local Files** (Ctrl+Shift+S) to scan your computer
+
+            ### What's included
+            - Full LARO dashboard — cases, lawyers, evidence, outreach, billing
+            - Local file scanner — finds legal documents on your computer and uploads them
+            - Auto-updater — future versions install automatically
+          files: |
+            release/windows/*.exe
+            release/mac/*.dmg
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

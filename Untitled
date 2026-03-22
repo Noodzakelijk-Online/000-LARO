@@ -1,0 +1,25 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install dependencies
+COPY package*.json ./
+RUN npm ci --only=production
+
+# Copy server source
+COPY server/ ./server/
+COPY shared/ ./shared/
+COPY drizzle/ ./drizzle/ 2>/dev/null || true
+
+# Build server
+RUN npx tsc -p tsconfig.server.json || npx esbuild server/index.ts \
+    --platform=node \
+    --packages=external \
+    --bundle \
+    --format=cjs \
+    --outfile=dist/server/index.js
+
+# Run database migrations then start server
+CMD ["sh", "-c", "node dist/server/index.js"]
+
+EXPOSE 3000

@@ -1,0 +1,123 @@
+import { randomUUID } from "crypto";
+import { and, desc, eq, like, or, sql } from "drizzle-orm";
+import { getDb } from "./db";
+import { evidence } from "./schema";
+
+export type EvidenceFileRow = typeof evidence.$inferSelect;
+
+export async function searchEvidenceFiles(opts: {
+  userId: string;
+  caseId?: string;
+  query?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<{ files: EvidenceFileRow[]; total: number }> {
+  const db = await getDb();
+  if (!db) return { files: [], total: 0 };
+
+  const conditions = [eq(evidence.userId, opts.userId)];
+  if (opts.caseId) conditions.push(eq(evidence.caseId, opts.caseId));
+  if (opts.query?.trim()) {
+    const q = `%${opts.query.trim()}%`;
+    conditions.push(or(like(evidence.title, q), like(evidence.description, q), like(evidence.fileName, q))!);
+  }
+
+  const whereClause = and(...conditions);
+  const limit = opts.limit ?? 50;
+  const offset = opts.offset ?? 0;
+
+  const [countRow] = await db
+    .select({ c: sql<number>`count(*)` })
+    .from(evidence)
+    .where(whereClause);
+  const total = Number(countRow?.c ?? 0);
+
+  const files = await db
+    .select()
+    .from(evidence)
+    .where(whereClause)
+    .orderBy(desc(evidence.createdAt))
+    .limit(limit)
+    .offset(offset);
+
+  return { files, total };
+}
+
+export async function getEvidenceFile(userId: string, id: string): Promise<EvidenceFileRow | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const [row] = await db
+    .select()
+    .from(evidence)
+    .where(and(eq(evidence.id, id), eq(evidence.userId, userId)))
+    .limit(1);
+  return row ?? null;
+}
+
+export async function createEvidenceFile(
+  userId: string,
+  data: Partial<EvidenceFileRow> & { caseId: string; title: string; type: EvidenceFileRow["type"] }
+): Promise<string> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const id = data.id ?? randomUUID();
+  await db.insert(evidence).values({
+    id,
+    caseId: data.caseId,
+    userId,
+    type: data.type,
+    source: data.source ?? null,
+    title: data.title,
+    description: data.description ?? null,
+    fileUrl: data.fileUrl ?? null,
+    fileName: data.fileName ?? null,
+    fileSize: data.fileSize ?? null,
+    mimeType: data.mimeType ?? null,
+    metadata: data.metadata ?? null,
+    tags: data.tags ?? null,
+    relevant: data.relevant ?? true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+  return id;
+}
+
+export async function deleteEvidenceFile(userId: string, id: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const res = await db.delete(evidence).where(and(eq(evidence.id, id), eq(evidence.userId, userId)));
+  return (res as unknown as { affectedRows?: number }).affectedRows !== 0;
+}
+
+export async function getEvidenceFilesByCase(userId: string, caseId: string): Promise<EvidenceFileRow[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(evidence)
+    .where(and(eq(evidence.userId, userId), eq(evidence.caseId, caseId)))
+    .orderBy(desc(evidence.createdAt));
+}
+
+export async function getEvidenceStats(userId: string): Promise<{
+  total: number;
+  byType: Record<string, number>;
+}> {
+  const db = await getDb();
+  if (!db) return { total: 0, byType: {} };
+
+  const [tot] = await db
+    .select({ c: sql<number>`count(*)` })
+    .from(evidence)
+    .where(eq(evidence.userId, userId));
+
+  const rows = await db
+    .select({ type: evidence.type, c: sql<number>`count(*)` })
+    .from(evidence)
+    .where(eq(evidence.userId, userId))
+    .groupBy(evidence.type);
+
+  const byType: Record<string, number> = {};
+  for (const r of rows) byType[String(r.type)] = Number(r.c);
+  return { total: Number(tot?.c ?? 0), byType };
+}
