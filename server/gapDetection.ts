@@ -8,13 +8,6 @@ import {
   communications,
   timeline,
   cases,
-  type CommunicationGap,
-  type ExpectedDocument,
-  type SuspiciousPattern,
-  type LegalInference,
-  type Communication,
-  type Timeline,
-  type Case,
 } from "./schema";
 import { eq, and, desc, asc, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -46,6 +39,64 @@ interface GapAnalysisResult {
     recommendations: string[];
     narrative: string;
   };
+}
+
+interface CommunicationGap {
+  id: string;
+  caseId: string;
+  gapType: string;
+  startDate: Date;
+  endDate: Date | null;
+  durationDays: string;
+  context: string;
+  significance: string;
+  precedingEvents: string;
+  legalImplications: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface ExpectedDocument {
+  id: string;
+  caseId: string;
+  gapId: string | null;
+  documentType: string;
+  reason: string;
+  legalRequirement: boolean;
+  legalBasis: string | null;
+  deadline: Date | null;
+  status: "missing" | "delayed" | "incomplete" | "received";
+  receivedAt: Date | null;
+  notes: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface SuspiciousPattern {
+  id: string;
+  caseId: string;
+  patternType: string;
+  description: string;
+  evidenceIds: string;
+  legalSignificance: string;
+  confidence: string;
+  detectedAt: Date;
+}
+
+interface LegalInference {
+  id: string;
+  caseId: string;
+  inference: string;
+  legalPrinciple: string;
+  supportingEvidence: string;
+  caselaw: string;
+  strength: string;
+  category: string;
+  generatedAt: Date;
+}
+
+interface CaseLike {
+  caseType: string | null;
 }
 
 export class GapDetectionService {
@@ -110,38 +161,52 @@ export class GapDetectionService {
       .select()
       .from(communications)
       .where(eq(communications.caseId, caseId))
-      .orderBy(asc(communications.timestamp));
+      .orderBy(asc(communications.createdAt));
 
     // Get timeline events
     const timelineData = await db
       .select()
       .from(timeline)
       .where(eq(timeline.caseId, caseId))
-      .orderBy(asc(timeline.date));
+      .orderBy(asc(timeline.eventAt));
 
     const events: TimelineEvent[] = [];
 
     // Add communications to timeline
     comms.forEach((comm) => {
+      let commMeta: any = {};
+      try {
+        commMeta = comm.metadata ? JSON.parse(comm.metadata) : {};
+      } catch {
+        commMeta = {};
+      }
+
       events.push({
         id: comm.id,
-        date: comm.timestamp,
-        type: comm.type,
-        title: comm.subject || `${comm.type} communication`,
-        description: comm.content,
-        direction: comm.direction,
+        date: comm.createdAt ?? new Date(),
+        type: comm.channel || "communication",
+        title: commMeta.subject || `${comm.channel || "message"} communication`,
+        description: comm.body || undefined,
+        direction: commMeta.direction as "inbound" | "outbound" | undefined,
         hasDocumentation: true, // Communications are documented
-        participants: comm.participants ? JSON.parse(comm.participants) : [],
+        participants: Array.isArray(commMeta.participants) ? commMeta.participants : [],
       });
     });
 
     // Add timeline events
     timelineData.forEach((item) => {
+      let timelineMeta: any = {};
+      try {
+        timelineMeta = item.metadata ? JSON.parse(item.metadata) : {};
+      } catch {
+        timelineMeta = {};
+      }
+
       events.push({
         id: item.id,
-        date: item.date,
-        type: item.type || "event",
-        title: item.event,
+        date: item.eventAt ?? item.createdAt ?? new Date(),
+        type: item.eventType || "event",
+        title: item.title || timelineMeta.event || "Timeline event",
         description: item.description || undefined,
         hasDocumentation: item.metadata ? true : false,
       });
@@ -237,14 +302,14 @@ export class GapDetectionService {
    */
   private async identifyExpectedDocuments(
     caseId: string,
-    caseInfo: Case,
+    caseInfo: CaseLike,
     timelineEvents: TimelineEvent[]
   ): Promise<ExpectedDocument[]> {
     const expectedDocs: ExpectedDocument[] = [];
 
     // For employment termination cases
-    if (caseInfo.caseType.toLowerCase().includes("employment") || 
-        caseInfo.caseType.toLowerCase().includes("termination")) {
+    const caseType = (caseInfo.caseType || "").toLowerCase();
+    if (caseType.includes("employment") || caseType.includes("termination")) {
       const terminationEvent = timelineEvents.find((e) =>
         e.title.toLowerCase().includes("termination") || e.title.toLowerCase().includes("fired")
       );
@@ -363,15 +428,21 @@ export class GapDetectionService {
     // Pattern 2: Missing legally required documents
     const db = await getDb();
     if (db) {
-      const legallyRequired = await db
+      const documentRows = await db
         .select()
         .from(expectedDocuments)
-        .where(
-          and(
-            eq(expectedDocuments.caseId, caseId),
-            eq(expectedDocuments.legalRequirement, true)
-          )
-        );
+        .where(eq(expectedDocuments.caseId, caseId));
+
+      const legallyRequired = documentRows
+        .map((d) => {
+          try {
+            const parsed = d.data ? JSON.parse(d.data) : {};
+            return { ...d, ...parsed } as any;
+          } catch {
+            return d as any;
+          }
+        })
+        .filter((d: any) => d.legalRequirement === true);
 
       const missing = legallyRequired.filter(
         (d) => d.status === "missing" || d.status === "delayed"
@@ -639,41 +710,107 @@ export class GapDetectionService {
     const db = await getDb();
     if (!db) return;
 
-    // Save gaps
+    // Save gaps into generic `data` column schema
     if (gaps.length > 0) {
-      await db.insert(communicationGaps).values(gaps);
+      await db.insert(communicationGaps).values(
+        gaps.map((g) => ({
+          id: g.id,
+          caseId: g.caseId,
+          data: JSON.stringify({
+            gapType: g.gapType,
+            startDate: g.startDate,
+            endDate: g.endDate,
+            durationDays: g.durationDays,
+            context: g.context,
+            significance: g.significance,
+            precedingEvents: g.precedingEvents,
+            legalImplications: g.legalImplications,
+            updatedAt: g.updatedAt,
+          }),
+          createdAt: g.createdAt,
+        }))
+      );
     }
 
-    // Save expected documents
+    // Save expected documents into generic `data` column schema
     if (expectedDocs.length > 0) {
-      await db.insert(expectedDocuments).values(expectedDocs);
+      await db.insert(expectedDocuments).values(
+        expectedDocs.map((d) => ({
+          id: d.id,
+          caseId: d.caseId,
+          data: JSON.stringify({
+            gapId: d.gapId,
+            documentType: d.documentType,
+            reason: d.reason,
+            legalRequirement: d.legalRequirement,
+            legalBasis: d.legalBasis,
+            deadline: d.deadline,
+            status: d.status,
+            receivedAt: d.receivedAt,
+            notes: d.notes,
+            updatedAt: d.updatedAt,
+          }),
+          createdAt: d.createdAt,
+        }))
+      );
     }
 
-    // Save patterns
+    // Save patterns into generic `data` column schema
     if (patterns.length > 0) {
-      await db.insert(suspiciousPatterns).values(patterns);
+      await db.insert(suspiciousPatterns).values(
+        patterns.map((p) => ({
+          id: p.id,
+          caseId: p.caseId,
+          data: JSON.stringify({
+            patternType: p.patternType,
+            description: p.description,
+            evidenceIds: p.evidenceIds,
+            legalSignificance: p.legalSignificance,
+            confidence: p.confidence,
+            detectedAt: p.detectedAt,
+          }),
+          createdAt: p.detectedAt,
+        }))
+      );
     }
 
-    // Save inferences
+    // Save inferences into generic `data` column schema
     if (inferences.length > 0) {
-      await db.insert(legalInferences).values(inferences);
+      await db.insert(legalInferences).values(
+        inferences.map((i) => ({
+          id: i.id,
+          caseId: i.caseId,
+          data: JSON.stringify({
+            inference: i.inference,
+            legalPrinciple: i.legalPrinciple,
+            supportingEvidence: i.supportingEvidence,
+            caselaw: i.caselaw,
+            strength: i.strength,
+            category: i.category,
+            generatedAt: i.generatedAt,
+          }),
+          createdAt: i.generatedAt,
+        }))
+      );
     }
 
-    // Save case strength analysis
+    // Save case strength analysis into generic `data` column schema
     await db.insert(caseStrengthAnalysis).values({
       id: nanoid(),
       caseId,
-      overallScore: caseStrength.overallScore.toString(),
-      directEvidenceScore: caseStrength.directEvidenceScore.toString(),
-      circumstantialEvidenceScore: caseStrength.circumstantialEvidenceScore.toString(),
-      legalBasisScore: caseStrength.legalBasisScore.toString(),
-      gapAnalysisImpact: caseStrength.gapAnalysisImpact.toString(),
-      strengths: JSON.stringify(caseStrength.strengths),
-      weaknesses: JSON.stringify(caseStrength.weaknesses),
-      recommendations: JSON.stringify(caseStrength.recommendations),
-      analysisNarrative: caseStrength.narrative,
-      generatedAt: new Date(),
-      updatedAt: new Date(),
+      data: JSON.stringify({
+        overallScore: caseStrength.overallScore.toString(),
+        directEvidenceScore: caseStrength.directEvidenceScore.toString(),
+        circumstantialEvidenceScore: caseStrength.circumstantialEvidenceScore.toString(),
+        legalBasisScore: caseStrength.legalBasisScore.toString(),
+        gapAnalysisImpact: caseStrength.gapAnalysisImpact.toString(),
+        strengths: caseStrength.strengths,
+        weaknesses: caseStrength.weaknesses,
+        recommendations: caseStrength.recommendations,
+        analysisNarrative: caseStrength.narrative,
+        generatedAt: new Date(),
+      }),
+      createdAt: new Date(),
     });
   }
 

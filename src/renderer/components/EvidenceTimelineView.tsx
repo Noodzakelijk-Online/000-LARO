@@ -28,13 +28,13 @@ export default function EvidenceTimelineView({ caseId }: EvidenceTimelineViewPro
   const { data: evidence, isLoading } = trpc.evidenceTimeline.getTimeline.useQuery({
     caseId: caseId || undefined,
     source: selectedSource !== "all" ? selectedSource : undefined,
-    type: selectedType !== "all" ? selectedType : undefined,
+    type: selectedType !== "all" ? (selectedType as any) : undefined,
     search: searchQuery || undefined,
   });
 
   // Group evidence by date
   const groupedEvidence = evidence?.reduce((acc, item) => {
-    const date = format(new Date(item.createdAt), "yyyy-MM-dd");
+    const date = format(new Date(item.createdAt ?? ""), "yyyy-MM-dd");
     if (!acc[date]) {
       acc[date] = [];
     }
@@ -71,6 +71,17 @@ export default function EvidenceTimelineView({ caseId }: EvidenceTimelineViewPro
         return "bg-purple-100 text-purple-800";
       default:
         return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  const safeParseTags = (tags: unknown): string[] => {
+    if (Array.isArray(tags)) return tags.map(String);
+    if (typeof tags !== "string" || tags.trim() === "") return [];
+    try {
+      const parsed = JSON.parse(tags);
+      return Array.isArray(parsed) ? parsed.map(String) : [];
+    } catch {
+      return [];
     }
   };
 
@@ -168,7 +179,9 @@ export default function EvidenceTimelineView({ caseId }: EvidenceTimelineViewPro
 
                 {/* Evidence Items */}
                 <div className="ml-8 space-y-4">
-                  {items.map((item) => (
+                  {items.map((item) => {
+                    const tags = safeParseTags((item as any).tags);
+                    return (
                     <Card key={item.id} className="hover:shadow-md transition-shadow border-border/50 bg-card/50">
                       <CardContent className="p-4">
                         <div className="flex items-start gap-4">
@@ -198,13 +211,13 @@ export default function EvidenceTimelineView({ caseId }: EvidenceTimelineViewPro
 
                             {/* Metadata */}
                             <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
-                              <span>{format(new Date(item.createdAt), "HH:mm")}</span>
+                              <span>{format(new Date(item.createdAt ?? ""), "HH:mm")}</span>
                               {item.fileSize && (
                                 <span>{(parseInt(item.fileSize) / 1024 / 1024).toFixed(2)} MB</span>
                               )}
-                              {item.tags && JSON.parse(item.tags).length > 0 && (
+                              {tags.length > 0 && (
                                 <div className="flex gap-1">
-                                  {JSON.parse(item.tags).slice(0, 3).map((tag: string, idx: number) => (
+                                  {tags.slice(0, 3).map((tag: string, idx: number) => (
                                     <Badge key={idx} variant="secondary" className="text-xs">
                                       {tag}
                                     </Badge>
@@ -221,7 +234,7 @@ export default function EvidenceTimelineView({ caseId }: EvidenceTimelineViewPro
                         </div>
                       </CardContent>
                     </Card>
-                  ))}
+                  )})}
                 </div>
               </div>
             ))}

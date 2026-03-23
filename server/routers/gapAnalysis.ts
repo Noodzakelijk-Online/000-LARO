@@ -14,6 +14,16 @@ import {
 } from "../schema";
 import { eq } from "drizzle-orm";
 
+const parseData = (raw: string | null) => {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
 export const gapAnalysisRouter = router({
   /**
    * Run gap analysis for a case
@@ -41,8 +51,33 @@ export const gapAnalysisRouter = router({
 
       return gaps.map((gap) => ({
         ...gap,
-        precedingEvents: gap.precedingEvents ? JSON.parse(gap.precedingEvents) : [],
-        legalImplications: gap.legalImplications ? JSON.parse(gap.legalImplications) : [],
+        ...parseData(gap.data),
+        precedingEvents: (() => {
+          const data = parseData(gap.data);
+          if (Array.isArray(data.precedingEvents)) return data.precedingEvents;
+          if (typeof data.precedingEvents === "string") {
+            try {
+              const parsed = JSON.parse(data.precedingEvents);
+              return Array.isArray(parsed) ? parsed : [];
+            } catch {
+              return [];
+            }
+          }
+          return [];
+        })(),
+        legalImplications: (() => {
+          const data = parseData(gap.data);
+          if (Array.isArray(data.legalImplications)) return data.legalImplications;
+          if (typeof data.legalImplications === "string") {
+            try {
+              const parsed = JSON.parse(data.legalImplications);
+              return Array.isArray(parsed) ? parsed : [];
+            } catch {
+              return [];
+            }
+          }
+          return [];
+        })(),
       }));
     }),
 
@@ -55,10 +90,15 @@ export const gapAnalysisRouter = router({
       const db = await getDb();
       if (!db) return [];
 
-      return await db
+      const docs = await db
         .select()
         .from(expectedDocuments)
         .where(eq(expectedDocuments.caseId, input.caseId));
+
+      return docs.map((doc) => ({
+        ...doc,
+        ...parseData(doc.data),
+      }));
     }),
 
   /**
@@ -77,7 +117,20 @@ export const gapAnalysisRouter = router({
 
       return patterns.map((pattern) => ({
         ...pattern,
-        evidenceIds: pattern.evidenceIds ? JSON.parse(pattern.evidenceIds) : [],
+        ...parseData(pattern.data),
+        evidenceIds: (() => {
+          const data = parseData(pattern.data);
+          if (Array.isArray(data.evidenceIds)) return data.evidenceIds;
+          if (typeof data.evidenceIds === "string") {
+            try {
+              const parsed = JSON.parse(data.evidenceIds);
+              return Array.isArray(parsed) ? parsed : [];
+            } catch {
+              return [];
+            }
+          }
+          return [];
+        })(),
       }));
     }),
 
@@ -97,10 +150,33 @@ export const gapAnalysisRouter = router({
 
       return inferences.map((inference) => ({
         ...inference,
-        supportingEvidence: inference.supportingEvidence
-          ? JSON.parse(inference.supportingEvidence)
-          : [],
-        caselaw: inference.caselaw ? JSON.parse(inference.caselaw) : [],
+        ...parseData(inference.data),
+        supportingEvidence: (() => {
+          const data = parseData(inference.data);
+          if (Array.isArray(data.supportingEvidence)) return data.supportingEvidence;
+          if (typeof data.supportingEvidence === "string") {
+            try {
+              const parsed = JSON.parse(data.supportingEvidence);
+              return Array.isArray(parsed) ? parsed : [];
+            } catch {
+              return [];
+            }
+          }
+          return [];
+        })(),
+        caselaw: (() => {
+          const data = parseData(inference.data);
+          if (Array.isArray(data.caselaw)) return data.caselaw;
+          if (typeof data.caselaw === "string") {
+            try {
+              const parsed = JSON.parse(data.caselaw);
+              return Array.isArray(parsed) ? parsed : [];
+            } catch {
+              return [];
+            }
+          }
+          return [];
+        })(),
       }));
     }),
 
@@ -122,11 +198,13 @@ export const gapAnalysisRouter = router({
       if (analysis.length === 0) return null;
 
       const result = analysis[0];
+      const data = parseData(result.data);
       return {
         ...result,
-        strengths: result.strengths ? JSON.parse(result.strengths) : [],
-        weaknesses: result.weaknesses ? JSON.parse(result.weaknesses) : [],
-        recommendations: result.recommendations ? JSON.parse(result.recommendations) : [],
+        ...data,
+        strengths: Array.isArray(data.strengths) ? data.strengths : [],
+        weaknesses: Array.isArray(data.weaknesses) ? data.weaknesses : [],
+        recommendations: Array.isArray(data.recommendations) ? data.recommendations : [],
       };
     }),
 
@@ -167,11 +245,19 @@ export const gapAnalysisRouter = router({
           .limit(1),
       ]);
 
+      const normalizedGaps = gaps.map((g) => ({ ...g, ...parseData(g.data) }));
+      const normalizedDocs = expectedDocs.map((d) => ({ ...d, ...parseData(d.data) }));
+
       return {
-        hasAnalysis: gaps.length > 0 || expectedDocs.length > 0,
+        hasAnalysis:
+          gaps.length > 0 ||
+          expectedDocs.length > 0 ||
+          patterns.length > 0 ||
+          inferences.length > 0 ||
+          strength.length > 0,
         gapsCount: gaps.length,
-        criticalGapsCount: gaps.filter((g) => g.significance === "critical").length,
-        missingDocsCount: expectedDocs.filter((d) => d.status === "missing").length,
+        criticalGapsCount: normalizedGaps.filter((g: any) => g.significance === "critical").length,
+        missingDocsCount: normalizedDocs.filter((d: any) => d.status === "missing").length,
         patternsCount: patterns.length,
         inferencesCount: inferences.length,
         caseStrength: strength.length > 0 ? strength[0] : null,

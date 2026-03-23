@@ -10,7 +10,8 @@ interface CollectionMonitoringDashboardProps {
 
 function formatDuration(seconds?: string) {
   if (!seconds) return "N/A";
-  const s = parseInt(seconds);
+  const s = Number.parseInt(seconds, 10);
+  if (Number.isNaN(s)) return "N/A";
   if (s < 60) return `${s}s`;
   if (s < 3600) return `${Math.floor(s / 60)}m ${s % 60}s`;
   return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
@@ -67,11 +68,69 @@ export function CollectionMonitoringDashboard({ caseId }: CollectionMonitoringDa
   const logs = logsData?.logs || [];
   const matches = matchesData?.matches || [];
 
+  const toSafeInt = (value: unknown): number => {
+    const num = Number.parseInt(String(value ?? "0"), 10);
+    return Number.isNaN(num) ? 0 : num;
+  };
+
+  const toSafeStatus = (value: unknown): string => {
+    if (typeof value !== "string" || value.trim() === "") return "pending";
+    return value;
+  };
+
+  const parseObject = (value: unknown): Record<string, unknown> => {
+    if (value && typeof value === "object" && !Array.isArray(value)) return value as Record<string, unknown>;
+    if (typeof value !== "string" || value.trim() === "") return {};
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : {};
+    } catch {
+      return {};
+    }
+  };
+
+  const normalizedLogs = logs.map((log: any) => {
+    const meta = parseObject(log.metadata);
+    return {
+      id: log.id,
+      status: toSafeStatus(log.status ?? log.level ?? meta.status),
+      runStartedAt: (log.runStartedAt ?? log.createdAt ?? meta.runStartedAt) as Date | string | undefined,
+      emailsProcessed: toSafeInt(log.emailsProcessed ?? meta.emailsProcessed),
+      filesDownloaded: toSafeInt(log.filesDownloaded ?? meta.filesDownloaded),
+      executionTimeSeconds: String(log.executionTimeSeconds ?? meta.executionTimeSeconds ?? ""),
+      errorMessage: (log.errorMessage ?? log.message ?? meta.errorMessage ?? "") as string,
+    };
+  });
+
+  const normalizedMatches = matches.map((match: any) => {
+    const meta = parseObject(match.metadata);
+    return {
+      id: match.id,
+      itemType: String(match.itemType ?? meta.itemType ?? match.source ?? "item"),
+      matchCount: toSafeInt(match.matchCount ?? meta.matchCount ?? 1),
+      matchedKeywords:
+        match.matchedKeywords ?? meta.matchedKeywords ?? (match.keyword ? JSON.stringify([match.keyword]) : "[]"),
+    };
+  });
+
+  const safeParseStringArray = (value: unknown): string[] => {
+    if (Array.isArray(value)) return value.map(String);
+    if (typeof value !== "string" || value.trim() === "") return [];
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed.map(String) : [];
+    } catch {
+      return [];
+    }
+  };
+
   // Calculate summary stats
-  const totalRuns = logs.length;
-  const successfulRuns = logs.filter((l) => l.status === "completed").length;
-  const totalEmailsCollected = logs.reduce((sum, l) => sum + parseInt(l.emailsProcessed || "0"), 0);
-  const totalFilesCollected = logs.reduce((sum, l) => sum + parseInt(l.filesDownloaded || "0"), 0);
+  const totalRuns = normalizedLogs.length;
+  const successfulRuns = normalizedLogs.filter((l) => toSafeStatus(l.status) === "completed").length;
+  const totalEmailsCollected = normalizedLogs.reduce((sum, l) => sum + toSafeInt(l.emailsProcessed), 0);
+  const totalFilesCollected = normalizedLogs.reduce((sum, l) => sum + toSafeInt(l.filesDownloaded), 0);
 
   return (
     <div className="space-y-6">
@@ -143,33 +202,33 @@ export function CollectionMonitoringDashboard({ caseId }: CollectionMonitoringDa
               <div className="flex items-center justify-center p-8">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
-            ) : logs.length === 0 ? (
+            ) : normalizedLogs.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">
                 No collection runs yet. Configure keywords and run your first collection.
               </p>
             ) : (
               <ScrollArea className="h-[300px]">
                 <div className="space-y-3">
-                  {logs.map((log) => (
+                  {normalizedLogs.map((log) => (
                     <div
                       key={log.id}
                       className="p-3 border rounded-lg space-y-2"
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          {getStatusIcon(log.status)}
+                          {getStatusIcon(toSafeStatus(log.status))}
                           <span className="text-sm font-medium">
                             {formatDate(log.runStartedAt)}
                           </span>
                         </div>
-                        {getStatusBadge(log.status)}
+                        {getStatusBadge(toSafeStatus(log.status))}
                       </div>
                       <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
                         <div>
-                          <span className="font-medium">{log.emailsProcessed || 0}</span> emails
+                          <span className="font-medium">{toSafeInt(log.emailsProcessed)}</span> emails
                         </div>
                         <div>
-                          <span className="font-medium">{log.filesDownloaded || 0}</span> files
+                          <span className="font-medium">{toSafeInt(log.filesDownloaded)}</span> files
                         </div>
                         <div>
                           <span className="font-medium">{formatDuration(log.executionTimeSeconds)}</span>
@@ -202,15 +261,15 @@ export function CollectionMonitoringDashboard({ caseId }: CollectionMonitoringDa
               <div className="flex items-center justify-center p-8">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
-            ) : matches.length === 0 ? (
+            ) : normalizedMatches.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">
                 No keyword matches found yet.
               </p>
             ) : (
               <ScrollArea className="h-[300px]">
                 <div className="space-y-3">
-                  {matches.map((match) => {
-                    const matchedKeywords = JSON.parse(match.matchedKeywords || "[]");
+                  {normalizedMatches.map((match) => {
+                    const matchedKeywords = safeParseStringArray(match.matchedKeywords);
                     return (
                       <div
                         key={match.id}

@@ -31,6 +31,19 @@ interface EvidenceGapAnalysisDashboardProps {
 export function EvidenceGapAnalysisDashboard({ caseId }: EvidenceGapAnalysisDashboardProps) {
   const [analyzing, setAnalyzing] = useState(false);
 
+  const toStringArray = (value: unknown): string[] => {
+    if (Array.isArray(value)) return value.map(String);
+    if (typeof value === "string") {
+      try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed.map(String) : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  };
+
   // Fetch gap analysis data
   const { data: summary, refetch: refetchSummary } = trpc.gapAnalysis.getSummary.useQuery({
     caseId,
@@ -41,6 +54,12 @@ export function EvidenceGapAnalysisDashboard({ caseId }: EvidenceGapAnalysisDash
   const { data: patterns } = trpc.gapAnalysis.getPatterns.useQuery({ caseId });
   const { data: inferences } = trpc.gapAnalysis.getInferences.useQuery({ caseId });
   const { data: caseStrength } = trpc.gapAnalysis.getCaseStrength.useQuery({ caseId });
+
+  const normalizedGaps = ((gaps ?? []) as any[]);
+  const normalizedExpectedDocs = ((expectedDocs ?? []) as any[]);
+  const normalizedPatterns = ((patterns ?? []) as any[]);
+  const normalizedInferences = ((inferences ?? []) as any[]);
+  const cs = ((caseStrength ?? {}) as any);
 
   const analyzeMutation = trpc.gapAnalysis.analyze.useMutation({
     onSuccess: () => {
@@ -139,6 +158,10 @@ export function EvidenceGapAnalysisDashboard({ caseId }: EvidenceGapAnalysisDash
     }
   };
 
+  const strengths = toStringArray(cs.strengths);
+  const weaknesses = toStringArray(cs.weaknesses);
+  const recommendations = toStringArray(cs.recommendations);
+
   return (
     <div className="space-y-6">
       {/* Case Strength Overview */}
@@ -155,9 +178,9 @@ export function EvidenceGapAnalysisDashboard({ caseId }: EvidenceGapAnalysisDash
             <div>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium">Overall Strength</span>
-                <span className="text-2xl font-bold">{caseStrength.overallScore}%</span>
+                <span className="text-2xl font-bold">{cs.overallScore}%</span>
               </div>
-              <Progress value={parseInt(caseStrength.overallScore || "0")} className="h-3" />
+              <Progress value={parseInt(cs.overallScore || "0")} className="h-3" />
             </div>
 
             {/* Score Breakdown */}
@@ -166,11 +189,11 @@ export function EvidenceGapAnalysisDashboard({ caseId }: EvidenceGapAnalysisDash
                 <div className="text-sm text-muted-foreground mb-1">Direct Evidence</div>
                 <div className="flex items-center gap-2">
                   <Progress
-                    value={parseInt(caseStrength.directEvidenceScore || "0")}
+                    value={parseInt(cs.directEvidenceScore || "0")}
                     className="h-2 flex-1"
                   />
                   <span className="text-sm font-medium w-12 text-right">
-                    {caseStrength.directEvidenceScore}%
+                    {cs.directEvidenceScore}%
                   </span>
                 </div>
               </div>
@@ -178,11 +201,11 @@ export function EvidenceGapAnalysisDashboard({ caseId }: EvidenceGapAnalysisDash
                 <div className="text-sm text-muted-foreground mb-1">Circumstantial Evidence</div>
                 <div className="flex items-center gap-2">
                   <Progress
-                    value={parseInt(caseStrength.circumstantialEvidenceScore || "0")}
+                    value={parseInt(cs.circumstantialEvidenceScore || "0")}
                     className="h-2 flex-1"
                   />
                   <span className="text-sm font-medium w-12 text-right">
-                    {caseStrength.circumstantialEvidenceScore}%
+                    {cs.circumstantialEvidenceScore}%
                   </span>
                 </div>
               </div>
@@ -190,11 +213,11 @@ export function EvidenceGapAnalysisDashboard({ caseId }: EvidenceGapAnalysisDash
                 <div className="text-sm text-muted-foreground mb-1">Legal Basis</div>
                 <div className="flex items-center gap-2">
                   <Progress
-                    value={parseInt(caseStrength.legalBasisScore || "0")}
+                    value={parseInt(cs.legalBasisScore || "0")}
                     className="h-2 flex-1"
                   />
                   <span className="text-sm font-medium w-12 text-right">
-                    {caseStrength.legalBasisScore}%
+                    {cs.legalBasisScore}%
                   </span>
                 </div>
               </div>
@@ -202,35 +225,35 @@ export function EvidenceGapAnalysisDashboard({ caseId }: EvidenceGapAnalysisDash
                 <div className="text-sm text-muted-foreground mb-1">Gap Analysis Impact</div>
                 <div className="flex items-center gap-2">
                   <Progress
-                    value={parseInt(caseStrength.gapAnalysisImpact || "0")}
+                    value={parseInt(cs.gapAnalysisImpact || "0")}
                     className="h-2 flex-1"
                   />
                   <span className="text-sm font-medium w-12 text-right">
-                    {caseStrength.gapAnalysisImpact}%
+                    {cs.gapAnalysisImpact}%
                   </span>
                 </div>
               </div>
             </div>
 
             {/* Narrative */}
-            {caseStrength.analysisNarrative && (
+            {cs.analysisNarrative && (
               <Alert>
                 <TrendingUp className="h-4 w-4" />
                 <AlertTitle>Analysis Summary</AlertTitle>
-                <AlertDescription>{caseStrength.analysisNarrative}</AlertDescription>
+                <AlertDescription>{cs.analysisNarrative}</AlertDescription>
               </Alert>
             )}
 
             {/* Strengths & Weaknesses */}
             <div className="grid md:grid-cols-2 gap-4">
-              {caseStrength.strengths && JSON.parse(caseStrength.strengths).length > 0 && (
+              {strengths.length > 0 && (
                 <div>
                   <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
                     <CheckCircle2 className="h-4 w-4 text-green-600" />
                     Strengths
                   </h4>
                   <ul className="space-y-1">
-                    {JSON.parse(caseStrength.strengths || "[]").map((strength: string, idx: number) => (
+                    {strengths.map((strength: string, idx: number) => (
                       <li key={idx} className="text-sm text-muted-foreground">
                         • {strength}
                       </li>
@@ -238,14 +261,14 @@ export function EvidenceGapAnalysisDashboard({ caseId }: EvidenceGapAnalysisDash
                   </ul>
                 </div>
               )}
-              {caseStrength.weaknesses && JSON.parse(caseStrength.weaknesses).length > 0 && (
+              {weaknesses.length > 0 && (
                 <div>
                   <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
                     <AlertCircle className="h-4 w-4 text-orange-500" />
                     Areas to Improve
                   </h4>
                   <ul className="space-y-1">
-                    {JSON.parse(caseStrength.weaknesses || "[]").map((weakness: string, idx: number) => (
+                    {weaknesses.map((weakness: string, idx: number) => (
                       <li key={idx} className="text-sm text-muted-foreground">
                         • {weakness}
                       </li>
@@ -256,11 +279,11 @@ export function EvidenceGapAnalysisDashboard({ caseId }: EvidenceGapAnalysisDash
             </div>
 
             {/* Recommendations */}
-            {caseStrength.recommendations && JSON.parse(caseStrength.recommendations).length > 0 && (
+            {recommendations.length > 0 && (
               <div>
                 <h4 className="font-semibold text-sm mb-2">Recommended Actions</h4>
                 <div className="space-y-2">
-                  {JSON.parse(caseStrength.recommendations || "[]").map(
+                  {recommendations.map(
                     (recommendation: string, idx: number) => (
                       <div
                         key={idx}
@@ -303,7 +326,7 @@ export function EvidenceGapAnalysisDashboard({ caseId }: EvidenceGapAnalysisDash
             <Building2 className="h-4 w-4" />
             Public Records
           </TabsTrigger>
-          <TabsTrigger value="documents" className="gap-2">
+          <TabsTrigger value="legal-docs" className="gap-2">
             <FileText className="h-4 w-4" />
             Legal Docs
           </TabsTrigger>
@@ -311,8 +334,8 @@ export function EvidenceGapAnalysisDashboard({ caseId }: EvidenceGapAnalysisDash
 
         {/* Communication Gaps */}
         <TabsContent value="gaps" className="space-y-4">
-          {gaps && gaps.length > 0 ? (
-            gaps.map((gap) => (
+          {normalizedGaps.length > 0 ? (
+            normalizedGaps.map((gap) => (
               <Card key={gap.id}>
                 <CardHeader>
                   <div className="flex items-start justify-between">
@@ -356,8 +379,8 @@ export function EvidenceGapAnalysisDashboard({ caseId }: EvidenceGapAnalysisDash
 
         {/* Expected Documents */}
         <TabsContent value="documents" className="space-y-4">
-          {expectedDocs && expectedDocs.length > 0 ? (
-            expectedDocs.map((doc) => (
+          {normalizedExpectedDocs.length > 0 ? (
+            normalizedExpectedDocs.map((doc) => (
               <Card key={doc.id}>
                 <CardHeader>
                   <div className="flex items-start justify-between">
@@ -399,8 +422,8 @@ export function EvidenceGapAnalysisDashboard({ caseId }: EvidenceGapAnalysisDash
 
         {/* Suspicious Patterns */}
         <TabsContent value="patterns" className="space-y-4">
-          {patterns && patterns.length > 0 ? (
-            patterns.map((pattern) => (
+          {normalizedPatterns.length > 0 ? (
+            normalizedPatterns.map((pattern) => (
               <Card key={pattern.id}>
                 <CardHeader>
                   <div className="flex items-start justify-between">
@@ -439,8 +462,8 @@ export function EvidenceGapAnalysisDashboard({ caseId }: EvidenceGapAnalysisDash
 
         {/* Legal Inferences */}
         <TabsContent value="inferences" className="space-y-4">
-          {inferences && inferences.length > 0 ? (
-            inferences.map((inference) => (
+          {normalizedInferences.length > 0 ? (
+            normalizedInferences.map((inference) => (
               <Card key={inference.id}>
                 <CardHeader>
                   <div className="flex items-start justify-between">
@@ -506,7 +529,7 @@ export function EvidenceGapAnalysisDashboard({ caseId }: EvidenceGapAnalysisDash
         </TabsContent>
 
         {/* Legal Document Generator */}
-        <TabsContent value="documents" className="space-y-4">
+        <TabsContent value="legal-docs" className="space-y-4">
           <LegalDocumentGenerator caseId={caseId} />
         </TabsContent>
       </Tabs>
