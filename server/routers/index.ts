@@ -418,27 +418,57 @@ export const appRouter = router({
   lawyers: router({
     list: publicProcedure
       .input(z.object({
-        page: z.number().default(1),
-        limit: z.number().default(20),
-        city: z.string().optional(),
+        page:      z.number().default(1),
+        limit:     z.number().default(50),
+        city:      z.string().optional(),
         legalArea: z.string().optional(),
-        name: z.string().optional(),
+        name:      z.string().optional(),
       }).optional())
       .query(async ({ input }) => {
         const db = await import("../db").then((m) => m.getDb());
         if (!db) return { lawyers: [], total: 0 };
         const { lawyers: lawyersTable } = await import('../schema');
-        const { desc } = await import("drizzle-orm");
-        const limit = input?.limit ?? 20;
-        const lawyers = await db.select().from(lawyersTable)
+        const { desc, like, or, eq, and } = await import("drizzle-orm");
+        const limit = input?.limit ?? 50;
+
+        let allLawyers = await db.select().from(lawyersTable)
           .orderBy(desc(lawyersTable.createdAt))
-          .limit(limit);
+          .limit(500); // get all then filter in JS for flexibility
+
+        // Filter by name
+        if (input?.name) {
+          const q = input.name.toLowerCase();
+          allLawyers = allLawyers.filter(l =>
+            l.name?.toLowerCase().includes(q) ||
+            l.firmName?.toLowerCase().includes(q)
+          );
+        }
+
+        // Filter by city
+        if (input?.city) {
+          const q = input.city.toLowerCase();
+          allLawyers = allLawyers.filter(l => l.city?.toLowerCase().includes(q));
+        }
+
+        // Filter by legal area (search in JSON string)
+        if (input?.legalArea) {
+          const q = input.legalArea.toLowerCase();
+          allLawyers = allLawyers.filter(l => {
+            try {
+              const areas = JSON.parse(l.legalAreas ?? "[]") as string[];
+              return areas.some(a => a.toLowerCase().includes(q));
+            } catch { return false; }
+          });
+        }
+
+        const paginated = allLawyers.slice(0, limit);
+
         return {
-          lawyers: lawyers.map(l => ({
+          lawyers: paginated.map(l => ({
             ...l,
             legalAreas: (() => { try { return JSON.parse(l.legalAreas ?? "[]"); } catch { return []; } })(),
           })),
-          total: lawyers.length,
+          total: allLawyers.length,
         };
       }),
 
@@ -464,19 +494,61 @@ export const appRouter = router({
   matching: router({
     findLawyers: publicProcedure
       .input(z.object({
-        caseId: z.string(),
+        caseId:      z.string(),
         maxDistance: z.number().optional().default(50),
-        maxResults: z.number().optional().default(10),
+        maxResults:  z.number().optional().default(10),
       }))
       .query(async ({ input }) => {
         const db = await import("../db").then((m) => m.getDb());
-        if (!db) return { lawyers: [] };
+        if (!db) return { lawyers: [], caseType: "" };
         const { lawyers: lawyersTable, cases: casesTable } = await import('../schema');
         const { eq } = await import("drizzle-orm");
-        const caseResult = await db.select().from(casesTable).where(eq(casesTable.id, input.caseId)).limit(1);
-        const lawyers = await db.select().from(lawyersTable).limit(input.maxResults);
+
+        // Get case details to match on legal area
+        const caseResult = await db.select().from(casesTable)
+          .where(eq(casesTable.id, input.caseId)).limit(1);
+        const caseData = caseResult[0];
+
+        // Get case legal areas
+        let caseLegalAreas: string[] = [];
+        try { caseLegalAreas = JSON.parse(caseData?.legalAreas ?? "[]"); } catch {}
+        if (caseLegalAreas.length === 0 && caseData?.caseType) {
+          caseLegalAreas = [caseData.caseType];
+        }
+
+        // Get all available lawyers
+        const allLawyers = await db.select().from(lawyersTable)
+          .limit(500);
+
+        // Score each lawyer by legal area match
+        const scored = allLawyers
+          .filter((l) => (l as any).caseStop !== 'Yes' && (l as any).currentlyAccepting !== 'No')
+          .map(l => {
+            let score = 50; // base score
+            try {
+              const lawyerAreas = JSON.parse(l.legalAreas ?? "[]") as string[];
+              // Boost score for each matching legal area
+              caseLegalAreas.forEach(caseArea => {
+                const match = lawyerAreas.some(la =>
+                  la.toLowerCase().includes(caseArea.toLowerCase()) ||
+                  caseArea.toLowerCase().includes(la.toLowerCase())
+                );
+                if (match) score += 30;
+              });
+              // Boost for experience
+              const exp = parseInt((l as any).experienceYears ?? "0");
+              if (exp >= 10) score += 15;
+              else if (exp >= 5) score += 8;
+              // Boost for accepting cases
+              if ((l as any).currentlyAccepting === 'Yes') score += 5;
+            } catch {}
+            return { ...l, score, distanceKm: Math.floor(Math.random() * input.maxDistance) };
+          })
+          .sort((a, b) => b.score - a.score)
+          .slice(0, input.maxResults);
+
         return {
-          lawyers: lawyers.map((l, i) => ({
+          lawyers: scored.map((l, i) => ({
             ...l,
             score: 100 - i * 5,
             distanceKm: Math.floor(Math.random() * input.maxDistance),

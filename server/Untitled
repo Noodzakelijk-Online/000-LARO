@@ -1,4 +1,0 @@
-find server/ -name "*.ts" -exec sed -i '' \
-  -e "s|from '../storage'|from './storage'|g" \
-  -e "s|from \"../storage\"|from \"./storage\"|g" \
-  {} \;

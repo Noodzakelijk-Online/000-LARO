@@ -21,6 +21,27 @@ export default function Lawyers() {
   const [comparisonMode, setComparisonMode] = useState(false);
   const [selectedLawyers, setSelectedLawyers] = useState<any[]>([]);
 
+  const parseStringArray = (value: unknown): string[] => {
+    if (Array.isArray(value)) return value.map(String).filter(Boolean);
+    if (typeof value !== "string") return [];
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) return parsed.map(String).filter(Boolean);
+      if (typeof parsed === "string" && parsed.trim()) return [parsed.trim()];
+    } catch {
+      // Fallback for legacy/non-JSON values like "Verzekeringsrecht"
+      return trimmed
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+    }
+
+    return [];
+  };
+
   const toggleLawyerSelection = (lawyer: any) => {
     if (selectedLawyers.find(l => l.id === lawyer.id)) {
       setSelectedLawyers(selectedLawyers.filter(l => l.id !== lawyer.id));
@@ -40,16 +61,8 @@ export default function Lawyers() {
     
     // Legal area filter
     const matchesLegalArea = !filterLegalArea || (() => {
-      try {
-        const areas = lawyer.legalAreas ? JSON.parse(lawyer.legalAreas) : [];
-        return areas.some((area: any) => 
-          (typeof area === 'string' ? area : area.area || '')
-            .toLowerCase()
-            .includes(filterLegalArea.toLowerCase())
-        );
-      } catch {
-        return false;
-      }
+      const areas = parseStringArray(lawyer.legalAreas);
+      return areas.some((area) => area.toLowerCase().includes(filterLegalArea.toLowerCase()));
     })();
     
     // Experience filter
@@ -198,12 +211,8 @@ export default function Lawyers() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredLawyers?.map((lawyer: any) => {
-              const legalAreas = lawyer.legalAreas 
-                ? JSON.parse(lawyer.legalAreas as string) 
-                : [];
-              const languages = lawyer.languages 
-                ? JSON.parse(lawyer.languages as string) 
-                : [];
+              const legalAreas = parseStringArray(lawyer.legalAreas);
+              const languages = parseStringArray(lawyer.languages);
               
               return (
                 <Card 

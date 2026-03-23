@@ -22,15 +22,15 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Rebuild better-sqlite3 for Electron
         run: npx @electron/rebuild -f -w better-sqlite3
-      - name: Build main process
-        run: npm run build:main
       - name: Build renderer
         run: npm run build:renderer
+      - name: Build main process
+        run: npm run build:main
       - name: Package Windows installer
         run: npx electron-builder --win --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Upload Windows exe
+      - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
           name: LARO-Desktop-Windows
@@ -49,15 +49,15 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Rebuild better-sqlite3 for Electron
         run: npx @electron/rebuild -f -w better-sqlite3
-      - name: Build main process
-        run: npm run build:main
       - name: Build renderer
         run: npm run build:renderer
+      - name: Build main process
+        run: npm run build:main
       - name: Package macOS dmg
         run: npx electron-builder --mac --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Upload macOS dmg
+      - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
         with:
           name: LARO-Desktop-Mac
@@ -88,24 +88,15 @@ jobs:
 
             | Platform | Download |
             |----------|----------|
-            | Windows 10/11 (64-bit) | `LARO Desktop Setup.exe` |
+            | Windows 10/11 | `LARO Desktop Setup.exe` |
             | macOS | `LARO Desktop.dmg` |
 
-            ### Windows installation
-            1. Download `LARO Desktop Setup.exe`
-            2. Double-click to install
-            3. Open LARO Desktop from Start Menu or Desktop shortcut
-            4. Log in with your existing LARO account
-            5. Use **Evidence > Scan Local Files** (Ctrl+Shift+S) to scan your computer
-
-            ### What's included
-            - Full LARO dashboard — cases, lawyers, evidence, outreach, billing
-            - Local file scanner — finds legal documents on your computer and uploads them
-            - Auto-updater — future versions install automatically
+            ### Installation
+            1. Install Docker Desktop first (https://docker.com)
+            2. Run the installer
+            3. Open LARO Desktop — dashboard loads automatically
           files: |
             release/windows/*.exe
             release/mac/*.dmg
-          draft: false
-          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
