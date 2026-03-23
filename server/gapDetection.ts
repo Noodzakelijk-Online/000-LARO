@@ -8,6 +8,8 @@ import {
   communications,
   timeline,
   cases,
+  evidence,
+  evidenceFiles,
 } from "./schema";
 import { eq, and, desc, asc, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -170,6 +172,20 @@ export class GapDetectionService {
       .where(eq(timeline.caseId, caseId))
       .orderBy(asc(timeline.eventAt));
 
+    // Get evidence items (uploaded files, scanned docs, etc.)
+    const evidenceData = await db
+      .select()
+      .from(evidence)
+      .where(eq(evidence.caseId, caseId))
+      .orderBy(asc(evidence.createdAt));
+
+    // Get evidence files (from desktop scanner)
+    const evidenceFileData = await db
+      .select()
+      .from(evidenceFiles)
+      .where(eq(evidenceFiles.caseId, caseId))
+      .orderBy(asc(evidenceFiles.uploadedAt));
+
     const events: TimelineEvent[] = [];
 
     // Add communications to timeline
@@ -188,7 +204,7 @@ export class GapDetectionService {
         title: commMeta.subject || `${comm.channel || "message"} communication`,
         description: comm.body || undefined,
         direction: commMeta.direction as "inbound" | "outbound" | undefined,
-        hasDocumentation: true, // Communications are documented
+        hasDocumentation: true,
         participants: Array.isArray(commMeta.participants) ? commMeta.participants : [],
       });
     });
@@ -209,6 +225,32 @@ export class GapDetectionService {
         title: item.title || timelineMeta.event || "Timeline event",
         description: item.description || undefined,
         hasDocumentation: item.metadata ? true : false,
+      });
+    });
+
+    // Add evidence items to timeline — these ARE documented events
+    evidenceData.forEach((item) => {
+      events.push({
+        id: item.id,
+        date: item.createdAt ?? new Date(),
+        type: item.type || "document",
+        title: item.title || item.fileName || "Evidence document",
+        description: item.description || undefined,
+        hasDocumentation: true, // Evidence items are by definition documented
+        participants: [],
+      });
+    });
+
+    // Add scanned files to timeline
+    evidenceFileData.forEach((item) => {
+      events.push({
+        id: item.id,
+        date: item.uploadedAt ?? new Date(),
+        type: item.fileType || "document",
+        title: item.fileName || "Scanned document",
+        description: `Uploaded via ${item.uploadSource === "agent" ? "desktop scanner" : "manual upload"}`,
+        hasDocumentation: true,
+        participants: [],
       });
     });
 
@@ -710,6 +752,16 @@ export class GapDetectionService {
     const db = await getDb();
     if (!db) return;
 
+    // Clear existing analysis for this case before saving new results
+    // This prevents duplicates when re-running analysis
+    await Promise.all([
+      db.delete(communicationGaps).where(eq(communicationGaps.caseId, caseId)),
+      db.delete(expectedDocuments).where(eq(expectedDocuments.caseId, caseId)),
+      db.delete(suspiciousPatterns).where(eq(suspiciousPatterns.caseId, caseId)),
+      db.delete(legalInferences).where(eq(legalInferences.caseId, caseId)),
+      db.delete(caseStrengthAnalysis).where(eq(caseStrengthAnalysis.caseId, caseId)),
+    ]);
+
     // Save gaps into generic `data` column schema
     if (gaps.length > 0) {
       await db.insert(communicationGaps).values(
@@ -794,16 +846,16 @@ export class GapDetectionService {
       );
     }
 
-    // Save case strength analysis into generic `data` column schema
+    // Save case strength analysis — store as numbers not strings
     await db.insert(caseStrengthAnalysis).values({
       id: nanoid(),
       caseId,
       data: JSON.stringify({
-        overallScore: caseStrength.overallScore.toString(),
-        directEvidenceScore: caseStrength.directEvidenceScore.toString(),
-        circumstantialEvidenceScore: caseStrength.circumstantialEvidenceScore.toString(),
-        legalBasisScore: caseStrength.legalBasisScore.toString(),
-        gapAnalysisImpact: caseStrength.gapAnalysisImpact.toString(),
+        overallScore: Number(caseStrength.overallScore),
+        directEvidenceScore: Number(caseStrength.directEvidenceScore),
+        circumstantialEvidenceScore: Number(caseStrength.circumstantialEvidenceScore),
+        legalBasisScore: Number(caseStrength.legalBasisScore),
+        gapAnalysisImpact: Number(caseStrength.gapAnalysisImpact),
         strengths: caseStrength.strengths,
         weaknesses: caseStrength.weaknesses,
         recommendations: caseStrength.recommendations,
@@ -871,4 +923,3 @@ export class GapDetectionService {
 }
 
 export const gapDetectionService = new GapDetectionService();
-

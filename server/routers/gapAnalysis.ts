@@ -24,6 +24,17 @@ const parseData = (raw: string | null) => {
   }
 };
 
+const parseStringArray = (value: unknown): string[] => {
+  if (Array.isArray(value)) return value.map(String);
+  if (typeof value !== "string" || value.trim() === "") return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch {
+    return [];
+  }
+};
+
 export const gapAnalysisRouter = router({
   /**
    * Run gap analysis for a case
@@ -308,8 +319,11 @@ export const gapAnalysisRouter = router({
               .where(eq(expectedDocuments.caseId, caseItem.id)),
           ]);
 
-          const criticalGaps = gaps.filter((g) => g.significance === "critical");
-          const missingDocs = expectedDocs.filter((d) => d.status === "missing");
+          const normalizedGaps = gaps.map((g) => ({ ...g, ...parseData(g.data) })) as any[];
+          const normalizedDocs = expectedDocs.map((d) => ({ ...d, ...parseData(d.data) })) as any[];
+
+          const criticalGaps = normalizedGaps.filter((g) => g.significance === "critical");
+          const missingDocs = normalizedDocs.filter((d) => d.status === "missing");
 
           // Find oldest gap (longest time since last contact)
           let oldestGapDays: number | null = null;
@@ -463,8 +477,8 @@ export const gapAnalysisRouter = router({
       }
 
       // Get case data
-      const { getCase } = await import("../db");
-      const caseData = await getCase(input.caseId);
+      const { getCaseById } = await import("../db");
+      const caseData = await getCaseById(input.caseId);
       if (!caseData) {
         return {
           success: false,
@@ -488,27 +502,31 @@ export const gapAnalysisRouter = router({
           .where(eq(suspiciousPatterns.caseId, input.caseId)),
       ]);
 
+      const normalizedGaps = gaps.map((g) => ({ ...g, ...parseData(g.data) })) as any[];
+      const normalizedDocs = expectedDocs.map((d) => ({ ...d, ...parseData(d.data) })) as any[];
+      const normalizedPatterns = patterns.map((p) => ({ ...p, ...parseData(p.data) })) as any[];
+
       // Prepare gap analysis data
       const gapAnalysisData = {
         caseId: input.caseId,
         clientName: caseData.clientName || "Client",
-        opponentName: caseData.opponentName || "Opponent",
-        opponentAddress: caseData.opponentAddress,
-        gaps: gaps.map((g) => ({
-          type: g.type,
-          description: g.description || "",
-          durationDays: g.durationDays ? parseInt(g.durationDays) : undefined,
+        opponentName: (caseData as any).opponentName || "Opponent",
+        opponentAddress: (caseData as any).opponentAddress,
+        gaps: normalizedGaps.map((g) => ({
+          type: g.gapType || g.type || "gap",
+          description: g.context || g.description || "",
+          durationDays: g.durationDays ? parseInt(String(g.durationDays), 10) : undefined,
         })),
-        missingDocuments: expectedDocs
+        missingDocuments: normalizedDocs
           .filter((d) => d.status === "missing")
           .map((d) => ({
             type: d.documentType,
             legalRequirement: d.legalRequirement || undefined,
-            deadline: d.expectedDate || undefined,
+            deadline: d.deadline || undefined,
           })),
-        suspiciousPatterns: patterns.map((p) => ({
+        suspiciousPatterns: normalizedPatterns.map((p) => ({
           pattern: p.patternType,
-          evidence: p.evidence || "",
+          evidence: parseStringArray(p.evidenceIds).join(", "),
         })),
       };
 

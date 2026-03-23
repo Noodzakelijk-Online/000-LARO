@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -45,15 +45,15 @@ export function EvidenceGapAnalysisDashboard({ caseId }: EvidenceGapAnalysisDash
   };
 
   // Fetch gap analysis data
-  const { data: summary, refetch: refetchSummary } = trpc.gapAnalysis.getSummary.useQuery({
+  const { data: summary, refetch: refetchSummary, isLoading: summaryLoading } = trpc.gapAnalysis.getSummary.useQuery({
     caseId,
   });
 
-  const { data: gaps } = trpc.gapAnalysis.getGaps.useQuery({ caseId });
-  const { data: expectedDocs } = trpc.gapAnalysis.getExpectedDocuments.useQuery({ caseId });
-  const { data: patterns } = trpc.gapAnalysis.getPatterns.useQuery({ caseId });
-  const { data: inferences } = trpc.gapAnalysis.getInferences.useQuery({ caseId });
-  const { data: caseStrength } = trpc.gapAnalysis.getCaseStrength.useQuery({ caseId });
+  const { data: gaps, refetch: refetchGaps } = trpc.gapAnalysis.getGaps.useQuery({ caseId });
+  const { data: expectedDocs, refetch: refetchDocs } = trpc.gapAnalysis.getExpectedDocuments.useQuery({ caseId });
+  const { data: patterns, refetch: refetchPatterns } = trpc.gapAnalysis.getPatterns.useQuery({ caseId });
+  const { data: inferences, refetch: refetchInferences } = trpc.gapAnalysis.getInferences.useQuery({ caseId });
+  const { data: caseStrength, refetch: refetchStrength } = trpc.gapAnalysis.getCaseStrength.useQuery({ caseId });
 
   const normalizedGaps = ((gaps ?? []) as any[]);
   const normalizedExpectedDocs = ((expectedDocs ?? []) as any[]);
@@ -61,15 +61,39 @@ export function EvidenceGapAnalysisDashboard({ caseId }: EvidenceGapAnalysisDash
   const normalizedInferences = ((inferences ?? []) as any[]);
   const cs = ((caseStrength ?? {}) as any);
 
+  // Parse scores as numbers — they may be stored as strings in DB
+  const score = {
+    overall:         Number(cs.overallScore ?? 0),
+    directEvidence:  Number(cs.directEvidenceScore ?? 0),
+    circumstantial:  Number(cs.circumstantialEvidenceScore ?? 0),
+    legalBasis:      Number(cs.legalBasisScore ?? 0),
+    gapImpact:       Number(cs.gapAnalysisImpact ?? 0),
+  };
+
   const analyzeMutation = trpc.gapAnalysis.analyze.useMutation({
     onSuccess: () => {
       setAnalyzing(false);
+      // Refetch all gap analysis data
       refetchSummary();
+      refetchGaps();
+      refetchDocs();
+      refetchPatterns();
+      refetchInferences();
+      refetchStrength();
     },
-    onError: () => {
+    onError: (err) => {
       setAnalyzing(false);
+      console.error("[GapAnalysis] Analysis failed:", err);
     },
   });
+
+  // Auto-run analysis when caseId changes and no analysis exists yet
+  useEffect(() => {
+    if (caseId && !summaryLoading && !summary?.hasAnalysis && !analyzing) {
+      setAnalyzing(true);
+      analyzeMutation.mutate({ caseId });
+    }
+  }, [caseId, summaryLoading, summary?.hasAnalysis]);
 
   const handleAnalyze = () => {
     setAnalyzing(true);
@@ -178,9 +202,9 @@ export function EvidenceGapAnalysisDashboard({ caseId }: EvidenceGapAnalysisDash
             <div>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium">Overall Strength</span>
-                <span className="text-2xl font-bold">{cs.overallScore}%</span>
+                <span className="text-2xl font-bold">{score.overall}%</span>
               </div>
-              <Progress value={parseInt(cs.overallScore || "0")} className="h-3" />
+              <Progress value={score.overall} className="h-3" />
             </div>
 
             {/* Score Breakdown */}
@@ -189,11 +213,11 @@ export function EvidenceGapAnalysisDashboard({ caseId }: EvidenceGapAnalysisDash
                 <div className="text-sm text-muted-foreground mb-1">Direct Evidence</div>
                 <div className="flex items-center gap-2">
                   <Progress
-                    value={parseInt(cs.directEvidenceScore || "0")}
+                    value={score.directEvidence}
                     className="h-2 flex-1"
                   />
                   <span className="text-sm font-medium w-12 text-right">
-                    {cs.directEvidenceScore}%
+                    {score.directEvidence}%
                   </span>
                 </div>
               </div>
@@ -201,11 +225,11 @@ export function EvidenceGapAnalysisDashboard({ caseId }: EvidenceGapAnalysisDash
                 <div className="text-sm text-muted-foreground mb-1">Circumstantial Evidence</div>
                 <div className="flex items-center gap-2">
                   <Progress
-                    value={parseInt(cs.circumstantialEvidenceScore || "0")}
+                    value={score.circumstantial}
                     className="h-2 flex-1"
                   />
                   <span className="text-sm font-medium w-12 text-right">
-                    {cs.circumstantialEvidenceScore}%
+                    {score.circumstantial}%
                   </span>
                 </div>
               </div>
@@ -213,11 +237,11 @@ export function EvidenceGapAnalysisDashboard({ caseId }: EvidenceGapAnalysisDash
                 <div className="text-sm text-muted-foreground mb-1">Legal Basis</div>
                 <div className="flex items-center gap-2">
                   <Progress
-                    value={parseInt(cs.legalBasisScore || "0")}
+                    value={score.legalBasis}
                     className="h-2 flex-1"
                   />
                   <span className="text-sm font-medium w-12 text-right">
-                    {cs.legalBasisScore}%
+                    {score.legalBasis}%
                   </span>
                 </div>
               </div>
@@ -225,11 +249,11 @@ export function EvidenceGapAnalysisDashboard({ caseId }: EvidenceGapAnalysisDash
                 <div className="text-sm text-muted-foreground mb-1">Gap Analysis Impact</div>
                 <div className="flex items-center gap-2">
                   <Progress
-                    value={parseInt(cs.gapAnalysisImpact || "0")}
+                    value={score.gapImpact}
                     className="h-2 flex-1"
                   />
                   <span className="text-sm font-medium w-12 text-right">
-                    {cs.gapAnalysisImpact}%
+                    {score.gapImpact}%
                   </span>
                 </div>
               </div>
@@ -554,4 +578,3 @@ export function EvidenceGapAnalysisDashboard({ caseId }: EvidenceGapAnalysisDash
     </div>
   );
 }
-
