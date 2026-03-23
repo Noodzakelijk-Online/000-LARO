@@ -1,13 +1,13 @@
 import { eq } from 'drizzle-orm';
 import Papa from 'papaparse';
 import { getDb } from './db';
-import { bulkImportJobs, cases } from './schema';
+import { bulkImportJobs, cases, evidence } from './schema';
 import { nanoid } from 'nanoid';
 import { aggregateCases, generateAggregationReport } from './caseAggregation';
 
 /**
  * Bulk Case Import Service
- * Parse CSV files and create multiple cases with aggregation and consolidation
+ * Parse CSV files and create multiple cases with evidence records
  */
 
 export interface CaseCSVRow {
@@ -16,7 +16,7 @@ export interface CaseCSVRow {
   category: string;
   urgency: string;
   evidenceUrls?: string; // Comma-separated URLs
-  tags?: string; // Comma-separated tags
+  tags?: string;         // Comma-separated tags
 }
 
 export interface BulkImportResult {
@@ -48,16 +48,12 @@ export async function parseCaseCSV(csvContent: string): Promise<{
     Papa.parse<CaseCSVRow>(csvContent, {
       header: true,
       skipEmptyLines: true,
-      transformHeader: (header) => {
-        // Normalize headers (trim, lowercase)
-        return header.trim().replace(/\s+/g, '');
-      },
+      transformHeader: (header) => header.trim().replace(/\s+/g, ''),
       complete: (results) => {
-        // Validate required columns
         const requiredColumns = ['caseTitle', 'description', 'category', 'urgency'];
         const headers = results.meta.fields || [];
-        
-        const missingColumns = requiredColumns.filter(col => 
+
+        const missingColumns = requiredColumns.filter(col =>
           !headers.some(h => h.toLowerCase().replace(/\s+/g, '') === col.toLowerCase())
         );
 
@@ -67,22 +63,12 @@ export async function parseCaseCSV(csvContent: string): Promise<{
           return;
         }
 
-        // Validate each row
         results.data.forEach((row, index) => {
           const rowErrors: string[] = [];
-
-          if (!row.caseTitle?.trim()) {
-            rowErrors.push(`Row ${index + 2}: Missing case title`);
-          }
-          if (!row.description?.trim()) {
-            rowErrors.push(`Row ${index + 2}: Missing description`);
-          }
-          if (!row.category?.trim()) {
-            rowErrors.push(`Row ${index + 2}: Missing category`);
-          }
-          if (!row.urgency?.trim()) {
-            rowErrors.push(`Row ${index + 2}: Missing urgency`);
-          }
+          if (!row.caseTitle?.trim())   rowErrors.push(`Row ${index + 2}: Missing case title`);
+          if (!row.description?.trim()) rowErrors.push(`Row ${index + 2}: Missing description`);
+          if (!row.category?.trim())    rowErrors.push(`Row ${index + 2}: Missing category`);
+          if (!row.urgency?.trim())     rowErrors.push(`Row ${index + 2}: Missing urgency`);
 
           if (rowErrors.length > 0) {
             errors.push(...rowErrors);
@@ -91,13 +77,9 @@ export async function parseCaseCSV(csvContent: string): Promise<{
           }
         });
 
-        resolve({
-          valid: errors.length === 0,
-          rows,
-          errors,
-        });
+        resolve({ valid: errors.length === 0, rows, errors });
       },
-      error: (error) => {
+      error: (error: any) => {
         errors.push(`CSV parsing error: ${error.message}`);
         resolve({ valid: false, rows: [], errors });
       },
@@ -106,7 +88,7 @@ export async function parseCaseCSV(csvContent: string): Promise<{
 }
 
 /**
- * Create bulk import job
+ * Create bulk import job record
  */
 export async function createBulkImportJob(
   userId: string,
@@ -117,7 +99,7 @@ export async function createBulkImportJob(
   if (!db) throw new Error('Database not available');
 
   const jobId = nanoid();
-  
+
   await db.insert(bulkImportJobs).values({
     id: jobId,
     userId,
@@ -127,13 +109,13 @@ export async function createBulkImportJob(
     processedRows: '0',
     failedRows: '0',
     errors: null,
-  });
+  } as any);
 
   return jobId;
 }
 
 /**
- * Process bulk import job - create cases from CSV rows
+ * Process bulk import — creates cases AND evidence records
  */
 export async function processBulkImport(
   jobId: string,
@@ -143,13 +125,12 @@ export async function processBulkImport(
   const db = await getDb();
   if (!db) throw new Error('Database not available');
 
-  // Update job status to processing
+  // Mark as processing
   await db
     .update(bulkImportJobs)
-    .set({ status: 'processing' })
+    .set({ status: 'processing' } as any)
     .where(eq(bulkImportJobs.id, jobId));
 
-  // STEP 1: Aggregate cases to detect and merge duplicates
   const aggregationResult = aggregateCases(rows);
   console.log(`[BulkImport] Aggregation: ${aggregationResult.originalCount} rows → ${aggregationResult.consolidatedCount} cases (${aggregationResult.duplicatesRemoved} duplicates removed)`);
 
@@ -157,80 +138,137 @@ export async function processBulkImport(
   let successCount = 0;
   let failureCount = 0;
 
-  // STEP 2: Process aggregated cases
   for (let i = 0; i < aggregationResult.aggregatedCases.length; i++) {
-    const aggregatedCase = aggregationResult.aggregatedCases[i];
-    
+    const agg = aggregationResult.aggregatedCases[i];
+
     try {
-      // Create case from aggregated data
+      // ── 1. Create the case ───────────────────────────────────────────────
       const caseId = nanoid();
 
       await db.insert(cases).values({
         id: caseId,
         userId,
-        clientName: aggregatedCase.caseTitle,
-        clientEmail: null,
-        clientPhone: null,
-        clientAddress: null,
-        caseType: aggregatedCase.category,
-        caseSummary: aggregatedCase.description,
-        urgency: aggregatedCase.urgency as any,
-        status: 'Matching',
-        legalAreas: aggregatedCase.tags.length > 0 ? JSON.stringify(aggregatedCase.tags) : null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
+        clientName:   agg.caseTitle,
+        clientEmail:  null,
+        caseType:     agg.category,
+        caseSummary:  agg.description,
+        urgency:      normaliseUrgency(agg.urgency),
+        status:       'active',
+        legalAreas:   agg.tags.length > 0 ? JSON.stringify(agg.tags) : null,
+        createdAt:    new Date(),
+        updatedAt:    new Date(),
+      } as any);
+
+      // ── 2. Create a case-summary evidence record ─────────────────────────
+      //    This ensures every imported case has at least one evidence item
+      //    visible in the Evidence dashboard immediately after import.
+      await db.insert(evidence).values({
+        id:          nanoid(),
+        caseId,
+        userId,
+        type:        'document',
+        source:      'manual',
+        title:       `Case Summary — ${agg.caseTitle}`,
+        description: agg.description,
+        tags:        agg.tags.length > 0 ? JSON.stringify(agg.tags) : null,
+        relevant:    true,
+        createdAt:   new Date(),
+        updatedAt:   new Date(),
+      } as any);
+
+      // ── 3. Create evidence records for each URL ──────────────────────────
+      if (agg.evidenceUrls && agg.evidenceUrls.length > 0) {
+        for (const url of agg.evidenceUrls) {
+          const trimmed = url.trim();
+          if (!trimmed) continue;
+
+          // Derive a readable filename from the URL
+          const fileName = trimmed.split('/').pop()?.split('?')[0] ?? 'document';
+          const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
+          const evidenceType = getEvidenceType(ext);
+
+          await db.insert(evidence).values({
+            id:          nanoid(),
+            caseId,
+            userId,
+            type:        evidenceType,
+            source:      'manual',
+            title:       fileName,
+            description: `Imported from: ${trimmed}`,
+            fileUrl:     trimmed,
+            fileName,
+            relevant:    true,
+            createdAt:   new Date(),
+            updatedAt:   new Date(),
+          } as any);
+        }
+      }
 
       successCount++;
-      
+
       // Update progress
       await db
         .update(bulkImportJobs)
-        .set({ processedRows: successCount.toString() })
+        .set({ processedRows: successCount.toString() } as any)
         .where(eq(bulkImportJobs.id, jobId));
 
     } catch (error) {
       failureCount++;
       errors.push({
-        row: aggregatedCase.rows[0], // Report first row number of the aggregated group
+        row:   agg.rows[0],
         error: error instanceof Error ? error.message : 'Unknown error',
       });
-      
-      // Update failure count
+
       await db
         .update(bulkImportJobs)
-        .set({ failedRows: failureCount.toString() })
+        .set({ failedRows: failureCount.toString() } as any)
         .where(eq(bulkImportJobs.id, jobId));
     }
   }
 
-  // Update job status to completed
+  // Mark complete
   await db
     .update(bulkImportJobs)
     .set({
-      status: errors.length === rows.length ? 'failed' : 'completed',
+      status:      errors.length === rows.length ? 'failed' : 'completed',
       completedAt: new Date(),
-      errors: errors.length > 0 ? JSON.stringify(errors) : null,
-    })
+      errors:      errors.length > 0 ? JSON.stringify(errors) : null,
+    } as any)
     .where(eq(bulkImportJobs.id, jobId));
 
   return {
     jobId,
-    totalRows: rows.length,
+    totalRows:    rows.length,
     successCount,
     failureCount,
     errors,
     aggregation: {
-      originalCount: aggregationResult.originalCount,
+      originalCount:     aggregationResult.originalCount,
       consolidatedCount: aggregationResult.consolidatedCount,
       duplicatesRemoved: aggregationResult.duplicatesRemoved,
-      report: generateAggregationReport(aggregationResult),
+      report:            generateAggregationReport(aggregationResult),
     },
   };
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function normaliseUrgency(raw: string): 'Low' | 'Medium' | 'High' {
+  const v = raw.trim().toLowerCase();
+  if (v === 'high')   return 'High';
+  if (v === 'low')    return 'Low';
+  return 'Medium';
+}
+
+function getEvidenceType(ext: string): 'document' | 'email' | 'photo' | 'other' {
+  if (['pdf', 'doc', 'docx', 'txt', 'xlsx', 'csv'].includes(ext)) return 'document';
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext))         return 'photo';
+  if (['eml', 'msg'].includes(ext))                                 return 'email';
+  return 'other';
+}
+
 /**
- * Get bulk import job status
+ * Get a single bulk import job
  */
 export async function getBulkImportJob(jobId: string) {
   const db = await getDb();
@@ -250,11 +288,10 @@ export async function getBulkImportJob(jobId: string) {
  */
 export async function getUserBulkImportJobs(userId: string) {
   const db = await getDb();
-  if (!db) throw new Error('Database not available');
+  if (!db) return [];
 
   return await db
     .select()
     .from(bulkImportJobs)
-    .where(eq(bulkImportJobs.userId, userId))
-    .orderBy(bulkImportJobs.createdAt);
+    .where(eq(bulkImportJobs.userId, userId));
 }

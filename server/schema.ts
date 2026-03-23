@@ -382,7 +382,13 @@ export type InsertAuditLog = typeof auditLogs.$inferInsert;
 export const bulkImportJobs = mysqlTable("bulk_import_jobs", {
   id: varchar("id", { length: 64 }).primaryKey(),
   userId: varchar("userId", { length: 64 }),
+  filename: varchar("filename", { length: 256 }),
   status: varchar("status", { length: 64 }),
+  totalRows: varchar("totalRows", { length: 16 }).default("0"),
+  processedRows: varchar("processedRows", { length: 16 }).default("0"),
+  failedRows: varchar("failedRows", { length: 16 }).default("0"),
+  errors: text("errors"),
+  completedAt: timestamp("completedAt"),
   metadata: text("metadata"),
   createdAt: timestamp("createdAt").defaultNow(),
 });

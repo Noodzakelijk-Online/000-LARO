@@ -409,12 +409,18 @@ CREATE TABLE IF NOT EXISTS `audit_logs` (
 CREATE TABLE IF NOT EXISTS `bulk_import_jobs` (
   `id` varchar(64) NOT NULL,
   `userId` varchar(64) DEFAULT NULL,
+  `filename` varchar(256) DEFAULT NULL,
   `status` varchar(64) DEFAULT NULL,
+  `totalRows` varchar(16) DEFAULT '0',
+  `processedRows` varchar(16) DEFAULT '0',
+  `failedRows` varchar(16) DEFAULT '0',
+  `errors` text,
+  `completedAt` timestamp NULL DEFAULT NULL,
   `metadata` text,
   `createdAt` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
+  
 CREATE TABLE IF NOT EXISTS `extracted_entities` (
   `id` varchar(64) NOT NULL,
   `caseId` varchar(64) DEFAULT NULL,
