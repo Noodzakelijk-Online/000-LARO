@@ -2,6 +2,8 @@ name: Build & Release LARO Desktop
 
 on:
   push:
+    branches:
+      - 'staging'
     tags:
       - 'v*'
   workflow_dispatch:
