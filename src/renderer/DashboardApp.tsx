@@ -3,6 +3,7 @@
  * as the deployed app at https://lawyerdashboard.manus.space
  */
 import { Router, Route, Switch } from "wouter";
+import { useHashLocation } from "wouter/use-hash-location";
 import Home from "@/components/Home";
 import Cases from "@/components/Cases";
 import Lawyers from "@/components/Lawyers";
@@ -16,9 +17,12 @@ import LawyerProfile from "@/components/LawyerProfile";
 import Messages from "@/components/Messages";
 import RoutePlaceholder from "@/components/RoutePlaceholder";
 
+const fileProtocol =
+  typeof window !== "undefined" && window.location.protocol === "file:";
+
 export default function DashboardApp() {
   return (
-    <Router>
+    <Router {...(fileProtocol ? { hook: useHashLocation } : {})}>
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/cases" component={Cases} />
