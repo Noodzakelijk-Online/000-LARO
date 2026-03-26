@@ -1,26 +1,35 @@
-/**
- * Electron main process
- * Entry point for the LARO Evidence Collection Agent
- */
+import { app, BrowserWindow, ipcMain, dialog, shell, Menu } from "electron";
+import path from "path";
+import os from "os";
+import { execSync, spawn } from "child_process";
+import { nanoid } from "nanoid";
+import {
+  IPC_CHANNELS,
+  Platform,
+  ScanConfig,
+  AgentConfig,
+} from "../shared/types";
+import {
+  initDatabase,
+  closeDatabase,
+  createScan,
+  getScanFiles,
+} from "./database";
+import { FileScanner } from "./scanner";
+import { FileUploader } from "./uploader";
+import { initAutoUpdater } from "./autoUpdater";
 
-import { app, BrowserWindow, ipcMain, dialog } from 'electron';
-import path from 'path';
-import os from 'os';
-import { nanoid } from 'nanoid';
-import { IPC_CHANNELS, Platform, ScanConfig, AgentConfig } from '../shared/types';
-import { initDatabase, closeDatabase, createScan, getScan, getScanFiles } from './database';
-import { FileScanner } from './scanner';
-import { FileUploader } from './uploader';
-import { initAutoUpdater } from './autoUpdater';
+const LARO_URL = "http://localhost:3000";
+const HEALTH_URL = "http://localhost:3000/api/health";
+const isDev = process.env.NODE_ENV === "development";
 
-// Keep a global reference of the window object
 let mainWindow: BrowserWindow | null = null;
+let scanPanel: BrowserWindow | null = null;
 let currentScanner: FileScanner | null = null;
 let currentUploader: FileUploader | null = null;
 
-// Agent configuration
 let agentConfig: AgentConfig = {
-  apiUrl: 'https://3000-igg5m4mdwe2agq93mhzko-26878163.manusvm.computer',
+  apiUrl: LARO_URL,
   token: null,
   deviceId: null,
   deviceName: os.hostname(),
@@ -28,271 +37,348 @@ let agentConfig: AgentConfig = {
   caseId: null,
 };
 
-/**
- * Get platform
- */
 function getPlatform(): Platform {
-  const platform = process.platform;
-  if (platform === 'win32') return 'windows';
-  if (platform === 'darwin') return 'macos';
-  return 'linux';
+  if (process.platform === "win32") return "windows";
+  if (process.platform === "darwin") return "macos";
+  return "linux";
 }
 
-/**
- * Create the main window
- */
-function createWindow(): void {
+function getComposePath(): string {
+  if (app.isPackaged)
+    return path.join(process.resourcesPath, "docker-compose.yml");
+  return path.join(app.getAppPath(), "docker-compose.yml");
+}
+
+function isDockerRunning(): boolean {
+  try {
+    execSync("docker info", { stdio: "ignore", timeout: 5000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function startDockerServices(): void {
+  const p = spawn(
+    "docker",
+    ["compose", "-f", getComposePath(), "up", "--build", "-d"],
+    { stdio: "pipe" },
+  );
+  p.stdout?.on("data", (d: Buffer) =>
+    console.log("[Docker]", d.toString().trim()),
+  );
+  p.stderr?.on("data", (d: Buffer) =>
+    console.log("[Docker]", d.toString().trim()),
+  );
+}
+
+function stopDockerServices(): void {
+  try {
+    execSync(`docker compose -f "${getComposePath()}" down`, {
+      stdio: "ignore",
+      timeout: 15000,
+    });
+  } catch {}
+}
+
+async function waitForServer(max = 40, ms = 3000): Promise<boolean> {
+  for (let i = 0; i < max; i++) {
+    try {
+      const r = await fetch(HEALTH_URL, { signal: AbortSignal.timeout(2000) });
+      if (r.ok) return true;
+    } catch {}
+    mainWindow?.webContents
+      .executeJavaScript(
+        `document.getElementById('laro-status')&&(document.getElementById('laro-status').textContent='Starting services... (${i + 1}/${max})')`,
+      )
+      .catch(() => {});
+    await new Promise((r) => setTimeout(r, ms));
+  }
+  return false;
+}
+
+const LOADING_HTML = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+<style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0f172a;color:white;font-family:system-ui;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:16px}.icon{width:72px;height:72px;background:#2563eb;border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:36px}h1{font-size:26px;font-weight:700}#laro-status{font-size:14px;color:#94a3b8}.bar{width:220px;height:3px;background:#1e293b;border-radius:2px;overflow:hidden;margin-top:8px}.fill{height:100%;background:#2563eb;width:50%;animation:p 1.4s ease-in-out infinite}@keyframes p{0%,100%{opacity:.4}50%{opacity:1}}</style>
+</head><body><div class="icon">⚖️</div><h1>LARO Desktop</h1><p id="laro-status">Starting services...</p><div class="bar"><div class="fill"></div></div></body></html>`;
+
+async function createMainWindow(): Promise<void> {
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
-    minWidth: 800,
-    minHeight: 600,
+    width: 1440,
+    height: 900,
+    minWidth: 1024,
+    minHeight: 700,
+    title: "LARO Desktop",
+    backgroundColor: "#0f172a",
+    webPreferences: { nodeIntegration: false, contextIsolation: true },
+  });
+  mainWindow.on("closed", () => {
+    mainWindow = null;
+    scanPanel?.close();
+  });
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith(LARO_URL)) return { action: "allow" };
+    shell.openExternal(url);
+    return { action: "deny" };
+  });
+
+  if (isDev) {
+    await mainWindow.loadURL("http://localhost:5173");
+    mainWindow.webContents.openDevTools({ mode: "detach" });
+    return;
+  }
+
+  await mainWindow.loadURL(
+    `data:text/html;charset=utf-8,${encodeURIComponent(LOADING_HTML)}`,
+  );
+
+  // Check if already running first
+  if (await waitForServer(3, 1000)) {
+    await mainWindow.loadURL(LARO_URL);
+    initAutoUpdater(mainWindow);
+    return;
+  }
+
+  if (!isDockerRunning()) {
+    const { response } = await dialog.showMessageBox(mainWindow!, {
+      type: "error",
+      title: "Docker Desktop Required",
+      message: "Docker Desktop is not running",
+      detail: "LARO requires Docker Desktop. Please start it and reopen LARO.",
+      buttons: ["Open Docker Website", "Quit"],
+    });
+    if (response === 0)
+      shell.openExternal("https://www.docker.com/products/docker-desktop/");
+    app.quit();
+    return;
+  }
+
+  startDockerServices();
+  const ready = await waitForServer(40, 3000);
+
+  if (!ready) {
+    await dialog.showMessageBox(mainWindow!, {
+      type: "error",
+      title: "Startup Failed",
+      message: "LARO services did not start in time",
+      detail: "Try restarting the app. Make sure Docker Desktop is running.",
+      buttons: ["Quit"],
+    });
+    app.quit();
+    return;
+  }
+
+  await mainWindow.loadURL(LARO_URL);
+  initAutoUpdater(mainWindow);
+}
+
+function createScanPanel(): void {
+  if (scanPanel) {
+    scanPanel.focus();
+    return;
+  }
+  scanPanel = new BrowserWindow({
+    width: 520,
+    height: 700,
+    minWidth: 480,
+    title: "LARO Evidence Scanner",
+    backgroundColor: "#0f172a",
+    parent: mainWindow ?? undefined,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, "preload.js"),
     },
-    title: 'LARO Evidence Collection Agent',
   });
-
-  // Load the app
-  console.log("[DEBUG] NODE_ENV =", process.env.NODE_ENV);
-  if (process.env.NODE_ENV === 'development') {
-    // Full LARO dashboard from this repo (run `npm run dev:renderer` + API on :3000).
-    // Deployed reference UI: https://lawyerdashboard.manus.space
-    mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173');
-    mainWindow.webContents.openDevTools();
-  } else {
-    // __dirname = dist/main/electron → renderer bundle is dist/renderer
-    mainWindow.loadFile(path.join(__dirname, '../../renderer/index.html'));
-  }
-
-  mainWindow.on('closed', () => {
-    mainWindow = null;
+  isDev
+    ? scanPanel.loadURL("http://localhost:5173")
+    : scanPanel.loadFile(
+        path.join(__dirname, "../../dist/renderer/index.html"),
+      );
+  scanPanel.on("closed", () => {
+    scanPanel = null;
   });
-
-  // Initialize auto-updater (production only)
-  if (process.env.NODE_ENV !== 'development') {
-    initAutoUpdater(mainWindow);
-  }
 }
 
-/**
- * App ready
- */
-app.whenReady().then(() => {
+function buildMenu(): void {
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate([
+      {
+        label: "LARO",
+        submenu: [
+          {
+            label: "Reload",
+            accelerator: "CmdOrCtrl+R",
+            click: () => mainWindow?.loadURL(LARO_URL),
+          },
+          { type: "separator" },
+          {
+            label: "Quit",
+            accelerator: "CmdOrCtrl+Q",
+            click: () => app.quit(),
+          },
+        ],
+      },
+      {
+        label: "Evidence",
+        submenu: [
+          {
+            label: "Scan Local Files",
+            accelerator: "CmdOrCtrl+Shift+S",
+            click: createScanPanel,
+          },
+        ],
+      },
+      {
+        label: "View",
+        submenu: [
+          { role: "toggleDevTools" },
+          { type: "separator" },
+          { role: "resetZoom" },
+          { role: "zoomIn" },
+          { role: "zoomOut" },
+          { type: "separator" },
+          { role: "togglefullscreen" },
+        ],
+      },
+    ]),
+  );
+}
+
+app.whenReady().then(async () => {
   initDatabase();
-  createWindow();
+  buildMenu();
   setupIPC();
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
-    }
+  await createMainWindow();
+  app.on("activate", () => {
+    if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
   });
 });
 
-/**
- * Quit when all windows are closed
- */
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
+app.on("window-all-closed", () => {
+  if (process.platform !== "darwin") app.quit();
 });
-
-/**
- * Before quit
- */
-app.on('before-quit', () => {
-  // Stop any active scanning/uploading
-  if (currentScanner) {
-    currentScanner.stop();
-  }
-  if (currentUploader) {
-    currentUploader.stop();
-  }
-  
+app.on("before-quit", () => {
+  currentScanner?.stop();
+  currentUploader?.stop();
   closeDatabase();
+  if (!isDev) stopDockerServices();
 });
 
-/**
- * Setup IPC handlers
- */
 function setupIPC(): void {
-  // Configuration
-  ipcMain.handle(IPC_CHANNELS.CONFIG_GET, () => {
-    return agentConfig;
+  ipcMain.handle(IPC_CHANNELS.CONFIG_GET, () => ({ ...agentConfig }));
+  ipcMain.handle(IPC_CHANNELS.CONFIG_SET, (_, c: Partial<AgentConfig>) => {
+    agentConfig = { ...agentConfig, ...c };
+    return { ...agentConfig };
   });
-
-  ipcMain.handle(IPC_CHANNELS.CONFIG_SET, (_, config: Partial<AgentConfig>) => {
-    agentConfig = { ...agentConfig, ...config };
-    return agentConfig;
-  });
-
-  // System info
-  ipcMain.handle(IPC_CHANNELS.SYSTEM_INFO, () => {
-    return {
-      platform: getPlatform(),
-      hostname: os.hostname(),
-      username: os.userInfo().username,
-      homeDir: os.homedir(),
-    };
-  });
-
-  // App version
-  ipcMain.handle(IPC_CHANNELS.APP_VERSION, () => {
-    return app.getVersion();
-  });
-
-  // Folder selection
+  ipcMain.handle(IPC_CHANNELS.SYSTEM_INFO, () => ({
+    platform: getPlatform(),
+    arch: process.arch,
+    hostname: os.hostname(),
+    username: os.userInfo().username,
+    homeDir: os.homedir(),
+    totalMemory: os.totalmem(),
+    freeMemory: os.freemem(),
+    cpus: os.cpus().length,
+    version: app.getVersion(),
+  }));
+  ipcMain.handle(IPC_CHANNELS.APP_VERSION, () => app.getVersion());
+  ipcMain.handle(IPC_CHANNELS.OPEN_EXTERNAL, (_, url: string) =>
+    shell.openExternal(url),
+  );
+  ipcMain.handle("scan:open-panel", () => createScanPanel());
   ipcMain.handle(IPC_CHANNELS.FOLDER_SELECT, async () => {
-    if (!mainWindow) return null;
-
-    const result = await dialog.showOpenDialog(mainWindow, {
-      properties: ['openDirectory'],
+    const parent = scanPanel ?? mainWindow;
+    if (!parent) return null;
+    const result = await dialog.showOpenDialog(parent, {
+      properties: ["openDirectory", "multiSelections"],
+      title: "Select folders to scan",
     });
-
-    if (result.canceled) {
-      return null;
-    }
-
-    return result.filePaths[0];
+    return result.canceled ? null : result.filePaths;
   });
-
-  // Start scan
+  ipcMain.handle(IPC_CHANNELS.UPDATE_CHECK, () => ({
+    currentVersion: app.getVersion(),
+    updateAvailable: false,
+  }));
   ipcMain.handle(IPC_CHANNELS.SCAN_START, async (_, config: ScanConfig) => {
-    if (currentScanner) {
-      throw new Error('A scan is already in progress');
-    }
-
+    if (currentScanner) throw new Error("Scan already in progress");
     const scanId = nanoid();
-    const platform = getPlatform();
-
-    // Create scan in database
-    createScan(scanId, config.caseId, config.caseName, config.autoUpload, config.excludedFolders);
-
-    // Create scanner
+    createScan(
+      scanId,
+      config.caseId,
+      config.caseName,
+      config.autoUpload,
+      config.excludedFolders,
+    );
     currentScanner = new FileScanner({
       scanId,
       config,
-      platform,
+      platform: getPlatform(),
     });
-
-    // Setup event listeners
-    currentScanner.on('progress', (progress) => {
-      mainWindow?.webContents.send(IPC_CHANNELS.SCAN_PROGRESS, progress);
-    });
-
-    currentScanner.on('completed', async (result) => {
-      mainWindow?.webContents.send(IPC_CHANNELS.SCAN_PROGRESS, {
+    currentScanner.on("progress", (p) =>
+      scanPanel?.webContents.send(IPC_CHANNELS.SCAN_PROGRESS, p),
+    );
+    currentScanner.on("completed", async (result) => {
+      scanPanel?.webContents.send(IPC_CHANNELS.SCAN_PROGRESS, {
         scanId,
-        status: config.autoUpload ? 'uploading' : 'review',
+        status: config.autoUpload ? "uploading" : "review",
         ...result,
       });
-
-      // If auto-upload is enabled, start uploading
-      if (config.autoUpload && agentConfig.token) {
-        try {
-          await startUpload(scanId);
-        } catch (error: any) {
-          console.error('[Main] Failed to start auto-upload:', error);
-        }
-      }
-
+      mainWindow?.webContents
+        .executeJavaScript(
+          `window.dispatchEvent(new CustomEvent('laro:evidence-updated',{detail:{scanId:'${scanId}'}}))`,
+        )
+        .catch(() => {});
+      if (config.autoUpload && agentConfig.token)
+        await startUpload(scanId).catch(console.error);
       currentScanner = null;
     });
-
-    currentScanner.on('cancelled', () => {
-      mainWindow?.webContents.send(IPC_CHANNELS.SCAN_PROGRESS, {
+    currentScanner.on("cancelled", () => {
+      scanPanel?.webContents.send(IPC_CHANNELS.SCAN_PROGRESS, {
         scanId,
-        status: 'cancelled',
+        status: "cancelled",
       });
       currentScanner = null;
     });
-
-    currentScanner.on('error', (error) => {
-      mainWindow?.webContents.send(IPC_CHANNELS.SCAN_PROGRESS, {
+    currentScanner.on("error", (e: Error) => {
+      scanPanel?.webContents.send(IPC_CHANNELS.SCAN_PROGRESS, {
         scanId,
-        status: 'failed',
-        errorMessage: error.message,
+        status: "failed",
+        errorMessage: e.message,
       });
       currentScanner = null;
     });
-
-    // Start scanning
-    currentScanner.start().catch((error) => {
-      console.error('[Main] Scanner error:', error);
-    });
-
+    currentScanner.start().catch(console.error);
     return { scanId };
   });
-
-  // Stop scan
   ipcMain.handle(IPC_CHANNELS.SCAN_STOP, () => {
-    if (currentScanner) {
-      currentScanner.stop();
-    }
+    currentScanner?.stop();
     return { success: true };
   });
-
-  // Pause scan
   ipcMain.handle(IPC_CHANNELS.SCAN_PAUSE, () => {
-    if (currentScanner) {
-      currentScanner.pause();
-    }
+    currentScanner?.pause();
     return { success: true };
   });
-
-  // Resume scan
   ipcMain.handle(IPC_CHANNELS.SCAN_RESUME, () => {
-    if (currentScanner) {
-      currentScanner.resume();
-    }
+    currentScanner?.resume();
     return { success: true };
   });
-
-  // Get scan files
-  ipcMain.handle(IPC_CHANNELS.SCAN_FILES_GET, (_, scanId: string) => {
-    const files = getScanFiles(scanId);
-    return { files };
-  });
-
-  // Start upload
-  ipcMain.handle(IPC_CHANNELS.UPLOAD_START, async (_, scanId: string) => {
-    return startUpload(scanId);
-  });
-
-  // Pause upload
+  ipcMain.handle(IPC_CHANNELS.SCAN_FILES_GET, (_, id: string) => ({
+    files: getScanFiles(id),
+  }));
+  ipcMain.handle(IPC_CHANNELS.UPLOAD_START, (_, id: string) => startUpload(id));
   ipcMain.handle(IPC_CHANNELS.UPLOAD_PAUSE, () => {
-    if (currentUploader) {
-      currentUploader.pause();
-    }
+    currentUploader?.pause();
     return { success: true };
   });
-
-  // Resume upload
   ipcMain.handle(IPC_CHANNELS.UPLOAD_RESUME, () => {
-    if (currentUploader) {
-      currentUploader.resume();
-    }
+    currentUploader?.resume();
     return { success: true };
   });
 }
 
-/**
- * Start uploading files
- */
 async function startUpload(scanId: string): Promise<{ success: boolean }> {
-  if (currentUploader) {
-    throw new Error('An upload is already in progress');
-  }
-
-  if (!agentConfig.token) {
-    throw new Error('Not authenticated');
-  }
-
-  // Create uploader
+  if (currentUploader) throw new Error("Upload in progress");
+  if (!agentConfig.token) throw new Error("Not authenticated");
   currentUploader = new FileUploader({
     scanId,
     apiUrl: agentConfig.apiUrl,
@@ -300,46 +386,28 @@ async function startUpload(scanId: string): Promise<{ success: boolean }> {
     concurrency: 3,
     maxRetries: 3,
   });
-
-  // Setup event listeners
-  currentUploader.on('progress', (progress) => {
-    mainWindow?.webContents.send(IPC_CHANNELS.SCAN_PROGRESS, {
+  currentUploader.on("progress", (p) =>
+    scanPanel?.webContents.send(IPC_CHANNELS.UPLOAD_PROGRESS, { scanId, ...p }),
+  );
+  currentUploader.on("completed", (r) => {
+    scanPanel?.webContents.send(IPC_CHANNELS.UPLOAD_PROGRESS, {
       scanId,
-      status: 'uploading',
-      ...progress,
+      done: true,
+      ...r,
     });
-  });
-
-  currentUploader.on('completed', (result) => {
-    mainWindow?.webContents.send(IPC_CHANNELS.SCAN_PROGRESS, {
-      scanId,
-      status: 'completed',
-      ...result,
-    });
+    mainWindow?.webContents
+      .executeJavaScript(
+        `window.dispatchEvent(new CustomEvent('laro:evidence-updated',{detail:{scanId:'${scanId}'}}))`,
+      )
+      .catch(() => {});
     currentUploader = null;
   });
-
-  currentUploader.on('cancelled', () => {
-    mainWindow?.webContents.send(IPC_CHANNELS.SCAN_PROGRESS, {
-      scanId,
-      status: 'cancelled',
-    });
+  currentUploader.on("cancelled", () => {
     currentUploader = null;
   });
-
-  currentUploader.on('error', (error) => {
-    mainWindow?.webContents.send(IPC_CHANNELS.SCAN_PROGRESS, {
-      scanId,
-      status: 'failed',
-      errorMessage: error.message,
-    });
+  currentUploader.on("error", () => {
     currentUploader = null;
   });
-
-  // Start uploading
-  currentUploader.start().catch((error) => {
-    console.error('[Main] Uploader error:', error);
-  });
-
+  currentUploader.start().catch(console.error);
   return { success: true };
 }
