@@ -29,9 +29,9 @@
       "output": "release"
     },
     "files": [
+      "package.json",
       "dist/**/*",
-      "node_modules/**/*",
-      "package.json"
+      "node_modules/**/*"
     ],
     "extraResources": [
       {
@@ -66,7 +66,7 @@
         "from": "shared",
         "to": "laro-docker/shared"
       }
-    ],
+    ],    
     "win": {
       "target": [
         {
@@ -76,7 +76,10 @@
           ]
         }
       ],
-      "icon": "assets/icon.ico"
+      "icon": "assets/icon.ico",
+      "electronUpdaterCompatibility": ">=2.16.0",
+      "signingHashAlgorithms": ["sha256"],
+      "sign": null
     },
     "nsis": {
       "oneClick": false,
