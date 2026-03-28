@@ -33,6 +33,16 @@
       "node_modules/**/*",
       "package.json"
     ],
+    "extraResources": [
+      { "from": "docker-compose.yml", "to": "laro-docker" },
+      { "from": "Dockerfile.server", "to": "laro-docker" },
+      { "from": "docker", "to": "laro-docker/docker" },
+      { "from": "package.json", "to": "laro-docker" },
+      { "from": "package-lock.json", "to": "laro-docker" },
+      { "from": "dist/renderer", "to": "laro-docker/dist/renderer" },
+      { "from": "server", "to": "laro-docker/server" },
+      { "from": "shared", "to": "laro-docker/shared" }
+    ],
     "win": {
       "target": [
         {
@@ -101,7 +111,7 @@
     "isomorphic-fetch": "^3.0.0",
     "jose": "^6.2.2",
     "lucide-react": "^0.468.0",
-    "mammoth": "^1.9.0",
+    "mammoth": "^1.12.0",
     "mysql2": "^3.12.0",
     "nanoid": "^5.0.9",
     "node-cron": "^3.0.3",

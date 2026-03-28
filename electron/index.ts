@@ -1,7 +1,9 @@
 import { app, BrowserWindow, ipcMain, dialog, shell, Menu } from 'electron';
 import path from 'path';
 import os from 'os';
-import { execSync, spawn, spawnSync } from 'child_process';
+import fs from 'fs';
+import http from 'http';
+import { spawn, spawnSync } from 'child_process';
 import { nanoid } from 'nanoid';
 import { IPC_CHANNELS, Platform, ScanConfig, AgentConfig } from '../shared/types';
 import { initDatabase, closeDatabase, createScan, getScanFiles } from './database';
@@ -10,9 +12,14 @@ import { FileUploader } from './uploader';
 import { initAutoUpdater } from './autoUpdater';
 
 const LARO_URL   = 'http://localhost:3000';
-const HEALTH_URL = 'http://localhost:3000/api/health';
+/** Prefer IPv4 loopback — avoids occasional `localhost` → ::1 issues on Windows */
+const HEALTH_HOST = '127.0.0.1';
+const HEALTH_PATH = '/api/health';
 const isDev      = process.env.NODE_ENV === 'development';
 const isWindows  = process.platform === 'win32';
+
+/** Subfolder under `resources/` with compose + Docker build context (see package.json `extraResources`) */
+const DOCKER_BUNDLE_DIR = 'laro-docker';
 
 let mainWindow:      BrowserWindow | null = null;
 let scanPanel:       BrowserWindow | null = null;
@@ -65,8 +72,28 @@ function getDockerPath(): string {
 }
 
 function getComposePath(): string {
-  if (app.isPackaged) return path.join(process.resourcesPath, 'docker-compose.yml');
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, DOCKER_BUNDLE_DIR, 'docker-compose.yml');
+  }
   return path.join(app.getAppPath(), 'docker-compose.yml');
+}
+
+function getComposeProjectDir(): string {
+  return path.dirname(getComposePath());
+}
+
+/** Packaged app must ship compose + Dockerfile + context (extraResources). */
+function isComposeBundleComplete(): boolean {
+  const dir = getComposeProjectDir();
+  const compose = getComposePath();
+  const dockerfile = path.join(dir, 'Dockerfile.server');
+  const renderer = path.join(dir, 'dist', 'renderer', 'index.html');
+  return (
+    fs.existsSync(compose) &&
+    fs.existsSync(dockerfile) &&
+    fs.existsSync(path.join(dir, 'package.json')) &&
+    fs.existsSync(renderer)
+  );
 }
 
 function isDockerRunning(): boolean {
@@ -89,44 +116,101 @@ function isDockerRunning(): boolean {
   return false;
 }
 
-function startDockerServices(): void {
+function startDockerServices(): Promise<{ code: number | null; stderr: string; stdout: string }> {
   const docker = getDockerPath();
   const composePath = getComposePath();
-  console.log('[Docker] Starting with:', docker, 'compose:', composePath);
+  const cwd = getComposeProjectDir();
+  console.log('[Docker] Starting with:', docker, 'compose:', composePath, 'cwd:', cwd);
 
-  // Use docker compose (v2) — try both forms
+  if (!fs.existsSync(composePath)) {
+    return Promise.resolve({
+      code: 1,
+      stderr: `docker-compose.yml not found at:\n${composePath}\n\n(Rebuild the app so Docker files are included, or run Docker from the LARO project folder.)`,
+      stdout: '',
+    });
+  }
+
+  // Use docker compose (v2)
   const args = ['compose', '-f', composePath, 'up', '--build', '-d'];
-  const p = spawn(docker, args, {
-    stdio: 'pipe',
-    // On Windows, run in shell to pick up PATH
-    shell: isWindows,
+  return new Promise((resolve) => {
+    let stdout = '';
+    let stderr = '';
+    const p = spawn(docker, args, {
+      cwd,
+      stdio: 'pipe',
+      env: { ...process.env },
+      shell: isWindows,
+    });
+    p.stdout?.on('data', (d: Buffer) => {
+      const t = d.toString();
+      stdout += t;
+      console.log('[Docker]', t.trim());
+    });
+    p.stderr?.on('data', (d: Buffer) => {
+      const t = d.toString();
+      stderr += t;
+      console.log('[Docker]', t.trim());
+    });
+    p.on('error', (err) => {
+      console.error('[Docker] spawn error:', err);
+      resolve({ code: 1, stderr: `${stderr}\n${err.message}`, stdout });
+    });
+    p.on('exit', (code) => {
+      console.log('[Docker] compose exit:', code);
+      resolve({ code, stderr, stdout });
+    });
   });
-  p.stdout?.on('data', (d: Buffer) => console.log('[Docker]', d.toString().trim()));
-  p.stderr?.on('data', (d: Buffer) => console.log('[Docker]', d.toString().trim()));
-  p.on('error', (err) => console.error('[Docker] spawn error:', err));
-  p.on('exit', (code) => console.log('[Docker] startup exit:', code));
 }
 
 function stopDockerServices(): void {
   try {
     const docker = getDockerPath();
-    spawnSync(docker, ['compose', '-f', getComposePath(), 'down'], {
-      stdio: 'ignore', timeout: 15000, shell: isWindows,
+    const composePath = getComposePath();
+    spawnSync(docker, ['compose', '-f', composePath, 'down'], {
+      cwd: getComposeProjectDir(),
+      stdio: 'ignore',
+      timeout: 15000,
+      shell: isWindows,
     });
   } catch {}
 }
 
-async function waitForServer(max = 40, ms = 3000): Promise<boolean> {
+function checkHealthOnce(timeoutMs = 4000): Promise<boolean> {
+  return new Promise((resolve) => {
+    const req = http.request(
+      {
+        hostname: HEALTH_HOST,
+        port: 3000,
+        path: HEALTH_PATH,
+        method: 'GET',
+        timeout: timeoutMs,
+      },
+      (res) => {
+        res.resume();
+        resolve(res.statusCode === 200);
+      }
+    );
+    req.on('error', () => resolve(false));
+    req.on('timeout', () => {
+      req.destroy();
+      resolve(false);
+    });
+    req.end();
+  });
+}
+
+/** First `docker compose up --build` can take many minutes; keep polling long enough. */
+async function waitForServer(max = 120, ms = 4000): Promise<boolean> {
   for (let i = 0; i < max; i++) {
-    try {
-      const r = await fetch(HEALTH_URL, { signal: AbortSignal.timeout(2000) });
-      if (r.ok) { console.log('[Server] Ready!'); return true; }
-    } catch {}
+    if (await checkHealthOnce(3500)) {
+      console.log('[Server] Ready!');
+      return true;
+    }
     console.log(`[Server] Waiting... (${i + 1}/${max})`);
     mainWindow?.webContents.executeJavaScript(
-      `document.getElementById('laro-status')&&(document.getElementById('laro-status').textContent='Starting services... (${i+1}/${max})')`
+      `document.getElementById('laro-status')&&(document.getElementById('laro-status').textContent='Starting services... (${i+1}/${max}) — first run can take several minutes while Docker builds')`
     ).catch(() => {});
-    await new Promise(r => setTimeout(r, ms));
+    await new Promise((r) => setTimeout(r, ms));
   }
   return false;
 }
@@ -175,6 +259,20 @@ async function createMainWindow(): Promise<void> {
   const dockerOk = isDockerRunning();
   console.log('[Docker] isRunning:', dockerOk);
 
+  if (app.isPackaged && !isComposeBundleComplete()) {
+    await dialog.showMessageBox(mainWindow!, {
+      type: 'error',
+      title: 'Missing Docker bundle',
+      message: 'This install does not include the Docker stack files.',
+      detail:
+        `Expected under:\n${path.join(process.resourcesPath, DOCKER_BUNDLE_DIR)}\n\n` +
+        'Rebuild the desktop app (npm run dist) after `npm run build` so dist/renderer exists.',
+      buttons: ['Quit'],
+    });
+    app.quit();
+    return;
+  }
+
   if (!dockerOk) {
     // On Windows, give more helpful guidance
     const detail = isWindows
@@ -201,20 +299,37 @@ async function createMainWindow(): Promise<void> {
     }
   }
 
-  // Step 3: Start Docker services
-  setStatus('Starting LARO database and server...');
-  startDockerServices();
+  // Step 3: Start Docker services (blocks until compose finishes — build can take a long time)
+  setStatus('Starting Docker stack (building on first run can take 5–15 minutes)...');
+  const composeResult = await startDockerServices();
 
-  // Step 4: Wait for server
-  setStatus('Waiting for services... (first run takes ~1 minute)');
-  const ready = await waitForServer(40, 3000);
+  if (composeResult.code !== 0) {
+    const tail = (composeResult.stderr || composeResult.stdout || 'Unknown error').slice(-2800);
+    await dialog.showMessageBox(mainWindow!, {
+      type: 'error',
+      title: 'Docker Compose failed',
+      message: 'Could not start LARO containers.',
+      detail:
+        `${tail}\n\n` +
+        'Check that Docker Desktop is running, ports 3000 / 3306 / 6379 are free, and try again.',
+      buttons: ['Quit'],
+    });
+    app.quit();
+    return;
+  }
+
+  // Step 4: Wait for HTTP server inside the container
+  setStatus('Waiting for LARO server on port 3000...');
+  const ready = await waitForServer(120, 4000);
 
   if (!ready) {
     const { response } = await dialog.showMessageBox(mainWindow!, {
       type: 'error',
       title: 'Startup Timeout',
-      message: 'LARO services did not start in time',
-      detail: 'Docker may still be starting up. Try opening LARO again in a minute.',
+      message: 'LARO did not respond on http://127.0.0.1:3000 in time',
+      detail:
+        'Docker may still be pulling images or MySQL may be slow to become healthy.\n\n' +
+        'Check Docker Desktop → Containers for laro-server errors, ensure port 3000 is not used by another app, then try again.',
       buttons: ['Try Again', 'Quit'],
     });
     if (response === 0) { await createMainWindow(); return; }
