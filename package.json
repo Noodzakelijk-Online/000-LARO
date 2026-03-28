@@ -34,14 +34,38 @@
       "package.json"
     ],
     "extraResources": [
-      { "from": "docker-compose.yml", "to": "laro-docker" },
-      { "from": "Dockerfile.server", "to": "laro-docker" },
-      { "from": "docker", "to": "laro-docker/docker" },
-      { "from": "package.json", "to": "laro-docker" },
-      { "from": "package-lock.json", "to": "laro-docker" },
-      { "from": "dist/renderer", "to": "laro-docker/dist/renderer" },
-      { "from": "server", "to": "laro-docker/server" },
-      { "from": "shared", "to": "laro-docker/shared" }
+      {
+        "from": "docker-compose.yml",
+        "to": "laro-docker/docker-compose.yml"
+      },
+      {
+        "from": "Dockerfile.server",
+        "to": "laro-docker/Dockerfile.server"
+      },
+      {
+        "from": "package.json",
+        "to": "laro-docker/package.json"
+      },
+      {
+        "from": "package-lock.json",
+        "to": "laro-docker/package-lock.json"
+      },
+      {
+        "from": "docker",
+        "to": "laro-docker/docker"
+      },
+      {
+        "from": "dist/renderer",
+        "to": "laro-docker/dist/renderer"
+      },
+      {
+        "from": "server",
+        "to": "laro-docker/server"
+      },
+      {
+        "from": "shared",
+        "to": "laro-docker/shared"
+      }
     ],
     "win": {
       "target": [
@@ -155,6 +179,7 @@
     "concurrently": "^9.1.0",
     "cross-env": "^7.0.3",
     "electron": "^41.0.3",
+    "electron-builder": "^24.13.3",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.16",
     "tsx": "^4.19.2",
