@@ -316,7 +316,7 @@ function createScanPanel(): void {
     webPreferences: { nodeIntegration: false, contextIsolation: true, preload: path.join(__dirname, 'preload.js') },
   });
   isDev ? scanPanel.loadURL('http://localhost:5173') :
-    scanPanel.loadFile(path.join(__dirname, '../../renderer/index.html'));
+    scanPanel.loadFile(path.join(app.getAppPath(), 'dist', 'renderer', 'index.html'));
   scanPanel.on('closed', () => { scanPanel = null; });
 }
 

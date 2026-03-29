@@ -2,7 +2,7 @@
   "name": "laro-desktop",
   "version": "1.0.0",
   "description": "LARO Desktop — Legal AI Evidence Agent",
-  "main": "dist/main/electron/index.js",
+  "main": "./dist/main/electron/index.js",
   "author": "LARO",
   "license": "MIT",
   "private": true,
@@ -10,10 +10,9 @@
     "dev": "concurrently \"npm run dev:renderer\" \"wait-on http://localhost:5173 && npm run dev:main\"",
     "dev:renderer": "vite",
     "dev:main": "tsc -p tsconfig.main.json && cross-env NODE_ENV=development electron dist/main/electron/index.js",
-    "build": "npm run build:main && npm run build:renderer && npm run build:copy-pkg",
+    "build": "npm run build:main && npm run build:renderer",
     "build:main": "tsc -p tsconfig.main.json",
     "build:renderer": "vite build",
-    "build:copy-pkg": "cp package.json dist/",
     "build:server": "tsc -p tsconfig.server.json",
     "dev:server": "cross-env NODE_ENV=development npx tsx server/index.ts",
     "dist": "npm run build && electron-builder",
@@ -30,11 +29,12 @@
       "output": "release"
     },
     "files": [
-      "package.json",
-      "dist/**/*"
+      "dist/**/*",
+      "package.json"
     ],
     "asarUnpack": [
-      "node_modules/better-sqlite3/**/*"
+      "**/node_modules/better-sqlite3/**/*",
+      "**/node_modules/canvas/**/*"
     ],
     "extraResources": [
       {
@@ -44,10 +44,6 @@
       {
         "from": "Dockerfile.server",
         "to": "laro-docker/Dockerfile.server"
-      },
-      {
-        "from": "package.json",
-        "to": "laro-docker/package.json"
       },
       {
         "from": "package-lock.json",
@@ -70,6 +66,7 @@
         "to": "laro-docker/shared"
       }
     ],
+    "afterPack": "./scripts/afterPack.js",
     "win": {
       "target": [
         {
