@@ -10,9 +10,10 @@
     "dev": "concurrently \"npm run dev:renderer\" \"wait-on http://localhost:5173 && npm run dev:main\"",
     "dev:renderer": "vite",
     "dev:main": "tsc -p tsconfig.main.json && cross-env NODE_ENV=development electron dist/main/electron/index.js",
-    "build": "npm run build:main && npm run build:renderer",
+    "build": "npm run build:main && npm run build:renderer && npm run build:copy-pkg",
     "build:main": "tsc -p tsconfig.main.json",
     "build:renderer": "vite build",
+    "build:copy-pkg": "cp package.json dist/",
     "build:server": "tsc -p tsconfig.server.json",
     "dev:server": "cross-env NODE_ENV=development npx tsx server/index.ts",
     "dist": "npm run build && electron-builder",
@@ -30,8 +31,10 @@
     },
     "files": [
       "package.json",
-      "dist/**/*",
-      "node_modules/**/*"
+      "dist/**/*"
+    ],
+    "asarUnpack": [
+      "node_modules/better-sqlite3/**/*"
     ],
     "extraResources": [
       {
@@ -66,7 +69,7 @@
         "from": "shared",
         "to": "laro-docker/shared"
       }
-    ],    
+    ],
     "win": {
       "target": [
         {
@@ -76,10 +79,7 @@
           ]
         }
       ],
-      "icon": "assets/icon.ico",
-      "electronUpdaterCompatibility": ">=2.16.0",
-      "signingHashAlgorithms": ["sha256"],
-      "sign": null
+      "icon": "assets/icon.ico"
     },
     "nsis": {
       "oneClick": false,
