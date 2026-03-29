@@ -127,7 +127,7 @@ function startDockerServices(): Promise<{ code: number | null; stderr: string; s
     });
   }
 
-  const args = ['compose', '-f', composePath, 'up', '--build', '-d'];
+  const args = ['compose', 'up', '--build', '-d'];
   return new Promise((resolve) => {
     let stdout = '';
     let stderr = '';
