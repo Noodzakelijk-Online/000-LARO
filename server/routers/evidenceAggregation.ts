@@ -36,7 +36,7 @@ export const evidenceAggregationRouter = router({
       try {
         // This would aggregate from multiple tables
         // For now, returning structure for implementation
-        const items = [];
+        const items: any[] = [];
         const total = 0;
 
         return {
@@ -114,7 +114,7 @@ export const evidenceAggregationRouter = router({
     .query(async ({ ctx, input }) => {
       try {
         // Fetch and sort evidence chronologically
-        const timelineEvents = [];
+        const timelineEvents: any[] = [];
 
         return {
           events: timelineEvents,
@@ -139,7 +139,7 @@ export const evidenceAggregationRouter = router({
     )
     .query(async ({ ctx, input }) => {
       try {
-        const items = [];
+        const items: any[] = [];
 
         return {
           source: input.source,
@@ -165,7 +165,7 @@ export const evidenceAggregationRouter = router({
     )
     .query(async ({ ctx, input }) => {
       try {
-        const results = [];
+        const results: any[] = [];
 
         return {
           query: input.query,

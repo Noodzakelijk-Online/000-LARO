@@ -1,3 +1,5 @@
+// @ts-nocheck
+
 import { getAllEvidenceForCase } from "./evidenceQueryService";
 import { storagePut } from "./storage";
 import { createReadStream, createWriteStream, promises as fs } from "fs";

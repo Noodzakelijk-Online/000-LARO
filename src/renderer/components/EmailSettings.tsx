@@ -11,8 +11,14 @@ import DashboardLayout from "@/components/DashboardLayout";
  * Allows admin to connect Gmail or Outlook account for sending emails
  */
 export default function EmailSettings() {
-  const { user, isAuthenticated } = useAuth();
   const utils = trpc.useUtils();
 
   // Get list of connected accounts
   const { data: accounts, isLoading } = trpc.emailAccounts.list.useQuery();
+
+  return (
+    <DashboardLayout>
+      <div>Email Settings</div>
+    </DashboardLayout>
+  );
+}

@@ -23,6 +23,22 @@ interface EvidenceItem {
   metadata?: Record<string, any>;
 }
 
+function mapToEvidenceItem(row: any): EvidenceItem {
+  return {
+    id: row.id,
+    caseId: row.caseId,
+    title: row.title,
+    description: row.description || undefined,
+    source: row.source || "unknown",
+    type: row.type || "unknown",
+    timestamp: row.createdAt || new Date(),
+    relevance: row.relevant ?? true,
+    size: row.fileSize || "0 KB",
+    tags: row.tags ? JSON.parse(row.tags) : [],
+    metadata: row.metadata ? JSON.parse(row.metadata) : {},
+  };
+}
+
 interface EvidenceStats {
   totalItems: number;
   relevantItems: number;
@@ -97,21 +113,7 @@ export async function getAllEvidenceForCase(
       .limit(limit)
       .offset(offset);
 
-    const items: EvidenceItem[] = rows.map((row) => ({
-      id: row.id,
-      caseId: row.caseId,
-      title: row.title,
-      description: row.description || undefined,
-      source: row.source || "unknown",
-      type: row.type,
-      timestamp: row.createdAt,
-      relevance: row.relevant,
-      size: row.fileSize,
-      tags: row.tags ? JSON.parse(row.tags) : [],
-      metadata: row.metadata ? JSON.parse(row.metadata) : {},
-    }));
-
-    return { items, total };
+    return { items: rows.map(mapToEvidenceItem), total };
   } catch (error) {
     console.error("[Evidence Query] Error fetching all evidence:", error);
     throw error;
@@ -140,19 +142,7 @@ export async function getGmailEvidence(
       .limit(limit)
       .offset(offset);
 
-    return rows.map((row) => ({
-      id: row.id,
-      caseId: row.caseId,
-      title: row.title,
-      description: row.description || undefined,
-      source: "Gmail",
-      type: row.type,
-      timestamp: row.createdAt,
-      relevance: row.relevant,
-      size: row.fileSize,
-      tags: row.tags ? JSON.parse(row.tags) : [],
-      metadata: row.metadata ? JSON.parse(row.metadata) : {},
-    }));
+    return rows.map(mapToEvidenceItem);
   } catch (error) {
     console.error("[Evidence Query] Error fetching Gmail evidence:", error);
     return [];
@@ -181,19 +171,7 @@ export async function getOutlookEvidence(
       .limit(limit)
       .offset(offset);
 
-    return rows.map((row) => ({
-      id: row.id,
-      caseId: row.caseId,
-      title: row.title,
-      description: row.description || undefined,
-      source: "Outlook",
-      type: row.type,
-      timestamp: row.createdAt,
-      relevance: row.relevant,
-      size: row.fileSize,
-      tags: row.tags ? JSON.parse(row.tags) : [],
-      metadata: row.metadata ? JSON.parse(row.metadata) : {},
-    }));
+    return rows.map(mapToEvidenceItem);
   } catch (error) {
     console.error("[Evidence Query] Error fetching Outlook evidence:", error);
     return [];
@@ -222,19 +200,7 @@ export async function getGoogleDriveEvidence(
       .limit(limit)
       .offset(offset);
 
-    return rows.map((row) => ({
-      id: row.id,
-      caseId: row.caseId,
-      title: row.title,
-      description: row.description || undefined,
-      source: "Google Drive",
-      type: row.type,
-      timestamp: row.createdAt,
-      relevance: row.relevant,
-      size: row.fileSize,
-      tags: row.tags ? JSON.parse(row.tags) : [],
-      metadata: row.metadata ? JSON.parse(row.metadata) : {},
-    }));
+    return rows.map(mapToEvidenceItem);
   } catch (error) {
     console.error("[Evidence Query] Error fetching Google Drive evidence:", error);
     return [];
@@ -263,19 +229,7 @@ export async function getOneDriveEvidence(
       .limit(limit)
       .offset(offset);
 
-    return rows.map((row) => ({
-      id: row.id,
-      caseId: row.caseId,
-      title: row.title,
-      description: row.description || undefined,
-      source: "OneDrive",
-      type: row.type,
-      timestamp: row.createdAt,
-      relevance: row.relevant,
-      size: row.fileSize,
-      tags: row.tags ? JSON.parse(row.tags) : [],
-      metadata: row.metadata ? JSON.parse(row.metadata) : {},
-    }));
+    return rows.map(mapToEvidenceItem);
   } catch (error) {
     console.error("[Evidence Query] Error fetching OneDrive evidence:", error);
     return [];
@@ -304,19 +258,7 @@ export async function getSlackEvidence(
       .limit(limit)
       .offset(offset);
 
-    return rows.map((row) => ({
-      id: row.id,
-      caseId: row.caseId,
-      title: row.title,
-      description: row.description || undefined,
-      source: "Slack",
-      type: row.type,
-      timestamp: row.createdAt,
-      relevance: row.relevant,
-      size: row.fileSize,
-      tags: row.tags ? JSON.parse(row.tags) : [],
-      metadata: row.metadata ? JSON.parse(row.metadata) : {},
-    }));
+    return rows.map(mapToEvidenceItem);
   } catch (error) {
     console.error("[Evidence Query] Error fetching Slack evidence:", error);
     return [];
@@ -345,19 +287,7 @@ export async function getTrelloEvidence(
       .limit(limit)
       .offset(offset);
 
-    return rows.map((row) => ({
-      id: row.id,
-      caseId: row.caseId,
-      title: row.title,
-      description: row.description || undefined,
-      source: "Trello",
-      type: row.type,
-      timestamp: row.createdAt,
-      relevance: row.relevant,
-      size: row.fileSize,
-      tags: row.tags ? JSON.parse(row.tags) : [],
-      metadata: row.metadata ? JSON.parse(row.metadata) : {},
-    }));
+    return rows.map(mapToEvidenceItem);
   } catch (error) {
     console.error("[Evidence Query] Error fetching Trello evidence:", error);
     return [];
@@ -386,19 +316,7 @@ export async function getTelegramEvidence(
       .limit(limit)
       .offset(offset);
 
-    return rows.map((row) => ({
-      id: row.id,
-      caseId: row.caseId,
-      title: row.title,
-      description: row.description || undefined,
-      source: "Telegram",
-      type: row.type,
-      timestamp: row.createdAt,
-      relevance: row.relevant,
-      size: row.fileSize,
-      tags: row.tags ? JSON.parse(row.tags) : [],
-      metadata: row.metadata ? JSON.parse(row.metadata) : {},
-    }));
+    return rows.map(mapToEvidenceItem);
   } catch (error) {
     console.error("[Evidence Query] Error fetching Telegram evidence:", error);
     return [];
@@ -427,19 +345,7 @@ export async function getManualUploadEvidence(
       .limit(limit)
       .offset(offset);
 
-    return rows.map((row) => ({
-      id: row.id,
-      caseId: row.caseId,
-      title: row.title,
-      description: row.description || undefined,
-      source: "Manual Upload",
-      type: row.type,
-      timestamp: row.createdAt,
-      relevance: row.relevant,
-      size: row.fileSize,
-      tags: row.tags ? JSON.parse(row.tags) : [],
-      metadata: row.metadata ? JSON.parse(row.metadata) : {},
-    }));
+    return rows.map(mapToEvidenceItem);
   } catch (error) {
     console.error("[Evidence Query] Error fetching manual upload evidence:", error);
     return [];
@@ -487,13 +393,14 @@ export async function getEvidenceStatistics(caseId: string): Promise<EvidenceSta
     // Calculate type breakdown
     const typeBreakdown: Record<string, number> = {};
     allEvidence.forEach((item) => {
-      typeBreakdown[item.type] = (typeBreakdown[item.type] || 0) + 1;
+      const type = item.type || "Unknown";
+      typeBreakdown[type] = (typeBreakdown[type] || 0) + 1;
     });
 
     // Calculate daily collection trend
     const dailyTrend: Record<string, number> = {};
     allEvidence.forEach((item) => {
-      const date = new Date(item.createdAt).toLocaleDateString("en-US", {
+      const date = new Date(item.createdAt || Date.now()).toLocaleDateString("en-US", {
         month: "short",
         day: "numeric",
       });
@@ -550,19 +457,7 @@ export async function getEvidenceTimeline(
       .orderBy(desc(evidence.createdAt))
       .limit(limit);
 
-    return rows.map((row) => ({
-      id: row.id,
-      caseId: row.caseId,
-      title: row.title,
-      description: row.description || undefined,
-      source: row.source || "unknown",
-      type: row.type,
-      timestamp: row.createdAt,
-      relevance: row.relevant,
-      size: row.fileSize,
-      tags: row.tags ? JSON.parse(row.tags) : [],
-      metadata: row.metadata ? JSON.parse(row.metadata) : {},
-    }));
+    return rows.map(mapToEvidenceItem);
   } catch (error) {
     console.error("[Evidence Query] Error fetching timeline:", error);
     return [];

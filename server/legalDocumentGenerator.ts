@@ -31,7 +31,7 @@ interface GapAnalysisData {
   }>;
 }
 
-interface GeneratedDocument {
+export interface GeneratedDocument {
   type: "discovery_request" | "preservation_notice" | "spoliation_warning" | "demand_letter";
   title: string;
   content: string;

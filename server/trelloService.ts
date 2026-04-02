@@ -10,20 +10,20 @@ import { evidenceSources, evidenceItems } from './schema';
 import { v4 as uuidv4 } from 'uuid';
 import { eq, and } from 'drizzle-orm';
 
-interface TrelloBoard {
+export interface TrelloBoard {
   id: string;
   name: string;
   url: string;
   desc?: string;
 }
 
-interface TrelloList {
+export interface TrelloList {
   id: string;
   name: string;
   boardId: string;
 }
 
-interface TrelloCard {
+export interface TrelloCard {
   id: string;
   name: string;
   desc?: string;
@@ -48,7 +48,7 @@ interface TrelloComment {
   date: string;
 }
 
-interface SyncProgress {
+export interface SyncProgress {
   totalBoards: number;
   processedBoards: number;
   totalCards: number;
@@ -74,10 +74,10 @@ export function getTrelloOAuthConfig() {
  */
 export function getTrelloAuthorizationUrl(userId: string, caseId: string): string {
   const config = getTrelloOAuthConfig();
-  
+
   // Store userId and caseId in state parameter for callback
   const state = Buffer.from(JSON.stringify({ userId, caseId })).toString('base64');
-  
+
   // Trello OAuth URL
   const params = new URLSearchParams({
     key: config.apiKey,
@@ -98,7 +98,7 @@ export function getTrelloAuthorizationUrl(userId: string, caseId: string): strin
  */
 export async function getTrelloBoards(token: string): Promise<TrelloBoard[]> {
   const config = getTrelloOAuthConfig();
-  
+
   try {
     const response = await fetch(
       `https://api.trello.com/1/members/me/boards?key=${config.apiKey}&token=${token}&fields=id,name,url,desc`,
@@ -129,7 +129,7 @@ export async function getTrelloBoards(token: string): Promise<TrelloBoard[]> {
  */
 export async function getTrelloLists(boardId: string, token: string): Promise<TrelloList[]> {
   const config = getTrelloOAuthConfig();
-  
+
   try {
     const response = await fetch(
       `https://api.trello.com/1/boards/${boardId}/lists?key=${config.apiKey}&token=${token}&fields=id,name`,
@@ -163,7 +163,7 @@ export async function getTrelloLists(boardId: string, token: string): Promise<Tr
  */
 export async function getTrelloCards(listId: string, boardId: string, token: string): Promise<TrelloCard[]> {
   const config = getTrelloOAuthConfig();
-  
+
   try {
     const response = await fetch(
       `https://api.trello.com/1/lists/${listId}/cards?key=${config.apiKey}&token=${token}&fields=id,name,desc,url,dateLastActivity&attachments=open`,
@@ -198,7 +198,7 @@ export async function getTrelloCards(listId: string, boardId: string, token: str
  */
 export async function getTrelloComments(cardId: string, token: string): Promise<TrelloComment[]> {
   const config = getTrelloOAuthConfig();
-  
+
   try {
     const response = await fetch(
       `https://api.trello.com/1/cards/${cardId}/actions?key=${config.apiKey}&token=${token}&filter=commentCard&fields=id,data,type,date,memberCreator`,
@@ -238,7 +238,7 @@ export async function downloadTrelloAttachment(
 ): Promise<{ key: string; url: string } | null> {
   try {
     const response = await fetch(attachmentUrl);
-    
+
     if (!response.ok) {
       console.warn('[Trello] Failed to download attachment:', attachmentUrl);
       return null;
@@ -246,7 +246,7 @@ export async function downloadTrelloAttachment(
 
     const buffer = await response.arrayBuffer();
     const mimeType = response.headers.get('content-type') || 'application/octet-stream';
-    
+
     // Upload to S3
     const { key, url } = await storagePut(
       `uploads/evidence/trello/${uuidv4()}-${fileName}`,
@@ -266,7 +266,7 @@ export async function downloadTrelloAttachment(
  */
 export async function testTrelloConnection(token: string): Promise<{ ok: boolean; member?: any; error?: string }> {
   const config = getTrelloOAuthConfig();
-  
+
   try {
     const response = await fetch(
       `https://api.trello.com/1/members/me?key=${config.apiKey}&token=${token}&fields=id,fullName,email`,
@@ -316,7 +316,7 @@ export async function syncTrelloForCase(
   try {
     // Get all boards
     let boards = await getTrelloBoards(token);
-    
+
     // Filter by boardIds if provided
     if (boardIds && boardIds.length > 0) {
       boards = boards.filter(b => boardIds.includes(b.id));
@@ -357,16 +357,14 @@ ${comments.map(c => `- ${c.memberCreator?.fullName || 'Unknown'} (${c.date}): ${
               `.trim();
 
               const evidenceId = uuidv4();
-              
+
               // Store card as evidence item
               await db.insert(evidenceItems).values({
                 id: evidenceId,
                 caseId,
-                sourceId: `trello-${board.id}`,
-                sourceType: 'Trello',
+                userId,
                 title: card.name,
-                content: cardContent,
-                url: card.url,
+                source: "Trello",
                 metadata: JSON.stringify({
                   boardId: board.id,
                   boardName: board.name,
@@ -375,8 +373,10 @@ ${comments.map(c => `- ${c.memberCreator?.fullName || 'Unknown'} (${c.date}): ${
                   cardId: card.id,
                   commentCount: comments.length,
                   attachmentCount: card.attachments?.length || 0,
+                  cardContent,
+                  url: card.url,
                 }),
-                collectedAt: new Date(),
+                createdAt: new Date(),
               });
 
               // Download and store attachments
@@ -386,23 +386,22 @@ ${comments.map(c => `- ${c.memberCreator?.fullName || 'Unknown'} (${c.date}): ${
                     const result = await downloadTrelloAttachment(attachment.url, attachment.name);
                     if (result) {
                       progress.totalAttachments++;
-                      
+
                       // Store attachment metadata
                       await db.insert(evidenceItems).values({
                         id: uuidv4(),
                         caseId,
-                        sourceId: `trello-${board.id}`,
-                        sourceType: 'Trello',
+                        userId,
                         title: `Attachment: ${attachment.name}`,
-                        content: `Attachment from card: ${card.name}`,
-                        url: result.url,
+                        source: "Trello",
                         metadata: JSON.stringify({
                           attachmentId: attachment.id,
                           fileName: attachment.name,
                           s3Key: result.key,
                           cardId: card.id,
+                          url: result.url,
                         }),
-                        collectedAt: new Date(),
+                        createdAt: new Date(),
                       });
                     }
                   } catch (error) {
@@ -427,8 +426,9 @@ ${comments.map(c => `- ${c.memberCreator?.fullName || 'Unknown'} (${c.date}): ${
       id: uuidv4(),
       caseId,
       userId,
-      sourceType: 'Trello',
-      connectionStatus: 'connected',
+      provider: 'Trello',
+      sourceType: 'Board',
+      status: 'connected',
       metadata: JSON.stringify({
         syncedAt: new Date().toISOString(),
         boardCount: progress.processedBoards,
@@ -436,17 +436,6 @@ ${comments.map(c => `- ${c.memberCreator?.fullName || 'Unknown'} (${c.date}): ${
         commentCount: progress.totalComments,
         attachmentCount: progress.totalAttachments,
       }),
-    }).onDuplicateKeyUpdate({
-      set: {
-        connectionStatus: 'connected',
-        metadata: JSON.stringify({
-          syncedAt: new Date().toISOString(),
-          boardCount: progress.processedBoards,
-          cardCount: progress.totalCards,
-          commentCount: progress.totalComments,
-          attachmentCount: progress.totalAttachments,
-        }),
-      },
     });
 
     return progress;

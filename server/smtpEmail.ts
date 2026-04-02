@@ -58,7 +58,7 @@ function getTransporter(config: EmailConfig): Transporter {
   
   if (!transporters.has(key)) {
     const smtpConfig = getSMTPConfig(config.provider, config.user, config.password);
-    const transporter = nodemailer.createTransporter(smtpConfig);
+    const transporter = nodemailer.createTransport(smtpConfig);
     transporters.set(key, transporter);
   }
   

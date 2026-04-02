@@ -80,8 +80,8 @@ export async function initiateOutreach(caseId: string, userId?: string) {
     status: "Contacted",
     initialContact: new Date(),
     lastContact: new Date(),
-    followUpsSent: "0",
-    distanceKm: lawyer.distance.toString(),
+    followUpsSent: 0,
+    distanceKm: Math.round(lawyer.distance),
   });
 
   // Create email activity record
@@ -89,12 +89,12 @@ export async function initiateOutreach(caseId: string, userId?: string) {
     id: nanoid(),
     lawyerId: lawyer.id,
     caseId,
-    emailType: "Initial",
+    activityType: "Initial",
     subject: "New Legal Case - Your Expertise Needed",
     sentAt: new Date(),
     responseReceived: "No",
     responseStatus: "No Response",
-  });
+  } as any);
 
   // Update case status
   await db
@@ -145,12 +145,14 @@ export async function processFollowUps() {
   let scheduled = 0;
 
   for (const outreach of results) {
-    const followUpCount = parseInt(outreach.followUpsSent || "0");
+    const followUpCount = Number(outreach.followUpsSent || 0);
     
     // Check if max follow-ups reached
     if (followUpCount >= FOLLOW_UP_CONFIG.maxFollowUps) {
       // Escalate to next lawyer
-      await escalateToNextLawyer(outreach.caseId, outreach.lawyerId);
+      if (outreach.caseId && outreach.lawyerId) {
+        await escalateToNextLawyer(outreach.caseId, outreach.lawyerId);
+      }
       processed++;
       continue;
     }
@@ -171,19 +173,19 @@ export async function processFollowUps() {
         id: nanoid(),
         lawyerId: outreach.lawyerId,
         caseId: outreach.caseId,
-        emailType: "Follow-up",
+        activityType: "Follow-up",
         subject: `Follow-up: Legal Case Opportunity`,
         sentAt: new Date(),
         responseReceived: "No",
         responseStatus: "No Response",
-      });
+      } as any);
 
       // Update outreach record
       await db
         .update(outreachStatus)
         .set({
           lastContact: new Date(),
-          followUpsSent: (followUpCount + 1).toString(),
+          followUpsSent: followUpCount + 1,
         })
         .where(eq(outreachStatus.id, outreach.id));
 
@@ -231,7 +233,7 @@ export async function escalateToNextLawyer(caseId: string, currentLawyerId: stri
     .from(outreachStatus)
     .where(eq(outreachStatus.caseId, caseId));
 
-  const contactedIds = previousOutreach.map(o => o.lawyerId);
+  const contactedIds = previousOutreach.map(o => o.lawyerId).filter((id): id is string => id !== null);
 
   // Find next lawyer
   const nextLawyer = await getNextLawyerToContact(caseId, contactedIds);
@@ -295,20 +297,22 @@ export async function handleLawyerResponse(
     .where(eq(outreachStatus.id, outreachId));
 
   // Update email activity
-  await db
-    .update(emailActivity)
-    .set({
-      responseReceived: "Yes",
-      responseStatus: response,
-    })
-    .where(
-      and(
-        eq(emailActivity.caseId, record.caseId),
-        eq(emailActivity.lawyerId, record.lawyerId)
-      )
-    );
+  if (record.caseId && record.lawyerId) {
+    await db
+      .update(emailActivity)
+      .set({
+        responseReceived: "Yes",
+        responseStatus: response,
+      })
+      .where(
+        and(
+          eq(emailActivity.caseId, record.caseId),
+          eq(emailActivity.lawyerId, record.lawyerId)
+        )
+      );
+  }
 
-  if (response === "Interested") {
+  if (response === "Interested" && record.caseId) {
     // Update case status to Matched
     await db
       .update(cases)
@@ -327,7 +331,7 @@ export async function handleLawyerResponse(
         response,
       },
     });
-  } else {
+  } else if (record.caseId && record.lawyerId) {
     // Lawyer declined, escalate to next lawyer
     await escalateToNextLawyer(record.caseId, record.lawyerId);
   }

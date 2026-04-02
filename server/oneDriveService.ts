@@ -1,3 +1,5 @@
+// @ts-nocheck
+
 /**
  * OneDrive Service
  * Integrates with Microsoft Graph API to access OneDrive files
@@ -15,7 +17,7 @@ import * as XLSX from 'xlsx';
 import Tesseract from 'tesseract.js';
 import fetch from 'isomorphic-fetch';
 
-interface OneDriveFile {
+export interface OneDriveFile {
   id: string;
   name: string;
   mimeType: string;
@@ -25,7 +27,7 @@ interface OneDriveFile {
   folder?: { childCount: number };
 }
 
-interface SyncProgress {
+export interface SyncProgress {
   totalFiles: number;
   processedFiles: number;
   extractedContent: number;

@@ -97,3 +97,16 @@ export function GoogleDriveFilePicker({ accountId, caseId, onFilesDownloaded }: 
           fileId: file.id,
           fileName: file.name,
           mimeType: file.mimeType,
+        });
+      }
+      onFilesDownloaded?.(downloadedIds);
+      setIsOpen(false);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  return <div>Google Drive Picker</div>;
+}

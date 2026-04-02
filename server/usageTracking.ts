@@ -117,12 +117,14 @@ export async function getUserUsage(
     const cost = parseFloat(record.billedCost || '0');
     total += cost;
 
-    if (!byResourceType[record.resourceType]) {
-      byResourceType[record.resourceType] = { quantity: 0, cost: 0 };
-    }
+    if (record.resourceType) {
+      if (!byResourceType[record.resourceType]) {
+        byResourceType[record.resourceType] = { quantity: 0, cost: 0 };
+      }
 
-    byResourceType[record.resourceType].quantity += parseInt(record.quantity);
-    byResourceType[record.resourceType].cost += cost;
+      byResourceType[record.resourceType].quantity += parseInt(record.quantity || '0');
+      byResourceType[record.resourceType].cost += cost;
+    }
   }
 
   return {
@@ -177,7 +179,7 @@ export async function checkUsageLimit(
     .select()
     .from(usageLimits)
     .where(and(
-      eq(usageLimits.tier, tier),
+      eq(usageLimits.tier, tier || 'free'),
       eq(usageLimits.resourceType, resourceType)
     ))
     .limit(1);

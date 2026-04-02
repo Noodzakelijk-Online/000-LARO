@@ -9,7 +9,7 @@
 
 import cron from "node-cron";
 import { processOutreachCron } from "./outreach-automation";
-import { isStripeConfigured, reportUsageToStripe } from "./stripeSubscription";
+
 import { initializeUsageLimits } from "./usageTracking";
 import { resetMonthlyAlerts } from "./usageAlerts";
 import { runAutoCollectionForAllCases } from "./autoCollectionService";
@@ -33,25 +33,7 @@ export function initializeCronJobs(): void {
     console.error("[Cron] Error initializing usage limits:", err);
   });
   
-  if (isStripeConfigured()) {
-    cron.schedule(
-      "0 * * * *",
-      async () => {
-        console.log("[Cron] Reporting usage to Stripe...");
-        try {
-          const result = await reportUsageToStripe();
-          console.log(
-            `[Cron] Reported ${result.reported} usage records, total: $${(result.totalCost / 100).toFixed(2)}`
-          );
-        } catch (error) {
-          console.error("[Cron] Error reporting usage to Stripe:", error);
-        }
-      },
-      { timezone: "Europe/Amsterdam" }
-    );
-  } else {
-    console.log("[Cron] Stripe usage reporting skipped (no STRIPE_SECRET_KEY, or STRIPE_DISABLED=1)");
-  }
+
   
   // Monthly alert reset on the 1st of each month at midnight
   cron.schedule("0 0 1 * *", async () => {

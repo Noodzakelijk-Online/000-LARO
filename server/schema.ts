@@ -1,39 +1,31 @@
 /**
  * Drizzle schema — tables referenced across the server.
- * Columns are kept permissive (text/varchar) so the codebase compiles; align with your real DB as needed.
+ * Migrated to SQLite (Better-SQLite3) for unified desktop experience.
  */
 import {
-  mysqlTable,
-  varchar,
+  sqliteTable,
   text,
-  timestamp,
-  boolean,
-  int,
-  mysqlEnum,
+  integer,
   index,
-} from "drizzle-orm/mysql-core";
+} from "drizzle-orm/sqlite-core";
 
 // ─── Users & auth ───────────────────────────────────────────────────────────
 
-export const users = mysqlTable("users", {
-  id: varchar("id", { length: 64 }).primaryKey(),
+export const users = sqliteTable("users", {
+  id: text("id").primaryKey(),
   name: text("name"),
-  email: varchar("email", { length: 320 }),
-  loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
-  stripeCustomerId: varchar("stripeCustomerId", { length: 128 }),
-  stripeSubscriptionId: varchar("stripeSubscriptionId", { length: 128 }),
-  subscriptionStatus: mysqlEnum("subscriptionStatus", [
-    "free",
-    "active",
-    "past_due",
-    "canceled",
-    "trialing",
-  ]).default("free"),
-  subscriptionTier: mysqlEnum("subscriptionTier", ["free", "pro", "enterprise"]).default("free"),
+  email: text("email"),
+  loginMethod: text("loginMethod"),
+  role: text("role").default("user").notNull(),
+  stripeCustomerId: text("stripeCustomerId"),
+  stripeSubscriptionId: text("stripeSubscriptionId"),
+  subscriptionStatus: text("subscriptionStatus").default("free"),
+  subscriptionTier: text("subscriptionTier").default("free"),
   emailPreferences: text("emailPreferences"),
-  createdAt: timestamp("createdAt").defaultNow(),
-  lastSignedIn: timestamp("lastSignedIn").defaultNow(),
+  paymentFailedAt: integer("paymentFailedAt", { mode: "timestamp" }),
+  gracePeriodEndsAt: integer("gracePeriodEndsAt", { mode: "timestamp" }),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
+  lastSignedIn: integer("lastSignedIn", { mode: "timestamp" }).default(new Date()),
 });
 
 export type User = typeof users.$inferSelect;
@@ -41,22 +33,38 @@ export type InsertUser = typeof users.$inferInsert;
 
 // ─── Lawyers ─────────────────────────────────────────────────────────────────
 
-export const lawyers = mysqlTable(
+export const lawyers = sqliteTable(
   "lawyers",
   {
-    id: varchar("id", { length: 64 }).primaryKey(),
-    name: varchar("name", { length: 512 }),
-    city: varchar("city", { length: 256 }),
-    firm: varchar("firm", { length: 512 }),
-    firmName: varchar("firmName", { length: 512 }),
+    id: text("id").primaryKey(),
+    name: text("name"),
+    city: text("city"),
+    firm: text("firm"),
+    firmName: text("firmName"),
     legalAreas: text("legalAreas"),
-    email: varchar("email", { length: 320 }),
-    phone: varchar("phone", { length: 64 }),
-    website: varchar("website", { length: 512 }),
-    permanentlyFiltered: varchar("permanentlyFiltered", { length: 8 }),
-    filterUntil: timestamp("filterUntil"),
-    createdAt: timestamp("createdAt").defaultNow(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow(),
+    email: text("email"),
+    phone: text("phone"),
+    website: text("website"),
+    address: text("address"),
+    latitude: text("latitude"),
+    longitude: text("longitude"),
+    permanentlyFiltered: text("permanentlyFiltered").default("No"),
+    filterUntil: integer("filterUntil", { mode: "timestamp" }),
+    // Statistics for match scoring
+    totalOutreaches: text("totalOutreaches").default("0"),
+    totalResponses: text("totalResponses").default("0"),
+    totalAcceptances: text("totalAcceptances").default("0"),
+    averageResponseTimeHours: text("averageResponseTimeHours"),
+    caseLoad: text("caseLoad").default("0"),
+    caseStop: text("caseStop").default("No"),
+    experienceYears: text("experienceYears").default("0"),
+    barAssociationStatus: text("barAssociationStatus").default("Good Standing"),
+    currentlyAccepting: text("currentlyAccepting").default("Yes"),
+    capacityPercentage: text("capacityPercentage").default("0"),
+    languages: text("languages"), // JSON string
+    novaId: text("novaId"),
+    createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
+    updatedAt: integer("updatedAt", { mode: "timestamp" }).default(new Date()),
   },
   (t) => ({ cityIdx: index("lawyers_city_idx").on(t.city) })
 );
@@ -65,45 +73,51 @@ export type Lawyer = typeof lawyers.$inferSelect;
 
 // ─── Cases & evidence ───────────────────────────────────────────────────────
 
-export const cases = mysqlTable(
+export const cases = sqliteTable(
   "cases",
   {
-    id: varchar("id", { length: 64 }).primaryKey(),
-    userId: varchar("userId", { length: 64 }).notNull(),
-    clientName: varchar("clientName", { length: 512 }),
-    clientEmail: varchar("clientEmail", { length: 320 }),
-    caseType: varchar("caseType", { length: 256 }),
+    id: text("id").primaryKey(),
+    userId: text("userId").notNull(),
+    clientName: text("clientName"),
+    clientEmail: text("clientEmail"),
+    clientPhone: text("clientPhone"),
+    clientAddress: text("clientAddress"),
+    caseType: text("caseType"),
     caseSummary: text("caseSummary"),
-    urgency: varchar("urgency", { length: 32 }),
-    status: varchar("status", { length: 64 }).default("active"),
+    urgency: text("urgency"),
+    status: text("status").default("active"),
     legalAreas: text("legalAreas"),
-    createdAt: timestamp("createdAt").defaultNow(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow(),
+    preferredLanguages: text("preferredLanguages"),
+    latitude: text("latitude"),
+    longitude: text("longitude"),
+    metadata: text("metadata"),
+    createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
+    updatedAt: integer("updatedAt", { mode: "timestamp" }).default(new Date()),
   },
   (t) => ({
     userIdx: index("cases_userId_idx").on(t.userId),
   })
 );
 
-export const evidence = mysqlTable(
+export const evidence = sqliteTable(
   "evidence",
   {
-    id: varchar("id", { length: 64 }).primaryKey(),
-    caseId: varchar("caseId", { length: 64 }).notNull(),
-    userId: varchar("userId", { length: 64 }).notNull(),
-    type: mysqlEnum("type", ["document", "email", "chat", "photo", "video", "audio", "other"]).notNull(),
-    source: varchar("source", { length: 128 }),
-    title: varchar("title", { length: 512 }).notNull(),
+    id: text("id").primaryKey(),
+    caseId: text("caseId").notNull(),
+    userId: text("userId").notNull(),
+    type: text("type").notNull(),
+    source: text("source"),
+    title: text("title").notNull(),
     description: text("description"),
     fileUrl: text("fileUrl"),
-    fileName: varchar("fileName", { length: 512 }),
-    fileSize: varchar("fileSize", { length: 32 }),
-    mimeType: varchar("mimeType", { length: 128 }),
+    fileName: text("fileName"),
+    fileSize: text("fileSize"),
+    mimeType: text("mimeType"),
     metadata: text("metadata"),
     tags: text("tags"),
-    relevant: boolean("relevant").default(true),
-    createdAt: timestamp("createdAt").defaultNow(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow(),
+    relevant: integer("relevant", { mode: "boolean" }).default(true),
+    createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
+    updatedAt: integer("updatedAt", { mode: "timestamp" }).default(new Date()),
   },
   (table) => ({
     caseIdIdx: index("evidence_caseId_idx").on(table.caseId),
@@ -111,371 +125,487 @@ export const evidence = mysqlTable(
   })
 );
 
-export const evidenceItems = mysqlTable("evidence_items", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  caseId: varchar("caseId", { length: 64 }),
-  userId: varchar("userId", { length: 64 }),
-  title: varchar("title", { length: 512 }),
-  source: varchar("source", { length: 128 }),
+export const evidenceItems = sqliteTable("evidence_items", {
+  id: text("id").primaryKey(),
+  caseId: text("caseId"),
+  userId: text("userId"),
+  source: text("source"),
+  sourceId: text("sourceId"),
+  sourceType: text("sourceType"),
+  fileName: text("fileName"),
+  title: text("title"),
+  description: text("description"),
+  type: text("type"),
+  folder: text("folder"),
+  size: text("size"),
+  tags: text("tags"),
+  relevance: integer("relevance", { mode: "boolean" }),
+  relevanceScore: integer("relevanceScore"),
+  content: text("content"),
   metadata: text("metadata"),
-  createdAt: timestamp("createdAt").defaultNow(),
+  timestamp: integer("timestamp", { mode: "timestamp" }),
+  uploadedAt: integer("uploadedAt", { mode: "timestamp" }),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(new Date()),
 });
 
-export const evidenceSources = mysqlTable("evidence_sources", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  caseId: varchar("caseId", { length: 64 }),
-  userId: varchar("userId", { length: 64 }),
-  provider: varchar("provider", { length: 64 }),
-  sourceType: varchar("sourceType", { length: 64 }),
-  externalId: varchar("externalId", { length: 256 }),
-  status: varchar("status", { length: 64 }),
+export const evidenceSources = sqliteTable("evidence_sources", {
+  id: text("id").primaryKey(),
+  caseId: text("caseId"),
+  userId: text("userId"),
+  provider: text("provider"),
+  sourceType: text("sourceType"),
+  externalId: text("externalId"),
+  sourceIdentifier: text("sourceIdentifier"),
+  connectionStatus: text("connectionStatus"),
+  status: text("status"),
   accessToken: text("accessToken"),
-  itemsCollected: int("itemsCollected"),
-  lastSyncedAt: timestamp("lastSyncedAt"),
-  connectedAt: timestamp("connectedAt"),
+  itemsCollected: integer("itemsCollected"),
+  itemCount: integer("itemCount"),
+  lastSyncedAt: integer("lastSyncedAt", { mode: "timestamp" }),
+  connectedAt: integer("connectedAt", { mode: "timestamp" }),
   errorMessage: text("errorMessage"),
   metadata: text("metadata"),
-  createdAt: timestamp("createdAt").defaultNow(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
 });
 
-export const evidenceFiles = mysqlTable(
+export const evidenceFiles = sqliteTable(
   "evidence_files",
   {
-    id: varchar("id", { length: 64 }).primaryKey(),
-    caseId: varchar("caseId", { length: 64 }),
-    userId: varchar("userId", { length: 64 }).notNull(),
-    fileType: varchar("fileType", { length: 128 }),
-    fileSize: varchar("fileSize", { length: 32 }),
-    uploadSource: mysqlEnum("uploadSource", ["manual", "agent"]).default("manual"),
-    uploadedAt: timestamp("uploadedAt").defaultNow(),
-    fileName: varchar("fileName", { length: 512 }),
-    mimeType: varchar("mimeType", { length: 128 }),
+    id: text("id").primaryKey(),
+    caseId: text("caseId"),
+    userId: text("userId").notNull(),
+    fileType: text("fileType"),
+    fileSize: text("fileSize"),
+    uploadSource: text("uploadSource").default("manual"),
+    uploadedAt: integer("uploadedAt", { mode: "timestamp" }).default(new Date()),
+    fileName: text("fileName"),
+    mimeType: text("mimeType"),
     storageKey: text("storageKey"),
   },
   (t) => ({ userIdx: index("evidence_files_user_idx").on(t.userId) })
 );
 
-export const evidenceTags = mysqlTable("evidence_tags", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  userId: varchar("userId", { length: 64 }),
-  name: varchar("name", { length: 256 }),
-  color: varchar("color", { length: 32 }),
-  createdAt: timestamp("createdAt").defaultNow(),
+export const evidenceTags = sqliteTable("evidence_tags", {
+  id: text("id").primaryKey(),
+  userId: text("userId"),
+  name: text("name"),
+  color: text("color"),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
 });
 
-export const evidenceFileTags = mysqlTable("evidence_file_tags", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  evidenceFileId: varchar("evidenceFileId", { length: 64 }),
-  tagId: varchar("tagId", { length: 64 }),
+export const evidenceFileTags = sqliteTable("evidence_file_tags", {
+  id: text("id").primaryKey(),
+  evidenceFileId: text("evidenceFileId"),
+  tagId: text("tagId"),
 });
 
 // ─── Email & comms ────────────────────────────────────────────────────────────
 
-export const emailAccounts = mysqlTable("email_accounts", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  userId: varchar("userId", { length: 64 }).notNull(),
-  provider: varchar("provider", { length: 64 }),
-  email: varchar("email", { length: 320 }),
+export const emailAccounts = sqliteTable("email_accounts", {
+  id: text("id").primaryKey(),
+  userId: text("userId").notNull(),
+  provider: text("provider"),
+  email: text("email"),
+  displayName: text("displayName"),
   accessToken: text("accessToken"),
   refreshToken: text("refreshToken"),
-  tokenExpiry: timestamp("tokenExpiry"),
-  status: varchar("status", { length: 64 }),
-  connectedAt: timestamp("connectedAt"),
+  tokenExpiry: integer("tokenExpiry", { mode: "timestamp" }),
+  status: text("status"),
+  connectedAt: integer("connectedAt", { mode: "timestamp" }),
   metadata: text("metadata"),
-  createdAt: timestamp("createdAt").defaultNow(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(new Date()),
 });
 
-export const emailSyncJobs = mysqlTable("email_sync_jobs", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  accountId: varchar("accountId", { length: 64 }),
-  caseId: varchar("caseId", { length: 64 }),
-  status: varchar("status", { length: 64 }),
-  startDate: timestamp("startDate"),
-  endDate: timestamp("endDate"),
+export const emailSyncJobs = sqliteTable("email_sync_jobs", {
+  id: text("id").primaryKey(),
+  accountId: text("accountId"),
+  caseId: text("caseId"),
+  status: text("status"),
+  startDate: integer("startDate", { mode: "timestamp" }),
+  endDate: integer("endDate", { mode: "timestamp" }),
   keywords: text("keywords"),
-  createdAt: timestamp("createdAt").defaultNow(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
 });
 
-export const emailMessages = mysqlTable("email_messages", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  accountId: varchar("accountId", { length: 64 }),
-  caseId: varchar("caseId", { length: 64 }),
-  category: varchar("category", { length: 64 }),
-  relevanceScore: varchar("relevanceScore", { length: 32 }),
+export const emailMessages = sqliteTable("email_messages", {
+  id: text("id").primaryKey(),
+  accountId: text("accountId"),
+  caseId: text("caseId"),
+  category: text("category"),
+  relevanceScore: text("relevanceScore"),
+  subject: text("subject"),
+  snippet: text("snippet"),
+  body: text("body"),
+  date: integer("date", { mode: "timestamp" }),
+  metadata: text("metadata"),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
+});
+
+export const emailActivity = sqliteTable("email_activity", {
+  id: text("id").primaryKey(),
+  caseId: text("caseId"),
+  lawyerId: text("lawyerId"),
+  activityType: text("activityType"),
+  emailType: text("emailType"),
+  recipientEmail: text("recipientEmail"),
+  subject: text("subject"),
+  metadata: text("metadata"),
+  responseReceived: text("responseReceived"),
+  responseStatus: text("responseStatus"),
+  sentAt: integer("sentAt", { mode: "timestamp" }),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
+});
+
+export const outreachStatus = sqliteTable("outreach_status", {
+  id: text("id").primaryKey(),
+  caseId: text("caseId"),
+  lawyerId: text("lawyerId"),
+  status: text("status"),
+  initialContact: integer("initialContact", { mode: "timestamp" }),
+  lastContact: integer("lastContact", { mode: "timestamp" }),
+  followUpsSent: integer("followUpsSent"),
+  followUp1SentAt: integer("followUp1SentAt", { mode: "timestamp" }),
+  followUp2SentAt: integer("followUp2SentAt", { mode: "timestamp" }),
+  responseTimeHours: text("responseTimeHours"),
+  lawyerCapacityPercentage: text("lawyerCapacityPercentage"),
+  acceptanceStatus: text("acceptanceStatus"),
+  response: text("response"),
+  responseReceived: text("responseReceived").default("No"),
+  notes: text("notes"),
+  distanceKm: integer("distanceKm"),
+  metadata: text("metadata"),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(new Date()),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
+});
+
+export const messages = sqliteTable("messages", {
+  id: text("id").primaryKey(),
+  userId: text("userId"),
+  caseId: text("caseId"),
+  content: text("content"),
+  threadId: text("threadId"),
+  parentId: text("parentId"),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
+});
+
+export const communications = sqliteTable("communications", {
+  id: text("id").primaryKey(),
+  caseId: text("caseId"),
+  userId: text("userId"),
+  channel: text("channel"),
+  type: text("type"),
+  direction: text("direction"), // inbound, outbound
   subject: text("subject"),
   body: text("body"),
+  content: text("content"), // some services use content instead of body
+  timestamp: integer("timestamp", { mode: "timestamp" }),
   metadata: text("metadata"),
-  createdAt: timestamp("createdAt").defaultNow(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
 });
 
-export const emailActivity = mysqlTable("email_activity", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  caseId: varchar("caseId", { length: 64 }),
-  lawyerId: varchar("lawyerId", { length: 64 }),
-  activityType: varchar("activityType", { length: 64 }),
-  metadata: text("metadata"),
-  createdAt: timestamp("createdAt").defaultNow(),
-});
-
-export const outreachStatus = mysqlTable("outreach_status", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  caseId: varchar("caseId", { length: 64 }),
-  lawyerId: varchar("lawyerId", { length: 64 }),
-  status: varchar("status", { length: 64 }),
-  metadata: text("metadata"),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow(),
-});
-
-export const messages = mysqlTable("messages", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  userId: varchar("userId", { length: 64 }),
-  caseId: varchar("caseId", { length: 64 }),
+export const documents = sqliteTable("documents", {
+  id: text("id").primaryKey(),
+  caseId: text("caseId"),
+  userId: text("userId"),
+  title: text("title"),
   content: text("content"),
-  threadId: varchar("threadId", { length: 64 }),
-  parentId: varchar("parentId", { length: 64 }),
-  createdAt: timestamp("createdAt").defaultNow(),
-});
-
-export const communications = mysqlTable("communications", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  caseId: varchar("caseId", { length: 64 }),
-  userId: varchar("userId", { length: 64 }),
-  channel: varchar("channel", { length: 64 }),
-  body: text("body"),
-  metadata: text("metadata"),
-  createdAt: timestamp("createdAt").defaultNow(),
-});
-
-export const documents = mysqlTable("documents", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  caseId: varchar("caseId", { length: 64 }),
-  userId: varchar("userId", { length: 64 }),
-  title: varchar("title", { length: 512 }),
-  content: text("content"),
-  createdAt: timestamp("createdAt").defaultNow(),
+  name: text("name"),
+  type: text("type"),
+  folder: text("folder"),
+  uploadedAt: integer("uploadedAt", { mode: "timestamp" }),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
 });
 
 // ─── Billing & usage ─────────────────────────────────────────────────────────
 
-export const billingPeriods = mysqlTable("billing_periods", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  userId: varchar("userId", { length: 64 }),
-  stripeSubscriptionId: varchar("stripeSubscriptionId", { length: 128 }),
-  periodStart: timestamp("periodStart"),
-  periodEnd: timestamp("periodEnd"),
+export const billingPeriods = sqliteTable("billing_periods", {
+  id: text("id").primaryKey(),
+  userId: text("userId"),
+  stripeSubscriptionId: text("stripeSubscriptionId"),
+  stripeInvoiceId: text("stripeInvoiceId"),
+  periodStart: integer("periodStart", { mode: "timestamp" }),
+  periodEnd: integer("periodEnd", { mode: "timestamp" }),
+  status: text("status"), // completed, pending, failed
   metadata: text("metadata"),
-  totalCost: varchar("totalCost", { length: 32 }),
+  totalCost: text("totalCost"),
+  totalBilledCost: text("totalBilledCost"),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
 });
 
-export const usageTracking = mysqlTable("usage_tracking", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  userId: varchar("userId", { length: 64 }),
-  resourceType: varchar("resourceType", { length: 128 }),
-  quantity: varchar("quantity", { length: 32 }),
-  baseCost: varchar("baseCost", { length: 32 }),
-  billedCost: varchar("billedCost", { length: 32 }),
+export const usageTracking = sqliteTable("usage_tracking", {
+  id: text("id").primaryKey(),
+  userId: text("userId"),
+  resourceType: text("resourceType"),
+  quantity: text("quantity"),
+  baseCost: text("baseCost"),
+  billedCost: text("billedCost"),
   metadata: text("metadata"),
-  caseId: varchar("caseId", { length: 64 }),
-  reportedToStripe: boolean("reportedToStripe").default(false),
-  stripeUsageRecordId: varchar("stripeUsageRecordId", { length: 128 }),
-  timestamp: timestamp("timestamp"),
-  createdAt: timestamp("createdAt").defaultNow(),
+  caseId: text("caseId"),
+  reportedToStripe: integer("reportedToStripe", { mode: "boolean" }).default(false),
+  stripeUsageRecordId: text("stripeUsageRecordId"),
+  timestamp: integer("timestamp", { mode: "timestamp" }),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
 });
 
-export const usageLimits = mysqlTable("usage_limits", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  userId: varchar("userId", { length: 64 }),
-  tier: varchar("tier", { length: 64 }),
-  resourceType: varchar("resourceType", { length: 128 }),
-  monthlyLimit: varchar("monthlyLimit", { length: 32 }),
+export const usageLimits = sqliteTable("usage_limits", {
+  id: text("id").primaryKey(),
+  userId: text("userId"),
+  tier: text("tier"),
+  resourceType: text("resourceType"),
+  monthlyLimit: text("monthlyLimit"),
   description: text("description"),
   limitsJson: text("limitsJson"),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(new Date()),
 });
 
 // ─── Integrations & misc ─────────────────────────────────────────────────────
 
-export const googleDriveFiles = mysqlTable("google_drive_files", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  userId: varchar("userId", { length: 64 }),
-  caseId: varchar("caseId", { length: 64 }),
-  accountId: varchar("accountId", { length: 64 }),
-  googleFileId: varchar("googleFileId", { length: 256 }),
-  fileName: varchar("fileName", { length: 512 }),
-  mimeType: varchar("mimeType", { length: 256 }),
-  fileSize: varchar("fileSize", { length: 64 }),
+export const googleDriveFiles = sqliteTable("google_drive_files", {
+  id: text("id").primaryKey(),
+  userId: text("userId"),
+  caseId: text("caseId"),
+  accountId: text("accountId"),
+  googleFileId: text("googleFileId"),
+  fileName: text("fileName"),
+  mimeType: text("mimeType"),
+  fileSize: text("fileSize"),
   s3Key: text("s3Key"),
   s3Url: text("s3Url"),
   googleWebViewLink: text("googleWebViewLink"),
-  googleModifiedTime: timestamp("googleModifiedTime"),
-  evidenceType: varchar("evidenceType", { length: 64 }),
-  isIncluded: varchar("isIncluded", { length: 8 }),
-  relevanceScore: varchar("relevanceScore", { length: 32 }),
-  category: varchar("category", { length: 128 }),
+  googleModifiedTime: integer("googleModifiedTime", { mode: "timestamp" }),
+  evidenceType: text("evidenceType"),
+  isIncluded: text("isIncluded"),
+  relevanceScore: text("relevanceScore"),
+  category: text("category"),
   userNotes: text("userNotes"),
   metadata: text("metadata"),
-  createdAt: timestamp("createdAt").defaultNow(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
 });
 
-export const systemConfig = mysqlTable("system_config", {
-  key: varchar("key", { length: 128 }).primaryKey(),
-  value: text("value"),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow(),
+export const systemConfig = sqliteTable("system_config", {
+  configKey: text("configKey").primaryKey(),
+  configValue: text("configValue"),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(new Date()),
 });
 
-export const clarificationQuestions = mysqlTable("clarification_questions", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  caseId: varchar("caseId", { length: 64 }),
-  userId: varchar("userId", { length: 64 }),
+export const clarificationQuestions = sqliteTable("clarification_questions", {
+  id: text("id").primaryKey(),
+  caseId: text("caseId"),
+  userId: text("userId"),
   question: text("question"),
   answer: text("answer"),
-  status: varchar("status", { length: 64 }),
-  createdAt: timestamp("createdAt").defaultNow(),
+  status: text("status"),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
 });
 
-export const savedSearches = mysqlTable("saved_searches", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  userId: varchar("userId", { length: 64 }).notNull(),
-  name: varchar("name", { length: 256 }),
+export const savedSearches = sqliteTable("saved_searches", {
+  id: text("id").primaryKey(),
+  userId: text("userId").notNull(),
+  name: text("name"),
   queryJson: text("queryJson"),
-  createdAt: timestamp("createdAt").defaultNow(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
 });
 
-export const userPreferences = mysqlTable("user_preferences", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  userId: varchar("userId", { length: 64 }).notNull(),
-  key: varchar("key", { length: 128 }),
+export const userPreferences = sqliteTable("user_preferences", {
+  id: text("id").primaryKey(),
+  userId: text("userId").notNull(),
+  key: text("key"),
   value: text("value"),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow(),
+  theme: text("theme"),
+  dashboardWidgets: text("dashboardWidgets"),
+  notificationSettings: text("notificationSettings"),
+  preferredLawyers: text("preferredLawyers"),
+  caseTemplates: text("caseTemplates"),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(new Date()),
 });
 
-export const messageTemplates = mysqlTable("message_templates", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  userId: varchar("userId", { length: 64 }),
-  name: varchar("name", { length: 256 }),
+export const messageTemplates = sqliteTable("message_templates", {
+  id: text("id").primaryKey(),
+  userId: text("userId"),
+  name: text("name"),
   body: text("body"),
-  createdAt: timestamp("createdAt").defaultNow(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
 });
 
-export const notifications = mysqlTable("notifications", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  userId: varchar("userId", { length: 64 }),
-  title: varchar("title", { length: 512 }),
+export const notifications = sqliteTable("notifications", {
+  id: text("id").primaryKey(),
+  userId: text("userId"),
+  title: text("title"),
   body: text("body"),
-  read: boolean("read").default(false),
-  createdAt: timestamp("createdAt").defaultNow(),
+  read: integer("read", { mode: "boolean" }).default(false),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
 });
 
 export type InsertNotification = typeof notifications.$inferInsert;
 
-export const auditLogs = mysqlTable("audit_logs", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  userId: varchar("userId", { length: 64 }),
-  action: varchar("action", { length: 128 }),
-  resource: varchar("resource", { length: 128 }),
+export const auditLogs = sqliteTable("audit_logs", {
+  id: text("id").primaryKey(),
+  userId: text("userId"),
+  action: text("action"),
+  resource: text("resource"),
+  entityType: text("entityType"),
+  entityId: text("entityId"),
+  details: text("details"),
+  ipAddress: text("ipAddress"),
+  userAgent: text("userAgent"),
   metadata: text("metadata"),
-  createdAt: timestamp("createdAt").defaultNow(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
 });
 
 export type InsertAuditLog = typeof auditLogs.$inferInsert;
 
-export const bulkImportJobs = mysqlTable("bulk_import_jobs", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  userId: varchar("userId", { length: 64 }),
-  filename: varchar("filename", { length: 256 }),
-  status: varchar("status", { length: 64 }),
-  totalRows: varchar("totalRows", { length: 16 }).default("0"),
-  processedRows: varchar("processedRows", { length: 16 }).default("0"),
-  failedRows: varchar("failedRows", { length: 16 }).default("0"),
+export const bulkImportJobs = sqliteTable("bulk_import_jobs", {
+  id: text("id").primaryKey(),
+  userId: text("userId"),
+  filename: text("filename"),
+  status: text("status"),
+  totalRows: text("totalRows").default("0"),
+  processedRows: text("processedRows").default("0"),
+  failedRows: text("failedRows").default("0"),
   errors: text("errors"),
-  completedAt: timestamp("completedAt"),
+  completedAt: integer("completedAt", { mode: "timestamp" }),
   metadata: text("metadata"),
-  createdAt: timestamp("createdAt").defaultNow(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
 });
 
-export const extractedEntities = mysqlTable("extracted_entities", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  caseId: varchar("caseId", { length: 64 }),
-  userId: varchar("userId", { length: 64 }),
-  entityType: varchar("entityType", { length: 64 }),
+export const extractedEntities = sqliteTable("extracted_entities", {
+  id: text("id").primaryKey(),
+  caseId: text("caseId"),
+  userId: text("userId"),
+  entityType: text("entityType"),
   value: text("value"),
   metadata: text("metadata"),
-  createdAt: timestamp("createdAt").defaultNow(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
 });
 
 export type InsertExtractedEntity = typeof extractedEntities.$inferInsert;
 
-export const lawyerRatings = mysqlTable("lawyer_ratings", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  lawyerId: varchar("lawyerId", { length: 64 }),
-  overallRating: varchar("overallRating", { length: 32 }),
+export const lawyerRatings = sqliteTable("lawyer_ratings", {
+  id: text("id").primaryKey(),
+  lawyerId: text("lawyerId"),
+  overallRating: text("overallRating").notNull(),
+  totalInteractions: text("totalInteractions").default("0"),
+  ratingConfidence: text("ratingConfidence").default("low"), // low, medium, high
+  responseTimeScore: text("responseTimeScore"),
+  completenessScore: text("completenessScore"),
+  cooperationScore: text("cooperationScore"),
+  ratingTrend: text("ratingTrend").default("stable"), // improving, stable, declining
+  lastCalculatedAt: integer("lastCalculatedAt", { mode: "timestamp" }),
+  lastInteractionAt: integer("lastInteractionAt", { mode: "timestamp" }),
+  // Aggregated metrics
+  averageResponseTimeHours: text("averageResponseTimeHours"),
+  fastResponses: text("fastResponses").default("0"),
+  mediumResponses: text("mediumResponses").default("0"),
+  slowResponses: text("slowResponses").default("0"),
+  verySlowResponses: text("verySlowResponses").default("0"),
+  averageCompletenessScore: text("averageCompletenessScore"),
+  completeAnswers: text("completeAnswers").default("0"),
+  partialAnswers: text("partialAnswers").default("0"),
+  incompleteAnswers: text("incompleteAnswers").default("0"),
+  averageCooperationScore: text("averageCooperationScore"),
+  casesAccepted: text("casesAccepted").default("0"),
+  casesDeclined: text("casesDeclined").default("0"),
+  casesNoResponse: text("casesNoResponse").default("0"),
+  acceptanceRate: text("acceptanceRate"),
   metadata: text("metadata"),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(new Date()),
 });
 
-export const lawyerInteractions = mysqlTable("lawyer_interactions", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  lawyerId: varchar("lawyerId", { length: 64 }),
-  caseId: varchar("caseId", { length: 64 }),
-  interactionType: varchar("interactionType", { length: 64 }),
+export const lawyerInteractions = sqliteTable("lawyer_interactions", {
+  id: text("id").primaryKey(),
+  lawyerId: text("lawyerId").notNull(),
+  caseId: text("caseId").notNull(),
+  interactionType: text("interactionType").notNull(), // outreach, response, etc.
+  outreachSentAt: integer("outreachSentAt", { mode: "timestamp" }),
+  responseReceivedAt: integer("responseReceivedAt", { mode: "timestamp" }),
+  responseTimeHours: text("responseTimeHours"),
+  responseText: text("responseText"),
+  responseLength: text("responseLength"),
+  // AI scores (0-100)
+  completenessScore: text("completenessScore"),
+  professionalismScore: text("professionalismScore"),
+  helpfulnessScore: text("helpfulnessScore"),
+  clarityScore: text("clarityScore"),
+  aiAnalysis: text("aiAnalysis"),
+  // Outcome
+  acceptedCase: integer("acceptedCase", { mode: "boolean" }).default(false),
+  declinedCase: integer("declinedCase", { mode: "boolean" }).default(false),
+  providedAlternatives: integer("providedAlternatives", { mode: "boolean" }).default(false),
+  askedClarifyingQuestions: integer("askedClarifyingQuestions", { mode: "boolean" }).default(false),
+  finalOutcome: text("finalOutcome").default("pending"), // accepted, declined, no_response, pending
+  outcomeNotes: text("outcomeNotes"),
+  analyzedAt: integer("analyzedAt", { mode: "timestamp" }),
   metadata: text("metadata"),
-  createdAt: timestamp("createdAt").defaultNow(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
 });
 
-export const ratingCalculationLogs = mysqlTable("rating_calculation_logs", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  lawyerId: varchar("lawyerId", { length: 64 }),
+export const ratingCalculationLogs = sqliteTable("rating_calculation_logs", {
+  id: text("id").primaryKey(),
+  lawyerId: text("lawyerId"),
+  calculationType: text("calculationType"), // scheduled, triggered, manual
+  interactionsAnalyzed: text("interactionsAnalyzed"),
+  previousRating: text("previousRating"),
+  newRating: text("newRating"),
+  ratingChange: text("ratingChange"),
+  responseTimeComponent: text("responseTimeComponent"),
+  completenessComponent: text("completenessComponent"),
+  cooperationComponent: text("cooperationComponent"),
+  calculationDetails: text("calculationDetails"), // JSON
+  triggeredBy: text("triggeredBy"),
   log: text("log"),
-  createdAt: timestamp("createdAt").defaultNow(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
 });
 
 // ─── Gap analysis & timeline ─────────────────────────────────────────────────
 
-export const communicationGaps = mysqlTable("communication_gaps", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  caseId: varchar("caseId", { length: 64 }),
+export const communicationGaps = sqliteTable("communication_gaps", {
+  id: text("id").primaryKey(),
+  caseId: text("caseId"),
   data: text("data"),
-  createdAt: timestamp("createdAt").defaultNow(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
 });
 
-export const expectedDocuments = mysqlTable("expected_documents", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  caseId: varchar("caseId", { length: 64 }),
+export const expectedDocuments = sqliteTable("expected_documents", {
+  id: text("id").primaryKey(),
+  caseId: text("caseId"),
   data: text("data"),
-  createdAt: timestamp("createdAt").defaultNow(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
 });
 
-export const suspiciousPatterns = mysqlTable("suspicious_patterns", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  caseId: varchar("caseId", { length: 64 }),
+export const suspiciousPatterns = sqliteTable("suspicious_patterns", {
+  id: text("id").primaryKey(),
+  caseId: text("caseId"),
   data: text("data"),
-  createdAt: timestamp("createdAt").defaultNow(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
 });
 
-export const legalInferences = mysqlTable("legal_inferences", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  caseId: varchar("caseId", { length: 64 }),
+export const legalInferences = sqliteTable("legal_inferences", {
+  id: text("id").primaryKey(),
+  caseId: text("caseId"),
   data: text("data"),
-  createdAt: timestamp("createdAt").defaultNow(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
 });
 
-export const caseStrengthAnalysis = mysqlTable("case_strength_analysis", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  caseId: varchar("caseId", { length: 64 }),
+export const caseStrengthAnalysis = sqliteTable("case_strength_analysis", {
+  id: text("id").primaryKey(),
+  caseId: text("caseId"),
   data: text("data"),
-  createdAt: timestamp("createdAt").defaultNow(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
 });
 
-export const timeline = mysqlTable("timeline", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  caseId: varchar("caseId", { length: 64 }),
-  userId: varchar("userId", { length: 64 }),
-  eventType: varchar("eventType", { length: 64 }),
-  title: varchar("title", { length: 512 }),
+export const timeline = sqliteTable("timeline", {
+  id: text("id").primaryKey(),
+  caseId: text("caseId"),
+  userId: text("userId"),
+  eventType: text("eventType"),
+  title: text("title"),
   description: text("description"),
-  eventAt: timestamp("eventAt"),
+  eventAt: integer("eventAt", { mode: "timestamp" }),
   metadata: text("metadata"),
-  createdAt: timestamp("createdAt").defaultNow(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
 });
 
 export type CommunicationGap = typeof communicationGaps.$inferSelect;
@@ -488,60 +618,132 @@ export type Case = typeof cases.$inferSelect;
 
 // ─── Auto-collection & unified inbox ─────────────────────────────────────────
 
-export const autoCollectionSettings = mysqlTable("auto_collection_settings", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  caseId: varchar("caseId", { length: 64 }),
-  userId: varchar("userId", { length: 64 }),
+export const autoCollectionSettings = sqliteTable("auto_collection_settings", {
+  id: text("id").primaryKey(),
+  caseId: text("caseId"),
+  userId: text("userId"),
   keywords: text("keywords"),
+  keywordMatchMode: text("keywordMatchMode"),
+  dateRangeStart: integer("dateRangeStart", { mode: "timestamp" }),
+  dateRangeEnd: integer("dateRangeEnd", { mode: "timestamp" }),
+  emailAccountIds: text("emailAccountIds"),
+  googleDriveFolderIds: text("googleDriveFolderIds"),
+  autoDownloadAttachments: integer("autoDownloadAttachments", { mode: "boolean" }),
+  autoDownloadGoogleDriveFiles: integer("autoDownloadGoogleDriveFiles", { mode: "boolean" }),
+  isEnabled: integer("isEnabled", { mode: "boolean" }).default(true),
+  status: text("status"),
+  lastRunAt: integer("lastRunAt", { mode: "timestamp" }),
+  totalItemsCollected: text("totalItemsCollected"),
+  totalEmailsCollected: text("totalEmailsCollected"),
+  totalFilesCollected: text("totalFilesCollected"),
   metadata: text("metadata"),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(new Date()),
 });
 
-export const autoCollectionLogs = mysqlTable("auto_collection_logs", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  caseId: varchar("caseId", { length: 64 }),
-  message: text("message"),
-  level: varchar("level", { length: 32 }),
-  createdAt: timestamp("createdAt").defaultNow(),
+export const autoCollectionLogs = sqliteTable("auto_collection_logs", {
+  id: text("id").primaryKey(),
+  caseId: text("caseId"),
+  settingsId: text("settingsId"),
+  userId: text("userId"),
+  runStartedAt: integer("runStartedAt", { mode: "timestamp" }),
+  runCompletedAt: integer("runCompletedAt", { mode: "timestamp" }),
+  status: text("status"),
+  emailsFound: text("emailsFound"),
+  emailsProcessed: text("emailsProcessed"),
+  filesFound: text("filesFound"),
+  filesDownloaded: text("filesDownloaded"),
+  errorCount: text("errorCount"),
+  errorMessage: text("errorMessage"),
+  executionTimeSeconds: text("executionTimeSeconds"),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
 });
 
-export const keywordMatches = mysqlTable("keyword_matches", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  caseId: varchar("caseId", { length: 64 }),
-  keyword: varchar("keyword", { length: 256 }),
-  source: varchar("source", { length: 64 }),
+export const keywordMatches = sqliteTable("keyword_matches", {
+  id: text("id").primaryKey(),
+  caseId: text("caseId"),
+  itemId: text("itemId"),
+  itemType: text("itemType"),
+  matchedKeywords: text("matchedKeywords"),
+  matchCount: text("matchCount"),
+  source: text("source"),
   metadata: text("metadata"),
-  createdAt: timestamp("createdAt").defaultNow(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
 });
 
-export const unifiedMessages = mysqlTable("unified_messages", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  userId: varchar("userId", { length: 64 }),
-  threadId: varchar("threadId", { length: 64 }),
-  channel: varchar("channel", { length: 64 }),
+export const unifiedMessages = sqliteTable("unified_messages", {
+  id: text("id").primaryKey(),
+  userId: text("userId"),
+  caseId: text("caseId"),
+  threadId: text("threadId"),
+  channel: text("channel"),
+  externalId: text("externalId"),
+  sender: text("sender"),
+  recipient: text("recipient"),
+  subject: text("subject"),
   body: text("body"),
+  direction: text("direction"), // inbound, outbound
+  status: text("status").default("received"), // sent, delivered, read, failed
+  priority: text("priority").default("normal"),
   metadata: text("metadata"),
-  createdAt: timestamp("createdAt").defaultNow(),
+  attachmentCount: integer("attachmentCount").default(0),
+  readAt: integer("readAt", { mode: "timestamp" }),
+  sentAt: integer("sentAt", { mode: "timestamp" }),
+  receivedAt: integer("receivedAt", { mode: "timestamp" }),
+  aiSubject: text("aiSubject"),
+  aiSentiment: text("aiSentiment"),
+  aiCategory: text("aiCategory"),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
 });
 
 export type InsertUnifiedMessage = typeof unifiedMessages.$inferInsert;
 
-export const conversationThreads = mysqlTable("conversation_threads", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  userId: varchar("userId", { length: 64 }),
-  title: varchar("title", { length: 512 }),
+export const conversationThreads = sqliteTable("conversation_threads", {
+  id: text("id").primaryKey(),
+  userId: text("userId"),
+  caseId: text("caseId"),
+  title: text("title"),
+  status: text("status").default("active"),
+  priority: text("priority").default("normal"),
+  participants: text("participants"), // JSON
+  channels: text("channels"), // JSON
+  firstMessageAt: integer("firstMessageAt", { mode: "timestamp" }),
+  lastMessageAt: integer("lastMessageAt", { mode: "timestamp" }),
+  messageCount: integer("messageCount").default(0),
+  unreadCount: integer("unreadCount").default(0),
+  aiSummary: text("aiSummary"),
+  aiTopics: text("aiTopics"), // JSON
   metadata: text("metadata"),
-  createdAt: timestamp("createdAt").defaultNow(),
+  archivedAt: integer("archivedAt", { mode: "timestamp" }),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(new Date()),
 });
 
 export type InsertConversationThread = typeof conversationThreads.$inferInsert;
 
-export const channelIntegrations = mysqlTable("channel_integrations", {
-  id: varchar("id", { length: 64 }).primaryKey(),
-  userId: varchar("userId", { length: 64 }),
-  provider: varchar("provider", { length: 64 }),
+export const channelIntegrations = sqliteTable("channel_integrations", {
+  id: text("id").primaryKey(),
+  userId: text("userId"),
+  provider: text("provider"),
+  status: text("status").default("active"),
+  lastSyncAt: integer("lastSyncAt", { mode: "timestamp" }),
+  nextSyncAt: integer("nextSyncAt", { mode: "timestamp" }),
+  syncFrequency: integer("syncFrequency").default(3600), // in seconds
+  errorMessage: text("errorMessage"),
   metadata: text("metadata"),
-  createdAt: timestamp("createdAt").defaultNow(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(new Date()),
 });
 
 export type InsertChannelIntegration = typeof channelIntegrations.$inferInsert;
+ 
+export const deadlines = sqliteTable("deadlines", {
+  id: text("id").primaryKey(),
+  caseId: text("caseId"),
+  userId: text("userId"),
+  title: text("title"),
+  description: text("description"),
+  dueDate: integer("dueDate", { mode: "timestamp" }),
+  completed: integer("completed", { mode: "boolean" }).default(false),
+  createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).default(new Date()),
+});

@@ -14,13 +14,15 @@ const s3 = new S3Client({
 
 const BUCKET = process.env.AWS_S3_BUCKET || 'laro-evidence';
 
-export async function storagePut(key: string, body: Buffer, contentType = 'application/octet-stream'): Promise<string> {
+export async function storagePut(key: string, body: Buffer | string, contentType = 'application/octet-stream'): Promise<{ key: string; url: string }> {
   if (!process.env.AWS_S3_BUCKET) {
     console.warn('[Storage] S3 not configured — file not uploaded:', key);
-    return `/local/${key}`;
+    return { key, url: `/local/${key}` };
   }
-  await s3.send(new PutObjectCommand({ Bucket: BUCKET, Key: key, Body: body, ContentType: contentType }));
-  return `https://${BUCKET}.s3.amazonaws.com/${key}`;
+  const bodyBuffer = typeof body === 'string' ? Buffer.from(body) : body;
+  await s3.send(new PutObjectCommand({ Bucket: BUCKET, Key: key, Body: bodyBuffer, ContentType: contentType }));
+  const url = `https://${BUCKET}.s3.amazonaws.com/${key}`;
+  return { key, url };
 }
 
 export async function storageGet(key: string): Promise<string> {

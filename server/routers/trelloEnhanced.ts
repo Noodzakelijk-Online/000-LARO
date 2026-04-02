@@ -109,10 +109,10 @@ export const trelloEnhancedRouter = router({
 
         return {
           connected:
-            source.connectionStatus !== 'disconnected' &&
-            (source.connectionStatus === 'connected' ||
-              source.connectionStatus === 'synced' ||
-              source.connectionStatus === 'imported'),
+            source.status !== 'disconnected' &&
+            (source.status === 'connected' ||
+              source.status === 'synced' ||
+              source.status === 'imported'),
           itemCount: metadata.cardCount || 0,
           lastSyncedAt,
           lastSync: lastSyncedAt,

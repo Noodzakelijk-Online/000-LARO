@@ -155,9 +155,7 @@ export async function processBulkImport(
         urgency:      normaliseUrgency(agg.urgency),
         status:       'active',
         legalAreas:   agg.tags.length > 0 ? JSON.stringify(agg.tags) : null,
-        createdAt:    new Date(),
-        updatedAt:    new Date(),
-      } as any);
+      });
 
       // ── 2. Create a case-summary evidence record ─────────────────────────
       //    This ensures every imported case has at least one evidence item
@@ -172,9 +170,7 @@ export async function processBulkImport(
         description: agg.description,
         tags:        agg.tags.length > 0 ? JSON.stringify(agg.tags) : null,
         relevant:    true,
-        createdAt:   new Date(),
-        updatedAt:   new Date(),
-      } as any);
+      });
 
       // ── 3. Create evidence records for each URL ──────────────────────────
       if (agg.evidenceUrls && agg.evidenceUrls.length > 0) {
@@ -198,9 +194,7 @@ export async function processBulkImport(
             fileUrl:     trimmed,
             fileName,
             relevant:    true,
-            createdAt:   new Date(),
-            updatedAt:   new Date(),
-          } as any);
+          });
         }
       }
 

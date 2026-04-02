@@ -2,7 +2,7 @@ import { invokeLLM } from "./llm";
 import * as inboxService from "./unifiedInboxService";
 import { nanoid } from "nanoid";
 
-interface ThreadAnalysis {
+export interface ThreadAnalysis {
   shouldCreateNewThread: boolean;
   existingThreadId?: string;
   subject: string;
@@ -33,7 +33,7 @@ export async function analyzeMessageForThreading(
   const threadsContext = recentThreads
     .map(
       (t) =>
-        `Thread ID: ${t.id}\nSubject: ${t.subject}\nTopics: ${t.aiTopics || "N/A"}\nParticipants: ${t.participants}`
+        `Thread ID: ${t.id}\nTitle: ${t.title || "No Title"}\nTopics: ${t.aiTopics || "N/A"}\nParticipants: ${t.participants || "{}"}`
     )
     .join("\n\n");
 
@@ -134,7 +134,9 @@ Return your analysis in JSON format.`;
       },
     });
 
-    const analysis = JSON.parse(response.choices[0].message.content || "{}");
+    const rawContent = response.choices[0].message.content;
+    const content = typeof rawContent === "string" ? rawContent : JSON.stringify(rawContent || "{}");
+    const analysis = JSON.parse(content || "{}");
     return analysis as ThreadAnalysis;
   } catch (error) {
     console.error("Error analyzing message for threading:", error);
@@ -188,8 +190,8 @@ export async function processMessageThreading(
     const participants = [messageData.sender, messageData.recipient];
     const thread = await inboxService.createThread({
       userId,
-      caseId: messageData.caseId || analysis.suggestedCaseId,
-      subject: analysis.subject,
+      caseId: messageData.caseId || (analysis.suggestedCaseId as string | null),
+      title: analysis.subject,
       participants: JSON.stringify(participants),
       channels: JSON.stringify([messageData.channel]),
       status: "active",
@@ -250,7 +252,7 @@ export async function generateThreadSummary(threadId: string): Promise<string> {
   const conversationText = messages
     .map(
       (m) =>
-        `[${m.sentAt?.toISOString() || "Unknown"}] ${m.sender} to ${m.recipient}:\n${m.body}`
+        `[${m.sentAt?.toISOString() || "Unknown"}] ${m.sender || "Unknown"} to ${m.recipient || "Unknown"}:\n${m.body || ""}`
     )
     .join("\n\n");
 
@@ -272,7 +274,8 @@ Provide a concise summary:`;
       ],
     });
 
-    return response.choices[0].message.content || "Unable to generate summary";
+    const rawContent = response.choices[0].message.content;
+    return typeof rawContent === "string" ? rawContent : JSON.stringify(rawContent || "");
   } catch (error) {
     console.error("Error generating thread summary:", error);
     return "Summary generation failed";
@@ -326,7 +329,9 @@ ${conversationText}`;
       },
     });
 
-    const result = JSON.parse(response.choices[0].message.content || "{}");
+    const rawContent = response.choices[0].message.content;
+    const content = typeof rawContent === "string" ? rawContent : JSON.stringify(rawContent || "{}");
+    const result = JSON.parse(content || "{}");
     return result.topics || [];
   } catch (error) {
     console.error("Error extracting thread topics:", error);

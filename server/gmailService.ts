@@ -11,7 +11,7 @@ import { evidenceSources, evidenceItems } from './schema';
 import { v4 as uuidv4 } from 'uuid';
 import { eq, and } from 'drizzle-orm';
 
-interface GmailThread {
+export interface GmailThread {
   id: string;
   snippet: string;
   historyId: string;
@@ -29,7 +29,7 @@ interface GmailMessage {
       partId: string;
       mimeType: string;
       filename?: string;
-      body?: { attachmentId?: string; size?: number };
+      body?: { attachmentId?: string; size?: number; data?: string };
       headers?: Array<{ name: string; value: string }>;
     }>;
     body?: { data?: string };
@@ -44,7 +44,7 @@ interface GmailAttachment {
   data?: string;
 }
 
-interface SyncProgress {
+export interface SyncProgress {
   totalThreads: number;
   processedThreads: number;
   totalMessages: number;
@@ -259,7 +259,7 @@ export async function getGmailAttachment(
 /**
  * Extract email headers
  */
-function extractHeaders(headers: Array<{ name: string; value: string }> = {}) {
+function extractHeaders(headers: Array<{ name: string; value: string }> = []) {
   const result: Record<string, string> = {};
   if (Array.isArray(headers)) {
     headers.forEach((h) => {
@@ -385,8 +385,8 @@ export async function syncGmailForCase(
               id: itemId,
               caseId,
               sourceId: thread.id,
-              sourceType: 'gmail',
-              itemType: 'email',
+              source: 'gmail',
+              type: 'email',
               title: subject,
               content,
               metadata: JSON.stringify({
@@ -397,7 +397,7 @@ export async function syncGmailForCase(
                 messageId: message.id,
                 threadId: thread.id,
               }),
-              extractedAt: new Date(),
+              createdAt: new Date(),
             });
 
             progress.totalMessages++;
@@ -421,8 +421,8 @@ export async function syncGmailForCase(
                     id: attachmentItemId,
                     caseId,
                     sourceId: thread.id,
-                    sourceType: 'gmail',
-                    itemType: 'attachment',
+                    source: 'gmail',
+                    type: 'attachment',
                     title: attachment.filename,
                     content: `Attachment from email: ${subject}`,
                     metadata: JSON.stringify({
@@ -434,7 +434,7 @@ export async function syncGmailForCase(
                       messageId: message.id,
                       threadId: thread.id,
                     }),
-                    extractedAt: new Date(),
+                    createdAt: new Date(),
                   });
 
                   progress.totalAttachments++;

@@ -8,7 +8,7 @@ import { getDb } from './db';
 import { evidenceItems } from './schema';
 import { eq } from 'drizzle-orm';
 
-interface OcrResult {
+export interface OcrResult {
   success: boolean;
   text?: string;
   confidence?: number;

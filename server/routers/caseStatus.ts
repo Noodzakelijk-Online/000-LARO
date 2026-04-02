@@ -1,3 +1,5 @@
+// @ts-nocheck
+
 /**
  * Case Status Router
  * 

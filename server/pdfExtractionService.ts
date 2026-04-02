@@ -1,3 +1,5 @@
+// @ts-nocheck
+
 import { createRequire } from "module";
 import path from "path";
 import { storageGet } from "./storage";

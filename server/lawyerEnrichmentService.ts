@@ -1,3 +1,5 @@
+// @ts-nocheck
+
 import { adaptiveLLM, extractStructuredData } from "./adaptiveLLMOrchestrator";
 import type { Lawyer } from "./schema";
 

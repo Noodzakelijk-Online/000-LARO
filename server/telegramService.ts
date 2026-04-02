@@ -231,12 +231,12 @@ export async function importTelegramExport(
       id: sourceId,
       caseId,
       userId,
-      sourceType: 'telegram',
-      sourceIdentifier: `${exportData.name} (${exportData.id})`,
-      connectionStatus: 'imported',
+      provider: 'Telegram',
+      sourceType: 'Export',
+      externalId: `${exportData.name} (${exportData.id})`,
+      status: 'imported',
       lastSyncedAt: new Date(),
       createdAt: new Date(),
-      updatedAt: new Date(),
     });
 
     let filesFound = 0;
@@ -259,22 +259,20 @@ export async function importTelegramExport(
         id: itemId,
         caseId,
         userId,
-        sourceId,
-        sourceType: 'telegram',
-        itemType: message.media_type ? 'file' : 'message',
         title: `Telegram message from ${message.from || 'Unknown'}`,
-        content,
+        source: 'Telegram',
         metadata: JSON.stringify({
+          sourceId,
           messageId: message.id,
           date: message.date_unixtime,
           from: message.from,
           mediaType: message.media_type,
           fileName: message.file,
           mimeType: message.mime_type,
+          content,
+          relevanceScore: 0.5,
         }),
-        relevanceScore: 0.5, // Default, can be adjusted by user
         createdAt: new Date(parseInt(message.date_unixtime) * 1000),
-        updatedAt: new Date(),
       });
     }
 

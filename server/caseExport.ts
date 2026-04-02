@@ -1,84 +1,99 @@
 import { getDb } from "./db";
+import { cases, documents, communications, deadlines, timeline } from "./schema";
+import { eq, desc, asc } from "drizzle-orm";
 
 interface CaseExportData {
-  caseId: number;
+  caseId: string;
   title: string;
   description: string;
   status: string;
   createdAt: Date;
   documents: Array<{
-    name: string;
-    type: string;
-    uploadedAt: Date;
+    name: string | null;
+    type: string | null;
+    uploadedAt: Date | null;
   }>;
   communications: Array<{
-    type: string;
-    content: string;
-    timestamp: Date;
+    type: string | null;
+    content: string | null;
+    timestamp: Date | null;
   }>;
   deadlines: Array<{
-    title: string;
-    dueDate: Date;
-    completed: boolean;
+    title: string | null;
+    dueDate: Date | null;
+    completed: boolean | null;
   }>;
   timeline: Array<{
-    date: Date;
-    event: string;
-    description: string;
+    date: Date | null;
+    event: string | null;
+    description: string | null;
   }>;
 }
 
-export async function getCaseExportData(caseId: number): Promise<CaseExportData | null> {
+export async function getCaseExportData(caseId: string): Promise<CaseExportData | null> {
   const db = await getDb();
   if (!db) return null;
 
   try {
     // Get case details
-    const [caseRows] = await db.execute(
-      'SELECT * FROM cases WHERE id = ?',
-      [caseId]
-    );
+    const caseData = await db.select().from(cases).where(eq(cases.id, caseId)).limit(1);
     
-    if (!Array.isArray(caseRows) || caseRows.length === 0) {
+    if (caseData.length === 0) {
       return null;
     }
 
-    const caseData = caseRows[0] as any;
+    const c = caseData[0];
 
     // Get documents
-    const [docRows] = await db.execute(
-      'SELECT name, type, uploadedAt FROM documents WHERE caseId = ? ORDER BY uploadedAt DESC',
-      [caseId]
-    );
+    const docRows = await db.select({
+      name: documents.name,
+      type: documents.type,
+      uploadedAt: documents.uploadedAt
+    })
+    .from(documents)
+    .where(eq(documents.caseId, caseId))
+    .orderBy(desc(documents.uploadedAt));
 
     // Get communications
-    const [commRows] = await db.execute(
-      'SELECT type, content, timestamp FROM communications WHERE caseId = ? ORDER BY timestamp DESC',
-      [caseId]
-    );
+    const commRows = await db.select({
+      type: communications.type,
+      content: communications.content,
+      timestamp: communications.timestamp
+    })
+    .from(communications)
+    .where(eq(communications.caseId, caseId))
+    .orderBy(desc(communications.timestamp));
 
     // Get deadlines
-    const [deadlineRows] = await db.execute(
-      'SELECT title, dueDate, completed FROM deadlines WHERE caseId = ? ORDER BY dueDate ASC',
-      [caseId]
-    );
+    const deadlineRows = await db.select({
+      title: deadlines.title,
+      dueDate: deadlines.dueDate,
+      completed: deadlines.completed
+    })
+    .from(deadlines)
+    .where(eq(deadlines.caseId, caseId))
+    .orderBy(asc(deadlines.dueDate));
 
     // Get timeline events
-    const [timelineRows] = await db.execute(
-      'SELECT date, event, description FROM timeline WHERE caseId = ? ORDER BY date ASC',
-      [caseId]
-    );
+    const timelineRows = await db.select({
+      date: timeline.eventAt,
+      event: timeline.title,
+      description: timeline.description
+    })
+    .from(timeline)
+    .where(eq(timeline.caseId, caseId))
+    .orderBy(asc(timeline.eventAt));
 
     return {
-      caseId: caseData.id,
-      title: caseData.title || 'Untitled Case',
-      description: caseData.description || '',
-      status: caseData.status || 'draft',
-      createdAt: caseData.createdAt,
-      documents: Array.isArray(docRows) ? docRows as any[] : [],
-      communications: Array.isArray(commRows) ? commRows as any[] : [],
-      deadlines: Array.isArray(deadlineRows) ? deadlineRows as any[] : [],
-      timeline: Array.isArray(timelineRows) ? timelineRows as any[] : []
+      caseId: c.id,
+      title: c.clientName || 'Untitled Case',
+      description: c.caseSummary || '',
+      status: c.status || 'draft',
+      createdAt: c.createdAt || new Date(),
+      documents: docRows,
+      communications: commRows,
+      deadlines: deadlineRows,
+      timeline: timelineRows
     };
   } catch (error) {
     console.error('[CaseExport] Error getting case data:', error);
@@ -94,7 +109,7 @@ export function generateCaseMarkdown(data: CaseExportData): string {
   lines.push('');
   lines.push(`**Case ID:** ${data.caseId}`);
   lines.push(`**Status:** ${data.status}`);
-  lines.push(`**Created:** ${new Date(data.createdAt).toLocaleDateString()}`);
+  lines.push(`**Created:** ${data.createdAt ? new Date(data.createdAt).toLocaleDateString() : 'N/A'}`);
   lines.push('');
 
   // Description
@@ -110,7 +125,7 @@ export function generateCaseMarkdown(data: CaseExportData): string {
     lines.push('## Timeline');
     lines.push('');
     data.timeline.forEach(event => {
-      lines.push(`**${new Date(event.date).toLocaleDateString()}** - ${event.event}`);
+      lines.push(`**${event.date ? new Date(event.date).toLocaleDateString() : 'Unknown'}** - ${event.event || 'No Event'}`);
       if (event.description) {
         lines.push(`  ${event.description}`);
       }
@@ -125,7 +140,7 @@ export function generateCaseMarkdown(data: CaseExportData): string {
     lines.push('| Document Name | Type | Uploaded |');
     lines.push('|---------------|------|----------|');
     data.documents.forEach(doc => {
-      lines.push(`| ${doc.name} | ${doc.type} | ${new Date(doc.uploadedAt).toLocaleDateString()} |`);
+      lines.push(`| ${doc.name || 'Unnamed'} | ${doc.type || 'N/A'} | ${doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString() : 'N/A'} |`);
     });
     lines.push('');
   }
@@ -136,7 +151,7 @@ export function generateCaseMarkdown(data: CaseExportData): string {
     lines.push('');
     data.deadlines.forEach(deadline => {
       const status = deadline.completed ? '✅' : '⏳';
-      lines.push(`${status} **${deadline.title}** - Due: ${new Date(deadline.dueDate).toLocaleDateString()}`);
+      lines.push(`${status} **${deadline.title || 'Untitled'}** - Due: ${deadline.dueDate ? new Date(deadline.dueDate).toLocaleDateString() : 'N/A'}`);
     });
     lines.push('');
   }
@@ -146,9 +161,9 @@ export function generateCaseMarkdown(data: CaseExportData): string {
     lines.push('## Communications');
     lines.push('');
     data.communications.forEach(comm => {
-      lines.push(`### ${comm.type} - ${new Date(comm.timestamp).toLocaleDateString()}`);
+      lines.push(`### ${comm.type || 'Communication'} - ${comm.timestamp ? new Date(comm.timestamp).toLocaleDateString() : 'N/A'}`);
       lines.push('');
-      lines.push(comm.content);
+      lines.push(comm.content || 'No content');
       lines.push('');
     });
   }
@@ -160,7 +175,7 @@ export function generateCaseMarkdown(data: CaseExportData): string {
   return lines.join('\n');
 }
 
-export async function exportCaseToMarkdown(caseId: number): Promise<string | null> {
+export async function exportCaseToMarkdown(caseId: string): Promise<string | null> {
   const data = await getCaseExportData(caseId);
   if (!data) return null;
   

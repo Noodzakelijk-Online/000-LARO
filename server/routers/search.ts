@@ -4,9 +4,6 @@ import { globalSearch, getSearchSuggestions } from "../globalSearch";
 import { checkRateLimit, getRateLimitIdentifier, RATE_LIMITS } from "../rateLimit";
 
 export const searchRouter = router({
-  /**
-   * Global search across all entities
-   */
   global: protectedProcedure
     .input(
       z.object({
@@ -16,7 +13,6 @@ export const searchRouter = router({
       })
     )
     .query(async ({ input, ctx }) => {
-      // Rate limiting
       const identifier = getRateLimitIdentifier(ctx);
       checkRateLimit(identifier, RATE_LIMITS.general);
 
@@ -33,9 +29,6 @@ export const searchRouter = router({
       };
     }),
 
-  /**
-   * Get search suggestions
-   */
   suggestions: protectedProcedure
     .input(
       z.object({
@@ -44,7 +37,6 @@ export const searchRouter = router({
       })
     )
     .query(async ({ input, ctx }) => {
-      // Rate limiting
       const identifier = getRateLimitIdentifier(ctx);
       checkRateLimit(identifier, RATE_LIMITS.general);
 
@@ -56,4 +48,3 @@ export const searchRouter = router({
       };
     }),
 });
-

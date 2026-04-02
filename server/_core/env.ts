@@ -52,6 +52,10 @@ export const ENV = {
   // Frontend
   FRONTEND_URL: process.env.VITE_FRONTEND_URL || 'http://localhost:3000',
 
+  // Forge (custom LLM endpoint)
+  forgeApiUrl: process.env.FORGE_API_URL || '',
+  forgeApiKey: process.env.FORGE_API_KEY || '',
+
   get ownerId() { return this.OWNER_ID; },
   get isDev()   { return this.NODE_ENV === 'development'; },
   get isProd()  { return this.NODE_ENV === 'production'; },

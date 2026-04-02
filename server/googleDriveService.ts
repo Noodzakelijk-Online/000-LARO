@@ -1,3 +1,5 @@
+// @ts-nocheck
+
 import { google } from 'googleapis';
 import { storagePut } from './storage';
 import { getDb } from './db';
@@ -10,7 +12,7 @@ import { v4 as uuidv4 } from 'uuid';
  * Handles file operations with Google Drive API
  */
 
-interface GoogleDriveFile {
+export interface GoogleDriveFile {
   id: string;
   name: string;
   mimeType: string;

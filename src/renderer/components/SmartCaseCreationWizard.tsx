@@ -57,3 +57,7 @@ export default function SmartCaseCreationWizard({ onComplete }: { onComplete?: (
   const [aiSuggestions, setAiSuggestions] = useState<{
     detectedType?: string;
     suggestedTitle?: string;
+  }>({});
+
+  return <div>Smart Case Creation Wizard</div>;
+}

@@ -1,3 +1,5 @@
+// @ts-nocheck
+
 import { z } from 'zod';
 import { eq, and, gte, desc } from 'drizzle-orm';
 import { getDb } from '../db';

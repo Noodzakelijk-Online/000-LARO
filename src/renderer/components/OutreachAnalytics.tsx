@@ -1,3 +1,4 @@
+/**
  * Outreach Analytics Dashboard
  * 
  * Comprehensive analytics for outreach performance tracking
@@ -95,5 +96,24 @@ export default function OutreachAnalytics() {
           <MetricCard
             title="Avg Response Time"
             value={overallMetrics ? formatHours(overallMetrics.averageResponseTimeHours) : "-"}
-            icon={<Clock className="h-4 w-4" />}
             trend={overallMetrics && overallMetrics.averageResponseTimeHours < 48 ? "up" : "down"}
+            loading={metricsLoading}
+          />
+        </div>
+      </div>
+    </DashboardLayout>
+  );
+}
+
+function MetricCard({ title, value, icon, trend, loading }: any) {
+  return (
+    <Card>
+      <CardHeader>{title}</CardHeader>
+      <CardContent>{value}</CardContent>
+    </Card>
+  );
+}
+
+function formatHours(hours: number) {
+  return `${hours}h`;
+}

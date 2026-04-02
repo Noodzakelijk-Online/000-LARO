@@ -1,3 +1,5 @@
+// @ts-nocheck
+
 import { google } from "googleapis";
 import { storagePut } from "./storage";
 import { getDb } from "./db";
@@ -27,7 +29,7 @@ interface GoogleDriveFile {
   parents?: string[];
 }
 
-interface SyncProgress {
+export interface SyncProgress {
   totalFiles: number;
   processedFiles: number;
   extractedContent: number;

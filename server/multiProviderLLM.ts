@@ -37,11 +37,15 @@ export interface LLMProviderConfig {
   temperature?: number;
 }
 
+export type LLMMessage = {
+  role: "system" | "user" | "assistant";
+  content: any; // Can be string or array for multimodality
+};
+
+export type SelectionStrategy = "cost-optimized" | "speed-optimized" | "quality-optimized" | "balanced";
+
 export interface MultiProviderLLMOptions {
-  messages: Array<{
-    role: "system" | "user" | "assistant";
-    content: string;
-  }>;
+  messages: LLMMessage[];
   responseFormat?: {
     type: "json_schema";
     json_schema: {
@@ -51,7 +55,7 @@ export interface MultiProviderLLMOptions {
     };
   };
   providers?: LLMProvider[]; // Ordered list of providers to try
-  strategy?: "cost-optimized" | "speed-optimized" | "quality-optimized" | "balanced";
+  strategy?: SelectionStrategy;
   maxRetries?: number;
 }
 
@@ -174,7 +178,8 @@ export async function invokeMultiProviderLLM(
       });
       
       const responseTimeMs = Date.now() - startTime;
-      const content = response.choices[0]?.message?.content || "";
+      const rawContent = response.choices[0]?.message?.content || "";
+      const content = typeof rawContent === "string" ? rawContent : JSON.stringify(rawContent);
       
       // Estimate token usage (rough approximation)
       const inputTokens = estimateTokens(JSON.stringify(messages));
@@ -216,8 +221,9 @@ export async function invokeMultiProviderLLM(
 /**
  * Estimate token count (rough approximation: 1 token ≈ 4 characters)
  */
-function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 4);
+function estimateTokens(text: any): number {
+  const str = typeof text === "string" ? text : JSON.stringify(text || "");
+  return Math.ceil(str.length / 4);
 }
 
 /**

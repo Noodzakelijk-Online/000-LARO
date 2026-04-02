@@ -72,22 +72,20 @@ export async function getMessagesByUser(
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  let query = db.select().from(unifiedMessages).where(eq(unifiedMessages.userId, userId));
+  const conditions = [eq(unifiedMessages.userId, userId)];
+  
+  if (filters?.channel) conditions.push(eq(unifiedMessages.channel, filters.channel as any));
+  if (filters?.caseId) conditions.push(eq(unifiedMessages.caseId, filters.caseId));
+  if (filters?.status) conditions.push(eq(unifiedMessages.status, filters.status as any));
+  if (filters?.unreadOnly) conditions.push(sql`${unifiedMessages.readAt} IS NULL`);
 
-  if (filters?.channel) {
-    query = query.where(eq(unifiedMessages.channel, filters.channel as any));
-  }
-  if (filters?.caseId) {
-    query = query.where(eq(unifiedMessages.caseId, filters.caseId));
-  }
-  if (filters?.status) {
-    query = query.where(eq(unifiedMessages.status, filters.status as any));
-  }
-  if (filters?.unreadOnly) {
-    query = query.where(sql`${unifiedMessages.readAt} IS NULL`);
-  }
-
-  return await query.orderBy(desc(unifiedMessages.sentAt)).limit(limit).offset(offset);
+  return await db
+    .select()
+    .from(unifiedMessages)
+    .where(and(...conditions))
+    .orderBy(desc(unifiedMessages.sentAt))
+    .limit(limit)
+    .offset(offset);
 }
 
 export async function markMessageAsRead(id: string) {
@@ -170,16 +168,18 @@ export async function getThreadsByUser(
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  let query = db.select().from(conversationThreads).where(eq(conversationThreads.userId, userId));
+  const conditions = [eq(conversationThreads.userId, userId)];
+  
+  if (filters?.caseId) conditions.push(eq(conversationThreads.caseId, filters.caseId));
+  if (filters?.status) conditions.push(eq(conversationThreads.status, filters.status as any));
 
-  if (filters?.caseId) {
-    query = query.where(eq(conversationThreads.caseId, filters.caseId));
-  }
-  if (filters?.status) {
-    query = query.where(eq(conversationThreads.status, filters.status as any));
-  }
-
-  return await query.orderBy(desc(conversationThreads.lastMessageAt)).limit(limit).offset(offset);
+  return await db
+    .select()
+    .from(conversationThreads)
+    .where(and(...conditions))
+    .orderBy(desc(conversationThreads.lastMessageAt))
+    .limit(limit)
+    .offset(offset);
 }
 
 export async function updateThreadLastMessage(threadId: string) {
@@ -290,7 +290,8 @@ export async function updateChannelIntegrationSync(id: string) {
 
   if (integration.length === 0) return false;
 
-  const nextSync = new Date(now.getTime() + integration[0].syncFrequency * 1000);
+  const syncFrequency = integration[0].syncFrequency || 3600;
+  const nextSync = new Date(now.getTime() + syncFrequency * 1000);
 
   await db
     .update(channelIntegrations)

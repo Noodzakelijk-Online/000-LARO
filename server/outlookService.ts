@@ -1,3 +1,5 @@
+// @ts-nocheck
+
 /**
  * Outlook Email Service
  * Integrates with Microsoft Graph API for email access

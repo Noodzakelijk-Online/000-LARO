@@ -1,0 +1,177 @@
+import { z } from "zod";
+import { publicProcedure, router, protectedProcedure } from "../_core/trpc";
+import { getDb } from "../db";
+import { cases as casesTable, outreachStatus, lawyers } from '../schema';
+import { eq, desc, and, sql } from "drizzle-orm";
+import { sanitizeLegalAreas } from "../legalAreasValidator";
+
+export const casesRouter = router({
+  list: publicProcedure
+    .input(z.object({
+      page: z.number().optional().default(1),
+      limit: z.number().optional().default(10),
+    }).optional())
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { cases: [], pagination: { total: 0, totalPages: 0, page: 1, limit: 10 } };
+
+      const userId = ctx.user?.id || "demo-user-123";
+      const page = input?.page || 1;
+      const limit = input?.limit || 10;
+      const offset = (page - 1) * limit;
+
+      const userCases = await db
+        .select()
+        .from(casesTable)
+        .where(eq(casesTable.userId, userId))
+        .orderBy(desc(casesTable.createdAt))
+        .limit(limit)
+        .offset(offset);
+
+      const totalResult = await db.select({ count: sql<number>`count(*)` }).from(casesTable).where(eq(casesTable.userId, userId));
+      const total = Number(totalResult[0]?.count || 0);
+
+      return {
+        cases: userCases.map((c) => ({
+          ...c,
+          legalAreas: typeof c.legalAreas === "string" ? c.legalAreas : JSON.stringify(c.legalAreas || []),
+        })),
+        pagination: {
+          total,
+          totalPages: Math.ceil(total / limit),
+          page,
+          limit,
+        }
+      };
+    }),
+
+
+  byId: publicProcedure
+    .input(z.string())
+    .query(async ({ input: caseId }) => {
+      const db = await getDb();
+      if (!db) return null;
+      const result = await db.select().from(casesTable).where(eq(casesTable.id, caseId)).limit(1);
+      if (!result.length) return null;
+      return result[0];
+    }),
+
+  create: publicProcedure
+    .input(z.object({
+      clientName: z.string(),
+      clientEmail: z.string().email(),
+      clientPhone: z.string().optional().default(""),
+      clientAddress: z.string().optional().default(""),
+      caseType: z.string(),
+      caseSummary: z.string().default(""),
+      urgency: z.enum(["Low", "Medium", "High"]),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const caseId = `CASE${Date.now().toString().slice(-6)}`;
+      const userId = ctx.user?.id || "demo-user-123";
+
+      await db.insert(casesTable).values({
+        id: caseId,
+        userId,
+        clientName: input.clientName,
+        clientEmail: input.clientEmail,
+        clientPhone: input.clientPhone,
+        clientAddress: input.clientAddress,
+        caseType: input.caseType,
+        caseSummary: input.caseSummary,
+        urgency: input.urgency,
+        status: "Matching",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as any);
+
+      return { id: caseId, success: true };
+    }),
+
+
+  update: protectedProcedure
+    .input(z.object({
+      id: z.string(),
+      status: z.string().optional(),
+      caseSummary: z.string().optional(),
+      urgency: z.enum(["Low", "Medium", "High"]).optional(),
+      legalAreas: z.any().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const updateData: any = { updatedAt: new Date() };
+      if (input.status) updateData.status = input.status;
+      if (input.caseSummary) updateData.caseSummary = input.caseSummary;
+      if (input.urgency) updateData.urgency = input.urgency;
+      if (input.legalAreas) {
+        updateData.legalAreas = sanitizeLegalAreas(input.legalAreas);
+      }
+
+      await db.update(casesTable)
+        .set(updateData)
+        .where(and(eq(casesTable.id, input.id), eq(casesTable.userId, ctx.user.id)));
+
+      return { success: true };
+    }),
+
+  outreachProgress: publicProcedure
+    .input(z.object({ caseId: z.string() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return { legalAreas: [], overallStats: {} };
+
+      // Get case
+      const caseData = await db.select().from(casesTable).where(eq(casesTable.id, input.caseId)).limit(1);
+      if (!caseData.length) return { legalAreas: [], overallStats: {} };
+
+      // Mocked for now to satisfy component requirements
+      let legalAreas: string[] = [];
+      try {
+        legalAreas = JSON.parse(caseData[0].legalAreas || "[]");
+      } catch {}
+
+      return {
+        legalAreas: legalAreas.map(area => ({
+          name: area,
+          status: "In Progress",
+          count: 5,
+          contacted: 2,
+          responded: 1,
+        })),
+        overallStats: {
+          totalContacted: 2,
+          totalResponses: 1,
+          avgResponseTime: "48h",
+        }
+      };
+    }),
+    
+  getOutreachByCaseId: publicProcedure
+    .input(z.string())
+    .query(async ({ input: caseId }) => {
+      const db = await getDb();
+      if (!db) return [];
+      
+      const results = await db
+        .select({
+          id: outreachStatus.id,
+          lawyerName: lawyers.name,
+          status: outreachStatus.status,
+          distanceKm: outreachStatus.distanceKm,
+          initialContact: outreachStatus.initialContact,
+          followUpsSent: outreachStatus.followUpsSent,
+          response: outreachStatus.response,
+          lastContact: outreachStatus.lastContact,
+        })
+        .from(outreachStatus)
+        .leftJoin(lawyers, eq(outreachStatus.lawyerId, lawyers.id))
+        .where(eq(outreachStatus.caseId, caseId));
+        
+      return results;
+    }),
+});

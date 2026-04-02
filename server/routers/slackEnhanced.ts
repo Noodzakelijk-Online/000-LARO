@@ -234,10 +234,10 @@ export const slackEnhancedRouter = router({
             id: c.id,
             name: c.name,
             isPrivate: c.is_private,
-            isMember: c.is_member,
-            numMembers: c.num_members,
-            topic: c.topic?.value,
-            purpose: c.purpose?.value,
+            isMember: (c as any).is_member,
+            numMembers: (c as any).num_members,
+            topic: (c as any).topic?.value,
+            purpose: (c as any).purpose?.value,
           })),
         };
       } catch (error) {
@@ -304,8 +304,8 @@ export const slackEnhancedRouter = router({
             text: m.text,
             user: m.user,
             timestamp: new Date(parseFloat(m.ts) * 1000).toISOString(),
-            hasFiles: !!(m.files && m.files.length > 0),
-            fileCount: m.files?.length || 0,
+            hasFiles: !!((m as any).files && (m as any).files.length > 0),
+            fileCount: (m as any).files?.length || 0,
           })),
         };
       } catch (error) {

@@ -97,3 +97,7 @@ export default function EmailAutomation() {
         </div>
 
         {/* Tabs */}
+      </div>
+    </DashboardLayout>
+  );
+}

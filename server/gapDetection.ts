@@ -25,7 +25,7 @@ interface TimelineEvent {
   participants?: string[];
 }
 
-interface GapAnalysisResult {
+export interface GapAnalysisResult {
   gaps: CommunicationGap[];
   expectedDocs: ExpectedDocument[];
   patterns: SuspiciousPattern[];

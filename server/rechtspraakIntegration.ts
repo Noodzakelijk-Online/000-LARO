@@ -31,7 +31,7 @@ interface ECLIMetadata {
   vindplaatsen?: string[]; // Publication references
 }
 
-interface CourtDecision {
+export interface CourtDecision {
   ecli: string;
   title: string;
   court: string;
@@ -44,7 +44,7 @@ interface CourtDecision {
   relevanceScore?: number; // 0-100, how relevant to current case
 }
 
-interface RechtspraakSearchResult {
+export interface RechtspraakSearchResult {
   success: boolean;
   totalResults: number;
   decisions: CourtDecision[];

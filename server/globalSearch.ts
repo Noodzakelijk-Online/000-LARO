@@ -60,7 +60,7 @@ export async function globalSearch(
             urgency: c.urgency,
             createdAt: c.createdAt,
           },
-          relevance: calculateRelevance(query, [c.clientName, c.caseType, c.caseSummary || ""]),
+          relevance: calculateRelevance(query, [c.clientName || "", c.caseType || "", c.caseSummary || ""]),
         }))
       );
     } catch (error) {
@@ -88,7 +88,7 @@ export async function globalSearch(
         ...lawyerResults.map((l) => ({
           type: "lawyer" as const,
           id: l.id,
-          title: l.name,
+          title: l.name || "Unknown",
           description: `${l.firmName || "Independent"} - ${l.city || "Location unknown"}`,
           metadata: {
             city: l.city,
@@ -96,7 +96,7 @@ export async function globalSearch(
             email: l.email,
             phone: l.phone,
           },
-          relevance: calculateRelevance(query, [l.name, l.city || "", l.firmName || ""]),
+          relevance: calculateRelevance(query, [l.name || "", l.city || "", l.firmName || ""]),
         }))
       );
     } catch (error) {
@@ -161,7 +161,7 @@ export async function globalSearch(
         ...documentResults.map((d) => ({
           type: "document" as const,
           id: d.id,
-          title: d.name,
+          title: d.name || "Untitled",
           description: `${d.type} ${d.folder ? `in ${d.folder}` : ""}`,
           metadata: {
             type: d.type,
@@ -169,7 +169,7 @@ export async function globalSearch(
             caseId: d.caseId,
             uploadedAt: d.uploadedAt,
           },
-          relevance: calculateRelevance(query, [d.name, d.type, d.folder || ""]),
+          relevance: calculateRelevance(query, [d.name || "", d.type || "", d.folder || ""]),
         }))
       );
     } catch (error) {
@@ -199,14 +199,14 @@ export async function globalSearch(
           type: "communication" as const,
           id: c.id,
           title: c.subject || `${c.type} communication`,
-          description: c.content.substring(0, 150) + "...",
+          description: (c.content || "").substring(0, 150) + "...",
           metadata: {
             type: c.type,
             direction: c.direction,
             caseId: c.caseId,
             timestamp: c.timestamp,
           },
-          relevance: calculateRelevance(query, [c.subject || "", c.content]),
+          relevance: calculateRelevance(query, [c.subject || "", c.content || ""]),
         }))
       );
     } catch (error) {
@@ -274,7 +274,7 @@ export async function getSearchSuggestions(
       .where(like(cases.caseType, searchPattern))
       .limit(limit);
     
-    caseResults.forEach(c => suggestions.add(c.caseType));
+    caseResults.forEach(c => c.caseType && suggestions.add(c.caseType));
 
     // Get lawyer name suggestions
     const lawyerResults = await db
@@ -283,7 +283,7 @@ export async function getSearchSuggestions(
       .where(like(lawyers.name, searchPattern))
       .limit(limit);
     
-    lawyerResults.forEach(l => suggestions.add(l.name));
+    lawyerResults.forEach(l => l.name && suggestions.add(l.name));
 
     // Get city suggestions
     const cityResults = await db

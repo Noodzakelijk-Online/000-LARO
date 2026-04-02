@@ -50,11 +50,11 @@ export async function answerLawyerQuestions(
     const context = buildCaseContext(caseInfo);
     
     // Generate answer using LLM
-    const result = await generateAnswer(questions, context, lawyerInfo.name);
+    const result = await generateAnswer(questions, context, lawyerInfo.name || "Geachte heer/mevrouw");
     
     // If high confidence, send email automatically
     if (result.confidence >= 80 && !result.needsManualReview) {
-      await sendAnswerEmail(caseId, lawyerInfo.email || "", lawyerInfo.name, result.answer!);
+      await sendAnswerEmail(caseId, lawyerInfo.email || "", lawyerInfo.name || "Advocaat", result.answer!);
     }
     
     return result;
@@ -178,8 +178,9 @@ Please answer these questions based on the case information available.`,
       },
     });
 
-    const content = response.choices[0].message.content;
-    if (!content) {
+    const rawContent = response.choices[0].message.content;
+    const content = typeof rawContent === "string" ? rawContent : JSON.stringify(rawContent || "{}");
+    if (!content || content === "{}") {
       throw new Error("No response from LLM");
     }
 
@@ -318,8 +319,9 @@ Respond with JSON in this exact format:
       },
     });
 
-    const content = response.choices[0].message.content;
-    if (!content) {
+    const rawContent = response.choices[0].message.content;
+    const content = typeof rawContent === "string" ? rawContent : JSON.stringify(rawContent || "{}");
+    if (!content || content === "{}") {
       return [];
     }
 

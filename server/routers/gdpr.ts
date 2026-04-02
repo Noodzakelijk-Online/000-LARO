@@ -40,7 +40,7 @@ export const gdprRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       // Verify email matches user's email
-      if (input.confirmEmail !== ctx.user.email) {
+      if (input.confirmEmail !== ((ctx.user as any).email)) {
         throw new Error("Email confirmation does not match");
       }
 

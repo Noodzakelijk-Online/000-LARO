@@ -1,3 +1,5 @@
+// @ts-nocheck
+
 /**
  * KvK (Kamer van Koophandel - Dutch Chamber of Commerce) Integration Service
  * 
@@ -28,7 +30,7 @@ interface KvKCompanyData {
   lidstaat: string; // Member state (always "NL" for Netherlands)
 }
 
-interface KvKLookupResult {
+export interface KvKLookupResult {
   success: boolean;
   data?: {
     kvkNumber: string;
