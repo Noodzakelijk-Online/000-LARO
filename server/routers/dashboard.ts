@@ -1,24 +1,37 @@
 import { z } from "zod";
-import { publicProcedure, router } from "../_core/trpc";
+import { publicProcedure, router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { cases as casesTable, outreachStatus } from '../schema';
 import { desc, eq, sql, and } from "drizzle-orm";
 
 export const dashboardRouter = router({
-  stats: publicProcedure.query(async ({ ctx }) => {
+  stats: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) return { activeCases: 0, pendingRequests: 0, resolvedCases: 0, matchingScore: 0 };
 
-    const userId = ctx.user?.id || "demo-user-123";
+    const userId = ctx.user.id;
 
-    const totalCases = await db.select({ count: sql<number>`count(*)` }).from(casesTable).where(eq(casesTable.userId, userId));
-    const activeCases = await db.select({ count: sql<number>`count(*)` }).from(casesTable).where(and(eq(casesTable.userId, userId), eq(casesTable.status, "Active")));
+    const activeCases = await db.select({ count: sql<number>`count(*)` })
+      .from(casesTable)
+      .where(and(eq(casesTable.userId, userId), sql`status NOT IN ('Closed', 'Resolved')`));
+
+    console.log("activeCases ----->", activeCases);
+
+    // Total lawyers contacted for ALL user's cases
+    const lawyerContacts = await db.select({ count: sql<number>`count(*)` })
+      .from(outreachStatus)
+      .innerJoin(casesTable, eq(outreachStatus.caseId, casesTable.id))
+      .where(eq(casesTable.userId, userId));
+
+    const evidenceCount = await db.select({ count: sql<number>`count(*)` })
+      .from(require("../schema").evidence)
+      .where(eq(require("../schema").evidence.userId, userId));
 
     return {
       activeCases: Number(activeCases[0]?.count || 0),
-      pendingRequests: 2, // Mocked
-      resolvedCases: 12, // Mocked
-      matchingScore: 88, // Mocked
+      matchesMade: Number(lawyerContacts[0]?.count || 0),
+      evidenceCollected: Number(evidenceCount[0]?.count || 0),
+      pendingRequests: 0,
     };
   }),
 
@@ -31,10 +44,10 @@ export const dashboardRouter = router({
     };
   }),
 
-  recentCases: publicProcedure.query(async ({ ctx }) => {
+  recentCases: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) return [];
-    const userId = ctx.user?.id || "demo-user-123";
+    const userId = ctx.user.id;
     const results = await db.select().from(casesTable).where(eq(casesTable.userId, userId)).orderBy(desc(casesTable.createdAt)).limit(5);
     return results;
   }),
@@ -49,9 +62,9 @@ export const dashboardRouter = router({
       ];
     }),
 
-  interestedMatches: publicProcedure.query(async ({ ctx }) => {
+  interestedMatches: protectedProcedure.query(async ({ ctx }) => {
     const { getInterestedMatches } = await import("../db");
-    const userId = ctx.user?.id || "demo-user-123";
+    const userId = ctx.user.id;
     return await getInterestedMatches(10, userId);
   }),
 

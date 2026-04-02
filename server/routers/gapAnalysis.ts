@@ -1,4 +1,4 @@
-import { router, publicProcedure } from "../_core/trpc";
+import { router, publicProcedure, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { gapDetectionService } from "../gapDetection";
 import { kvkIntegrationService } from "../kvkIntegration";
@@ -278,9 +278,8 @@ export const gapAnalysisRouter = router({
   /**
    * Get critical gaps summary for all user's cases (for dashboard alert)
    */
-  getUserCriticalGaps: publicProcedure
-    .input(z.object({ userId: z.string() }))
-    .query(async ({ input }) => {
+  getUserCriticalGaps: protectedProcedure
+    .query(async ({ ctx }) => {
       const db = await getDb();
       if (!db) {
         return {
@@ -291,10 +290,9 @@ export const gapAnalysisRouter = router({
         };
       }
 
-      // Get all user's cases
-      const { getAllCases } = await import("../db");
-      const allCases = await getAllCases();
-      const userCases = allCases.filter((c) => c.userId === input.userId);
+      const userId = ctx.user.id;
+      // Get all user's cases directly from DB rather than allCases filter
+      const userCases = await db.select().from(require("../schema").cases).where(eq(require("../schema").cases.userId, userId));
 
       if (userCases.length === 0) {
         return {

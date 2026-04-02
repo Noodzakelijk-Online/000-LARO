@@ -13,10 +13,8 @@ interface CriticalGapsAlertProps {
 export function CriticalGapsAlert({ userId }: CriticalGapsAlertProps) {
   const [, setLocation] = useLocation();
   
-  // Fetch critical gaps summary for all user's cases
-  const { data: gapsSummary, isLoading } = trpc.gapAnalysis.getUserCriticalGaps.useQuery({
-    userId,
-  });
+  // Fetch critical gaps summary for all user's cases (securely uses session)
+  const { data: gapsSummary, isLoading } = trpc.gapAnalysis.getUserCriticalGaps.useQuery();
 
   if (isLoading) {
     return null; // Don't show skeleton, just hide while loading

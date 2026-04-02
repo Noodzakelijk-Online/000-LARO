@@ -15,6 +15,7 @@ export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
   name: text("name"),
   email: text("email"),
+  password: text("password"),
   loginMethod: text("loginMethod"),
   role: text("role").default("user").notNull(),
   stripeCustomerId: text("stripeCustomerId"),

@@ -4,6 +4,9 @@
  */
 import { Router, Route, Switch } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
+import { useAuth } from "@/_core/hooks/useAuth";
+import AuthPage from "@/components/AuthPage";
+import { DashboardSkeleton } from "@/components/SkeletonLoaders";
 import Home from "@/components/Home";
 import Cases from "@/components/Cases";
 import Lawyers from "@/components/Lawyers";
@@ -21,6 +24,16 @@ const fileProtocol =
   typeof window !== "undefined" && window.location.protocol === "file:";
 
 export default function DashboardApp() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return <DashboardSkeleton />;
+  }
+
+  if (!user) {
+    return <AuthPage />;
+  }
+
   return (
     <Router {...(fileProtocol ? { hook: useHashLocation } : {})}>
     <Switch>

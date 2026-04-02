@@ -6,7 +6,7 @@ import { eq, desc, and, sql } from "drizzle-orm";
 import { sanitizeLegalAreas } from "../legalAreasValidator";
 
 export const casesRouter = router({
-  list: publicProcedure
+  list: protectedProcedure
     .input(z.object({
       page: z.number().optional().default(1),
       limit: z.number().optional().default(10),
@@ -15,7 +15,7 @@ export const casesRouter = router({
       const db = await getDb();
       if (!db) return { cases: [], pagination: { total: 0, totalPages: 0, page: 1, limit: 10 } };
 
-      const userId = ctx.user?.id || "demo-user-123";
+      const userId = ctx.user.id;
       const page = input?.page || 1;
       const limit = input?.limit || 10;
       const offset = (page - 1) * limit;
@@ -46,17 +46,17 @@ export const casesRouter = router({
     }),
 
 
-  byId: publicProcedure
+  byId: protectedProcedure
     .input(z.string())
-    .query(async ({ input: caseId }) => {
+    .query(async ({ input: caseId, ctx }) => {
       const db = await getDb();
       if (!db) return null;
-      const result = await db.select().from(casesTable).where(eq(casesTable.id, caseId)).limit(1);
+      const result = await db.select().from(casesTable).where(and(eq(casesTable.id, caseId), eq(casesTable.userId, ctx.user.id))).limit(1);
       if (!result.length) return null;
       return result[0];
     }),
 
-  create: publicProcedure
+  create: protectedProcedure
     .input(z.object({
       clientName: z.string(),
       clientEmail: z.string().email(),
@@ -71,7 +71,7 @@ export const casesRouter = router({
       if (!db) throw new Error("Database not available");
 
       const caseId = `CASE${Date.now().toString().slice(-6)}`;
-      const userId = ctx.user?.id || "demo-user-123";
+      const userId = ctx.user.id;
 
       await db.insert(casesTable).values({
         id: caseId,
