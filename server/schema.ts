@@ -419,6 +419,7 @@ export const userPreferences = sqliteTable("user_preferences", {
   preferredLawyers: text("preferredLawyers"),
   caseTemplates: text("caseTemplates"),
   updatedAt: integer("updatedAt", { mode: "timestamp" }).default(new Date()),
+  userPreferences: text("userPreferences"),
 });
 
 export const messageTemplates = sqliteTable("message_templates", {
@@ -735,7 +736,7 @@ export const channelIntegrations = sqliteTable("channel_integrations", {
 });
 
 export type InsertChannelIntegration = typeof channelIntegrations.$inferInsert;
- 
+
 export const deadlines = sqliteTable("deadlines", {
   id: text("id").primaryKey(),
   caseId: text("caseId"),

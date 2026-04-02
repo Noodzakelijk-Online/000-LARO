@@ -69,7 +69,7 @@ export async function trackUsage(params: {
   console.log(`[USAGE_TRACKING] Tracked ${params.resourceType} for user ${params.userId}: ${quantity} units, $${(totalBilledCost / 100).toFixed(2)}`);
 
   // Check for usage alerts (async, don't block response)
-  checkAndSendUsageAlerts(params.userId, params.resourceType).catch(err => {
+  checkAndSendUsageAlerts(params.userId, params.resourceType).catch((err: any) => {
     console.error('[USAGE_TRACKING] Failed to check usage alerts:', err);
   });
 

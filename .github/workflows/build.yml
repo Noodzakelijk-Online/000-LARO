@@ -36,7 +36,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: LARO-Desktop-Windows
-          path: release/*.exe
+          path: release/**/*.exe
           if-no-files-found: error
 
   # build-mac:
@@ -63,7 +63,7 @@ jobs:
     #     uses: actions/upload-artifact@v4
     #     with:
     #       name: LARO-Desktop-Mac
-    #       path: release/*.dmg
+    #       path: release/**/*.dmg
     #       if-no-files-found: error
 
   release:
@@ -98,8 +98,8 @@ jobs:
             2. Run the installer
             3. Open LARO Desktop — dashboard loads automatically
           files: |
-            release/windows/*.exe
-            release/mac/*.dmg
+            release/windows/**/*.exe
+            release/mac/**/*.dmg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           

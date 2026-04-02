@@ -1,4 +1,6 @@
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -45,14 +47,14 @@ interface CaseEstimate {
 export default function SmartCaseCreationWizard({ onComplete }: { onComplete?: () => void }) {
   const [currentStep, setCurrentStep] = useState(1);
   const [steps, setSteps] = useState(STEPS);
-  
+
   // Form data
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [caseType, setCaseType] = useState("");
   const [urgency, setUrgency] = useState<"Low" | "Medium" | "High">("Medium");
   const [estimatedValue, setEstimatedValue] = useState("");
-  
+
   // AI suggestions
   const [aiSuggestions, setAiSuggestions] = useState<{
     detectedType?: string;

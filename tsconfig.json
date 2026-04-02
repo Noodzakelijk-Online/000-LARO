@@ -20,10 +20,11 @@
       "@/*": ["./src/renderer/*"]
     }
   },
-  "include": ["src", "src-main", "server", "shared"],
+  "include": [],
   "references": [
     { "path": "./tsconfig.node.json" },
     { "path": "./tsconfig.main.json" },
-    { "path": "./tsconfig.server.json" }
+    { "path": "./tsconfig.server.json" },
+    { "path": "./tsconfig.renderer.json" }
   ]
 }

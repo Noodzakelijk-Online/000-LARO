@@ -317,23 +317,22 @@ export async function handleLawyerResponse(
     await db
       .update(cases)
       .set({ status: "Matched" })
-      .where(eq(cases.id, record.caseId));
+      .where(eq(cases.id, record.caseId as string));
 
-    // TODO: Send notification to client
-
+    // Create audit log for the case
     await createAuditLog({
       action: AUDIT_ACTIONS.CASE_STATUS_CHANGED,
       entityType: "case",
-      entityId: record.caseId,
+      entityId: record.caseId as string,
       details: {
         newStatus: "Matched",
-        lawyerId: record.lawyerId,
-        response,
       },
     });
   } else if (record.caseId && record.lawyerId) {
-    // Lawyer declined, escalate to next lawyer
-    await escalateToNextLawyer(record.caseId, record.lawyerId);
+    // Escalate to next lawyer if response was a decline OR we need more matches
+    // Note: Escalate is called for declines, or for "Interested" if needed
+    console.log(`[Workflow] Escalating case ${record.caseId} from lawyer ${record.lawyerId}`);
+    await escalateToNextLawyer(record.caseId as string, record.lawyerId as string);
   }
 
   await createAuditLog({

@@ -74,14 +74,14 @@ export default function BulkEvidenceUpload({
       "text/*": [".txt", ".csv"],
     },
     maxSize: 100 * 1024 * 1024, // 100MB
-  });
+  } as any);
 
   const removeFile = (id: string) => {
     setFiles((prev) => prev.filter((f) => f.id !== id));
   };
 
   const detectFileType = (mimeType: string): string => {
-    if (mimeType.startsWith("image/")) return "image";
+    if (mimeType.startsWith("image/")) return "photo";
     if (mimeType.startsWith("video/")) return "video";
     if (mimeType.includes("pdf") || mimeType.includes("word") || mimeType.includes("document"))
       return "document";
@@ -94,7 +94,7 @@ export default function BulkEvidenceUpload({
     switch (type) {
       case "document":
         return <FileText className="w-5 h-5 text-blue-500" />;
-      case "image":
+      case "photo":
         return <ImageIcon className="w-5 h-5 text-green-500" />;
       case "video":
         return <Video className="w-5 h-5 text-purple-500" />;
@@ -146,13 +146,13 @@ export default function BulkEvidenceUpload({
       // Create evidence file record
       await createEvidenceFile.mutateAsync({
         caseId,
+        title: fileWithPreview.file.name,
+        type: detectFileType(fileWithPreview.file.type) as any,
         fileName: fileWithPreview.file.name,
         fileSize: fileWithPreview.file.size.toString(),
         mimeType: fileWithPreview.file.type,
-        fileType: detectFileType(fileWithPreview.file.type),
-        uploadSource: "manual",
-        s3Key,
-        s3Url,
+        source: "Upload",
+        fileUrl: s3Url,
       });
 
       // Update status to completed

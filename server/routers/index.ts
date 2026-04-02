@@ -18,6 +18,8 @@ import { lawyerRatingRouter } from "./lawyerRating";
 import { trelloEnhancedRouter } from "./trelloEnhanced";
 import { telegramEnhancedRouter } from "./telegramEnhanced";
 import { gapAnalysisRouter } from "./gapAnalysis";
+import { emailAccountsRouter } from "./emailAccounts";
+import { evidenceAnalyticsRouter } from "./evidenceAnalytics";
 import { z } from "zod";
 
 export const appRouter = router({
@@ -38,6 +40,8 @@ export const appRouter = router({
   trelloEnhanced: trelloEnhancedRouter,
   telegramEnhanced: telegramEnhancedRouter,
   gapAnalysis: gapAnalysisRouter,
+  emailAccounts: emailAccountsRouter,
+  evidenceAnalytics: evidenceAnalyticsRouter,
 
 
 

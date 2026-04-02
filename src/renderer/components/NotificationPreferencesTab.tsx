@@ -35,7 +35,7 @@ export function NotificationPreferencesTab() {
         [channel]: !notificationSettings[event as keyof typeof notificationSettings][channel],
       },
     };
-    
+
     setNotificationSettings(newSettings);
 
     try {
