@@ -15,12 +15,12 @@ import { compressionMiddleware } from './compression';
 
 // ─── Environment ──────────────────────────────────────────────────────────────
 
-const PORT   = parseInt(process.env.PORT || '3000', 10);
-const isDev  = process.env.NODE_ENV === 'development';
+const PORT = parseInt(process.env.PORT || '3000', 10);
+const isDev = process.env.NODE_ENV === 'development';
 
 // ─── Express setup ────────────────────────────────────────────────────────────
 
-const app        = express();
+const app = express();
 const httpServer = createServer(app);
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
@@ -73,7 +73,9 @@ if (!isDev) {
   // In a packaged Electron app, we need to find the renderer files relative to this file
   // dist/main/server/index.js -> dist/renderer
   const possiblePaths = [
-    path.join(__dirname, '..', '..', 'renderer'),
+    path.join(__dirname, '..', 'renderer'), // dist/server -> dist/renderer
+    path.join(__dirname, '..', '..', 'renderer'), // just in case it's in dist/main/server
+    path.join((process as any).resourcesPath || __dirname, 'app', 'dist', 'renderer'),
     path.join(process.cwd(), 'dist', 'renderer'),
     path.join(process.cwd(), 'resources', 'app', 'dist', 'renderer'),
   ];

@@ -118,8 +118,7 @@ function createScanPanel(): void {
   if (isDev) {
     scanPanel.loadURL('http://localhost:5173/?mode=scanner');
   } else {
-    // The local server should ideally serve this too, or we load file
-    scanPanel.loadFile(path.join(app.getAppPath(), 'dist', 'renderer', 'index.html'), { query: { mode: 'scanner' } });
+    scanPanel.loadURL(`${LARO_URL}/?mode=scanner`);
   }
   scanPanel.on('closed', () => {
     scanPanel = null;

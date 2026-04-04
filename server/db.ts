@@ -6,6 +6,8 @@ import fs from "fs";
 import { InsertUser, users, lawyers, cases, outreachStatus, emailActivity, systemConfig, evidence } from "./schema";
 import { ENV } from './_core/env';
 
+import { migrate } from "drizzle-orm/better-sqlite3/migrator";
+
 let _db: ReturnType<typeof drizzle> | null = null;
 
 // Determine DB path (using .laro.sqlite in current dir for now, 
@@ -18,8 +20,32 @@ export async function getDb() {
       const sqlite = new Database(DB_FILE);
       _db = drizzle(sqlite);
       console.log("[Database] SQLite initialized at:", DB_FILE);
+
+      // Attempt migration automatically
+      const possibleMigrationPaths = [
+        path.join(process.cwd(), 'drizzle'),
+        path.join(__dirname, '..', '..', 'drizzle'), // dist/server/.. -> dist/.. -> app/drizzle
+        path.join(__dirname, '..', '..', '..', 'drizzle'), // dist/main/server/.. -> dist/main/.. -> app/drizzle
+        path.join((process as any).resourcesPath || '', 'app', 'drizzle')
+      ];
+      
+      let foundFolder = '';
+      for (const p of possibleMigrationPaths) {
+        if (fs.existsSync(p)) {
+          foundFolder = p;
+          break;
+        }
+      }
+
+      if (foundFolder) {
+        migrate(_db, { migrationsFolder: foundFolder });
+        console.log("[Database] Migrations applied successfully from:", foundFolder);
+      } else {
+        console.warn("[Database] Migrations folder not found. Database might be uninitialized.");
+      }
+
     } catch (error) {
-      console.error("[Database] Failed to connect to SQLite:", error);
+      console.error("[Database] Failed to connect to SQLite or run migrations:", error);
       _db = null;
     }
   }

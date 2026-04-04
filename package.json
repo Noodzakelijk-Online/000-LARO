@@ -133,6 +133,7 @@
     "files": [
       "dist",
       "node_modules",
+      "drizzle",
       "package.json"
     ],
     "extraResources": [
