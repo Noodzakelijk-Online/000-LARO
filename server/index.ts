@@ -70,14 +70,32 @@ app.use(
 // ─── Static files (Production) ────────────────────────────────────────────────
 
 if (!isDev) {
-  const rendererPath = path.join(process.cwd(), 'dist', 'renderer');
-  if (fs.existsSync(rendererPath)) {
+  // In a packaged Electron app, we need to find the renderer files relative to this file
+  // dist/main/server/index.js -> dist/renderer
+  const possiblePaths = [
+    path.join(__dirname, '..', '..', 'renderer'),
+    path.join(process.cwd(), 'dist', 'renderer'),
+    path.join(process.cwd(), 'resources', 'app', 'dist', 'renderer'),
+  ];
+
+  let rendererPath = '';
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p) && fs.existsSync(path.join(p, 'index.html'))) {
+      rendererPath = p;
+      break;
+    }
+  }
+
+  if (rendererPath) {
+    console.log(`[Server] Serving static files from: ${rendererPath}`);
     app.use(express.static(rendererPath));
     app.get('*', (req, res) => {
       if (!req.path.startsWith('/trpc') && !req.path.startsWith('/api')) {
         res.sendFile(path.join(rendererPath, 'index.html'));
       }
     });
+  } else {
+    console.error(`[Server] Critical: Could not find renderer path in: ${possiblePaths.join(', ')}`);
   }
 }
 
