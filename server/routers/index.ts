@@ -20,6 +20,13 @@ import { telegramEnhancedRouter } from "./telegramEnhanced";
 import { gapAnalysisRouter } from "./gapAnalysis";
 import { emailAccountsRouter } from "./emailAccounts";
 import { evidenceAnalyticsRouter } from "./evidenceAnalytics";
+import {
+  gmailEnhancedRouter,
+  outlookEnhancedRouter,
+  googleDriveEnhancedRouter,
+  oneDriveEnhancedRouter,
+  slackEnhancedRouter,
+} from "./enhancedConnections";
 import { z } from "zod";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
@@ -49,9 +56,12 @@ export const appRouter = router({
   gapAnalysis: gapAnalysisRouter,
   emailAccounts: emailAccountsRouter,
   evidenceAnalytics: evidenceAnalyticsRouter,
-
-
-
+  
+  gmailEnhanced: gmailEnhancedRouter,
+  outlookEnhanced: outlookEnhancedRouter,
+  googleDriveEnhanced: googleDriveEnhancedRouter,
+  oneDriveEnhanced: oneDriveEnhancedRouter,
+  slackEnhanced: slackEnhancedRouter,
 
   // Auth procedures
   auth: router({

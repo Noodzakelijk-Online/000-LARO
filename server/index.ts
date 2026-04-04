@@ -12,6 +12,7 @@ import cookieParser from 'cookie-parser';
 import { appRouter } from './routers';
 import { createContext } from './context';
 import { compressionMiddleware } from './compression';
+import { initCronScheduler } from './cronScheduler';
 
 // ─── Environment ──────────────────────────────────────────────────────────────
 
@@ -100,13 +101,16 @@ if (!isDev) {
     console.error(`[Server] Critical: Could not find renderer path in: ${possiblePaths.join(', ')}`);
   }
 }
-
 // ─── Lifecycle ──────────────────────────────────────────────────────────────
 
 export async function startServer(port: number = PORT) {
   return new Promise<void>((resolve) => {
     httpServer.listen(port, () => {
       console.log(`[Server] Integrated backend listening on port ${port}`);
+
+      // Initialize background cron jobs
+      initCronScheduler();
+
       resolve();
     });
   });
