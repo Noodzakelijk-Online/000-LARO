@@ -70,21 +70,29 @@ async function createMainWindow(): Promise<void> {
     return { action: 'deny' };
   });
 
+  console.log(`[Electron] NODE_ENV: ${process.env.NODE_ENV}`);
+  console.log(`[Electron] isDev: ${isDev}`);
+
   if (isDev) {
     const devUrl = 'http://localhost:5173';
-    console.log(`[Electron] Loading dev URL: ${devUrl}`);
+    console.log(`[Electron] Attempting to load Vite Dev Server: ${devUrl}`);
     try {
       await mainWindow.loadURL(devUrl);
-      console.log('[Electron] Dev URL loaded successfully');
+      console.log('[Electron] Vite Dev Server loaded successfully');
       mainWindow.webContents.openDevTools({ mode: 'detach' });
     } catch (err) {
-      console.error('[Electron] Failed to load dev URL:', err);
+      console.error('[Electron] Failed to load Vite Dev Server. Is it running? Error:', err);
+      // Fallback to production URL if Vite fails in dev
+      await mainWindow.loadURL(LARO_URL);
     }
   } else {
-    // In production, the server serves the built renderer files
-    console.log(`[Electron] Loading production URL: ${LARO_URL}`);
-    await mainWindow.loadURL(LARO_URL);
-    initAutoUpdater(mainWindow);
+    console.log(`[Electron] Loading Production URL: ${LARO_URL}`);
+    try {
+      await mainWindow.loadURL(LARO_URL);
+    } catch (err) {
+      console.error('[Electron] Failed to load Production URL. Did you run npm run build? Error:', err);
+    }
+    if (process.env.DEBUG) mainWindow.webContents.openDevTools();
   }
 }
 
