@@ -14,19 +14,19 @@ export default function AuthPage({ onLogin }: Props) {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token.trim()) { toast.error('Enter your API token'); return; }
+    const effectiveToken = token.trim() || 'local-default';
 
     setLoading(true);
     try {
-      // Verify token against LARO API
+      // Verify token/connection against LARO API
       const res = await fetch(`${apiUrl}/api/trpc/system.health`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${effectiveToken}` },
       });
 
       if (res.ok || res.status === 401) {
         // Save API url too
         await electronAPI.setConfig({ apiUrl });
-        onLogin(token.trim(), 'user-' + Date.now(), 'user-' + Date.now());
+        onLogin(effectiveToken, 'user-' + Date.now(), 'user-' + Date.now());
         toast.success('Connected to LARO');
       } else {
         toast.error('Could not reach LARO server. Check the URL.');
@@ -34,7 +34,7 @@ export default function AuthPage({ onLogin }: Props) {
     } catch {
       // Allow offline login
       await electronAPI.setConfig({ apiUrl });
-      onLogin(token.trim(), 'user-offline', 'user-offline');
+      onLogin(token.trim() || 'local-default', 'user-offline', 'user-offline');
       toast.warning('Connected in offline mode');
     } finally {
       setLoading(false);
@@ -72,18 +72,29 @@ export default function AuthPage({ onLogin }: Props) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1.5">
-              API Token
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-sm font-medium text-slate-300">
+                API Token (Optional for Local)
+              </label>
+              {apiUrl.includes('localhost') && (
+                <button 
+                  type="button" 
+                  onClick={() => setToken('local-dev-token')}
+                  className="text-[10px] text-blue-400 hover:text-blue-300 uppercase tracking-wider font-bold"
+                >
+                  Skip for Local
+                </button>
+              )}
+            </div>
             <input
               type="password"
               value={token}
               onChange={e => setToken(e.target.value)}
               className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2.5 text-white text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Paste your LARO token here"
+              placeholder="Paste token or use local skip"
             />
             <p className="text-xs text-slate-500 mt-1.5">
-              Find your token in LARO → Settings → API Keys
+              Token is only required for remote servers.
             </p>
           </div>
 
