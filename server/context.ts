@@ -18,7 +18,7 @@ export const createContext = async ({
   res: Response;
 }): Promise<TrpcContext> => {
   const sessionToken = req.cookies[COOKIE_NAME];
-  
+
   if (!sessionToken) {
     return { req, res, user: null };
   }
@@ -26,7 +26,7 @@ export const createContext = async ({
   try {
     const decoded = jwt.verify(sessionToken, ENV.JWT_SECRET) as { userId: string };
     const user = await getUser(decoded.userId);
-    
+
     if (!user) {
       return { req, res, user: null };
     }

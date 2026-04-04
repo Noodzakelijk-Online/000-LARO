@@ -130,6 +130,11 @@ export class FileScanner extends EventEmitter {
    * Get root paths to scan based on platform
    */
   private getRootPaths(): string[] {
+    // If folders are provided in config, use them
+    if (this.config.folders && this.config.folders.length > 0) {
+      return this.config.folders;
+    }
+
     switch (this.platform) {
       case 'windows':
         // Scan user's home directory and common document locations

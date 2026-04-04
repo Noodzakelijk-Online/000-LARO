@@ -266,7 +266,60 @@ const normalizeResponseFormat = ({
 };
 
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
-  assertApiKey();
+  // If no API key is configured, return a mock response instead of throwing
+  if (!ENV.forgeApiKey) {
+    console.warn("[LLM] OPENAI_API_KEY is not configured. Returning mock response.");
+    
+    // For Lawyer Rating Analysis (JSON Schema mode)
+    if (params.response_format?.type === 'json_schema' || params.responseFormat?.type === 'json_schema') {
+       return {
+         id: "mock-" + Date.now(),
+         created: Date.now(),
+         model: "mock-gemini-2.5-flash",
+         choices: [{
+           index: 0,
+           message: {
+             role: "assistant",
+             content: JSON.stringify({
+               completenessScore: 85,
+               professionalismScore: 90,
+               helpfulnessScore: 80,
+               clarityScore: 92,
+               reasoning: "This is a mock response (demo mode). In a real environment with an API key, this would be a live AI analysis of the lawyer's tone and legal accuracy.",
+               keyPoints: ["Professional tone", "Clear next steps"],
+               concerns: ["Could be more detailed on costs"]
+             })
+           },
+           finish_reason: "stop"
+         }],
+         usage: {
+           prompt_tokens: 0,
+           completion_tokens: 0,
+           total_tokens: 0
+         }
+       };
+    }
+
+    // Default mock response
+    return {
+      id: "mock-" + Date.now(),
+      created: Date.now(),
+      model: "mock-gemini-2.5-flash",
+      choices: [{
+        index: 0,
+        message: { 
+          role: "assistant", 
+          content: "This is a mock response. Please set your OPENAI_API_KEY in the .env file to enable live AI analysis." 
+        },
+        finish_reason: "stop"
+      }],
+      usage: {
+        prompt_tokens: 0,
+        completion_tokens: 0,
+        total_tokens: 0
+      }
+    };
+  }
 
   const {
     messages,

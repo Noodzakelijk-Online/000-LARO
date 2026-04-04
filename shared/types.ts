@@ -92,6 +92,7 @@ export const IPC = {
   UPLOAD_PROGRESS: 'upload:progress',
   UPDATE_CHECK:    'update:check',
   OPEN_EXTERNAL:   'open:external',
+  SCAN_OPEN_PANEL: 'scan:open-panel',
   DB_GET:          'db:get',
   DB_SET:          'db:set',
   DB_DELETE:       'db:delete',
@@ -104,6 +105,7 @@ export interface ScanConfig {
   caseId: string;
   caseName: string;
   autoUpload: boolean;
+  folders: string[];
   excludedFolders: string[];
 }
 

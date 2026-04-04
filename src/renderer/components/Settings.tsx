@@ -18,8 +18,11 @@ export default function Settings() {
   const [testEmail, setTestEmail] = useState("");
   const [isTesting, setIsTesting] = useState(false);
   
-  const { data: providerInfo } = trpc.email.getProviderInfo.useQuery();
-  const testEmailMutation = trpc.email.test.useMutation({});
+  const [showApiKey, setShowApiKey] = useState(false);
+  const { data: apiTokenData } = trpc.auth.getApiToken.useQuery(undefined, { enabled: showApiKey });
+
+  const { data: providerInfo } = (trpc as any).email?.getProviderInfo?.useQuery() ?? { data: null };
+  const testEmailMutation = (trpc as any).email?.test?.useMutation() ?? { mutateAsync: async () => ({ success: false, error: "Not implemented" }) };
 
   const handleTestEmail = async () => {
     if (!testEmail || !testEmail.includes('@')) {
@@ -404,11 +407,27 @@ export default function Settings() {
                   <div className="space-y-3">
                     <Label className="text-base">API Keys</Label>
                     <p className="text-sm text-muted-foreground">
-                      Manage API keys for external integrations
+                      Manage API keys for external integrations & Local Agents
                     </p>
-                    <Button variant="outline" size="sm">
-                      Manage Keys
-                    </Button>
+                    {!apiTokenData ? (
+                      <Button variant="outline" size="sm" onClick={() => setShowApiKey(true)}>
+                        Generate / View API Key
+                      </Button>
+                    ) : (
+                      <div className="flex gap-2 items-center">
+                        <Input readOnly value={apiTokenData.token} className="font-mono text-xs text-muted-foreground h-8" />
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => {
+                            navigator.clipboard.writeText(apiTokenData.token);
+                            toast.success("API Key copied to clipboard!");
+                          }}
+                        >
+                          Copy
+                        </Button>
+                      </div>
+                    )}
                   </div>
                   <div className="space-y-3">
                     <Label className="text-base">Data Export</Label>

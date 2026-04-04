@@ -59,6 +59,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   removeAllListeners: (channel: string) => {
     ipcRenderer.removeAllListeners(channel);
   },
+
+  checkForUpdates: () => ipcRenderer.invoke(IPC_CHANNELS.UPDATE_CHECK),
+
+  // Open scan panel — added to electronAPI
+  openScanPanel: () => ipcRenderer.invoke('scan:open-panel'),
 });
 
 // TypeScript declaration for window.electronAPI
@@ -69,7 +74,7 @@ declare global {
       setConfig: (config: any) => Promise<any>;
       getSystemInfo: () => Promise<any>;
       getAppVersion: () => Promise<string>;
-      selectFolder: () => Promise<string | null>;
+      selectFolder: () => Promise<string[] | null>;
       startScan: (config: any) => Promise<{ scanId: string }>;
       stopScan: () => Promise<{ success: boolean }>;
       pauseScan: () => Promise<{ success: boolean }>;
@@ -80,6 +85,8 @@ declare global {
       resumeUpload: () => Promise<{ success: boolean }>;
       onScanProgress: (callback: (progress: any) => void) => void;
       removeAllListeners: (channel: string) => void;
+      checkForUpdates: () => Promise<{ currentVersion: string; updateAvailable: boolean }>;
+      openScanPanel: () => Promise<void>;
     };
   }
 }

@@ -55,6 +55,7 @@ async function createMainWindow(): Promise<void> {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js'),
     },
   });
 
@@ -107,10 +108,10 @@ function createScanPanel(): void {
   });
 
   if (isDev) {
-    scanPanel.loadURL('http://localhost:5173');
+    scanPanel.loadURL('http://localhost:5173/?mode=scanner');
   } else {
     // The local server should ideally serve this too, or we load file
-    scanPanel.loadFile(path.join(app.getAppPath(), 'dist', 'renderer', 'index.html'));
+    scanPanel.loadFile(path.join(app.getAppPath(), 'dist', 'renderer', 'index.html'), { query: { mode: 'scanner' } });
   }
   scanPanel.on('closed', () => {
     scanPanel = null;
@@ -216,7 +217,7 @@ function setupIPC(): void {
   }));
   ipcMain.handle(IPC_CHANNELS.APP_VERSION, () => app.getVersion());
   ipcMain.handle(IPC_CHANNELS.OPEN_EXTERNAL, (_: any, url: string) => shell.openExternal(url));
-  ipcMain.handle('scan:open-panel', () => createScanPanel());
+  ipcMain.handle(IPC_CHANNELS.SCAN_OPEN_PANEL, () => createScanPanel());
   ipcMain.handle(IPC_CHANNELS.FOLDER_SELECT, async () => {
     const parent = scanPanel ?? mainWindow;
     if (!parent) return null;

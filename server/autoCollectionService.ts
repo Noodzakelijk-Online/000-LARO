@@ -318,16 +318,55 @@ async function collectFilesFromGoogleDrive(
   found: number;
   downloaded: number;
 }> {
-  // This is a placeholder - in production, you would:
-  // 1. List files in the folder
-  // 2. Check file names against keywords
-  // 3. Download matching files
-  // 4. Save to database
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
 
-  return {
-    found: 0,
-    downloaded: 0,
-  };
+  let found = 0;
+  let downloaded = 0;
+
+  try {
+    // 1. Get file list from folder
+    const files = await getGoogleDriveFileMetadata(folderId);
+    
+    for (const file of files) {
+      if (!file.name) continue;
+
+      // 2. Check file names against keywords
+      const matches = matchesKeywords(file.name, keywords, matchMode);
+      
+      if (matches) {
+        found++;
+
+        // 3. Check if already downloaded/exists
+        const existing = await db
+          .select()
+          .from(googleDriveFiles)
+          .where(and(eq(googleDriveFiles.driveId, file.id), eq(googleDriveFiles.caseId, caseId)))
+          .limit(1);
+
+        if (existing.length === 0) {
+          // 4. Download and upload to local storage/S3
+          await downloadAndUploadGoogleDriveFile(file.id, caseId);
+          
+          await db.insert(googleDriveFiles).values({
+            id: uuidv4(),
+            caseId,
+            driveId: file.id,
+            name: file.name,
+            mimeType: file.mimeType,
+            size: file.size,
+            status: 'completed',
+          });
+          
+          downloaded++;
+        }
+      }
+    }
+  } catch (error) {
+    console.error(`[AutoCollection] Google Drive scan failed for folder ${folderId}:`, error);
+  }
+
+  return { found, downloaded };
 }
 
 /**
