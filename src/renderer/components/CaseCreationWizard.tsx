@@ -2,6 +2,7 @@
  * New case dialog — compact form (full multi-step wizard can be restored later).
  */
 import { useEffect, useState } from "react";
+import { useAuth } from "@/_core/hooks/useAuth";
 import {
   Dialog,
   DialogContent,
@@ -58,31 +59,34 @@ export default function CaseCreationWizard({
   onOpenChange,
   onComplete,
 }: CaseCreationWizardProps) {
+  const { user } = useAuth();
   const [caseData, setCaseData] = useState<CaseData>({
-    clientName: "",
-    clientEmail: "",
+    clientName: user?.name || "",
+    clientEmail: user?.email || "",
     clientPhone: "",
     legalArea: "",
     summary: "",
     urgency: "Medium",
   });
-  const [startStr, setStartStr] = useState("");
-  const [endStr, setEndStr] = useState("");
 
   useEffect(() => {
     if (!open) {
       setCaseData({
-        clientName: "",
-        clientEmail: "",
+        clientName: user?.name || "",
+        clientEmail: user?.email || "",
         clientPhone: "",
         legalArea: "",
         summary: "",
         urgency: "Medium",
       });
-      setStartStr("");
-      setEndStr("");
+    } else {
+      setCaseData(prev => ({
+        ...prev,
+        clientName: prev.clientName || user?.name || "",
+        clientEmail: prev.clientEmail || user?.email || "",
+      }));
     }
-  }, [open]);
+  }, [open, user]);
 
   const submit = () => {
     if (!caseData.clientName.trim() || !caseData.clientEmail.trim()) {
@@ -91,12 +95,10 @@ export default function CaseCreationWizard({
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(caseData.clientEmail)) {
       return;
     }
-    if (!caseData.legalArea || !caseData.summary.trim()) {
+    if (!caseData.summary.trim()) {
       return;
     }
-    const startDate = startStr ? new Date(startStr) : undefined;
-    const endDate = endStr ? new Date(endStr) : undefined;
-    onComplete?.({ ...caseData, startDate, endDate });
+    onComplete?.({ ...caseData });
     onOpenChange(false);
   };
 
@@ -142,7 +144,7 @@ export default function CaseCreationWizard({
             />
           </div>
           <div className="grid gap-2">
-            <Label>Legal area</Label>
+            <Label>Legal area (Optional - AI will auto-detect)</Label>
             <Select
               value={caseData.legalArea}
               onValueChange={(v) =>
@@ -162,56 +164,16 @@ export default function CaseCreationWizard({
             </Select>
           </div>
           <div className="grid gap-2">
-            <Label>Urgency</Label>
-            <Select
-              value={caseData.urgency}
-              onValueChange={(v) =>
-                setCaseData((d) => ({
-                  ...d,
-                  urgency: v as "Low" | "Medium" | "High",
-                }))
-              }
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Low">Low</SelectItem>
-                <SelectItem value="Medium">Medium</SelectItem>
-                <SelectItem value="High">High</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-2">
             <Label htmlFor="ccw-summary">Case summary</Label>
             <Textarea
               id="ccw-summary"
-              rows={4}
+              rows={12}
               value={caseData.summary}
               onChange={(e) =>
                 setCaseData((d) => ({ ...d, summary: e.target.value }))
               }
+              placeholder="Describe the case details here. LARO will use this to automatically determine the legal area."
             />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-2">
-              <Label htmlFor="ccw-start">Start (optional)</Label>
-              <Input
-                id="ccw-start"
-                type="date"
-                value={startStr}
-                onChange={(e) => setStartStr(e.target.value)}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="ccw-end">End (optional)</Label>
-              <Input
-                id="ccw-end"
-                type="date"
-                value={endStr}
-                onChange={(e) => setEndStr(e.target.value)}
-              />
-            </div>
           </div>
         </div>
         <DialogFooter>

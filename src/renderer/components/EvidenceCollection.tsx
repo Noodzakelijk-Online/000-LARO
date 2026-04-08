@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,13 +10,16 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Upload, File, Image, Video, Music, MessageSquare, FileText, Download, Trash2, Plus } from "lucide-react";
 import { toast } from "sonner";
+import BulkEvidenceUpload from "@/components/BulkEvidenceUpload";
 
 interface EvidenceCollectionProps {
   caseId: string;
+  onEvidenceUpdated?: () => void;
 }
 
-export function EvidenceCollection({ caseId }: EvidenceCollectionProps) {
+export function EvidenceCollection({ caseId, onEvidenceUpdated }: EvidenceCollectionProps) {
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [bulkUploadOpen, setBulkUploadOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [formData, setFormData] = useState({
@@ -85,6 +88,7 @@ export function EvidenceCollection({ caseId }: EvidenceCollectionProps) {
           tags: [],
         });
         utils.evidence.list.invalidate({ caseId });
+        onEvidenceUpdated?.();
       };
 
       reader.readAsDataURL(selectedFile);
@@ -103,6 +107,7 @@ export function EvidenceCollection({ caseId }: EvidenceCollectionProps) {
       await deleteMutation.mutateAsync({ id });
       toast.success("Evidence deleted");
       utils.evidence.list.invalidate({ caseId });
+      onEvidenceUpdated?.();
     } catch (error) {
       toast.error("Failed to delete evidence");
     }
@@ -126,6 +131,14 @@ export function EvidenceCollection({ caseId }: EvidenceCollectionProps) {
     return `${(size / (1024 * 1024)).toFixed(1)} MB`;
   };
 
+  useEffect(() => {
+    if (!selectedFile || uploading) return;
+    if (!formData.title) return;
+    handleUpload();
+    // Intentionally trigger upload as soon as a file is selected.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedFile, formData.title]);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -134,6 +147,10 @@ export function EvidenceCollection({ caseId }: EvidenceCollectionProps) {
           <h2 className="text-2xl font-bold">Evidence Collection</h2>
           <p className="text-muted-foreground">Upload and manage case evidence</p>
         </div>
+        <Button variant="outline" onClick={() => setBulkUploadOpen(true)}>
+          <Upload className="w-4 h-4 mr-2" />
+          Bulk Upload
+        </Button>
         <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
           <DialogTrigger asChild>
             <Button className="bg-orange-500 hover:bg-orange-600">
@@ -210,13 +227,11 @@ export function EvidenceCollection({ caseId }: EvidenceCollectionProps) {
               </div>
 
               <div className="flex gap-2 pt-4">
-                <Button
-                  onClick={handleUpload}
-                  disabled={uploading || !selectedFile}
-                  className="bg-orange-500 hover:bg-orange-600 flex-1"
-                >
-                  {uploading ? "Uploading..." : "Upload"}
-                </Button>
+                <div className="flex-1 text-sm text-muted-foreground flex items-center">
+                  {uploading
+                    ? "Uploading automatically..."
+                    : "Files upload automatically after selection."}
+                </div>
                 <Button
                   variant="outline"
                   onClick={() => setUploadOpen(false)}
@@ -298,6 +313,17 @@ export function EvidenceCollection({ caseId }: EvidenceCollectionProps) {
           ))
         )}
       </div>
+
+      <BulkEvidenceUpload
+        caseId={caseId}
+        open={bulkUploadOpen}
+        onClose={() => setBulkUploadOpen(false)}
+        onComplete={() => {
+          setBulkUploadOpen(false);
+          utils.evidence.list.invalidate({ caseId });
+          onEvidenceUpdated?.();
+        }}
+      />
     </div>
   );
 }

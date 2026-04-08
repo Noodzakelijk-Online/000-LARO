@@ -9,6 +9,7 @@ import { trpc } from '@/lib/trpc';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import { useEffect } from 'react';
 import { toast } from 'sonner';
 import BulkFileOperations from '@/components/BulkFileOperations';
 import {
@@ -122,7 +123,7 @@ export default function LocalFileUpload({ caseId, onUploadComplete }: LocalFileU
   /**
    * Upload files
    */
-  const handleUpload = async () => {
+  const handleUpload = useCallback(async () => {
     if (files.length === 0) return;
 
     setIsUploading(true);
@@ -213,7 +214,15 @@ export default function LocalFileUpload({ caseId, onUploadComplete }: LocalFileU
     } finally {
       setIsUploading(false);
     }
-  };
+  }, [files, isUploading, caseId, uploadFilesMutation, refetchStats, onUploadComplete]);
+
+  // Auto-upload effect
+  useEffect(() => {
+    const pendingFiles = files.filter(f => f.status === 'pending');
+    if (pendingFiles.length > 0 && !isUploading) {
+      handleUpload();
+    }
+  }, [files, isUploading, handleUpload]);
 
   /**
    * Remove file from queue
@@ -348,28 +357,7 @@ export default function LocalFileUpload({ caseId, onUploadComplete }: LocalFileU
             </div>
           )}
 
-          {/* Upload Button */}
-          {files.length > 0 && (
-            <div className="flex gap-2">
-              <Button
-                onClick={handleUpload}
-                disabled={isUploading || pendingCount === 0}
-                className="flex-1"
-              >
-                {isUploading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Uploading...
-                  </>
-                ) : (
-                  <>
-                    <Upload className="w-4 h-4 mr-2" />
-                    Upload {pendingCount} File{pendingCount !== 1 ? 's' : ''}
-                  </>
-                )}
-              </Button>
-            </div>
-          )}
+          {/* Upload Button Removed (Auto-uploading) */}
         </CardContent>
       </Card>
 

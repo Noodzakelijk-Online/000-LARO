@@ -38,15 +38,26 @@ export async function getDb() {
       }
 
       if (foundFolder) {
-        migrate(_db, { migrationsFolder: foundFolder });
-        console.log("[Database] Migrations applied successfully from:", foundFolder);
+        try {
+          migrate(_db, { migrationsFolder: foundFolder });
+          console.log("[Database] Migrations applied successfully from:", foundFolder);
+        } catch (migrationError: any) {
+          if (migrationError.message?.includes("already exists")) {
+            console.warn("[Database] Migration attempted to create existing table/index. Skipping migration and continuing.");
+          } else {
+            throw migrationError;
+          }
+        }
       } else {
         console.warn("[Database] Migrations folder not found. Database might be uninitialized.");
       }
 
     } catch (error) {
       console.error("[Database] Failed to connect to SQLite or run migrations:", error);
-      _db = null;
+      // We don't null out _db here if it was already initialized, 
+      // but if migrate failed catastrophically, we might have issues.
+      // However, for "already exists" errors, we've already handled it above.
+      if (!_db) _db = null;
     }
   }
   return _db;

@@ -30,7 +30,7 @@ export default function AuthPage() {
         await signupMutation.mutateAsync({ email, password, name });
         toast.success("Account created! Welcome to LARO.");
       }
-      
+
       // Refresh user state
       await utils.auth.me.invalidate();
     } catch (error: any) {
@@ -45,11 +45,13 @@ export default function AuthPage() {
       <div className="w-full max-w-md animate-in fade-in zoom-in duration-500">
         {/* Brand Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-primary/10 border border-primary/20 mb-4 shadow-2xl shadow-primary/10">
-            <ShieldCheck className="w-10 h-10 text-primary" />
+          <div className="flex items-center justify-center gap-4 mb-2">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 shadow-2xl shadow-primary/10">
+              <ShieldCheck className="w-6 h-6 text-primary" />
+            </div>
+            <h1 className="text-4xl font-bold tracking-tight text-white uppercase letter-spacing-widest">LARO</h1>
           </div>
-          <h1 className="text-3xl font-bold tracking-tight text-white">LARO Desktop</h1>
-          <p className="text-muted-foreground mt-2">Your self-hosted legal evidence agent</p>
+          <p className="text-muted-foreground">Your self-hosted legal evidence agent</p>
         </div>
 
         <Card className="border-border/50 bg-card/50 backdrop-blur-xl shadow-2xl">
@@ -58,8 +60,8 @@ export default function AuthPage() {
               {isLogin ? "Sign In" : "Create Account"}
             </CardTitle>
             <CardDescription>
-              {isLogin 
-                ? "Enter your credentials to access your legal dashboard" 
+              {isLogin
+                ? "Enter your credentials to access your legal dashboard"
                 : "Join LARO to start consolidating your legal evidence"}
             </CardDescription>
           </CardHeader>
@@ -82,7 +84,7 @@ export default function AuthPage() {
                   </div>
                 </div>
               )}
-              
+
               <div className="space-y-2">
                 <Label htmlFor="email">Email Address</Label>
                 <div className="relative">
@@ -116,9 +118,9 @@ export default function AuthPage() {
               </div>
             </CardContent>
             <CardFooter className="flex flex-col space-y-4 pt-4">
-              <Button 
-                type="submit" 
-                className="w-full h-12 text-base font-semibold transition-all hover:scale-[1.02] active:scale-[0.98]" 
+              <Button
+                type="submit"
+                className="w-full h-12 text-base font-semibold transition-all hover:scale-[1.02] active:scale-[0.98]"
                 disabled={loading}
               >
                 {loading ? (
@@ -133,7 +135,7 @@ export default function AuthPage() {
                   </div>
                 )}
               </Button>
-              
+
               <div className="text-center">
                 <button
                   type="button"
@@ -147,11 +149,6 @@ export default function AuthPage() {
           </form>
         </Card>
 
-        {/* Footer Info */}
-        <p className="text-center text-xs text-muted-foreground mt-8 px-4 leading-relaxed">
-          Your data is stored locally in your SQLite database. <br />
-          LARO encryption ensures your legal evidence stays private.
-        </p>
       </div>
     </div>
   );

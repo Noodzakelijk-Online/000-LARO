@@ -7,9 +7,9 @@ function UnreadMessageBadge() {
   const { data: unreadCount } = trpc.messages.getUnreadCount.useQuery(undefined, {
     refetchInterval: 30000, // Refresh every 30 seconds
   });
-  
+
   if (!unreadCount || unreadCount === 0) return null;
-  
+
   return (
     <Badge variant="destructive" className="h-5 min-w-5 px-1.5 text-xs">
       {unreadCount > 99 ? "99+" : unreadCount}
@@ -39,11 +39,9 @@ import {
 import { APP_LOGO, APP_TITLE } from "@/const";
 import { ConnectionStatus } from "./ConnectionStatus";
 import { useIsMobile } from "@/hooks/useMobile";
-import { Home, LogOut, PanelLeft, Briefcase, Settings, HelpCircle, Shield, BarChart3, Mail, Lock, ChevronDown, ChevronRight, FileText } from "lucide-react";
+import { Home, LogOut, PanelLeft, Briefcase, Settings, HelpCircle, Shield, BarChart3, ChevronDown, ChevronRight, FileText } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
-import { Button } from "./ui/button";
 import ChatWidget from "./ChatWidget";
 import NotificationCenter from "./NotificationCenter";
 
@@ -55,13 +53,7 @@ const mainMenuItems = [
   { icon: HelpCircle, label: "Help & Resources", path: "/help" },
 ];
 
-// Settings sub-menu
-const settingsMenuItems = [
-  { icon: Mail, label: "Email Preferences", path: "/email-preferences" },
-  { icon: Mail, label: "Email Settings", path: "/email-settings" },
-  { icon: Lock, label: "Privacy & Data", path: "/privacy" },
-  { icon: Settings, label: "General Settings", path: "/settings" },
-];
+
 
 // Admin sub-menu
 const adminMenuItems = [
@@ -75,14 +67,14 @@ const MIN_WIDTH = 200;
 const MAX_WIDTH = 480;
 
 // Collapsible section component for Settings and Admin
-function CollapsibleSection({ 
-  title, 
-  icon: Icon, 
-  items, 
-  location, 
+function CollapsibleSection({
+  title,
+  icon: Icon,
+  items,
+  location,
   setLocation,
   className = ""
-}: { 
+}: {
   title: string;
   icon: any;
   items: Array<{ icon: any; label: string; path: string }>;
@@ -92,14 +84,14 @@ function CollapsibleSection({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const hasActiveChild = items.some(item => location === item.path);
-  
+
   // Auto-expand if a child is active
   useEffect(() => {
     if (hasActiveChild) {
       setIsOpen(true);
     }
   }, [hasActiveChild]);
-  
+
   return (
     <div className={className}>
       <SidebarMenuItem>
@@ -115,7 +107,7 @@ function CollapsibleSection({
           </span>
         </SidebarMenuButton>
       </SidebarMenuItem>
-      
+
       {isOpen && (
         <div className="ml-4 border-l border-border/50 pl-2 space-y-0.5">
           {items.map(item => {
@@ -126,11 +118,10 @@ function CollapsibleSection({
                   isActive={isActive}
                   onClick={() => setLocation(item.path)}
                   tooltip={item.label}
-                  className={`h-9 rounded-md text-sm font-normal transition-colors ${
-                    isActive
-                      ? "bg-white/15 text-white"
-                      : "text-sidebar-foreground/75 hover:bg-white/10 hover:text-white"
-                  }`}
+                  className={`h-9 rounded-md text-sm font-normal transition-colors ${isActive
+                    ? "bg-white/15 text-white"
+                    : "text-sidebar-foreground/75 hover:bg-white/10 hover:text-white"
+                    }`}
                 >
                   <item.icon className="h-3.5 w-3.5 shrink-0" />
                   <span>{item.label}</span>
@@ -239,18 +230,18 @@ function DashboardLayoutContent({
           className="border-r border-sidebar-accent/25 bg-sidebar text-sidebar-foreground"
           disableTransition={isResizing}
         >
-          <SidebarHeader className="h-16 justify-center">
-            <div className="flex items-center gap-3 pl-2 group-data-[collapsible=icon]:px-0 transition-all w-full">
+          <SidebarHeader className="h-16 flex flex-row items-center px-4 border-b border-sidebar-accent/10">
+            <div className="flex items-center gap-3 transition-all w-full overflow-hidden">
               {isCollapsed ? (
-                <div className="relative h-8 w-8 shrink-0 group">
+                <div className="relative h-9 w-9 shrink-0 group mx-auto">
                   <img
                     src={APP_LOGO}
-                    className="h-8 w-8 rounded-md object-cover ring-1 ring-white/20"
+                    className="h-9 w-9 rounded-lg object-cover shadow-sm ring-1 ring-white/10"
                     alt="Logo"
                   />
                   <button
                     onClick={toggleSidebar}
-                    className="absolute inset-0 flex items-center justify-center rounded-md bg-sidebar-accent opacity-0 ring-1 ring-white/20 transition-opacity group-hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+                    className="absolute inset-0 flex items-center justify-center rounded-lg bg-sidebar-accent/80 opacity-0 transition-opacity group-hover:opacity-100 focus:outline-none"
                   >
                     <PanelLeft className="h-4 w-4 text-sidebar-foreground" />
                   </button>
@@ -260,16 +251,16 @@ function DashboardLayoutContent({
                   <div className="flex items-center gap-3 min-w-0">
                     <img
                       src={APP_LOGO}
-                      className="h-8 w-8 shrink-0 rounded-md object-cover ring-1 ring-white/20"
+                      className="h-9 w-9 shrink-0 rounded-lg object-cover shadow-md ring-1 ring-white/10"
                       alt="Logo"
                     />
-                    <span className="truncate font-semibold tracking-tight text-sidebar-foreground">
+                    <span className="truncate font-bold text-lg tracking-tight text-sidebar-foreground">
                       {APP_TITLE}
                     </span>
                   </div>
                   <button
                     onClick={toggleSidebar}
-                    className="ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+                    className="ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus:outline-none"
                   >
                     <PanelLeft className="h-4 w-4" />
                   </button>
@@ -289,11 +280,10 @@ function DashboardLayoutContent({
                       isActive={isActive}
                       onClick={() => setLocation(item.path)}
                       tooltip={item.label}
-                      className={`h-10 rounded-lg font-normal transition-colors ${
-                        isActive
-                          ? "bg-white/15 text-white"
-                          : "text-sidebar-foreground/75 hover:bg-white/10 hover:text-white"
-                      }`}
+                      className={`h-10 rounded-lg font-normal transition-colors ${isActive
+                        ? "bg-white/15 text-white"
+                        : "text-sidebar-foreground/75 hover:bg-white/10 hover:text-white"
+                        }`}
                     >
                       <item.icon className="h-4 w-4 shrink-0" />
                       <span>{item.label}</span>
@@ -301,16 +291,7 @@ function DashboardLayoutContent({
                   </SidebarMenuItem>
                 );
               })}
-              
-              {/* Settings section (collapsible) */}
-              <CollapsibleSection
-                title="Settings"
-                icon={Settings}
-                items={settingsMenuItems}
-                location={location}
-                setLocation={setLocation}
-              />
-              
+
               {/* Admin section (collapsible, admin-only) */}
               {user?.role === "admin" && (
                 <CollapsibleSection
@@ -328,23 +309,22 @@ function DashboardLayoutContent({
           <SidebarFooter className="p-3">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-3 rounded-lg px-1 py-1 hover:bg-accent/50 transition-colors w-full text-left group-data-[collapsible=icon]:justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <button className="flex items-center gap-3 rounded-lg px-1 py-1 hover:bg-accent/50 transition-colors w-full text-left justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                   <Avatar className="h-9 w-9 border shrink-0">
                     <AvatarFallback className="text-xs font-medium">
                       {user?.name?.charAt(0).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
-                  <div className="flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
-                    <p className="text-sm font-medium truncate leading-none">
-                      {user?.name || "-"}
-                    </p>
-                    <p className="text-xs text-muted-foreground truncate mt-1.5">
-                      {user?.email || "-"}
-                    </p>
-                  </div>
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem
+                  onClick={() => setLocation("/settings")}
+                  className="cursor-pointer"
+                >
+                  <Settings className="mr-2 h-4 w-4" />
+                  <span>Settings</span>
+                </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={logout}
                   className="cursor-pointer text-destructive focus:text-destructive"

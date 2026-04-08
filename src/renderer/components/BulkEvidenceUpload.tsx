@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useDropzone } from "react-dropzone";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -193,6 +193,14 @@ export default function BulkEvidenceUpload({
     }
   };
 
+  useEffect(() => {
+    const hasPending = files.some((f) => f.status === "pending");
+    if (!open || !hasPending || isUploading) return;
+    uploadAll();
+    // Auto-upload immediately after files are added via click/drag-drop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [files, open, isUploading]);
+
   const cancelAll = () => {
     setFiles([]);
     onClose();
@@ -318,22 +326,11 @@ export default function BulkEvidenceUpload({
           <Button variant="outline" onClick={cancelAll} disabled={isUploading}>
             Cancel
           </Button>
-          <Button
-            onClick={uploadAll}
-            disabled={files.length === 0 || isUploading || completedCount === totalCount}
-          >
-            {isUploading ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Uploading...
-              </>
-            ) : (
-              <>
-                <Upload className="w-4 h-4 mr-2" />
-                Upload All ({files.filter((f) => f.status === "pending").length})
-              </>
-            )}
-          </Button>
+          <div className="text-sm text-muted-foreground flex items-center">
+            {isUploading
+              ? "Uploading automatically..."
+              : "Files upload automatically after selection."}
+          </div>
         </div>
       </DialogContent>
     </Dialog>

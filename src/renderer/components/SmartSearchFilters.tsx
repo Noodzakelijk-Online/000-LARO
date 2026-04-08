@@ -11,17 +11,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
   Search,
-  Filter,
   Save,
   Clock,
   X,
-  Sparkles,
   TrendingUp,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -68,13 +61,20 @@ const FILTER_PRESETS = [
   },
 ];
 
-export default function SmartSearchFilters({ onSearch, searchType = "cases" }: { onSearch?: (query: string, filters: any) => void; searchType?: "cases" | "lawyers" | "evidence" }) {
+export default function SmartSearchFilters({
+  onSearch,
+  searchType = "cases",
+  compact = false,
+}: {
+  onSearch?: (query: string, filters: any) => void;
+  searchType?: "cases" | "lawyers" | "evidence";
+  compact?: boolean;
+}) {
   const [searchQuery, setSearchQuery] = useState("");
-  const [naturalLanguageMode, setNaturalLanguageMode] = useState(false);
-  
+
   // Fetch saved searches from backend
   const { data: savedSearchesData = [], refetch: refetchSavedSearches } = trpc.savedSearches.list.useQuery({ searchType });
-  
+
   // Create saved search mutation
   const createSavedSearchMutation = trpc.savedSearches.create.useMutation({
     onSuccess: () => {
@@ -85,7 +85,7 @@ export default function SmartSearchFilters({ onSearch, searchType = "cases" }: {
       toast.error("Failed to save search: " + error.message);
     },
   });
-  
+
   // Delete saved search mutation
   const deleteSavedSearchMutation = trpc.savedSearches.delete.useMutation({
     onSuccess: () => {
@@ -93,7 +93,7 @@ export default function SmartSearchFilters({ onSearch, searchType = "cases" }: {
       toast.success("Search filter deleted");
     },
   });
-  
+
   // Convert backend saved searches to frontend format
   const savedFilters: SearchFilter[] = savedSearchesData.map((search) => ({
     id: search.id,
@@ -102,8 +102,7 @@ export default function SmartSearchFilters({ onSearch, searchType = "cases" }: {
     filters: search.filters,
     savedAt: search.createdAt || new Date(),
   }));
-  
-  const [currentFilters, setCurrentFilters] = useState<any>({});
+
   const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([
     {
       id: "1",
@@ -159,17 +158,17 @@ export default function SmartSearchFilters({ onSearch, searchType = "cases" }: {
     createSavedSearchMutation.mutate({
       name: filterName,
       query: searchQuery,
-      filters: currentFilters,
+      filters: activeFilters,
       searchType,
     });
   };
 
   const handleLoadFilter = (filter: SearchFilter) => {
     setSearchQuery(filter.query);
-    setCurrentFilters(filter.filters);
+    setActiveFilters(filter.filters);
     toast.success(`Loaded filter: ${filter.name}`);
   };
-  
+
   const handleDeleteFilter = (filterId: string) => {
     deleteSavedSearchMutation.mutate({ id: filterId });
   };
@@ -191,153 +190,106 @@ export default function SmartSearchFilters({ onSearch, searchType = "cases" }: {
     <div className="space-y-4">
       {/* Search Bar */}
       <Card>
-        <CardContent className="p-4">
+        <CardContent className="p-4 space-y-4">
           <div className="flex gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder={
-                  naturalLanguageMode
-                    ? "Try: 'Find urgent divorce cases in Amsterdam from this week'"
-                    : "Search cases, lawyers, or documents..."
-                }
+                placeholder="Search cases, lawyers, or documents using natural language or keywords..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSearch()}
                 className="pl-9 pr-10"
               />
-              {naturalLanguageMode && (
-                <Sparkles className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-primary animate-pulse" />
-              )}
             </div>
 
             <Button onClick={handleSearch}>Search</Button>
-
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" className="relative">
-                  <Filter className="w-4 h-4 mr-2" />
-                  Filters
-                  {activeFilterCount > 0 && (
-                    <Badge variant="destructive" className="absolute -top-2 -right-2 px-1.5 py-0 text-xs">
-                      {activeFilterCount}
-                    </Badge>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-80" align="end">
-                <div className="space-y-4">
-                  <div>
-                    <h4 className="font-medium mb-2 text-white">Filters</h4>
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium mb-2 block text-white">Status</label>
-                    <Select
-                      value={activeFilters.status || ""}
-                      onValueChange={(value) =>
-                        setActiveFilters(prev => ({ ...prev, status: value || undefined }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="All statuses" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="open">Open</SelectItem>
-                        <SelectItem value="in_progress">In Progress</SelectItem>
-                        <SelectItem value="waiting_for_lawyer">Waiting for Lawyer</SelectItem>
-                        <SelectItem value="closed">Closed</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium mb-2 block text-white">Urgency</label>
-                    <Select
-                      value={activeFilters.urgency || ""}
-                      onValueChange={(value) =>
-                        setActiveFilters(prev => ({ ...prev, urgency: value || undefined }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="All urgencies" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="high">High</SelectItem>
-                        <SelectItem value="medium">Medium</SelectItem>
-                        <SelectItem value="low">Low</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium mb-2 block text-white">Legal Area</label>
-                    <Select
-                      value={activeFilters.legalArea || ""}
-                      onValueChange={(value) =>
-                        setActiveFilters(prev => ({ ...prev, legalArea: value || undefined }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="All areas" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="family">Family Law</SelectItem>
-                        <SelectItem value="employment">Employment Law</SelectItem>
-                        <SelectItem value="contract">Contract Law</SelectItem>
-                        <SelectItem value="real-estate">Real Estate</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium mb-2 block text-white">Date Range</label>
-                    <Select
-                      value={activeFilters.dateRange || ""}
-                      onValueChange={(value) =>
-                        setActiveFilters(prev => ({ ...prev, dateRange: value || undefined }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="All time" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="today">Today</SelectItem>
-                        <SelectItem value="week">This Week</SelectItem>
-                        <SelectItem value="month">This Month</SelectItem>
-                        <SelectItem value="year">This Year</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={handleClearFilters} className="flex-1">
-                      Clear All
-                    </Button>
-                    <Button size="sm" onClick={handleSearch} className="flex-1">
-                      Apply Filters
-                    </Button>
-                  </div>
-                </div>
-              </PopoverContent>
-            </Popover>
           </div>
 
-          {/* AI Mode Toggle */}
-          <div className="flex items-center gap-2 mt-3">
-            <Button
-              variant={naturalLanguageMode ? "default" : "outline"}
-              size="sm"
-              onClick={() => setNaturalLanguageMode(!naturalLanguageMode)}
-            >
-              <Sparkles className="w-3 h-3 mr-2" />
-              Natural Language Search
-            </Button>
-            {naturalLanguageMode && (
-              <span className="text-xs text-muted-foreground">
-                Describe what you're looking for in plain language
-              </span>
-            )}
+          {/* Inline Filters */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-2 border-t border-border/50">
+            <div>
+              <label className="text-sm font-medium mb-1 block text-muted-foreground">Status</label>
+              <Select
+                value={activeFilters.status || "all"}
+                onValueChange={(value: any) =>
+                  setActiveFilters(prev => ({ ...prev, status: value === "all" ? undefined : value }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="All statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All statuses</SelectItem>
+                  <SelectItem value="open">Open</SelectItem>
+                  <SelectItem value="in_progress">In Progress</SelectItem>
+                  <SelectItem value="waiting_for_lawyer">Waiting for Lawyer</SelectItem>
+                  <SelectItem value="closed">Closed</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-1 block text-muted-foreground">Urgency</label>
+              <Select
+                value={activeFilters.urgency || "all"}
+                onValueChange={(value) =>
+                  setActiveFilters(prev => ({ ...prev, urgency: value === "all" ? undefined : value }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="All urgencies" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All urgencies</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="low">Low</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-1 block text-muted-foreground">Legal Area</label>
+              <Select
+                value={activeFilters.legalArea || "all"}
+                onValueChange={(value) =>
+                  setActiveFilters(prev => ({ ...prev, legalArea: value === "all" ? undefined : value }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="All areas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All areas</SelectItem>
+                  <SelectItem value="family">Family Law</SelectItem>
+                  <SelectItem value="employment">Employment Law</SelectItem>
+                  <SelectItem value="contract">Contract Law</SelectItem>
+                  <SelectItem value="real-estate">Real Estate</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-1 block text-muted-foreground">Date Range</label>
+              <Select
+                value={activeFilters.dateRange || "all"}
+                onValueChange={(value) =>
+                  setActiveFilters(prev => ({ ...prev, dateRange: value === "all" ? undefined : value }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="All time" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All time</SelectItem>
+                  <SelectItem value="today">Today</SelectItem>
+                  <SelectItem value="week">This Week</SelectItem>
+                  <SelectItem value="month">This Month</SelectItem>
+                  <SelectItem value="year">This Year</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -359,29 +311,30 @@ export default function SmartSearchFilters({ onSearch, searchType = "cases" }: {
         </div>
       )}
 
-      {/* Filter Presets */}
-      <div>
-        <h4 className="text-sm font-medium mb-2 text-white">Quick Filters</h4>
-        <div className="flex flex-wrap gap-2">
-          {FILTER_PRESETS.map((preset) => {
-            const Icon = preset.icon;
-            return (
-              <Button
-                key={preset.id}
-                variant="outline"
-                size="sm"
-                onClick={() => handleApplyPreset(preset)}
-              >
-                <Icon className="w-3 h-3 mr-2" />
-                {preset.name}
-              </Button>
-            );
-          })}
+      {!compact && (
+        <div>
+          <h4 className="text-sm font-medium mb-2 text-white">Quick Filters</h4>
+          <div className="flex flex-wrap gap-2">
+            {FILTER_PRESETS.map((preset) => {
+              const Icon = preset.icon;
+              return (
+                <Button
+                  key={preset.id}
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleApplyPreset(preset)}
+                >
+                  <Icon className="w-3 h-3 mr-2" />
+                  {preset.name}
+                </Button>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Saved Filters */}
-      {savedFilters.length > 0 && (
+      {!compact && savedFilters.length > 0 && (
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-3">
@@ -419,7 +372,7 @@ export default function SmartSearchFilters({ onSearch, searchType = "cases" }: {
       )}
 
       {/* Recent Searches */}
-      {recentSearches.length > 0 && (
+      {!compact && recentSearches.length > 0 && (
         <Card>
           <CardContent className="p-4">
             <h4 className="text-sm font-medium mb-3 text-white">Recent Searches</h4>

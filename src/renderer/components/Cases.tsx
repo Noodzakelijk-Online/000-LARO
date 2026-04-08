@@ -44,45 +44,49 @@ export default function Cases() {
   return (
     <DashboardLayout>
       <div className="p-8 space-y-8">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-orange-400 to-orange-600 bg-clip-text text-transparent">
-              Your Cases
-            </h1>
-            <p className="text-muted-foreground mt-2">
-              Track your legal matters and lawyer connections
-            </p>
+        {/* Top controls: title + actions + search/filter */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-4xl font-bold bg-gradient-to-r from-orange-400 to-orange-600 bg-clip-text text-transparent">
+                Your Cases
+              </h1>
+              <p className="text-muted-foreground mt-2">
+                Track your legal matters and lawyer connections
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={() => setBulkImportOpen(true)}
+                variant="outline"
+                className="border-orange-500/30 hover:bg-orange-500/10"
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                Bulk Import
+              </Button>
+              <Button
+                onClick={() => setNewCaseOpen(true)}
+                className="bg-orange-500 hover:bg-orange-600"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                New Case
+              </Button>
+            </div>
           </div>
-          <div className="flex gap-2">
-            <Button
-              onClick={() => setBulkImportOpen(true)}
-              variant="outline"
-              className="border-orange-500/30 hover:bg-orange-500/10"
-            >
-              <Upload className="w-4 h-4 mr-2" />
-              Bulk Import
-            </Button>
-            <Button
-              onClick={() => setNewCaseOpen(true)}
-              className="bg-orange-500 hover:bg-orange-600"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              New Case
-            </Button>
+
+          <div>
+            <SmartSearchFilters
+              compact
+              onSearch={(query, filters) => {
+                setSearchTerm(query);
+                if (filters) {
+                  setStatusFilter(filters.status || null);
+                  setUrgencyFilter(filters.urgency || null);
+                }
+              }}
+            />
           </div>
         </div>
-
-        {/* Search and Filters */}
-        <SmartSearchFilters
-          onSearch={(query, filters) => {
-            setSearchTerm(query);
-            if (filters) {
-              setStatusFilter(filters.status || null);
-              setUrgencyFilter(filters.urgency || null);
-            }
-          }}
-        />
 
         {/* Cases Grid */}
         {isLoading ? (
@@ -101,13 +105,9 @@ export default function Cases() {
               <p className="text-muted-foreground mb-6 max-w-md">
                 Tell us about your legal issue and we'll connect you with qualified lawyers who can help.
               </p>
-              <Button
-                onClick={() => setNewCaseOpen(true)}
-                className="bg-orange-500 hover:bg-orange-600"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Create Your First Case
-              </Button>
+              <p className="text-sm text-muted-foreground">
+                Use the single <span className="font-medium text-foreground">New Case</span> action in the page header to create your case.
+              </p>
             </CardContent>
           </Card>
         ) : (

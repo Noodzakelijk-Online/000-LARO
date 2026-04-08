@@ -1,35 +1,22 @@
+import { useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { HelpCircle, BookOpen, MessageSquare, Mail, ExternalLink, FileText, Video } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { HelpCircle, Mail, ChevronDown, ChevronUp, Send } from "lucide-react";
+import { toast } from "sonner";
 
 export default function Help() {
-  const helpTopics = [
-    {
-      title: "Getting Started with LARO",
-      description: "Learn how to create your first case and connect with lawyers",
-      icon: BookOpen,
-      link: "#",
-    },
-    {
-      title: "Understanding the Matching Process",
-      description: "How LARO finds and contacts qualified lawyers for your case",
-      icon: FileText,
-      link: "#",
-    },
-    {
-      title: "Evidence Collection Guide",
-      description: "Best practices for gathering and organizing legal evidence",
-      icon: Video,
-      link: "#",
-    },
-    {
-      title: "Privacy & Data Security",
-      description: "How we protect your sensitive legal information",
-      icon: HelpCircle,
-      link: "#",
-    },
-  ];
+  const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
+  const [supportForm, setSupportForm] = useState({
+    category: "",
+    subject: "",
+    message: ""
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const faqs = [
     {
@@ -54,122 +41,134 @@ export default function Help() {
     },
   ];
 
+  const handleSupportSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!supportForm.category || !supportForm.subject || !supportForm.message) {
+      toast.error("Please fill in all fields");
+      return;
+    }
+    setIsSubmitting(true);
+    // Simulate API call
+    setTimeout(() => {
+      toast.success("Support ticket submitted! We'll get back to you soon.");
+      setSupportForm({ category: "", subject: "", message: "" });
+      setIsSubmitting(false);
+    }, 1500);
+  };
+
   return (
     <DashboardLayout>
-      <div className="p-8 space-y-8">
+      <div className="p-8 space-y-8 max-w-5xl mx-auto">
         {/* Header */}
-        <div>
-          <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-orange-400 to-orange-600 bg-clip-text text-transparent">
+        <div className="text-center">
+          <h1 className="text-4xl font-bold tracking-tight text-foreground">
             Help & Resources
           </h1>
           <p className="text-muted-foreground mt-2 text-lg">
-            Everything you need to know about using LARO
+            Find answers to common questions or reach out to our team
           </p>
         </div>
 
-        {/* Quick Help */}
-        <Card className="border-border/50 bg-gradient-to-r from-orange-500/10 to-orange-600/10 backdrop-blur-sm border-orange-500/20">
-          <CardContent className="p-6">
-            <div className="flex items-start gap-4">
-              <div className="p-3 rounded-lg bg-orange-500/20">
-                <MessageSquare className="w-6 h-6 text-orange-500" />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-semibold text-lg mb-2">Need Immediate Help?</h3>
-                <p className="text-muted-foreground mb-4">
-                  Use the chat widget in the bottom-right corner to ask LARO questions about your cases, evidence collection, or how the platform works.
-                </p>
-                <Button className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700">
-                  <MessageSquare className="w-4 h-4 mr-2" />
-                  Open Chat
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Help Topics */}
-        <div>
-          <h2 className="text-2xl font-bold mb-4">Help Topics</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {helpTopics.map((topic, index) => {
-              const Icon = topic.icon;
-              return (
-                <Card 
-                  key={index}
-                  className="border-border/50 bg-card/50 backdrop-blur-sm hover:bg-card/80 transition-all duration-200 hover:scale-105 hover:shadow-lg cursor-pointer"
-                >
-                  <CardHeader>
-                    <div className="flex items-start gap-3">
-                      <div className="p-2 rounded-lg bg-blue-500/10">
-                        <Icon className="w-5 h-5 text-blue-500" />
-                      </div>
-                      <div className="flex-1">
-                        <CardTitle className="text-base">{topic.title}</CardTitle>
-                        <CardDescription className="mt-1">
-                          {topic.description}
-                        </CardDescription>
-                      </div>
-                      <ExternalLink className="w-4 h-4 text-muted-foreground" />
-                    </div>
-                  </CardHeader>
-                </Card>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* FAQs */}
-        <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <HelpCircle className="w-5 h-5 text-purple-500" />
-              Frequently Asked Questions
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        {/* FAQs - Collapsible */}
+        <section className="space-y-4">
+          <h2 className="text-2xl font-bold flex items-center gap-2">
+            <HelpCircle className="w-6 h-6 text-orange-500" />
+            Frequently Asked Questions
+          </h2>
+          <div className="space-y-3">
             {faqs.map((faq, index) => (
-              <div 
+              <Card
                 key={index}
-                className="p-4 rounded-lg border border-border/50 bg-background/50"
+                className="overflow-hidden border-border/50 bg-card/50 backdrop-blur-sm cursor-pointer hover:border-orange-500/30 transition-all"
+                onClick={() => setExpandedFaq(expandedFaq === index ? null : index)}
               >
-                <h4 className="font-semibold text-foreground mb-2">{faq.question}</h4>
-                <p className="text-sm text-muted-foreground">{faq.answer}</p>
-              </div>
+                <div className="p-4 flex items-center justify-between">
+                  <h4 className="font-semibold text-foreground">{faq.question}</h4>
+                  {expandedFaq === index ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </div>
+                {expandedFaq === index && (
+                  <CardContent className="pt-0 pb-4 text-sm text-muted-foreground animate-in slide-in-from-top-2">
+                    <p className="border-t border-border/50 pt-3">{faq.answer}</p>
+                  </CardContent>
+                )}
+              </Card>
             ))}
-          </CardContent>
-        </Card>
+          </div>
+        </section>
 
-        {/* Contact Support */}
-        <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Mail className="w-5 h-5 text-green-500" />
-              Still Need Help?
-            </CardTitle>
-            <CardDescription>
-              Our support team is here to assist you
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground mb-2">
-                  Email us at <span className="font-medium text-foreground">support@laro.nl</span>
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  We typically respond within 24 hours
-                </p>
-              </div>
-              <Button variant="outline">
-                <Mail className="w-4 h-4 mr-2" />
-                Contact Support
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Contact Support Form */}
+        <section className="space-y-4">
+          <h2 className="text-2xl font-bold flex items-center gap-2">
+            <Mail className="w-6 h-6 text-orange-500" />
+            Contact Support
+          </h2>
+          <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
+            <CardHeader>
+              <CardTitle className="text-lg">Open a Support Ticket</CardTitle>
+              <CardDescription>Tell us what you need help with and we'll get back to you within 24 hours.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSupportSubmit} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="category">Category</Label>
+                    <Select
+                      value={supportForm.category}
+                      onValueChange={(v: any) => setSupportForm({ ...supportForm, category: v })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a topic" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="account">Account Access</SelectItem>
+                        <SelectItem value="matching">Lawyer Matching</SelectItem>
+                        <SelectItem value="evidence">Evidence Collection</SelectItem>
+                        <SelectItem value="billing">Billing & Subscription</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="subject">Subject</Label>
+                    <Input
+                      id="subject"
+                      placeholder="Brief summary of the issue"
+                      value={supportForm.subject}
+                      onChange={(e) => setSupportForm({ ...supportForm, subject: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="message">How can we help?</Label>
+                  <Textarea
+                    id="message"
+                    placeholder="Describe your issue in detail..."
+                    rows={6}
+                    value={supportForm.message}
+                    onChange={(e) => setSupportForm({ ...supportForm, message: e.target.value })}
+                  />
+                </div>
+                <div className="flex justify-end">
+                  <Button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="bg-orange-500 hover:bg-orange-600 min-w-[140px]"
+                  >
+                    {isSubmitting ? (
+                      "Sending..."
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4 mr-2" />
+                        Send Message
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </section>
       </div>
     </DashboardLayout>
   );
 }
-
