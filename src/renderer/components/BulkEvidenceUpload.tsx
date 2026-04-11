@@ -232,7 +232,7 @@ export default function BulkEvidenceUpload({
     >
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
-          <DialogTitle>Bulk Evidence Upload</DialogTitle>
+          <DialogTitle>Upload files</DialogTitle>
         </DialogHeader>
 
         <div className="flex-1 overflow-auto space-y-4">

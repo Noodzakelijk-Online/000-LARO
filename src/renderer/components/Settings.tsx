@@ -21,7 +21,7 @@ import {
   HardDrive,
 } from "lucide-react";
 import PersonalizationSettings from "@/components/PersonalizationSettings";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 type SettingsSection =
@@ -51,6 +51,7 @@ export default function Settings() {
   const [testEmail, setTestEmail] = useState("");
   const [isTesting, setIsTesting] = useState(false);
   const [scraperSchedule, setScraperSchedule] = useState("Every Sunday at 2:00 AM");
+  const scraperScheduleInputRef = useRef<HTMLInputElement>(null);
 
   const { data: providerInfo } = trpc.email.getProviderInfo.useQuery();
   const testEmailMutation = trpc.email.test.useMutation();
@@ -348,6 +349,7 @@ export default function Settings() {
                       <div className="space-y-2">
                         <Label className="text-base">Scraping schedule</Label>
                         <Input
+                          ref={scraperScheduleInputRef}
                           value={scraperSchedule}
                           onChange={(e) => {
                             setScraperSchedule(e.target.value);
@@ -366,7 +368,16 @@ export default function Settings() {
                     </div>
                     <div className="flex flex-wrap gap-3 border-t pt-4">
                       <Button onClick={() => toast.success("Scraper started")}>Run scraper now</Button>
-                      <Button variant="outline" onClick={() => toast.success("Schedule configuration saved")}>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          scraperScheduleInputRef.current?.focus();
+                          scraperScheduleInputRef.current?.select();
+                          toast.message("Edit the schedule field above", {
+                            description: "Your changes apply as you type.",
+                          });
+                        }}
+                      >
                         Configure schedule
                       </Button>
                     </div>

@@ -144,13 +144,13 @@ export default function CaseCreationWizard({
           <div className="grid gap-2">
             <Label>Legal area (Optional - AI will auto-detect)</Label>
             <Select
-              value={caseData.legalArea}
+              value={caseData.legalArea || undefined}
               onValueChange={(v: string) =>
                 setCaseData((d) => ({ ...d, legalArea: v }))
               }
             >
               <SelectTrigger>
-                <SelectValue placeholder="Select area" />
+                <SelectValue placeholder="Optional — leave blank for AI to detect" />
               </SelectTrigger>
               <SelectContent>
                 {LEGAL_AREAS.map((a) => (
