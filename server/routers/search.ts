@@ -2,8 +2,18 @@ import { z } from "zod";
 import { publicProcedure, protectedProcedure, router } from "../_core/trpc";
 import { globalSearch, getSearchSuggestions } from "../globalSearch";
 import { checkRateLimit, getRateLimitIdentifier, RATE_LIMITS } from "../rateLimit";
+import { hybridCaseSearch } from "../casesHybridSearch";
 
 export const searchRouter = router({
+  /** Natural-language expanded tokens + keyword global search → case IDs */
+  hybridCases: protectedProcedure
+    .input(z.object({ query: z.string().min(1).max(500) }))
+    .query(async ({ input, ctx }) => {
+      const identifier = getRateLimitIdentifier(ctx);
+      checkRateLimit(identifier, RATE_LIMITS.general);
+      return hybridCaseSearch(input.query, ctx.user.id);
+    }),
+
   global: protectedProcedure
     .input(
       z.object({

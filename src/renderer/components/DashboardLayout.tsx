@@ -368,7 +368,7 @@ function DashboardLayoutContent({
         <main id="main-content" className="flex-1 bg-black p-6 md:p-8">
           {children}
         </main>
-        <ChatWidget />
+        {location !== "/" && <ChatWidget />}
       </SidebarInset>
     </>
   );

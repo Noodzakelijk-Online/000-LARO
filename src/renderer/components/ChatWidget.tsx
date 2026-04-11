@@ -14,8 +14,8 @@ interface Message {
   timestamp: Date;
 }
 
-export default function ChatWidget() {
-  const [isOpen, setIsOpen] = useState(false);
+export default function ChatWidget({ embedded = false }: { embedded?: boolean }) {
+  const [isOpen, setIsOpen] = useState(embedded);
   const [isMinimized, setIsMinimized] = useState(false);
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<Message[]>([
@@ -36,8 +36,8 @@ export default function ChatWidget() {
     onSuccess: () => {
       toast.success("Answer recorded successfully!");
     },
-    onError: (error) => {
-      toast.error(`Failed to record answer: ${error.message}`);
+    onError: (error: { message?: string }) => {
+      toast.error(`Failed to record answer: ${error.message ?? "Unknown error"}`);
     },
   });
 
@@ -107,8 +107,8 @@ export default function ChatWidget() {
 
   return (
     <>
-      {/* Floating Chat Button */}
-      {!isOpen && (
+      {/* Floating Chat Button (hidden on dashboard embedded chat) */}
+      {!embedded && !isOpen && (
         <Button
           onClick={() => setIsOpen(true)}
           className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-2xl bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 z-50 transition-all duration-300 hover:scale-110"
@@ -128,9 +128,13 @@ export default function ChatWidget() {
       {/* Chat Panel */}
       {isOpen && (
         <Card 
-          className={`fixed bottom-6 right-6 z-50 shadow-2xl border-border/50 bg-card/95 backdrop-blur-lg transition-all duration-300 ${
-            isMinimized ? "h-14 w-80" : "h-[600px] w-96"
-          }`}
+          className={
+            embedded
+              ? `flex h-full min-h-[420px] max-h-[640px] flex-col border-border/50 bg-card/95 shadow-md ${isMinimized ? "min-h-14" : ""}`
+              : `fixed bottom-6 right-6 z-50 shadow-2xl border-border/50 bg-card/95 backdrop-blur-lg transition-all duration-300 ${
+                  isMinimized ? "h-14 w-80" : "h-[600px] w-96"
+                }`
+          }
         >
           {/* Header */}
           <CardHeader className="flex flex-row items-center justify-between p-4 border-b border-border/50">
@@ -160,21 +164,29 @@ export default function ChatWidget() {
                   <Minimize2 className="h-4 w-4" />
                 )}
               </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setIsOpen(false)}
-                className="h-8 w-8"
-              >
-                <X className="h-4 w-4" />
-              </Button>
+              {!embedded && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setIsOpen(false)}
+                  className="h-8 w-8"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
             </div>
           </CardHeader>
 
           {/* Messages */}
           {!isMinimized && (
             <>
-              <CardContent className="flex-1 overflow-y-auto p-4 space-y-4 h-[calc(600px-140px)]">
+              <CardContent
+                className={
+                  embedded
+                    ? "flex-1 overflow-y-auto p-4 space-y-4 min-h-0"
+                    : "flex-1 overflow-y-auto p-4 space-y-4 h-[calc(600px-140px)]"
+                }
+              >
                 {/* Pending Questions */}
                 {pendingQuestions && pendingQuestions.length > 0 && (
                   <div className="mb-4 p-3 rounded-lg bg-orange-500/10 border border-orange-500/20">

@@ -472,6 +472,18 @@ export const bulkImportJobs = sqliteTable("bulk_import_jobs", {
   createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
 });
 
+export const supportTickets = sqliteTable("support_tickets", {
+  id: text("id").primaryKey(),
+  userId: text("userId"),
+  category: text("category").notNull(),
+  subject: text("subject").notNull(),
+  message: text("message").notNull(),
+  status: text("status").default("open"),
+  createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
+});
+
+export type InsertSupportTicket = typeof supportTickets.$inferInsert;
+
 export const extractedEntities = sqliteTable("extracted_entities", {
   id: text("id").primaryKey(),
   caseId: text("caseId"),

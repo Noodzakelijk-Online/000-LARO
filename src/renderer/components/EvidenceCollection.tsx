@@ -24,6 +24,11 @@ export function EvidenceCollection({ caseId, onEvidenceUpdated }: EvidenceCollec
 
   const invalidateEvidenceQueries = async () => {
     await utils.evidenceFiles.search.invalidate({ caseId });
+    await utils.evidenceAnalytics.getStats.invalidate();
+    await utils.evidenceAnalytics.getFileTypeDistribution.invalidate();
+    await utils.evidenceAnalytics.getUploadTimeline.invalidate();
+    await utils.evidenceAnalytics.getStorageByCase.invalidate();
+    await utils.evidenceAnalytics.getUploadSourceBreakdown.invalidate();
     onEvidenceUpdated?.();
   };
 

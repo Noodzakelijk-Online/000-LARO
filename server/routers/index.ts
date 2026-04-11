@@ -22,6 +22,7 @@ import { emailAccountsRouter } from "./emailAccounts";
 import { emailRouter } from "./email";
 import { userPreferencesRouter } from "./userPreferences";
 import { bulkImportRouter } from "./bulkImport";
+import { supportRouter } from "./support";
 import { evidenceAnalyticsRouter } from "./evidenceAnalytics";
 import {
   gmailEnhancedRouter,
@@ -63,6 +64,7 @@ export const appRouter = router({
   userPreferences: userPreferencesRouter,
   bulkImport: bulkImportRouter,
   evidenceAnalytics: evidenceAnalyticsRouter,
+  support: supportRouter,
   
   gmailEnhanced: gmailEnhancedRouter,
   outlookEnhanced: outlookEnhancedRouter,
@@ -223,7 +225,10 @@ export const appRouter = router({
 
   // Clarifications procedures
   clarifications: router({
-    pending: protectedProcedure.query(() => []),
+    pending: protectedProcedure.query((): Array<{ id: string; question: string; context?: string }> => []),
+    answer: protectedProcedure
+      .input(z.object({ questionId: z.string(), answer: z.string() }))
+      .mutation(() => ({ ok: true as const })),
   }),
   
   // OCR procedures (placeholder for now)

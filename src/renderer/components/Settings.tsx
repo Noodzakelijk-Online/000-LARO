@@ -46,12 +46,36 @@ const NAV_ITEMS: Array<{
   { id: "security", label: "Security", description: "Data & privacy", icon: Shield },
 ];
 
+const DEFAULT_OUTREACH = {
+  followUpIntervalDays: 5,
+  maxFollowUps: 2,
+  filterThreshold: 3,
+  batchLimit: 10,
+  scraperSchedule: "Every Sunday at 2:00 AM",
+};
+
+const DEFAULT_TOGGLES = {
+  lawyerMatch: true,
+  emailActivity: true,
+  newCase: true,
+  scraper: false,
+};
+
 export default function Settings() {
   const [section, setSection] = useState<SettingsSection>("email");
   const [testEmail, setTestEmail] = useState("");
   const [isTesting, setIsTesting] = useState(false);
-  const [scraperSchedule, setScraperSchedule] = useState("Every Sunday at 2:00 AM");
   const scraperScheduleInputRef = useRef<HTMLInputElement>(null);
+
+  const { data: userPref, refetch: refetchPrefs } = trpc.userPreferences.get.useQuery();
+  const updateWorkbench = trpc.userPreferences.updateAppWorkbench.useMutation({
+    onSuccess: () => {
+      void refetchPrefs();
+    },
+  });
+
+  const outreach = userPref?.appWorkbench?.outreach ?? DEFAULT_OUTREACH;
+  const toggles = userPref?.appWorkbench?.quickNotificationToggles ?? DEFAULT_TOGGLES;
 
   const { data: providerInfo } = trpc.email.getProviderInfo.useQuery();
   const testEmailMutation = trpc.email.test.useMutation();
@@ -299,7 +323,17 @@ export default function Settings() {
                         <Label htmlFor="follow-up-interval" className="text-base">
                           Follow-up interval (days)
                         </Label>
-                        <Input id="follow-up-interval" type="number" defaultValue="5" className="max-w-xs" />
+                        <Input
+                          id="follow-up-interval"
+                          type="number"
+                          className="max-w-xs"
+                          value={outreach.followUpIntervalDays}
+                          onChange={(e) => {
+                            const v = parseInt(e.target.value, 10);
+                            if (!Number.isFinite(v)) return;
+                            updateWorkbench.mutate({ outreach: { followUpIntervalDays: v } });
+                          }}
+                        />
                         <p className="text-sm text-muted-foreground">
                           Days between follow-up emails (Day 0, 5, 10, 15)
                         </p>
@@ -308,7 +342,17 @@ export default function Settings() {
                         <Label htmlFor="max-follow-ups" className="text-base">
                           Maximum follow-ups
                         </Label>
-                        <Input id="max-follow-ups" type="number" defaultValue="2" className="max-w-xs" />
+                        <Input
+                          id="max-follow-ups"
+                          type="number"
+                          className="max-w-xs"
+                          value={outreach.maxFollowUps}
+                          onChange={(e) => {
+                            const v = parseInt(e.target.value, 10);
+                            if (!Number.isFinite(v)) return;
+                            updateWorkbench.mutate({ outreach: { maxFollowUps: v } });
+                          }}
+                        />
                         <p className="text-sm text-muted-foreground">
                           Total follow-ups before marking as &quot;No Response&quot;
                         </p>
@@ -317,7 +361,17 @@ export default function Settings() {
                         <Label htmlFor="filter-threshold" className="text-base">
                           Permanent filter threshold
                         </Label>
-                        <Input id="filter-threshold" type="number" defaultValue="3" className="max-w-xs" />
+                        <Input
+                          id="filter-threshold"
+                          type="number"
+                          className="max-w-xs"
+                          value={outreach.filterThreshold}
+                          onChange={(e) => {
+                            const v = parseInt(e.target.value, 10);
+                            if (!Number.isFinite(v)) return;
+                            updateWorkbench.mutate({ outreach: { filterThreshold: v } });
+                          }}
+                        />
                         <p className="text-sm text-muted-foreground">
                           Contacts with 0% response before filtering (6 months)
                         </p>
@@ -326,7 +380,17 @@ export default function Settings() {
                         <Label htmlFor="batch-limit" className="text-base">
                           Batch processing limit
                         </Label>
-                        <Input id="batch-limit" type="number" defaultValue="10" className="max-w-xs" />
+                        <Input
+                          id="batch-limit"
+                          type="number"
+                          className="max-w-xs"
+                          value={outreach.batchLimit}
+                          onChange={(e) => {
+                            const v = parseInt(e.target.value, 10);
+                            if (!Number.isFinite(v)) return;
+                            updateWorkbench.mutate({ outreach: { batchLimit: v } });
+                          }}
+                        />
                         <p className="text-sm text-muted-foreground">Maximum lawyers to contact per case</p>
                       </div>
                     </div>
@@ -350,11 +414,10 @@ export default function Settings() {
                         <Label className="text-base">Scraping schedule</Label>
                         <Input
                           ref={scraperScheduleInputRef}
-                          value={scraperSchedule}
-                          onChange={(e) => {
-                            setScraperSchedule(e.target.value);
-                            toast.success("Schedule saved automatically");
-                          }}
+                          value={outreach.scraperSchedule}
+                          onChange={(e) =>
+                            updateWorkbench.mutate({ outreach: { scraperSchedule: e.target.value } })
+                          }
                         />
                       </div>
                       <div className="space-y-2">
@@ -403,7 +466,13 @@ export default function Settings() {
                           Get notified when a lawyer shows interest in your case
                         </p>
                       </div>
-                      <Switch id="notify-match" defaultChecked />
+                      <Switch
+                        id="notify-match"
+                        checked={toggles.lawyerMatch}
+                        onCheckedChange={(v: boolean) =>
+                          updateWorkbench.mutate({ quickNotificationToggles: { lawyerMatch: v } })
+                        }
+                      />
                     </div>
                     <div className="flex items-start justify-between gap-4">
                       <div className="space-y-1">
@@ -414,7 +483,13 @@ export default function Settings() {
                           Get notified of email responses and outreach activity
                         </p>
                       </div>
-                      <Switch id="notify-email" defaultChecked />
+                      <Switch
+                        id="notify-email"
+                        checked={toggles.emailActivity}
+                        onCheckedChange={(v: boolean) =>
+                          updateWorkbench.mutate({ quickNotificationToggles: { emailActivity: v } })
+                        }
+                      />
                     </div>
                     <div className="flex items-start justify-between gap-4">
                       <div className="space-y-1">
@@ -423,7 +498,13 @@ export default function Settings() {
                         </Label>
                         <p className="text-sm text-muted-foreground">Get notified when new cases are added</p>
                       </div>
-                      <Switch id="notify-case" defaultChecked />
+                      <Switch
+                        id="notify-case"
+                        checked={toggles.newCase}
+                        onCheckedChange={(v: boolean) =>
+                          updateWorkbench.mutate({ quickNotificationToggles: { newCase: v } })
+                        }
+                      />
                     </div>
                     <div className="flex items-start justify-between gap-4">
                       <div className="space-y-1">
@@ -432,7 +513,13 @@ export default function Settings() {
                         </Label>
                         <p className="text-sm text-muted-foreground">Get notified of weekly scraper runs</p>
                       </div>
-                      <Switch id="notify-scraper" />
+                      <Switch
+                        id="notify-scraper"
+                        checked={toggles.scraper}
+                        onCheckedChange={(v: boolean) =>
+                          updateWorkbench.mutate({ quickNotificationToggles: { scraper: v } })
+                        }
+                      />
                     </div>
                   </div>
                 </CardContent>

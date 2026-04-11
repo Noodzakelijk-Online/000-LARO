@@ -14,11 +14,30 @@ let _db: ReturnType<typeof drizzle> | null = null;
 // will be refined in Electron to use app.getPath('userData'))
 const DB_FILE = process.env.DATABASE_URL || "laro.sqlite";
 
+function ensureSupportTicketsTable(sqlite: InstanceType<typeof Database>) {
+  try {
+    sqlite.exec(`
+      CREATE TABLE IF NOT EXISTS support_tickets (
+        id TEXT PRIMARY KEY NOT NULL,
+        userId TEXT,
+        category TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        message TEXT NOT NULL,
+        status TEXT DEFAULT 'open',
+        createdAt INTEGER NOT NULL
+      );
+    `);
+  } catch (e) {
+    console.warn("[Database] Could not ensure support_tickets table:", e);
+  }
+}
+
 export async function getDb() {
   if (!_db) {
     try {
       const sqlite = new Database(DB_FILE);
       _db = drizzle(sqlite);
+      ensureSupportTicketsTable(sqlite);
       console.log("[Database] SQLite initialized at:", DB_FILE);
 
       // Attempt migration automatically

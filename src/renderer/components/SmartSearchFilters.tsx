@@ -209,6 +209,10 @@ export default function SmartSearchFilters({
 
             <Button onClick={handleSearch}>Search</Button>
           </div>
+          <p className="text-xs text-muted-foreground">
+            Keyword match runs on every search. With 2+ characters, LARO also expands natural-language queries into
+            extra search terms (uses your configured AI keys when available).
+          </p>
 
           {/* Inline Filters */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-2 border-t border-border/50">

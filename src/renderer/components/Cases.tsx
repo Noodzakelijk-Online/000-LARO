@@ -2,7 +2,7 @@ import { trpc } from "@/lib/trpc";
 import DashboardLayout from "@/components/DashboardLayout";
 import CaseCreationWizard from "@/components/CaseCreationWizard";
 import EnhancedCaseDetailsDialog from "@/components/EnhancedCaseDetailsDialog";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -83,6 +83,21 @@ function matchesDateRangeFilter(createdAt: Date | string | null | undefined, ran
   }
 }
 
+function parseLegalAreas(caseItem: any): string[] {
+  if (!caseItem.legalAreas) return [];
+  try {
+    const raw =
+      typeof caseItem.legalAreas === "string"
+        ? JSON.parse(caseItem.legalAreas)
+        : caseItem.legalAreas;
+    return Array.isArray(raw)
+      ? raw.map((a: any) => (typeof a === "string" ? a : a?.area || a?.areaEn || ""))
+      : [];
+  } catch {
+    return typeof caseItem.legalAreas === "string" ? [caseItem.legalAreas] : [];
+  }
+}
+
 export default function Cases() {
   const [newCaseOpen, setNewCaseOpen] = useState(false);
   const createCase = trpc.cases.create.useMutation();
@@ -115,21 +130,46 @@ export default function Cases() {
   const allCases = data?.cases ?? [];
   const pagination = data?.pagination;
 
-  const cases = allCases.filter((c: any) => {
-    const q = searchTerm.trim().toLowerCase();
-    const matchesSearch =
-      !q ||
-      (c.caseType && String(c.caseType).toLowerCase().includes(q)) ||
-      (c.caseSummary && String(c.caseSummary).toLowerCase().includes(q)) ||
-      (c.clientName && String(c.clientName).toLowerCase().includes(q));
+  const hybridEnabled = searchTerm.trim().length >= 2;
+  const { data: hybridCaseIds = [] } = trpc.search.hybridCases.useQuery(
+    { query: searchTerm.trim() },
+    { enabled: hybridEnabled, staleTime: 20_000 }
+  );
+  const hybridSet = useMemo(
+    () => (hybridEnabled ? new Set(hybridCaseIds) : null),
+    [hybridEnabled, hybridCaseIds]
+  );
 
-    const matchesStatus = matchesStatusFilter(c.status, statusFilter);
-    const matchesUrgency = matchesUrgencyFilter(c.urgency, urgencyFilter);
-    const matchesLegal = matchesLegalAreaFilter(c, legalAreaFilter);
-    const matchesDate = matchesDateRangeFilter(c.createdAt, dateRangeFilter);
+  const cases = useMemo(() => {
+    return allCases.filter((c: any) => {
+      const qRaw = searchTerm.trim();
+      const q = qRaw.toLowerCase();
+      const clientKeywordMatch =
+        !qRaw ||
+        (c.caseType && String(c.caseType).toLowerCase().includes(q)) ||
+        (c.caseSummary && String(c.caseSummary).toLowerCase().includes(q)) ||
+        (c.clientName && String(c.clientName).toLowerCase().includes(q));
 
-    return matchesSearch && matchesStatus && matchesUrgency && matchesLegal && matchesDate;
-  });
+      const matchesNl = hybridEnabled && hybridSet ? hybridSet.has(c.id) : false;
+      const matchesSearch = !qRaw || clientKeywordMatch || matchesNl;
+
+      const matchesStatus = matchesStatusFilter(c.status, statusFilter);
+      const matchesUrgency = matchesUrgencyFilter(c.urgency, urgencyFilter);
+      const matchesLegal = matchesLegalAreaFilter(c, legalAreaFilter);
+      const matchesDate = matchesDateRangeFilter(c.createdAt, dateRangeFilter);
+
+      return matchesSearch && matchesStatus && matchesUrgency && matchesLegal && matchesDate;
+    });
+  }, [
+    allCases,
+    searchTerm,
+    hybridEnabled,
+    hybridSet,
+    statusFilter,
+    urgencyFilter,
+    legalAreaFilter,
+    dateRangeFilter,
+  ]);
 
   return (
     <DashboardLayout>
@@ -203,97 +243,89 @@ export default function Cases() {
           </Card>
         ) : (
           <>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {cases?.map((caseItem: any) => {
-                let legalAreas: string[] = [];
-                if (caseItem.legalAreas) {
-                  try {
-                    legalAreas = typeof caseItem.legalAreas === 'string' 
-                      ? JSON.parse(caseItem.legalAreas) 
-                      : Array.isArray(caseItem.legalAreas) 
-                        ? caseItem.legalAreas 
-                        : [];
-                  } catch (error) {
-                    console.warn('[Cases] Failed to parse legalAreas:', error);
-                    // If it's already a string (not JSON), treat it as a single area
-                    legalAreas = typeof caseItem.legalAreas === 'string' 
-                      ? [caseItem.legalAreas] 
-                      : [];
-                  }
-                }
-                
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              {cases.map((caseItem: any) => {
+                const legalAreas = parseLegalAreas(caseItem);
                 return (
-                  <Card 
-                    key={caseItem.id} 
-                    className="border-border/50 bg-card/50 backdrop-blur-sm hover:bg-card/80 transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-orange-500/10 group"
+                  <Card
+                    key={caseItem.id}
+                    className="group border-border/50 bg-card/50 backdrop-blur-sm transition-all duration-300 hover:scale-[1.02] hover:bg-card/80 hover:shadow-xl hover:shadow-orange-500/10"
                   >
                     <CardHeader>
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <div className="p-2 rounded-lg bg-blue-500/10">
-                              <Briefcase className="w-4 h-4 text-blue-500" />
+                          <div className="mb-2 flex items-center gap-2">
+                            <div className="rounded-lg bg-blue-500/10 p-2">
+                              <Briefcase className="h-4 w-4 text-blue-500" />
                             </div>
                             <CardTitle className="text-lg">Your {caseItem.caseType} Case</CardTitle>
                           </div>
-                          <p className="text-sm text-muted-foreground">
-                            {caseItem.caseType}
-                          </p>
+                          <p className="text-sm text-muted-foreground">{caseItem.caseType}</p>
                         </div>
-                        <Badge variant={
-                          caseItem.status === "Matched" ? "default" :
-                          caseItem.status === "Outreach" ? "secondary" :
-                          "outline"
-                        } className={
-                          caseItem.status === "Matched" ? "bg-green-500 hover:bg-green-600" :
-                          caseItem.status === "Outreach" ? "bg-blue-500 hover:bg-blue-600" :
-                          ""
-                        }>
+                        <Badge
+                          variant={
+                            caseItem.status === "Matched"
+                              ? "default"
+                              : caseItem.status === "Outreach"
+                                ? "secondary"
+                                : "outline"
+                          }
+                          className={
+                            caseItem.status === "Matched"
+                              ? "bg-green-500 hover:bg-green-600"
+                              : caseItem.status === "Outreach"
+                                ? "bg-blue-500 hover:bg-blue-600"
+                                : ""
+                          }
+                        >
                           {caseItem.status}
                         </Badge>
                       </div>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      <p className="text-sm text-muted-foreground line-clamp-2">
-                        {caseItem.caseSummary}
-                      </p>
-
+                      <p className="line-clamp-2 text-sm text-muted-foreground">{caseItem.caseSummary}</p>
                       <div className="space-y-2">
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <MapPin className="w-4 h-4" />
+                          <MapPin className="h-4 w-4 shrink-0" />
                           <span>{caseItem.clientAddress || "No address provided"}</span>
                         </div>
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Clock className="w-4 h-4" />
+                          <Clock className="h-4 w-4 shrink-0" />
                           <span>Created {new Date(caseItem.createdAt).toLocaleDateString()}</span>
                         </div>
                       </div>
-
                       <div className="flex flex-wrap gap-2">
                         {legalAreas.map((area: any, index: number) => (
-                          <Badge key={index} variant="secondary" className="bg-purple-500/20 text-purple-300 border-purple-500/30">
-                            {typeof area === 'string' ? area : area.area || area.areaEn || 'Unknown'}
+                          <Badge
+                            key={index}
+                            variant="secondary"
+                            className="border-purple-500/30 bg-purple-500/20 text-purple-300"
+                          >
+                            {typeof area === "string" ? area : area.area || area.areaEn || "Unknown"}
                           </Badge>
                         ))}
                       </div>
-
                       <div className="flex items-center justify-between pt-2">
-                        <Badge variant="outline" className={
-                          caseItem.urgency === "High" ? "border-red-500/50 text-red-400" :
-                          caseItem.urgency === "Medium" ? "border-yellow-500/50 text-yellow-400" :
-                          "border-green-500/50 text-green-400"
-                        }>
+                        <Badge
+                          variant="outline"
+                          className={
+                            caseItem.urgency === "High"
+                              ? "border-red-500/50 text-red-400"
+                              : caseItem.urgency === "Medium"
+                                ? "border-yellow-500/50 text-yellow-400"
+                                : "border-green-500/50 text-green-400"
+                          }
+                        >
                           {caseItem.urgency} Priority
                         </Badge>
                       </div>
-
-                    <Button
-                      variant="outline"
-                      onClick={() => setSelectedCaseId(caseItem.id)}
-                      className="w-full mt-4 border-blue-500/30 hover:bg-blue-500/10 hover:border-blue-500/50 transition-all group-hover:border-blue-500/50"
-                    >
-                      View Your Case Details
-                    </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => setSelectedCaseId(caseItem.id)}
+                        className="mt-4 w-full border-blue-500/30 transition-all group-hover:border-blue-500/50 hover:bg-blue-500/10"
+                      >
+                        View Your Case Details
+                      </Button>
                     </CardContent>
                   </Card>
                 );

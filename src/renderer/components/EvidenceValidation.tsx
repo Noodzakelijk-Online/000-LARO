@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 
 interface EvidenceValidationProps {
-  caseId: number;
+  caseId: string;
   legalArea: string;
   onValidationComplete?: (isValid: boolean, score: number) => void;
 }

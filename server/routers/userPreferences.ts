@@ -13,6 +13,38 @@ const DEFAULT_NOTIFICATION_SETTINGS = {
   gapDetected: { email: false, push: false, inApp: true },
 };
 
+export type AppWorkbenchPrefs = {
+  outreach: {
+    followUpIntervalDays: number;
+    maxFollowUps: number;
+    filterThreshold: number;
+    batchLimit: number;
+    scraperSchedule: string;
+  };
+  quickNotificationToggles: {
+    lawyerMatch: boolean;
+    emailActivity: boolean;
+    newCase: boolean;
+    scraper: boolean;
+  };
+};
+
+const DEFAULT_APP_WORKBENCH: AppWorkbenchPrefs = {
+  outreach: {
+    followUpIntervalDays: 5,
+    maxFollowUps: 2,
+    filterThreshold: 3,
+    batchLimit: 10,
+    scraperSchedule: "Every Sunday at 2:00 AM",
+  },
+  quickNotificationToggles: {
+    lawyerMatch: true,
+    emailActivity: true,
+    newCase: true,
+    scraper: false,
+  },
+};
+
 function effectiveUserId(ctx: { user: { id: string } | null }) {
   return ctx.user?.id ?? "demo-user-123";
 }
@@ -37,6 +69,17 @@ function parseJson<T>(raw: string | null | undefined, fallback: T): T {
   }
 }
 
+function parseAppWorkbench(row: Awaited<ReturnType<typeof getRow>>): AppWorkbenchPrefs {
+  const raw = parseJson<Partial<AppWorkbenchPrefs>>(row?.userPreferences ?? null, {});
+  return {
+    outreach: { ...DEFAULT_APP_WORKBENCH.outreach, ...raw.outreach },
+    quickNotificationToggles: {
+      ...DEFAULT_APP_WORKBENCH.quickNotificationToggles,
+      ...raw.quickNotificationToggles,
+    },
+  };
+}
+
 export const userPreferencesRouter = router({
   get: publicProcedure.query(async ({ ctx }) => {
     const userId = effectiveUserId(ctx);
@@ -50,6 +93,7 @@ export const userPreferencesRouter = router({
       ),
       preferredLawyers: parseJson<unknown[]>(row?.preferredLawyers ?? null, []),
       caseTemplates: parseJson<unknown[]>(row?.caseTemplates ?? null, []),
+      appWorkbench: parseAppWorkbench(row),
     };
   }),
 
@@ -109,6 +153,56 @@ export const userPreferencesRouter = router({
           id: nanoid(),
           userId,
           notificationSettings: payload,
+          updatedAt: new Date(),
+        });
+      }
+      return { ok: true };
+    }),
+
+  updateAppWorkbench: publicProcedure
+    .input(
+      z.object({
+        outreach: z
+          .object({
+            followUpIntervalDays: z.number().min(1).max(90).optional(),
+            maxFollowUps: z.number().min(0).max(20).optional(),
+            filterThreshold: z.number().min(0).max(100).optional(),
+            batchLimit: z.number().min(1).max(500).optional(),
+            scraperSchedule: z.string().max(500).optional(),
+          })
+          .optional(),
+        quickNotificationToggles: z
+          .object({
+            lawyerMatch: z.boolean().optional(),
+            emailActivity: z.boolean().optional(),
+            newCase: z.boolean().optional(),
+            scraper: z.boolean().optional(),
+          })
+          .optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { ok: true };
+      const userId = effectiveUserId(ctx);
+      const existing = await getRow(userId);
+      const prev = existing ? parseAppWorkbench(existing) : DEFAULT_APP_WORKBENCH;
+      const next: AppWorkbenchPrefs = {
+        outreach: { ...prev.outreach, ...input.outreach },
+        quickNotificationToggles: { ...prev.quickNotificationToggles, ...input.quickNotificationToggles },
+      };
+      const payload = JSON.stringify(next);
+
+      if (existing) {
+        await db
+          .update(userPreferences)
+          .set({ userPreferences: payload, updatedAt: new Date() })
+          .where(eq(userPreferences.userId, userId));
+      } else {
+        await db.insert(userPreferences).values({
+          id: nanoid(),
+          userId,
+          userPreferences: payload,
           updatedAt: new Date(),
         });
       }

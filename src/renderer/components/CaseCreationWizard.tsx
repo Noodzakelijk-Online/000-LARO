@@ -29,7 +29,8 @@ export interface CaseData {
   clientPhone: string;
   legalArea: string;
   summary: string;
-  urgency: "Medium"; // Fixed to Medium, no longer user-selectable per client requirements
+  urgency: "Medium";
+  profileSource: "account" | "custom";
 }
 
 interface CaseCreationWizardProps {
@@ -65,6 +66,7 @@ export default function CaseCreationWizard({
     legalArea: "",
     summary: "",
     urgency: "Medium",
+    profileSource: "account",
   });
 
   useEffect(() => {
@@ -76,6 +78,7 @@ export default function CaseCreationWizard({
         legalArea: "",
         summary: "",
         urgency: "Medium",
+        profileSource: "account",
       });
     } else {
       setCaseData(prev => ({
@@ -111,10 +114,47 @@ export default function CaseCreationWizard({
         </DialogHeader>
         <div className="grid gap-4 py-2">
           <div className="grid gap-2">
+            <Label>Contact source</Label>
+            <Select
+              value={caseData.profileSource}
+              onValueChange={(v: "account" | "custom") => {
+                if (v === "account") {
+                  setCaseData((d) => ({
+                    ...d,
+                    profileSource: "account",
+                    clientName: user?.name || "",
+                    clientEmail: user?.email || "",
+                  }));
+                } else {
+                  setCaseData((d) => ({
+                    ...d,
+                    profileSource: "custom",
+                    clientName: "",
+                    clientEmail: "",
+                  }));
+                }
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Choose profile" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="account">
+                  My account{user?.email ? ` (${user.email})` : ""}
+                </SelectItem>
+                <SelectItem value="custom">Someone else / enter manually</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Use your signed-in profile or enter different contact details for this matter.
+            </p>
+          </div>
+          <div className="grid gap-2">
             <Label htmlFor="ccw-name">Client name</Label>
             <Input
               id="ccw-name"
               value={caseData.clientName}
+              disabled={caseData.profileSource === "account"}
               onChange={(e) =>
                 setCaseData((d) => ({ ...d, clientName: e.target.value }))
               }
@@ -126,6 +166,7 @@ export default function CaseCreationWizard({
               id="ccw-email"
               type="email"
               value={caseData.clientEmail}
+              disabled={caseData.profileSource === "account"}
               onChange={(e) =>
                 setCaseData((d) => ({ ...d, clientEmail: e.target.value }))
               }

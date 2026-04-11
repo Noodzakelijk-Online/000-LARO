@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { trpc } from "@/lib/trpc";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,17 @@ export default function Help() {
     message: ""
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submitTicket = trpc.support.submitTicket.useMutation({
+    onSuccess: () => {
+      toast.success("Support ticket submitted. We'll get back to you soon.");
+      setSupportForm({ category: "", subject: "", message: "" });
+      setIsSubmitting(false);
+    },
+    onError: (err) => {
+      toast.error(err.message || "Could not submit ticket");
+      setIsSubmitting(false);
+    },
+  });
 
   const faqs = [
     {
@@ -37,7 +49,7 @@ export default function Help() {
     },
     {
       question: "What if I need to clarify something about my case?",
-      answer: "Use the chat widget (bottom right) to communicate with LARO. Our AI will ask clarifying questions to better understand your situation.",
+      answer: "On the Home dashboard, use the Input & control chat column, or open the floating assistant from other pages. LARO can ask clarifying questions about your situation.",
     },
   ];
 
@@ -48,12 +60,11 @@ export default function Help() {
       return;
     }
     setIsSubmitting(true);
-    // Simulate API call
-    setTimeout(() => {
-      toast.success("Support ticket submitted! We'll get back to you soon.");
-      setSupportForm({ category: "", subject: "", message: "" });
-      setIsSubmitting(false);
-    }, 1500);
+    submitTicket.mutate({
+      category: supportForm.category,
+      subject: supportForm.subject,
+      message: supportForm.message,
+    });
   };
 
   return (
