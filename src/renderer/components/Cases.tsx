@@ -2,7 +2,7 @@ import { trpc } from "@/lib/trpc";
 import DashboardLayout from "@/components/DashboardLayout";
 import CaseCreationWizard from "@/components/CaseCreationWizard";
 import EnhancedCaseDetailsDialog from "@/components/EnhancedCaseDetailsDialog";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,72 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
+function matchesUrgencyFilter(caseUrgency: string | null | undefined, filter: string | null) {
+  if (!filter || filter === "all") return true;
+  return (caseUrgency ?? "").toLowerCase() === filter.toLowerCase();
+}
+
+/** UI filter values vs DB status strings (e.g. Matching, Outreach, Matched) */
+function matchesStatusFilter(dbStatus: string | null | undefined, filter: string | null) {
+  if (!filter || filter === "all") return true;
+  const s = (dbStatus ?? "").toLowerCase().replace(/\s+/g, "_");
+  const f = filter.toLowerCase();
+  if (s === f) return true;
+  const groups: Record<string, string[]> = {
+    open: ["matching", "active", "pending", "open", "new"],
+    in_progress: ["outreach", "in_progress", "review", "progress"],
+    waiting_for_lawyer: ["waiting_for_lawyer", "waiting"],
+    closed: ["closed", "matched", "resolved", "complete"],
+  };
+  return (groups[f] ?? []).includes(s);
+}
+
+const LEGAL_AREA_HINTS: Record<string, string[]> = {
+  family: ["family", "divorce", "custody", "familierecht", "marriage"],
+  employment: ["employment", "labor", "arbeid", "workplace", "termination", "wrongful"],
+  contract: ["contract", "agreement", "lease", "verbint", "commercial"],
+  "real-estate": ["real estate", "property", "huur", "tenancy", "huurrecht", "landlord"],
+};
+
+function matchesLegalAreaFilter(caseItem: any, filter: string | null) {
+  if (!filter || filter === "all") return true;
+  let areas: string[] = [];
+  if (caseItem.legalAreas) {
+    try {
+      const raw =
+        typeof caseItem.legalAreas === "string"
+          ? JSON.parse(caseItem.legalAreas)
+          : caseItem.legalAreas;
+      areas = Array.isArray(raw) ? raw.map((a: any) => (typeof a === "string" ? a : a?.area || a?.areaEn || "")) : [];
+    } catch {
+      areas = typeof caseItem.legalAreas === "string" ? [caseItem.legalAreas] : [];
+    }
+  }
+  const blob = [caseItem.caseType, caseItem.caseSummary, ...areas].join(" ").toLowerCase();
+  const hints = LEGAL_AREA_HINTS[filter] ?? [filter.replace(/-/g, " ")];
+  return hints.some((h) => blob.includes(h.toLowerCase()));
+}
+
+function matchesDateRangeFilter(createdAt: Date | string | null | undefined, range: string | null) {
+  if (!range || range === "all") return true;
+  const t = new Date(createdAt ?? 0).getTime();
+  if (Number.isNaN(t)) return true;
+  const now = Date.now();
+  const day = 86400000;
+  switch (range) {
+    case "today":
+      return t >= now - day;
+    case "week":
+      return t >= now - 7 * day;
+    case "month":
+      return t >= now - 30 * day;
+    case "year":
+      return t >= now - 365 * day;
+    default:
+      return true;
+  }
+}
+
 export default function Cases() {
   const [newCaseOpen, setNewCaseOpen] = useState(false);
   const createCase = trpc.cases.create.useMutation();
@@ -25,20 +91,44 @@ export default function Cases() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [urgencyFilter, setUrgencyFilter] = useState<string | null>(null);
+  const [legalAreaFilter, setLegalAreaFilter] = useState<string | null>(null);
+  const [dateRangeFilter, setDateRangeFilter] = useState<string | null>(null);
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
-  
+
+  const applySearchFilters = useCallback((query: string, filters: Record<string, string | undefined> | null | undefined) => {
+    setSearchTerm(query ?? "");
+    if (filters == null) {
+      setStatusFilter(null);
+      setUrgencyFilter(null);
+      setLegalAreaFilter(null);
+      setDateRangeFilter(null);
+      return;
+    }
+    const pick = (v: string | undefined) => (v && v !== "all" ? v : null);
+    setStatusFilter(pick(filters.status));
+    setUrgencyFilter(pick(filters.urgency));
+    setLegalAreaFilter(pick(filters.legalArea));
+    setDateRangeFilter(pick(filters.dateRange));
+  }, []);
+
   const { data, isLoading } = trpc.cases.list.useQuery({ page, limit: 20 });
   const allCases = data?.cases ?? [];
   const pagination = data?.pagination;
-  
-  // Client-side filtering
-  const cases = allCases.filter(c => {
-    const matchesSearch = !searchTerm || 
-      c.caseType.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.caseSummary?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = !statusFilter || c.status === statusFilter;
-    const matchesUrgency = !urgencyFilter || c.urgency === urgencyFilter;
-    return matchesSearch && matchesStatus && matchesUrgency;
+
+  const cases = allCases.filter((c: any) => {
+    const q = searchTerm.trim().toLowerCase();
+    const matchesSearch =
+      !q ||
+      (c.caseType && String(c.caseType).toLowerCase().includes(q)) ||
+      (c.caseSummary && String(c.caseSummary).toLowerCase().includes(q)) ||
+      (c.clientName && String(c.clientName).toLowerCase().includes(q));
+
+    const matchesStatus = matchesStatusFilter(c.status, statusFilter);
+    const matchesUrgency = matchesUrgencyFilter(c.urgency, urgencyFilter);
+    const matchesLegal = matchesLegalAreaFilter(c, legalAreaFilter);
+    const matchesDate = matchesDateRangeFilter(c.createdAt, dateRangeFilter);
+
+    return matchesSearch && matchesStatus && matchesUrgency && matchesLegal && matchesDate;
   });
 
   return (
@@ -75,16 +165,7 @@ export default function Cases() {
           </div>
 
           <div>
-            <SmartSearchFilters
-              compact
-              onSearch={(query, filters) => {
-                setSearchTerm(query);
-                if (filters) {
-                  setStatusFilter(filters.status || null);
-                  setUrgencyFilter(filters.urgency || null);
-                }
-              }}
-            />
+            <SmartSearchFilters compact onSearch={applySearchFilters} />
           </div>
         </div>
 
@@ -95,7 +176,7 @@ export default function Cases() {
               <Skeleton key={i} className="h-80 w-full bg-card/50" />
             ))}
           </div>
-        ) : cases.length === 0 ? (
+        ) : allCases.length === 0 ? (
           <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
             <CardContent className="flex flex-col items-center justify-center py-16 text-center">
               <div className="p-4 rounded-full bg-orange-500/10 mb-4">
@@ -107,6 +188,16 @@ export default function Cases() {
               </p>
               <p className="text-sm text-muted-foreground">
                 Use the single <span className="font-medium text-foreground">New Case</span> action in the page header to create your case.
+              </p>
+            </CardContent>
+          </Card>
+        ) : cases.length === 0 ? (
+          <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
+            <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+              <FileText className="w-12 h-12 text-orange-500 mx-auto mb-4 opacity-80" />
+              <h3 className="text-xl font-semibold mb-2">No cases match your filters</h3>
+              <p className="text-muted-foreground text-sm max-w-md">
+                Try clearing urgency, status, legal area, or date filters, or adjust your search text.
               </p>
             </CardContent>
           </Card>
@@ -253,13 +344,11 @@ export default function Cases() {
         open={newCaseOpen} 
         onOpenChange={setNewCaseOpen}
         onComplete={(caseData) => {
-          const u = caseData.urgency;
-          const urgency =
-            u === "low" ? "Low" : u === "high" ? "High" : "Medium";
+          // Urgency is now fixed to Medium per client requirements
           createCase.mutate({
             caseType: caseData.legalArea,
             caseSummary: caseData.summary,
-            urgency,
+            urgency: "Medium",
             clientName: caseData.clientName,
             clientEmail: caseData.clientEmail,
           });

@@ -19,15 +19,15 @@ export const createContext = async ({
 }): Promise<TrpcContext> => {
   const authHeader = req.headers.authorization;
   let userId: string | null = null;
-  let sessionToken = req.cookies[COOKIE_NAME];
+  const sessionToken = req.cookies[COOKIE_NAME];
+  /** Placeholder bearer used by the desktop scanner — must not override a real browser session cookie */
+  let useLocalDefaultFallback = false;
 
-  if (authHeader?.startsWith('Bearer ')) {
+  if (authHeader?.startsWith("Bearer ")) {
     const token = authHeader.substring(7);
-    
-    // Support local-default token for rapid dev/local scanner use without real token
-    if (token === 'local-default' || token === 'local-dev-token') {
-      // Find or use a default user ID for local scanning
-      userId = 'USER_LOCAL_DEFAULT'; 
+
+    if (token === "local-default" || token === "local-dev-token") {
+      useLocalDefaultFallback = true;
     } else {
       try {
         const decoded = jwt.verify(token, ENV.JWT_SECRET) as { userId: string };
@@ -45,6 +45,10 @@ export const createContext = async ({
     } catch (error) {
       console.error("[Auth] Session verification failed:", error);
     }
+  }
+
+  if (!userId && useLocalDefaultFallback) {
+    userId = "USER_LOCAL_DEFAULT";
   }
 
   if (!userId) {

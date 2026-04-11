@@ -9,7 +9,7 @@ interface Props {
   onSave: (updates: Partial<AgentConfig>) => Promise<void>;
 }
 
-export default function SettingsPage({ config, onNavigate }: Props) {
+export default function SettingsPage({ config, onNavigate, onSave }: Props) {
   const electronAPI = getElectronAPI();
   const [apiUrl, setApiUrl]     = useState(config?.apiUrl ?? 'http://localhost:3000');
   const [token, setToken]       = useState(config?.token ?? '');
@@ -40,7 +40,7 @@ export default function SettingsPage({ config, onNavigate }: Props) {
     <div className="min-h-screen bg-slate-950 text-white flex flex-col">
       <header className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
         <button
-          onClick={() => onNavigate('dashboard')}
+          onClick={() => onNavigate('home')}
           className="text-slate-400 hover:text-white transition-colors text-sm"
         >
           ← Back

@@ -19,6 +19,9 @@ import { trelloEnhancedRouter } from "./trelloEnhanced";
 import { telegramEnhancedRouter } from "./telegramEnhanced";
 import { gapAnalysisRouter } from "./gapAnalysis";
 import { emailAccountsRouter } from "./emailAccounts";
+import { emailRouter } from "./email";
+import { userPreferencesRouter } from "./userPreferences";
+import { bulkImportRouter } from "./bulkImport";
 import { evidenceAnalyticsRouter } from "./evidenceAnalytics";
 import {
   gmailEnhancedRouter,
@@ -56,6 +59,9 @@ export const appRouter = router({
   telegramEnhanced: telegramEnhancedRouter,
   gapAnalysis: gapAnalysisRouter,
   emailAccounts: emailAccountsRouter,
+  email: emailRouter,
+  userPreferences: userPreferencesRouter,
+  bulkImport: bulkImportRouter,
   evidenceAnalytics: evidenceAnalyticsRouter,
   
   gmailEnhanced: gmailEnhancedRouter,

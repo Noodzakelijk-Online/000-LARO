@@ -29,9 +29,7 @@ export interface CaseData {
   clientPhone: string;
   legalArea: string;
   summary: string;
-  startDate?: Date;
-  endDate?: Date;
-  urgency: "Low" | "Medium" | "High";
+  urgency: "Medium"; // Fixed to Medium, no longer user-selectable per client requirements
 }
 
 interface CaseCreationWizardProps {
@@ -147,7 +145,7 @@ export default function CaseCreationWizard({
             <Label>Legal area (Optional - AI will auto-detect)</Label>
             <Select
               value={caseData.legalArea}
-              onValueChange={(v) =>
+              onValueChange={(v: string) =>
                 setCaseData((d) => ({ ...d, legalArea: v }))
               }
             >
@@ -167,13 +165,17 @@ export default function CaseCreationWizard({
             <Label htmlFor="ccw-summary">Case summary</Label>
             <Textarea
               id="ccw-summary"
-              rows={12}
+              rows={16}
               value={caseData.summary}
               onChange={(e) =>
                 setCaseData((d) => ({ ...d, summary: e.target.value }))
               }
-              placeholder="Describe the case details here. LARO will use this to automatically determine the legal area."
+              placeholder="Describe the case details here. LARO will analyze the description and automatically determine relevant legal areas from uploaded evidence."
+              className="min-h-[240px]"
             />
+            <p className="text-xs text-muted-foreground">
+              Note: Case urgency is automatically determined by LARO AI based on case details.
+            </p>
           </div>
         </div>
         <DialogFooter>

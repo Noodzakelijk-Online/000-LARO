@@ -173,6 +173,7 @@ export default function BulkEvidenceUpload({
             : f
         )
       );
+      throw error;
     }
   };
 
@@ -180,23 +181,35 @@ export default function BulkEvidenceUpload({
     setIsUploading(true);
 
     const pendingFiles = files.filter((f) => f.status === "pending");
+    let ok = 0;
+    let failed = 0;
 
     for (const file of pendingFiles) {
-      await uploadFile(file);
+      try {
+        await uploadFile(file);
+        ok++;
+      } catch {
+        failed++;
+      }
     }
 
     setIsUploading(false);
-    toast.success(`Uploaded ${pendingFiles.length} files successfully`);
-    
-    if (onComplete) {
+    if (ok > 0) toast.success(`Uploaded ${ok} file${ok === 1 ? "" : "s"} successfully`);
+    if (failed > 0) toast.error(`${failed} file${failed === 1 ? "" : "s"} failed to upload`);
+
+    if (onComplete && ok > 0) {
       onComplete();
     }
   };
 
   useEffect(() => {
+    if (!open) setFiles([]);
+  }, [open]);
+
+  useEffect(() => {
     const hasPending = files.some((f) => f.status === "pending");
     if (!open || !hasPending || isUploading) return;
-    uploadAll();
+    void uploadAll();
     // Auto-upload immediately after files are added via click/drag-drop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [files, open, isUploading]);
@@ -211,7 +224,12 @@ export default function BulkEvidenceUpload({
   const totalCount = files.length;
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen: boolean) => {
+        if (!nextOpen) onClose();
+      }}
+    >
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>Bulk Evidence Upload</DialogTitle>

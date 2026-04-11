@@ -15,7 +15,6 @@ export const dashboardRouter = router({
       .from(casesTable)
       .where(and(eq(casesTable.userId, userId), sql`status NOT IN ('Closed', 'Resolved')`));
 
-    console.log("activeCases ----->", activeCases);
 
     // Total lawyers contacted for ALL user's cases
     const lawyerContacts = await db.select({ count: sql<number>`count(*)` })

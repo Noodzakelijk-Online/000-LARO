@@ -4,6 +4,7 @@ import HomePage from '../renderer/pages/HomePage';
 import ScanPage from '../renderer/pages/ScanPage';
 import SettingsPage from '../renderer/pages/SettingsPage';
 import { getElectronApi } from '../../lib/electronApiShim';
+import type { AgentConfig } from '../../shared/types';
 import { Page } from '../../shared/types';
 
 export default function App() {
@@ -45,6 +46,11 @@ export default function App() {
     setCurrentPage('home');
   };
 
+  const handleAgentSettingsSave = async (updates: Partial<AgentConfig>) => {
+    const updated = await electronAPI.setConfig(updates);
+    setConfig(updated);
+  };
+
   const handleLogout = async () => {
     // Clear authentication
     const updatedConfig = await electronAPI.setConfig({
@@ -69,9 +75,15 @@ export default function App() {
       case 'scan':
         return <ScanPage onNavigate={(page) => setCurrentPage(page as Page)} onLogout={handleLogout} config={config} />;
       case 'settings':
-        return <SettingsPage onNavigate={(page) => setCurrentPage(page as Page)} />;
+        return (
+          <SettingsPage
+            config={config}
+            onNavigate={(page) => setCurrentPage(page as Page)}
+            onSave={handleAgentSettingsSave}
+          />
+        );
       default:
-        return <HomePage onNavigate={(page) => setCurrentPage(page as Page)} />;
+        return <HomePage onNavigate={(page) => setCurrentPage(page as Page)} config={config} />;
     }
   };
 

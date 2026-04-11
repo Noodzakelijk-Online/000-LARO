@@ -23,7 +23,6 @@ import {
   Star,
   Layout,
   FileText,
-  Save,
   RotateCcw,
   Trash2,
   Plus,
@@ -228,14 +227,10 @@ export default function PersonalizationSettings() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">Personalization</h2>
-          <p className="text-muted-foreground">Customize your LARO experience</p>
-        </div>
-        <Button variant="outline" onClick={resetToDefaults}>
+      <div className="flex justify-end">
+        <Button variant="outline" size="sm" onClick={resetToDefaults}>
           <RotateCcw className="w-4 h-4 mr-2" />
-          Reset to Defaults
+          Reset to defaults
         </Button>
       </div>
 
@@ -498,14 +493,9 @@ export default function PersonalizationSettings() {
         </TabsContent>
       </Tabs>
 
-      {/* Save Button */}
-      <div className="flex justify-end gap-3">
-        <Button variant="outline">Cancel</Button>
-        <Button onClick={() => toast.success("Settings saved successfully")}>
-          <Save className="w-4 h-4 mr-2" />
-          Save Changes
-        </Button>
-      </div>
+      <p className="text-center text-xs text-muted-foreground">
+        Preference changes save automatically when you toggle options.
+      </p>
     </div>
   );
 }

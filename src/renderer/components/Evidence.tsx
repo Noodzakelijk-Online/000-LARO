@@ -108,7 +108,7 @@ export default function Evidence() {
 
   return (
     <DashboardLayout>
-      <div className="p-8 space-y-8">
+      <div className="space-y-6">
 
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -186,12 +186,12 @@ export default function Evidence() {
         )}
 
         {/* Sidebar layout: nav + main + persistent context */}
-        <div className="grid grid-cols-1 xl:grid-cols-[240px_minmax(0,1fr)_320px] gap-4">
-          <Card className="border-border/50 bg-card/50 h-fit">
-            <CardHeader>
-              <CardTitle className="text-base">Evidence Pages</CardTitle>
+        <div className="grid grid-cols-1 xl:grid-cols-[280px_minmax(0,1fr)_340px] gap-6">
+          <Card className="border-border/50 bg-card/50 h-fit shadow-sm">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-lg">Evidence Pages</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
+            <CardContent className="space-y-1">
               {navItems.map((item) => {
                 const Icon = item.icon;
                 const active = activeView === item.id;
@@ -237,7 +237,7 @@ export default function Evidence() {
             {activeView === "connections" && (
               <>
                 <EvidenceConnectionsCard />
-                <AutoCollectionSettings />
+                {selectedCaseId && <AutoCollectionSettings caseId={selectedCaseId} />}
               </>
             )}
 
@@ -260,7 +260,7 @@ export default function Evidence() {
                       min={5}
                       max={50}
                       step={1}
-                      onValueChange={(v) => setItemsBatchSize(v[0] ?? 12)}
+                      onValueChange={(v: number[]) => setItemsBatchSize(v[0] ?? 12)}
                     />
                   </div>
                   <div className="space-y-2 max-h-[520px] overflow-y-auto">
@@ -350,7 +350,7 @@ export default function Evidence() {
                   caseId={selectedCaseId}
                   caseDescription={""}
                   legalArea={""}
-                  keyIssues={""}
+                  keyIssues={[]}
                 />
               ) : (
                 <Card>
@@ -367,34 +367,34 @@ export default function Evidence() {
           </div>
 
           <div className="space-y-4">
-            <Card className="border-border/50 bg-card/50">
-              <CardHeader>
-                <CardTitle>Case Context</CardTitle>
+            <Card className="border-border/50 bg-card/50 shadow-sm">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-base">Case Context</CardTitle>
                 <CardDescription>{selectedCaseId ? caseLabel : "All cases overview"}</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-3">
                   <Card className="border-border/50 bg-background/40">
-                    <CardContent className="p-3">
-                      <p className="text-xs text-muted-foreground">Total</p>
+                    <CardContent className="p-4">
+                      <p className="text-xs text-muted-foreground mb-1">Total</p>
                       <p className="text-2xl font-bold">{stats.total}</p>
                     </CardContent>
                   </Card>
                   <Card className="border-border/50 bg-background/40">
-                    <CardContent className="p-3">
-                      <p className="text-xs text-muted-foreground">Relevant</p>
+                    <CardContent className="p-4">
+                      <p className="text-xs text-muted-foreground mb-1">Relevant</p>
                       <p className="text-2xl font-bold text-green-500">{stats.relevant}</p>
                     </CardContent>
                   </Card>
                   <Card className="border-border/50 bg-background/40">
-                    <CardContent className="p-3">
-                      <p className="text-xs text-muted-foreground">Sources</p>
+                    <CardContent className="p-4">
+                      <p className="text-xs text-muted-foreground mb-1">Sources</p>
                       <p className="text-2xl font-bold">{stats.sources}</p>
                     </CardContent>
                   </Card>
                   <Card className="border-border/50 bg-background/40">
-                    <CardContent className="p-3">
-                      <p className="text-xs text-muted-foreground">Scans</p>
+                    <CardContent className="p-4">
+                      <p className="text-xs text-muted-foreground mb-1">Scans</p>
                       <p className="text-2xl font-bold">{stats.scanCount}</p>
                     </CardContent>
                   </Card>
@@ -402,9 +402,9 @@ export default function Evidence() {
               </CardContent>
             </Card>
 
-            <Card className="border-border/50 bg-card/50">
-              <CardHeader>
-                <CardTitle>Case Strength</CardTitle>
+            <Card className="border-border/50 bg-card/50 shadow-sm">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-base">Case Strength</CardTitle>
                 <CardDescription>Live signal from current evidence profile</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -416,13 +416,13 @@ export default function Evidence() {
               </CardContent>
             </Card>
 
-            <Card className="border-border/50 bg-card/50">
-              <CardHeader>
-                <CardTitle>Areas To Improve</CardTitle>
+            <Card className="border-border/50 bg-card/50 shadow-sm">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-base">Areas To Improve</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
                 {prioritizedIssues.map((issue, idx) => (
-                  <div key={idx} className="rounded-md border border-border/50 p-2">
+                  <div key={idx} className="rounded-md border border-border/50 p-3">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-sm">{issue.label}</p>
                       <Badge variant={issue.severity === "high" ? "destructive" : "outline"}>
@@ -434,9 +434,9 @@ export default function Evidence() {
               </CardContent>
             </Card>
 
-            <Card className="border-border/50 bg-card/50">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+            <Card className="border-border/50 bg-card/50 shadow-sm">
+              <CardHeader className="pb-4">
+                <CardTitle className="flex items-center gap-2 text-base">
                   <Sparkles className="w-4 h-4 text-orange-500" />
                   Recommended Actions
                 </CardTitle>

@@ -18,7 +18,6 @@ export default function NewCaseDialog({ open, onOpenChange }: NewCaseDialogProps
   const { user } = useAuth();
   const [formData, setFormData] = useState({
     caseSummary: "",
-    urgency: "Medium" as "Low" | "Medium" | "High",
   });
 
   const utils = trpc.useUtils();
@@ -32,7 +31,6 @@ export default function NewCaseDialog({ open, onOpenChange }: NewCaseDialogProps
       // Reset form
       setFormData({
         caseSummary: "",
-        urgency: "Medium",
       });
     },
     onError: (error: any) => {
@@ -56,12 +54,13 @@ export default function NewCaseDialog({ open, onOpenChange }: NewCaseDialogProps
 
     // For now, set caseType to "General" - AI will infer actual legal areas later
     // User data (name, email) comes from auth context automatically
+    // Urgency is fixed to Medium per client requirements - AI determines actual urgency
     createCase.mutate({
       clientName: user.name || "User",
       clientEmail: user.email || "",
       caseType: "General", // Placeholder - will be replaced by AI inference
       caseSummary: formData.caseSummary,
-      urgency: formData.urgency,
+      urgency: "Medium", // Fixed value per client requirements
     });
   };
 
@@ -110,36 +109,9 @@ export default function NewCaseDialog({ open, onOpenChange }: NewCaseDialogProps
                   {formData.caseSummary.length} characters {formData.caseSummary.length < 50 ? `(minimum 50)` : "✓"}
                 </span>
               </div>
-            </div>
-
-            {/* Urgency */}
-            <div className="grid gap-2">
-              <Label htmlFor="urgency" className="text-base">How urgent is this? *</Label>
-              <Select value={formData.urgency} onValueChange={(value: any) => setFormData({ ...formData, urgency: value })}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Low">
-                    <div className="flex flex-col items-start">
-                      <span className="font-medium">Low Priority</span>
-                      <span className="text-xs text-muted-foreground">I have time to explore options</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="Medium">
-                    <div className="flex flex-col items-start">
-                      <span className="font-medium">Medium Priority</span>
-                      <span className="text-xs text-muted-foreground">I need help within a few weeks</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="High">
-                    <div className="flex flex-col items-start">
-                      <span className="font-medium">High Priority</span>
-                      <span className="text-xs text-muted-foreground">This is urgent, I need help soon</span>
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+              <p className="text-xs text-muted-foreground italic">
+                Note: LARO AI will automatically determine case urgency and priority based on your description.
+              </p>
             </div>
           </div>
           <DialogFooter>

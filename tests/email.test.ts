@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { emailRouter } from '../email';
+import { emailRouter } from '../server/routers/email';
 
 describe('Email Router', () => {
   describe('getProviderInfo', () => {

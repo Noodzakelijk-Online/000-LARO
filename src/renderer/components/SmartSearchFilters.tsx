@@ -97,9 +97,9 @@ export default function SmartSearchFilters({
   // Convert backend saved searches to frontend format
   const savedFilters: SearchFilter[] = savedSearchesData.map((search) => ({
     id: search.id,
-    name: search.name,
+    name: search.name ?? "Saved search",
     query: search.query || "",
-    filters: search.filters,
+    filters: (search.filters ?? {}) as SearchFilter["filters"],
     savedAt: search.createdAt || new Date(),
   }));
 
@@ -125,25 +125,28 @@ export default function SmartSearchFilters({
     dateRange?: string;
   }>({});
 
+  const activeFilterCount = Object.values(activeFilters).filter(Boolean).length;
+
   const handleSearch = () => {
-    if (!searchQuery.trim()) {
-      toast.error("Please enter a search query");
+    if (!searchQuery.trim() && activeFilterCount === 0) {
+      toast.error("Enter a search query or choose at least one filter");
       return;
     }
 
-    // Add to recent searches
-    const newSearch: RecentSearch = {
-      id: Date.now().toString(),
-      query: searchQuery,
-      timestamp: new Date(),
-      resultCount: Math.floor(Math.random() * 50), // Mock result count
-    };
-    setRecentSearches(prev => [newSearch, ...prev.slice(0, 9)]);
+    if (searchQuery.trim()) {
+      const newSearch: RecentSearch = {
+        id: Date.now().toString(),
+        query: searchQuery,
+        timestamp: new Date(),
+        resultCount: Math.floor(Math.random() * 50),
+      };
+      setRecentSearches((prev) => [newSearch, ...prev.slice(0, 9)]);
+      toast.success(`Searching for: ${searchQuery}`);
+    } else {
+      toast.success("Filters applied");
+    }
 
-    // Trigger search callback
     onSearch?.(searchQuery, activeFilters);
-
-    toast.success(`Searching for: ${searchQuery}`);
   };
 
   const handleSaveFilter = () => {
@@ -166,6 +169,7 @@ export default function SmartSearchFilters({
   const handleLoadFilter = (filter: SearchFilter) => {
     setSearchQuery(filter.query);
     setActiveFilters(filter.filters);
+    onSearch?.(filter.query, filter.filters);
     toast.success(`Loaded filter: ${filter.name}`);
   };
 
@@ -173,18 +177,18 @@ export default function SmartSearchFilters({
     deleteSavedSearchMutation.mutate({ id: filterId });
   };
 
-  const handleApplyPreset = (preset: typeof FILTER_PRESETS[0]) => {
+  const handleApplyPreset = (preset: (typeof FILTER_PRESETS)[0]) => {
     setActiveFilters(preset.filters);
+    onSearch?.(searchQuery, preset.filters);
     toast.success(`Applied preset: ${preset.name}`);
   };
 
   const handleClearFilters = () => {
     setActiveFilters({});
     setSearchQuery("");
+    onSearch?.("", {});
     toast.info("Filters cleared");
   };
-
-  const activeFilterCount = Object.values(activeFilters).filter(Boolean).length;
 
   return (
     <div className="space-y-4">
@@ -213,7 +217,11 @@ export default function SmartSearchFilters({
               <Select
                 value={activeFilters.status || "all"}
                 onValueChange={(value: any) =>
-                  setActiveFilters(prev => ({ ...prev, status: value === "all" ? undefined : value }))
+                  setActiveFilters((prev) => {
+                    const next = { ...prev, status: value === "all" ? undefined : value };
+                    onSearch?.(searchQuery, next);
+                    return next;
+                  })
                 }
               >
                 <SelectTrigger>
@@ -233,8 +241,12 @@ export default function SmartSearchFilters({
               <label className="text-sm font-medium mb-1 block text-muted-foreground">Urgency</label>
               <Select
                 value={activeFilters.urgency || "all"}
-                onValueChange={(value) =>
-                  setActiveFilters(prev => ({ ...prev, urgency: value === "all" ? undefined : value }))
+                onValueChange={(value: string) =>
+                  setActiveFilters((prev) => {
+                    const next = { ...prev, urgency: value === "all" ? undefined : value };
+                    onSearch?.(searchQuery, next);
+                    return next;
+                  })
                 }
               >
                 <SelectTrigger>
@@ -253,8 +265,12 @@ export default function SmartSearchFilters({
               <label className="text-sm font-medium mb-1 block text-muted-foreground">Legal Area</label>
               <Select
                 value={activeFilters.legalArea || "all"}
-                onValueChange={(value) =>
-                  setActiveFilters(prev => ({ ...prev, legalArea: value === "all" ? undefined : value }))
+                onValueChange={(value: string) =>
+                  setActiveFilters((prev) => {
+                    const next = { ...prev, legalArea: value === "all" ? undefined : value };
+                    onSearch?.(searchQuery, next);
+                    return next;
+                  })
                 }
               >
                 <SelectTrigger>
@@ -274,8 +290,12 @@ export default function SmartSearchFilters({
               <label className="text-sm font-medium mb-1 block text-muted-foreground">Date Range</label>
               <Select
                 value={activeFilters.dateRange || "all"}
-                onValueChange={(value) =>
-                  setActiveFilters(prev => ({ ...prev, dateRange: value === "all" ? undefined : value }))
+                onValueChange={(value: string) =>
+                  setActiveFilters((prev) => {
+                    const next = { ...prev, dateRange: value === "all" ? undefined : value };
+                    onSearch?.(searchQuery, next);
+                    return next;
+                  })
                 }
               >
                 <SelectTrigger>
@@ -303,7 +323,13 @@ export default function SmartSearchFilters({
                 {key}: {value}
                 <X
                   className="w-3 h-3 cursor-pointer hover:text-destructive"
-                  onClick={() => setActiveFilters(prev => ({ ...prev, [key]: undefined }))}
+                  onClick={() =>
+                    setActiveFilters((prev) => {
+                      const next = { ...prev, [key]: undefined };
+                      onSearch?.(searchQuery, next);
+                      return next;
+                    })
+                  }
                 />
               </Badge>
             ) : null
@@ -381,7 +407,10 @@ export default function SmartSearchFilters({
                 <div
                   key={search.id}
                   className="flex items-center justify-between p-2 rounded-lg hover:bg-accent/50 transition-colors cursor-pointer"
-                  onClick={() => setSearchQuery(search.query)}
+                  onClick={() => {
+                    setSearchQuery(search.query);
+                    onSearch?.(search.query, activeFilters);
+                  }}
                 >
                   <div className="flex items-center gap-3 flex-1">
                     <Clock className="w-4 h-4 text-muted-foreground" />

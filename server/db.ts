@@ -41,9 +41,22 @@ export async function getDb() {
         try {
           migrate(_db, { migrationsFolder: foundFolder });
           console.log("[Database] Migrations applied successfully from:", foundFolder);
-        } catch (migrationError: any) {
-          if (migrationError.message?.includes("already exists")) {
-            console.warn("[Database] Migration attempted to create existing table/index. Skipping migration and continuing.");
+        } catch (migrationError: unknown) {
+          const msg =
+            migrationError instanceof Error ? migrationError.message : String(migrationError);
+          const causeMsg =
+            migrationError instanceof Error && migrationError.cause instanceof Error
+              ? migrationError.cause.message
+              : "";
+          const combined = `${msg} ${causeMsg}`;
+          if (
+            combined.includes("already exists") ||
+            combined.includes("duplicate column name") ||
+            combined.includes("UNIQUE constraint failed")
+          ) {
+            console.warn(
+              "[Database] Migration conflict (existing schema). Continuing with current database."
+            );
           } else {
             throw migrationError;
           }
