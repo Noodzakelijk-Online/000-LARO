@@ -75,7 +75,30 @@ export default function CaseStatusWorkflow({
     }
   ];
 
-  const currentIndex = statuses.findIndex(s => s.key === currentStatus);
+  // Normalize DB status to workflow key
+  const normalizeStatus = (s: string): string => {
+    const lower = (s ?? "").toLowerCase().replace(/\s+/g, "_");
+    const map: Record<string, string> = {
+      draft: "draft",
+      new: "draft",
+      active: "active",
+      matching: "active",
+      open: "active",
+      outreach: "pending_response",
+      pending_response: "pending_response",
+      pending: "pending_response",
+      waiting: "pending_response",
+      waiting_for_lawyer: "pending_response",
+      matched: "matched",
+      resolved: "closed",
+      closed: "closed",
+      complete: "closed",
+    };
+    return map[lower] ?? "draft";
+  };
+
+  const normalizedStatus = normalizeStatus(currentStatus);
+  const currentIndex = Math.max(0, statuses.findIndex(s => s.key === normalizedStatus));
 
   const getNextStatus = () => {
     if (currentIndex < statuses.length - 1) {

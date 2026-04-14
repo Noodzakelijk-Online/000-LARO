@@ -51,7 +51,18 @@ interface CaseProgress {
   }[];
 }
 
-export default function ProgressTrackingDashboard({ caseProgress }: { caseProgress: CaseProgress }) {
+export default function ProgressTrackingDashboard({ caseProgress, caseId }: { caseProgress?: CaseProgress; caseId?: string }) {
+  // Provide safe defaults if no data is supplied (e.g. when only caseId is passed)
+  const progress: CaseProgress = caseProgress ?? {
+    caseId: caseId ?? "",
+    caseTitle: "",
+    overallProgress: 0,
+    healthScore: 0,
+    milestones: [],
+    nextActions: [],
+    deadlines: [],
+    recentActivity: [],
+  };
   const getHealthScoreColor = (score: number) => {
     if (score >= 80) return "text-green-600 dark:text-green-400";
     if (score >= 60) return "text-yellow-600 dark:text-yellow-400";
@@ -91,8 +102,8 @@ export default function ProgressTrackingDashboard({ caseProgress }: { caseProgre
     }
   };
 
-  const completedMilestones = caseProgress.milestones.filter(m => m.status === "completed").length;
-  const totalMilestones = caseProgress.milestones.length;
+  const completedMilestones = progress.milestones.filter(m => m.status === "completed").length;
+  const totalMilestones = progress.milestones.length;
 
   return (
     <div className="space-y-6">
@@ -104,13 +115,13 @@ export default function ProgressTrackingDashboard({ caseProgress }: { caseProgre
             <div className="flex items-center justify-between mb-4">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Overall Progress</p>
-                <p className="text-3xl font-bold">{caseProgress.overallProgress}%</p>
+                <p className="text-3xl font-bold">{progress.overallProgress}%</p>
               </div>
               <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
                 <TrendingUp className="w-6 h-6 text-primary" />
               </div>
             </div>
-            <Progress value={caseProgress.overallProgress} className="h-2" />
+            <Progress value={progress.overallProgress} className="h-2" />
             <p className="text-xs text-muted-foreground mt-2">
               {completedMilestones} of {totalMilestones} milestones completed
             </p>
@@ -123,15 +134,15 @@ export default function ProgressTrackingDashboard({ caseProgress }: { caseProgre
             <div className="flex items-center justify-between mb-4">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Case Health</p>
-                <p className={`text-3xl font-bold ${getHealthScoreColor(caseProgress.healthScore)}`}>
-                  {caseProgress.healthScore}
+                <p className={`text-3xl font-bold ${getHealthScoreColor(progress.healthScore)}`}>
+                  {progress.healthScore}
                 </p>
               </div>
               <Badge variant="outline" className="text-sm">
-                {getHealthScoreLabel(caseProgress.healthScore)}
+                {getHealthScoreLabel(progress.healthScore)}
               </Badge>
             </div>
-            <Progress value={caseProgress.healthScore} className="h-2" />
+            <Progress value={progress.healthScore} className="h-2" />
             <p className="text-xs text-muted-foreground mt-2">
               Based on progress, deadlines, and activity
             </p>
@@ -144,15 +155,15 @@ export default function ProgressTrackingDashboard({ caseProgress }: { caseProgre
             <div className="flex items-center justify-between mb-4">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Upcoming Deadlines</p>
-                <p className="text-3xl font-bold">{caseProgress.deadlines.length}</p>
+                <p className="text-3xl font-bold">{progress.deadlines.length}</p>
               </div>
               <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center">
                 <Calendar className="w-6 h-6 text-amber-600 dark:text-amber-500" />
               </div>
             </div>
-            {caseProgress.deadlines.length > 0 && (
+            {progress.deadlines.length > 0 && (
               <div className="space-y-1">
-                {caseProgress.deadlines.slice(0, 2).map((deadline) => (
+                {progress.deadlines.slice(0, 2).map((deadline) => (
                   <div key={deadline.id} className="flex items-center justify-between text-xs">
                     <span className="truncate">{deadline.title}</span>
                     <Badge variant={getPriorityColor(deadline.priority)} className="text-xs">
@@ -176,12 +187,12 @@ export default function ProgressTrackingDashboard({ caseProgress }: { caseProgre
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {caseProgress.milestones.map((milestone, index) => (
+            {progress.milestones.map((milestone, index) => (
               <div key={milestone.id} className="flex gap-4">
                 {/* Timeline */}
                 <div className="flex flex-col items-center">
                   {getMilestoneIcon(milestone.status)}
-                  {index < caseProgress.milestones.length - 1 && (
+                  {index < progress.milestones.length - 1 && (
                     <div className="w-0.5 h-full bg-border my-1 flex-1" />
                   )}
                 </div>
@@ -234,7 +245,7 @@ export default function ProgressTrackingDashboard({ caseProgress }: { caseProgre
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {caseProgress.nextActions.map((action) => (
+            {progress.nextActions.map((action) => (
               <div
                 key={action.id}
                 className="flex items-start gap-4 p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
@@ -266,7 +277,7 @@ export default function ProgressTrackingDashboard({ caseProgress }: { caseProgre
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {caseProgress.recentActivity.map((activity) => (
+            {progress.recentActivity.map((activity) => (
               <div key={activity.id} className="flex gap-3 pb-3 border-b last:border-0 last:pb-0">
                 <div className="w-2 h-2 rounded-full bg-primary mt-2" />
                 <div className="flex-1">

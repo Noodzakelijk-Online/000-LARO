@@ -8,10 +8,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,7 +20,6 @@ import {
   MapPin,
   Phone,
   Mail,
-  Globe,
   Briefcase,
   Clock,
   Target,
@@ -31,11 +29,22 @@ import {
   Edit,
   Save,
   X,
-  TrendingUp,
   MessageSquare,
   Calendar,
   Scale,
   CloudDownload,
+  Download,
+  Printer,
+  FileText,
+  BarChart3,
+  Users,
+  Search,
+  Activity,
+  Layers,
+  GitBranch,
+  TrendingUp,
+  Shield,
+  ChevronRight,
 } from "lucide-react";
 import { LegalAreasSelect } from "@/components/LegalAreasSelect";
 import { EvidenceCollection } from "@/components/EvidenceCollection";
@@ -45,16 +54,12 @@ import EvidenceTimelineView from "@/components/EvidenceTimelineView";
 import OutreachAnalyticsView from "@/components/OutreachAnalyticsView";
 import { EvidenceGapAnalysisDashboard } from "@/components/EvidenceGapAnalysisDashboard";
 import EnhancedEvidenceUpload from "@/components/EnhancedEvidenceUpload";
-// Removed old GoogleDriveFilePicker - using enhanced integration instead
 import { AutoCollectionSettings } from "@/components/AutoCollectionSettings";
 import { CollectionMonitoringDashboard } from "@/components/CollectionMonitoringDashboard";
 import ProgressTrackingDashboard from "@/components/ProgressTrackingDashboard";
 import { exportCaseSummary, printCaseSummary } from "@/lib/export";
-import { Download, Printer } from "lucide-react";
 import CaseStatusWorkflow from "@/components/CaseStatusWorkflow";
-import { CardDescription } from "@/components/ui/card";
-
-// Google Drive integration moved to Evidence page with enhanced component
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface EnhancedCaseDetailsDialogProps {
   caseId: string;
@@ -62,24 +67,26 @@ interface EnhancedCaseDetailsDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-// Wrapper component to fetch and display outreach progress
+/* ─── nav items ─── */
+const NAV_ITEMS = [
+  { id: "overview", label: "Overview", icon: Briefcase },
+  { id: "status", label: "Status", icon: Activity },
+  { id: "progress", label: "Progress", icon: TrendingUp },
+  { id: "messages", label: "Messages", icon: MessageSquare },
+  { id: "evidence", label: "Evidence", icon: FileText },
+  { id: "evidence-timeline", label: "Evidence Timeline", icon: GitBranch },
+  { id: "gap-analysis", label: "Gap Analysis", icon: Shield },
+  { id: "matching", label: "Lawyers", icon: Users },
+  { id: "outreach", label: "Outreach", icon: Send },
+  { id: "outreach-analytics", label: "Analytics", icon: BarChart3 },
+  { id: "timeline", label: "Timeline", icon: Clock },
+] as const;
+
+/* ─── Outreach progress wrapper ─── */
 function OutreachProgressVisualization({ caseId }: { caseId: string }) {
   const { data, isLoading } = trpc.cases.outreachProgress.useQuery({ caseId });
-  
-  if (isLoading) {
-    return (
-      <Card className="border-border/50 bg-card/50">
-        <CardContent className="pt-6">
-          <Skeleton className="h-32 w-full" />
-        </CardContent>
-      </Card>
-    );
-  }
-  
-  if (!data || data.legalAreas.length === 0) {
-    return null; // Don't show if no data
-  }
-  
+  if (isLoading) return <Skeleton className="h-32 w-full rounded-xl" />;
+  if (!data || data.legalAreas.length === 0) return null;
   return (
     <MultiAreaOutreachProgress
       caseId={caseId}
@@ -89,6 +96,7 @@ function OutreachProgressVisualization({ caseId }: { caseId: string }) {
   );
 }
 
+/* ═══════════════════════════════════════════════════ */
 export default function EnhancedCaseDetailsDialog({
   caseId,
   open,
@@ -97,724 +105,619 @@ export default function EnhancedCaseDetailsDialog({
   const [selectedDistance, setSelectedDistance] = useState(50);
   const [isEditing, setIsEditing] = useState(false);
   const [editedCase, setEditedCase] = useState<any>(null);
-  
-  // Tab state persistence
+
   const [activeTab, setActiveTab] = useState(() => {
     const saved = localStorage.getItem(`case-tab-${caseId}`);
     return saved || "overview";
   });
-  
+
   const handleTabChange = (value: string) => {
     setActiveTab(value);
     localStorage.setItem(`case-tab-${caseId}`, value);
   };
-  
-  const { data: caseData, isLoading: caseLoading, refetch: refetchCase } = trpc.cases.byId.useQuery(caseId, {
-    enabled: open && !!caseId,
-  });
 
-  const { data: matchedLawyers, isLoading: matchingLoading, refetch: refetchMatches } = trpc.matching.findLawyers.useQuery(
-    {
-      caseId,
-      maxDistance: selectedDistance,
-      maxResults: 10,
-    },
-    {
-      enabled: open && !!caseId,
-    }
-  );
+  /* ── queries ── */
+  const { data: caseData, isLoading: caseLoading, refetch: refetchCase } =
+    trpc.cases.byId.useQuery(caseId, { enabled: open && !!caseId });
+
+  const { data: matchedLawyers, isLoading: matchingLoading, refetch: refetchMatches } =
+    trpc.matching.findLawyers.useQuery(
+      { caseId, maxDistance: selectedDistance, maxResults: 10 },
+      { enabled: open && !!caseId }
+    );
 
   const { data: outreachHistory } = trpc.outreach.byCaseId.useQuery(caseId, {
     enabled: open && !!caseId,
   });
 
+  /* ── mutations ── */
   const initiateOutreachMutation = trpc.workflow.initiateOutreach.useMutation({
-    onSuccess: () => {
-      toast.success("Outreach initiated successfully!");
-      refetchMatches();
-      refetchCase();
-    },
-    onError: (error) => {
-      toast.error(`Failed to initiate outreach: ${error.message}`);
-    },
+    onSuccess: () => { toast.success("Outreach initiated successfully!"); refetchMatches(); refetchCase(); },
+    onError: (error) => { toast.error(`Failed to initiate outreach: ${error.message}`); },
   });
-
-  const handleInitiateOutreach = () => {
-    if (!caseId) return;
-    initiateOutreachMutation.mutate({ caseId });
-  };
-
-  const handleEdit = () => {
-    setEditedCase(caseData);
-    setIsEditing(true);
-  };
-
-  const handleCancelEdit = () => {
-    setIsEditing(false);
-    setEditedCase(null);
-  };
 
   const updateCaseMutation = trpc.cases.update.useMutation({
-    onSuccess: () => {
-      toast.success("Case updated successfully!");
-      setIsEditing(false);
-      setEditedCase(null);
-      refetchCase();
-    },
-    onError: (error) => {
-      toast.error(`Failed to update case: ${error.message}`);
-    },
+    onSuccess: () => { toast.success("Case updated successfully!"); setIsEditing(false); setEditedCase(null); refetchCase(); },
+    onError: (error) => { toast.error(`Failed to update case: ${error.message}`); },
   });
 
+  const handleInitiateOutreach = () => { if (caseId) initiateOutreachMutation.mutate({ caseId }); };
+  const handleEdit = () => { setEditedCase(caseData); setIsEditing(true); };
+  const handleCancelEdit = () => { setIsEditing(false); setEditedCase(null); };
   const handleSaveEdit = () => {
     if (!editedCase || !caseId) return;
-    
-    updateCaseMutation.mutate({
-      id: caseId,
-      caseSummary: editedCase.caseSummary,
-      urgency: editedCase.urgency,
-    });
+    updateCaseMutation.mutate({ id: caseId, caseSummary: editedCase.caseSummary, urgency: editedCase.urgency });
   };
 
   if (!open) return null;
 
+  /* ── urgency colors ── */
+  const urgencyClass = (u: string | undefined) =>
+    u === "High" ? "border-red-500/50 text-red-400" :
+    u === "Medium" ? "border-orange-500/50 text-orange-400" :
+    "border-emerald-500/50 text-emerald-400";
+
+  const statusClass = (s: string | undefined) =>
+    s === "Matched" ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" :
+    s === "Outreach" ? "bg-blue-500/15 text-blue-400 border-blue-500/30" :
+    "bg-orange-500/15 text-orange-400 border-orange-500/30";
+
+  /* ── parse legal areas helper ── */
+  const parseLegalAreas = (c: any): string[] => {
+    if (!c?.legalAreas) return [];
+    try {
+      const raw = typeof c.legalAreas === "string" ? JSON.parse(c.legalAreas) : c.legalAreas;
+      return Array.isArray(raw) ? raw.map((a: any) => (typeof a === "string" ? a : a?.area || a?.areaEn || "")) : [];
+    } catch { return []; }
+  };
+
+  /* ═══════════════════════ RENDER ═══════════════════════ */
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto bg-card border-border/50">
-        <DialogHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <DialogTitle className="text-2xl bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-                Case Details
-              </DialogTitle>
-              <DialogDescription>
-                Comprehensive case management and lawyer matching
-              </DialogDescription>
+      <DialogContent
+        showCloseButton={false}
+        className="sm:max-w-[92vw] max-w-[1400px] h-[88vh] p-0 overflow-hidden bg-background border-border/40 shadow-2xl shadow-black/40"
+      >
+        {/* ─── top header bar ─── */}
+        <div className="flex items-center justify-between border-b border-border/40 px-6 py-4 bg-gradient-to-r from-background via-card to-background">
+          <div className="flex items-center gap-4 min-w-0">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-500/15 ring-1 ring-orange-500/30">
+              <Briefcase className="h-5 w-5 text-orange-500" />
             </div>
-            <div className="flex items-center gap-2">
-              <Button
-                onClick={() => exportCaseSummary(caseData)}
-                variant="outline"
-                size="sm"
-                className="border-green-500/30 hover:bg-green-500/10"
-              >
-                <Download className="w-4 h-4 mr-2" />
-                Export
-              </Button>
-              <Button
-                onClick={() => printCaseSummary(caseData)}
-                variant="outline"
-                size="sm"
-                className="border-blue-500/30 hover:bg-blue-500/10"
-              >
-                <Printer className="w-4 h-4 mr-2" />
-                Print
-              </Button>
-              {!isEditing && (
-                <Button
-                  onClick={handleEdit}
-                  variant="outline"
-                  size="sm"
-                  className="border-purple-500/30 hover:bg-purple-500/10"
-                >
-                  <Edit className="w-4 h-4 mr-2" />
-                  Edit Case
-                </Button>
-              )}
+            <div className="min-w-0">
+              <DialogHeader className="p-0 space-y-0">
+                <DialogTitle className="text-lg font-semibold text-foreground truncate">
+                  {caseLoading ? "Loading…" : caseData?.caseType || "Case Details"}
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground truncate">
+                  {caseLoading ? "" : caseData?.clientName} · Created {caseData?.createdAt ? new Date(caseData.createdAt).toLocaleDateString() : ""}
+                </DialogDescription>
+              </DialogHeader>
             </div>
-          </div>
-        </DialogHeader>
-
-        {caseLoading ? (
-          <div className="space-y-4">
-            <Skeleton className="h-32 w-full" />
-            <Skeleton className="h-64 w-full" />
-          </div>
-        ) : caseData ? (
-          <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-            <TabsList className="grid w-full grid-cols-11 bg-card/50">
-              <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="status">Status</TabsTrigger>
-              <TabsTrigger value="progress">Progress</TabsTrigger>
-              <TabsTrigger value="messages">Messages</TabsTrigger>
-              <TabsTrigger value="evidence">Evidence</TabsTrigger>
-              <TabsTrigger value="evidence-timeline">Evidence Timeline</TabsTrigger>
-              <TabsTrigger value="gap-analysis">Gap Analysis</TabsTrigger>
-              <TabsTrigger value="matching">Lawyers</TabsTrigger>
-              <TabsTrigger value="outreach">Outreach</TabsTrigger>
-              <TabsTrigger value="outreach-analytics">Outreach Analytics</TabsTrigger>
-              <TabsTrigger value="timeline">Timeline</TabsTrigger>
-            </TabsList>
-
-            {/* Overview Tab */}
-            <TabsContent value="overview" className="space-y-4">
-              <Card className="border-border/50 bg-card/50">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Briefcase className="w-5 h-5" />
-                    Your Case Information
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {isEditing ? (
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label>Client Name</Label>
-                        <Input
-                          value={editedCase?.clientName || ""}
-                          onChange={(e) =>
-                            setEditedCase({ ...editedCase, clientName: e.target.value })
-                          }
-                        />
-                      </div>
-                      <div>
-                        <Label>Email</Label>
-                        <Input
-                          type="email"
-                          value={editedCase?.clientEmail || ""}
-                          onChange={(e) =>
-                            setEditedCase({ ...editedCase, clientEmail: e.target.value })
-                          }
-                        />
-                      </div>
-                      <div>
-                        <Label>Phone</Label>
-                        <Input
-                          value={editedCase?.clientPhone || ""}
-                          onChange={(e) =>
-                            setEditedCase({ ...editedCase, clientPhone: e.target.value })
-                          }
-                        />
-                      </div>
-                      <div>
-                        <Label>Case Type</Label>
-                        <Input
-                          value={editedCase?.caseType || ""}
-                          onChange={(e) =>
-                            setEditedCase({ ...editedCase, caseType: e.target.value })
-                          }
-                        />
-                      </div>
-                      <div>
-                        <Label>Priority</Label>
-                        <select
-                          value={editedCase?.urgency || "Medium"}
-                          onChange={(e) =>
-                            setEditedCase({ ...editedCase, urgency: e.target.value as "Low" | "Medium" | "High" })
-                          }
-                          className="w-full px-3 py-2 bg-background border border-input rounded-md"
-                        >
-                          <option value="Low">Low</option>
-                          <option value="Medium">Medium</option>
-                          <option value="High">High</option>
-                        </select>
-                      </div>
-                      <div className="col-span-2">
-                        <Label>Case Summary</Label>
-                        <Textarea
-                          value={editedCase?.caseSummary || ""}
-                          onChange={(e) =>
-                            setEditedCase({ ...editedCase, caseSummary: e.target.value })
-                          }
-                          rows={6}
-                        />
-                      </div>
-                      <div className="col-span-2">
-                        <Label>Legal Areas</Label>
-                        <LegalAreasSelect
-                          value={editedCase?.legalAreas ? JSON.parse(editedCase.legalAreas as string) : []}
-                          onChange={(areas) =>
-                            setEditedCase({ ...editedCase, legalAreas: JSON.stringify(areas) as any })
-                          }
-                        />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Adjust the legal areas if the AI classification needs correction
-                        </p>
-                      </div>
-                      <div className="col-span-2 flex gap-2">
-                        <Button onClick={handleSaveEdit} className="bg-green-500 hover:bg-green-600">
-                          <Save className="w-4 h-4 mr-2" />
-                          Save Changes
-                        </Button>
-                        <Button onClick={handleCancelEdit} variant="outline">
-                          <X className="w-4 h-4 mr-2" />
-                          Cancel
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-sm text-muted-foreground">Client Name</p>
-                        <p className="font-medium">{caseData.clientName}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Email</p>
-                        <p className="font-medium flex items-center gap-2">
-                          <Mail className="w-4 h-4 text-muted-foreground" />
-                          {caseData.clientEmail}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Phone</p>
-                        <p className="font-medium flex items-center gap-2">
-                          <Phone className="w-4 h-4 text-muted-foreground" />
-                          {caseData.clientPhone}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Address</p>
-                        <p className="font-medium flex items-center gap-2">
-                          <MapPin className="w-4 h-4 text-muted-foreground" />
-                          {caseData.clientAddress || "No address provided"}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Case Type</p>
-                        <p className="font-medium">{caseData.caseType}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Status</p>
-                        <Badge variant="secondary">{caseData.status}</Badge>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Priority</p>
-                        <Badge
-                          variant="outline"
-                          className={
-                            caseData.urgency === "High"
-                              ? "border-red-500/50 text-red-400"
-                              : caseData.urgency === "Medium"
-                              ? "border-yellow-500/50 text-yellow-400"
-                              : "border-green-500/50 text-green-400"
-                          }
-                        >
-                          {caseData.urgency}
-                        </Badge>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Created</p>
-                        <p className="font-medium flex items-center gap-2">
-                          <Calendar className="w-4 h-4 text-muted-foreground" />
-                          {caseData.createdAt ? new Date(caseData.createdAt).toLocaleDateString() : 'N/A'}
-                        </p>
-                      </div>
-                      <div className="col-span-2">
-                        <p className="text-sm text-muted-foreground mb-2">Case Summary</p>
-                        <p className="text-sm bg-card/80 p-3 rounded-md border border-border/30">
-                          {caseData.caseSummary}
-                        </p>
-                      </div>
-                      <div className="col-span-2">
-                        <p className="text-sm text-muted-foreground mb-2 flex items-center gap-2">
-                          <Scale className="w-4 h-4" />
-                          Legal Areas {caseData.legalAreas && JSON.parse(caseData.legalAreas as string).length > 0 && (
-                            <span className="text-xs text-muted-foreground/70">(AI-detected, editable)</span>
-                          )}
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {caseData.legalAreas && JSON.parse(caseData.legalAreas as string).length > 0 ? (
-                            JSON.parse(caseData.legalAreas as string).map((area: any, index: number) => (
-                              <Badge key={index} variant="secondary" className="bg-purple-500/10 text-purple-300 border-purple-500/30">
-                                {typeof area === 'string' ? area : area.area || area.areaEn || 'Unknown'}
-                              </Badge>
-                            ))
-                          ) : (
-                            <p className="text-sm text-muted-foreground italic">No legal areas assigned yet</p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* Status Tab */}
-            <TabsContent value="status" className="space-y-4">
-              <CaseStatusWorkflow
-                currentStatus={caseData.status}
-                onStatusChange={(newStatus) => {
-                  updateCase.mutate(
-                    { id: caseId, status: newStatus as any },
-                    {
-                      onSuccess: () => {
-                        toast.success("Case status updated successfully");
-                        caseRefetch();
-                      },
-                      onError: () => {
-                        toast.error("Failed to update case status");
-                      },
-                    }
-                  );
-                }}
-                canEdit={true}
-              />
-            </TabsContent>
-
-            {/* Progress Tracking Tab */}
-            <TabsContent value="progress" className="space-y-4">
-              <ProgressTrackingDashboard caseId={caseId} />
-            </TabsContent>
-
-            {/* Evidence Tab */}
-            <TabsContent value="evidence" className="space-y-4">
-              <Tabs defaultValue="upload" className="w-full">
-                <TabsList className="grid w-full grid-cols-4 bg-card/50">
-                  <TabsTrigger value="upload">Upload</TabsTrigger>
-                  <TabsTrigger value="google-drive">Google Drive</TabsTrigger>
-                  <TabsTrigger value="auto-collection">Auto-Collection</TabsTrigger>
-                  <TabsTrigger value="monitoring">Monitoring</TabsTrigger>
-                </TabsList>
-                
-                <TabsContent value="upload" className="space-y-4 mt-4">
-                  <EnhancedEvidenceUpload caseId={caseId} />
-                  <div className="mt-6">
-                    <h3 className="text-lg font-semibold mb-4">Existing Evidence</h3>
-                    <EvidenceCollection caseId={caseId} />
-                  </div>
-                </TabsContent>
-                
-                <TabsContent value="google-drive" className="space-y-4 mt-4">
-                  <Card className="border-border/50 bg-card/50">
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <CloudDownload className="w-5 h-5" />
-                        Import from Google Drive
-                      </CardTitle>
-                      <CardDescription>
-                        Select files from your connected Google Drive account to add as evidence.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-center py-8 text-muted-foreground">
-                        <p>Google Drive integration has been moved to the Evidence page.</p>
-                        <p className="text-sm mt-2">Go to the Evidence tab to connect and sync your Google Drive.</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-                
-                <TabsContent value="auto-collection" className="space-y-4 mt-4">
-                  <AutoCollectionSettings caseId={caseId} />
-                </TabsContent>
-                
-                <TabsContent value="monitoring" className="space-y-4 mt-4">
-                  <CollectionMonitoringDashboard caseId={caseId} />
-                </TabsContent>
-              </Tabs>
-            </TabsContent>
-
-            {/* Matching Tab */}
-            <TabsContent value="matching" className="space-y-4">
-              <div className="flex items-center gap-4">
-                <div className="flex-1">
-                  <label className="text-sm text-muted-foreground mb-2 block">
-                    Search Radius: {selectedDistance} km
-                  </label>
-                  <input
-                    type="range"
-                    min="10"
-                    max="200"
-                    step="10"
-                    value={selectedDistance}
-                    onChange={(e) => setSelectedDistance(parseInt(e.target.value))}
-                    className="w-full"
-                  />
-                </div>
-                <Button
-                  onClick={() => refetchMatches()}
-                  variant="outline"
-                  className="border-purple-500/30 hover:bg-purple-500/10"
-                >
-                  <Target className="w-4 h-4 mr-2" />
-                  Refresh
-                </Button>
+            {caseData && (
+              <div className="flex items-center gap-2 ml-2">
+                <Badge variant="outline" className={`text-[11px] ${statusClass(caseData.status)}`}>
+                  {caseData.status}
+                </Badge>
+                <Badge variant="outline" className={`text-[11px] ${urgencyClass(caseData.urgency)}`}>
+                  {caseData.urgency}
+                </Badge>
               </div>
+            )}
+          </div>
 
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold">
-                  Matched Lawyers ({matchedLawyers?.length || 0})
-                </h3>
-                {matchedLawyers && matchedLawyers.length > 0 && (
-                  <Button
-                    onClick={handleInitiateOutreach}
-                    disabled={initiateOutreachMutation.isPending}
-                    className="bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-600 hover:to-blue-600"
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Button onClick={() => exportCaseSummary(caseData)} variant="ghost" size="sm" className="h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground">
+              <Download className="w-3.5 h-3.5 mr-1.5" /> Export
+            </Button>
+            <Button onClick={() => printCaseSummary(caseData)} variant="ghost" size="sm" className="h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground">
+              <Printer className="w-3.5 h-3.5 mr-1.5" /> Print
+            </Button>
+            {!isEditing && (
+              <Button onClick={handleEdit} variant="ghost" size="sm" className="h-8 px-2.5 text-xs text-orange-400 hover:text-orange-300 hover:bg-orange-500/10">
+                <Edit className="w-3.5 h-3.5 mr-1.5" /> Edit
+              </Button>
+            )}
+            <div className="w-px h-5 bg-border/60 mx-1" />
+            <Button onClick={() => onOpenChange(false)} variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground">
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+
+        {/* ─── body: sidebar + content ─── */}
+        <div className="flex flex-1 min-h-0">
+          {/* sidebar nav */}
+          <nav className="w-[200px] shrink-0 border-r border-border/40 bg-card/30 py-3 overflow-y-auto">
+            <div className="space-y-0.5 px-2">
+              {NAV_ITEMS.map((item) => {
+                const Icon = item.icon;
+                const active = activeTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => handleTabChange(item.id)}
+                    className={`
+                      group w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium transition-all duration-150
+                      ${active
+                        ? "bg-orange-500/12 text-orange-400 ring-1 ring-orange-500/20"
+                        : "text-muted-foreground hover:text-foreground hover:bg-card/60"
+                      }
+                    `}
                   >
-                    <Send className="w-4 h-4 mr-2" />
-                    {initiateOutreachMutation.isPending ? "Initiating..." : "Start Outreach"}
-                  </Button>
-                )}
+                    <Icon className={`w-4 h-4 shrink-0 transition-colors ${active ? "text-orange-500" : "text-muted-foreground/60 group-hover:text-muted-foreground"}`} />
+                    <span className="truncate">{item.label}</span>
+                    {active && <ChevronRight className="w-3 h-3 ml-auto text-orange-500/60" />}
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
+
+          {/* main content area */}
+          <main className="flex-1 min-w-0 overflow-y-auto p-6">
+            {caseLoading ? (
+              <div className="space-y-4">
+                <Skeleton className="h-8 w-48 rounded-lg" />
+                <Skeleton className="h-40 w-full rounded-xl" />
+                <Skeleton className="h-64 w-full rounded-xl" />
               </div>
+            ) : !caseData ? (
+              <div className="flex flex-col items-center justify-center h-full text-center">
+                <XCircle className="w-12 h-12 text-muted-foreground/40 mb-4" />
+                <p className="text-muted-foreground">Case not found</p>
+              </div>
+            ) : (
+              <>
+                {/* ═══ OVERVIEW ═══ */}
+                {activeTab === "overview" && (
+                  <div className="space-y-5 animate-in fade-in-0 duration-200">
+                    <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                      <Briefcase className="w-5 h-5 text-orange-500" /> Case Overview
+                    </h2>
 
-              {matchingLoading ? (
-                <div className="space-y-4">
-                  {[1, 2, 3].map((i) => (
-                    <Skeleton key={i} className="h-40 w-full" />
-                  ))}
-                </div>
-              ) : matchedLawyers && matchedLawyers.length > 0 ? (
-                <div className="space-y-4 max-h-96 overflow-y-auto">
-                  {matchedLawyers.map((lawyer: any, index: number) => (
-                    <Card
-                      key={lawyer.id}
-                      className="border-border/50 bg-card/50 hover:bg-card/80 transition-all"
-                    >
-                      <CardContent className="pt-6">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-3">
-                              <div className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold">
-                                #{index + 1}
-                              </div>
-                              <div>
-                                <h4 className="font-semibold text-lg">{lawyer.name}</h4>
-                                <p className="text-sm text-muted-foreground flex items-center gap-1">
-                                  <MapPin className="w-3 h-3" />
-                                  {lawyer.distance} km away
-                                </p>
-                              </div>
+                    {isEditing ? (
+                      <Card className="border-border/40 bg-card/60 backdrop-blur-sm">
+                        <CardContent className="pt-6 space-y-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                              <Label className="text-xs text-muted-foreground">Client Name</Label>
+                              <Input value={editedCase?.clientName || ""} onChange={(e) => setEditedCase({ ...editedCase, clientName: e.target.value })} />
                             </div>
-
-                            <div className="grid grid-cols-2 gap-4 mb-3">
-                              {lawyer.email && (
-                                <div className="flex items-center gap-2 text-sm">
-                                  <Mail className="w-4 h-4 text-muted-foreground" />
-                                  <span>{lawyer.email}</span>
-                                </div>
-                              )}
-                              {lawyer.phone && (
-                                <div className="flex items-center gap-2 text-sm">
-                                  <Phone className="w-4 h-4 text-muted-foreground" />
-                                  <span>{lawyer.phone}</span>
-                                </div>
-                              )}
+                            <div className="space-y-1.5">
+                              <Label className="text-xs text-muted-foreground">Email</Label>
+                              <Input type="email" value={editedCase?.clientEmail || ""} onChange={(e) => setEditedCase({ ...editedCase, clientEmail: e.target.value })} />
                             </div>
-
-                            <div className="flex flex-wrap gap-2 mb-3">
-                              {lawyer.legalAreas?.map((area: any, i: number) => (
-                                <Badge
-                                  key={i}
-                                  variant="secondary"
-                                  className="bg-blue-500/20 text-blue-300 border-blue-500/30"
-                                >
-                                  {typeof area === 'string' ? area : area.area || area.areaEn || 'Unknown'}
-                                </Badge>
-                              ))}
+                            <div className="space-y-1.5">
+                              <Label className="text-xs text-muted-foreground">Phone</Label>
+                              <Input value={editedCase?.clientPhone || ""} onChange={(e) => setEditedCase({ ...editedCase, clientPhone: e.target.value })} />
                             </div>
-
-                            <div className="flex flex-wrap gap-2">
-                              {lawyer.matchReasons?.map((reason: string, i: number) => (
-                                <Badge
-                                  key={i}
-                                  variant="outline"
-                                  className="text-xs border-green-500/30 text-green-400"
-                                >
-                                  <CheckCircle2 className="w-3 h-3 mr-1" />
-                                  {reason}
-                                </Badge>
-                              ))}
+                            <div className="space-y-1.5">
+                              <Label className="text-xs text-muted-foreground">Case Type</Label>
+                              <Input value={editedCase?.caseType || ""} onChange={(e) => setEditedCase({ ...editedCase, caseType: e.target.value })} />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs text-muted-foreground">Priority</Label>
+                              <select
+                                value={editedCase?.urgency || "Medium"}
+                                onChange={(e) => setEditedCase({ ...editedCase, urgency: e.target.value })}
+                                className="w-full h-9 px-3 bg-background border border-input rounded-md text-sm"
+                              >
+                                <option value="Low">Low</option>
+                                <option value="Medium">Medium</option>
+                                <option value="High">High</option>
+                              </select>
                             </div>
                           </div>
-
-                          <div className="text-right space-y-2">
-                            <div>
-                              <div className="text-3xl font-bold bg-gradient-to-r from-green-400 to-blue-400 bg-clip-text text-transparent">
-                                {lawyer.matchScore}
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Case Summary</Label>
+                            <Textarea value={editedCase?.caseSummary || ""} onChange={(e) => setEditedCase({ ...editedCase, caseSummary: e.target.value })} rows={5} />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Legal Areas</Label>
+                            <LegalAreasSelect
+                              value={editedCase?.legalAreas ? JSON.parse(editedCase.legalAreas as string) : []}
+                              onChange={(areas) => setEditedCase({ ...editedCase, legalAreas: JSON.stringify(areas) })}
+                            />
+                            <p className="text-[11px] text-muted-foreground/70">Adjust the legal areas if the AI classification needs correction</p>
+                          </div>
+                          <div className="flex gap-2 pt-2">
+                            <Button onClick={handleSaveEdit} size="sm" className="bg-orange-500 hover:bg-orange-600 text-white">
+                              <Save className="w-3.5 h-3.5 mr-1.5" /> Save Changes
+                            </Button>
+                            <Button onClick={handleCancelEdit} size="sm" variant="outline" className="border-border/60">
+                              <X className="w-3.5 h-3.5 mr-1.5" /> Cancel
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      <>
+                        {/* info grid */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          {[
+                            { label: "Client Name", value: caseData.clientName, icon: <Briefcase className="w-3.5 h-3.5" /> },
+                            { label: "Email", value: caseData.clientEmail, icon: <Mail className="w-3.5 h-3.5" /> },
+                            { label: "Phone", value: caseData.clientPhone || "—", icon: <Phone className="w-3.5 h-3.5" /> },
+                            { label: "Address", value: caseData.clientAddress || "No address provided", icon: <MapPin className="w-3.5 h-3.5" /> },
+                          ].map((item, i) => (
+                            <div key={i} className="rounded-xl border border-border/30 bg-card/40 p-3.5">
+                              <div className="flex items-center gap-1.5 mb-1.5">
+                                <span className="text-muted-foreground/50">{item.icon}</span>
+                                <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{item.label}</span>
                               </div>
-                              <p className="text-xs text-muted-foreground">Total Score (max 210)</p>
+                              <p className="text-sm font-medium text-foreground truncate" title={item.value}>{item.value}</p>
                             </div>
-                            
-                            {/* Score Breakdown */}
-                            <div className="text-xs space-y-1 text-left">
-                              {lawyer.caseLoadScore !== undefined && (
-                                <div className="flex justify-between gap-2">
-                                  <span className="text-muted-foreground">Case-load:</span>
-                                  <span className="font-medium text-green-400">{lawyer.caseLoadScore}/50</span>
-                                </div>
-                              )}
-                              {lawyer.responseTimeScore !== undefined && (
-                                <div className="flex justify-between gap-2">
-                                  <span className="text-muted-foreground">Response Time:</span>
-                                  <span className="font-medium text-blue-400">{lawyer.responseTimeScore}/50</span>
-                                </div>
-                              )}
-                              {lawyer.acceptanceRateScore !== undefined && (
-                                <div className="flex justify-between gap-2">
-                                  <span className="text-muted-foreground">Acceptance Rate:</span>
-                                  <span className="font-medium text-purple-400">{lawyer.acceptanceRateScore}/50</span>
-                                </div>
-                              )}
-                              {lawyer.capacityScore !== undefined && (
-                                <div className="flex justify-between gap-2">
-                                  <span className="text-muted-foreground">Capacity:</span>
-                                  <span className="font-medium text-yellow-400">{lawyer.capacityScore}/20</span>
-                                </div>
-                              )}
-                              {lawyer.distanceScore !== undefined && (
-                                <div className="flex justify-between gap-2">
-                                  <span className="text-muted-foreground">Distance:</span>
-                                  <span className="font-medium text-cyan-400">{lawyer.distanceScore}/10</span>
-                                </div>
-                              )}
-                              {lawyer.experienceScore !== undefined && (
-                                <div className="flex justify-between gap-2">
-                                  <span className="text-muted-foreground">Experience:</span>
-                                  <span className="font-medium text-orange-400">{lawyer.experienceScore}/10</span>
-                                </div>
-                              )}
+                          ))}
+                        </div>
+
+                        {/* case type + status + priority + created */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          <div className="rounded-xl border border-border/30 bg-card/40 p-3.5">
+                            <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Case Type</span>
+                            <p className="text-sm font-medium text-foreground mt-1">{caseData.caseType}</p>
+                          </div>
+                          <div className="rounded-xl border border-border/30 bg-card/40 p-3.5">
+                            <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Status</span>
+                            <div className="mt-1.5">
+                              <Badge variant="outline" className={`text-xs ${statusClass(caseData.status)}`}>{caseData.status}</Badge>
                             </div>
+                          </div>
+                          <div className="rounded-xl border border-border/30 bg-card/40 p-3.5">
+                            <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Priority</span>
+                            <div className="mt-1.5">
+                              <Badge variant="outline" className={`text-xs ${urgencyClass(caseData.urgency)}`}>{caseData.urgency}</Badge>
+                            </div>
+                          </div>
+                          <div className="rounded-xl border border-border/30 bg-card/40 p-3.5">
+                            <div className="flex items-center gap-1.5 mb-1">
+                              <Calendar className="w-3.5 h-3.5 text-muted-foreground/50" />
+                              <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Created</span>
+                            </div>
+                            <p className="text-sm font-medium text-foreground">{caseData.createdAt ? new Date(caseData.createdAt).toLocaleDateString() : "N/A"}</p>
                           </div>
                         </div>
+
+                        {/* summary */}
+                        <div className="rounded-xl border border-border/30 bg-card/40 p-4">
+                          <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Case Summary</span>
+                          <p className="text-sm text-foreground/80 mt-2 leading-relaxed">{caseData.caseSummary}</p>
+                        </div>
+
+                        {/* legal areas */}
+                        <div className="rounded-xl border border-border/30 bg-card/40 p-4">
+                          <div className="flex items-center gap-2 mb-3">
+                            <Scale className="w-4 h-4 text-muted-foreground/50" />
+                            <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Legal Areas</span>
+                            {parseLegalAreas(caseData).length > 0 && (
+                              <span className="text-[10px] text-muted-foreground/50 ml-1">(AI-detected, editable)</span>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {parseLegalAreas(caseData).length > 0 ? (
+                              parseLegalAreas(caseData).map((area, i) => (
+                                <Badge key={i} variant="secondary" className="bg-purple-500/10 text-purple-300 border border-purple-500/25 text-xs">
+                                  {area}
+                                </Badge>
+                              ))
+                            ) : (
+                              <p className="text-sm text-muted-foreground/60 italic">No legal areas assigned yet</p>
+                            )}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* ═══ STATUS ═══ */}
+                {activeTab === "status" && (
+                  <div className="space-y-5 animate-in fade-in-0 duration-200">
+                    <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                      <Activity className="w-5 h-5 text-orange-500" /> Case Status
+                    </h2>
+                    <CaseStatusWorkflow
+                      currentStatus={caseData.status}
+                      onStatusChange={(newStatus) => {
+                        updateCaseMutation.mutate(
+                          { id: caseId, status: newStatus as any },
+                          {
+                            onSuccess: () => { toast.success("Case status updated"); refetchCase(); },
+                            onError: () => { toast.error("Failed to update status"); },
+                          }
+                        );
+                      }}
+                      canEdit={true}
+                    />
+                  </div>
+                )}
+
+                {/* ═══ PROGRESS ═══ */}
+                {activeTab === "progress" && (
+                  <div className="space-y-5 animate-in fade-in-0 duration-200">
+                    <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                      <TrendingUp className="w-5 h-5 text-orange-500" /> Progress Tracking
+                    </h2>
+                    <ProgressTrackingDashboard caseId={caseId} />
+                  </div>
+                )}
+
+                {/* ═══ MESSAGES ═══ */}
+                {activeTab === "messages" && (
+                  <div className="space-y-5 animate-in fade-in-0 duration-200">
+                    <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                      <MessageSquare className="w-5 h-5 text-orange-500" /> Messages
+                    </h2>
+                    <CommunicationHub caseId={caseId} />
+                  </div>
+                )}
+
+                {/* ═══ EVIDENCE ═══ */}
+                {activeTab === "evidence" && (
+                  <div className="space-y-5 animate-in fade-in-0 duration-200">
+                    <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                      <FileText className="w-5 h-5 text-orange-500" /> Evidence Management
+                    </h2>
+                    <Tabs defaultValue="upload" className="w-full">
+                      <TabsList className="w-full justify-start gap-1 h-auto bg-card/40 border border-border/30 rounded-xl p-1">
+                        <TabsTrigger value="upload" className="text-xs rounded-lg">Upload</TabsTrigger>
+                        <TabsTrigger value="google-drive" className="text-xs rounded-lg">Google Drive</TabsTrigger>
+                        <TabsTrigger value="auto-collection" className="text-xs rounded-lg">Auto-Collection</TabsTrigger>
+                        <TabsTrigger value="monitoring" className="text-xs rounded-lg">Monitoring</TabsTrigger>
+                      </TabsList>
+                      <TabsContent value="upload" className="mt-4 space-y-4">
+                        <EnhancedEvidenceUpload caseId={caseId} />
+                        <div className="mt-6">
+                          <h3 className="text-base font-semibold mb-4 text-foreground/80">Existing Evidence</h3>
+                          <EvidenceCollection caseId={caseId} />
+                        </div>
+                      </TabsContent>
+                      <TabsContent value="google-drive" className="mt-4">
+                        <Card className="border-border/30 bg-card/40">
+                          <CardHeader>
+                            <CardTitle className="flex items-center gap-2 text-base"><CloudDownload className="w-5 h-5" /> Import from Google Drive</CardTitle>
+                            <CardDescription>Select files from your connected Google Drive account to add as evidence.</CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="text-center py-8 text-muted-foreground">
+                              <p>Google Drive integration has been moved to the Evidence page.</p>
+                              <p className="text-sm mt-2 text-muted-foreground/60">Go to the Evidence tab to connect and sync your Google Drive.</p>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </TabsContent>
+                      <TabsContent value="auto-collection" className="mt-4">
+                        <AutoCollectionSettings caseId={caseId} />
+                      </TabsContent>
+                      <TabsContent value="monitoring" className="mt-4">
+                        <CollectionMonitoringDashboard caseId={caseId} />
+                      </TabsContent>
+                    </Tabs>
+                  </div>
+                )}
+
+                {/* ═══ EVIDENCE TIMELINE ═══ */}
+                {activeTab === "evidence-timeline" && (
+                  <div className="space-y-5 animate-in fade-in-0 duration-200">
+                    <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                      <GitBranch className="w-5 h-5 text-orange-500" /> Evidence Timeline
+                    </h2>
+                    <EvidenceTimelineView caseId={caseId} />
+                  </div>
+                )}
+
+                {/* ═══ GAP ANALYSIS ═══ */}
+                {activeTab === "gap-analysis" && (
+                  <div className="space-y-5 animate-in fade-in-0 duration-200">
+                    <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                      <Shield className="w-5 h-5 text-orange-500" /> Gap Analysis
+                    </h2>
+                    <EvidenceGapAnalysisDashboard caseId={caseId} />
+                  </div>
+                )}
+
+                {/* ═══ MATCHING ═══ */}
+                {activeTab === "matching" && (
+                  <div className="space-y-5 animate-in fade-in-0 duration-200">
+                    <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                      <Users className="w-5 h-5 text-orange-500" /> Lawyer Matching
+                    </h2>
+
+                    {/* radius control */}
+                    <div className="flex items-center gap-4 rounded-xl border border-border/30 bg-card/40 p-4">
+                      <div className="flex-1">
+                        <label className="text-xs font-medium text-muted-foreground block mb-2">
+                          Search Radius: <span className="text-orange-400 font-semibold">{selectedDistance} km</span>
+                        </label>
+                        <input
+                          type="range" min="10" max="200" step="10"
+                          value={selectedDistance}
+                          onChange={(e) => setSelectedDistance(parseInt(e.target.value))}
+                          className="w-full accent-orange-500"
+                        />
+                      </div>
+                      <Button onClick={() => refetchMatches()} variant="outline" size="sm" className="border-border/50 hover:bg-card/60">
+                        <Target className="w-3.5 h-3.5 mr-1.5" /> Refresh
+                      </Button>
+                    </div>
+
+                    {/* header + outreach button */}
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-medium text-muted-foreground">
+                        Matched Lawyers <span className="text-foreground">({matchedLawyers?.length || 0})</span>
+                      </h3>
+                      {matchedLawyers && matchedLawyers.length > 0 && (
+                        <Button
+                          onClick={handleInitiateOutreach}
+                          disabled={initiateOutreachMutation.isPending}
+                          size="sm"
+                          className="bg-orange-500 hover:bg-orange-600 text-white"
+                        >
+                          <Send className="w-3.5 h-3.5 mr-1.5" />
+                          {initiateOutreachMutation.isPending ? "Initiating…" : "Start Outreach"}
+                        </Button>
+                      )}
+                    </div>
+
+                    {matchingLoading ? (
+                      <div className="space-y-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-32 w-full rounded-xl" />)}</div>
+                    ) : matchedLawyers && matchedLawyers.length > 0 ? (
+                      <div className="space-y-3">
+                        {matchedLawyers.map((lawyer: any, index: number) => (
+                          <div key={lawyer.id} className="rounded-xl border border-border/30 bg-card/40 p-4 transition-colors hover:bg-card/60">
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-3 mb-2.5">
+                                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
+                                    {index + 1}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <h4 className="font-semibold text-sm text-foreground truncate">{lawyer.name}</h4>
+                                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                      <MapPin className="w-3 h-3" /> {lawyer.distance} km away
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground mb-2">
+                                  {lawyer.email && <span className="flex items-center gap-1"><Mail className="w-3 h-3" /> {lawyer.email}</span>}
+                                  {lawyer.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" /> {lawyer.phone}</span>}
+                                </div>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {lawyer.legalAreas?.map((area: any, i: number) => (
+                                    <Badge key={i} variant="secondary" className="bg-blue-500/10 text-blue-300 border-blue-500/25 text-[11px]">
+                                      {typeof area === "string" ? area : area.area || area.areaEn || "Unknown"}
+                                    </Badge>
+                                  ))}
+                                  {lawyer.matchReasons?.map((reason: string, i: number) => (
+                                    <Badge key={`r-${i}`} variant="outline" className="text-[11px] border-emerald-500/25 text-emerald-400">
+                                      <CheckCircle2 className="w-2.5 h-2.5 mr-1" /> {reason}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              </div>
+                              {/* score */}
+                              <div className="text-right shrink-0 min-w-[90px]">
+                                <div className="text-2xl font-bold bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent">
+                                  {lawyer.matchScore}
+                                </div>
+                                <p className="text-[10px] text-muted-foreground mb-2">Score (max 210)</p>
+                                <div className="text-[11px] space-y-0.5">
+                                  {lawyer.caseLoadScore !== undefined && <div className="flex justify-between gap-1"><span className="text-muted-foreground/70">Load</span><span className="text-emerald-400">{lawyer.caseLoadScore}/50</span></div>}
+                                  {lawyer.responseTimeScore !== undefined && <div className="flex justify-between gap-1"><span className="text-muted-foreground/70">Response</span><span className="text-blue-400">{lawyer.responseTimeScore}/50</span></div>}
+                                  {lawyer.acceptanceRateScore !== undefined && <div className="flex justify-between gap-1"><span className="text-muted-foreground/70">Accept</span><span className="text-purple-400">{lawyer.acceptanceRateScore}/50</span></div>}
+                                  {lawyer.capacityScore !== undefined && <div className="flex justify-between gap-1"><span className="text-muted-foreground/70">Capacity</span><span className="text-yellow-400">{lawyer.capacityScore}/20</span></div>}
+                                  {lawyer.distanceScore !== undefined && <div className="flex justify-between gap-1"><span className="text-muted-foreground/70">Distance</span><span className="text-cyan-400">{lawyer.distanceScore}/10</span></div>}
+                                  {lawyer.experienceScore !== undefined && <div className="flex justify-between gap-1"><span className="text-muted-foreground/70">Exp.</span><span className="text-orange-400">{lawyer.experienceScore}/10</span></div>}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border border-border/30 bg-card/40 p-8 text-center">
+                        <Search className="w-10 h-10 mx-auto mb-3 text-muted-foreground/30" />
+                        <p className="text-muted-foreground text-sm">No matching lawyers found within {selectedDistance} km.</p>
+                        <p className="text-xs text-muted-foreground/60 mt-1">Try increasing the search radius.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ═══ OUTREACH ═══ */}
+                {activeTab === "outreach" && (
+                  <div className="space-y-5 animate-in fade-in-0 duration-200">
+                    <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                      <Send className="w-5 h-5 text-orange-500" /> Outreach History
+                    </h2>
+                    <OutreachProgressVisualization caseId={caseId} />
+                    <Card className="border-border/30 bg-card/40">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="flex items-center gap-2 text-base">
+                          <MessageSquare className="w-4 h-4 text-muted-foreground/60" /> Lawyers Contacted
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        {outreachHistory && outreachHistory.length > 0 ? (
+                          <div className="space-y-3">
+                            {outreachHistory.map((outreach: any) => (
+                              <div key={outreach.id} className="rounded-lg border border-border/20 bg-background/40 p-3">
+                                <div className="flex items-center justify-between mb-2">
+                                  <p className="font-medium text-sm">{outreach.lawyerName || "Unknown Lawyer"}</p>
+                                  <Badge variant={outreach.status === "Interested" ? "default" : outreach.status === "Declined" ? "destructive" : "secondary"} className="text-[11px]">
+                                    {outreach.status}
+                                  </Badge>
+                                </div>
+                                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                                  <span>Distance: {outreach.distanceKm} km</span>
+                                  <span>Contact: {new Date(outreach.initialContact).toLocaleDateString()}</span>
+                                  <span>Follow-ups: {outreach.followUpsSent}</span>
+                                </div>
+                                {outreach.response && (
+                                  <p className="text-xs mt-2 bg-background/60 p-2 rounded border border-border/20 text-foreground/70">{outreach.response}</p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-center text-muted-foreground/60 py-6 text-sm">No outreach history yet.</p>
+                        )}
                       </CardContent>
                     </Card>
-                  ))}
-                </div>
-              ) : (
-                <Card className="border-border/50 bg-card/50">
-                  <CardContent className="pt-6 text-center">
-                    <XCircle className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-                    <p className="text-muted-foreground">
-                      No matching lawyers found within {selectedDistance} km radius.
-                    </p>
-                    <p className="text-sm text-muted-foreground mt-2">
-                      Try increasing the search radius or check case requirements.
-                    </p>
-                  </CardContent>
-                </Card>
-              )}
-            </TabsContent>
+                  </div>
+                )}
 
-            {/* Outreach History Tab */}
-            <TabsContent value="outreach" className="space-y-4">
-              {/* Multi-Discipline Outreach Progress Visualization */}
-              <OutreachProgressVisualization caseId={caseId} />
-              
-              {/* Detailed Outreach History */}
-              <Card className="border-border/50 bg-card/50">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <MessageSquare className="w-5 h-5" />
-                    Lawyers We've Contacted for You
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {outreachHistory && outreachHistory.length > 0 ? (
-                    <div className="space-y-4">
-                      {outreachHistory.map((outreach: any) => (
-                        <div
-                          key={outreach.id}
-                          className="border-l-2 border-purple-500/30 pl-4 py-2"
-                        >
-                          <div className="flex items-center justify-between mb-2">
-                            <p className="font-medium">{outreach.lawyerName || "Unknown Lawyer"}</p>
-                            <Badge
-                              variant={
-                                outreach.status === "Interested"
-                                  ? "default"
-                                  : outreach.status === "Declined"
-                                  ? "destructive"
-                                  : "secondary"
-                              }
-                            >
-                              {outreach.status}
-                            </Badge>
-                          </div>
-                          <p className="text-sm text-muted-foreground">
-                            Distance: {outreach.distanceKm} km
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            Initial Contact: {new Date(outreach.initialContact).toLocaleDateString()}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            Follow-ups Sent: {outreach.followUpsSent}
-                          </p>
-                          {outreach.response && (
-                            <p className="text-sm mt-2 bg-card/80 p-2 rounded border border-border/30">
-                              {outreach.response}
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-center text-muted-foreground py-8">
-                      No outreach history yet. Start matching lawyers to begin outreach.
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
+                {/* ═══ OUTREACH ANALYTICS ═══ */}
+                {activeTab === "outreach-analytics" && (
+                  <div className="space-y-5 animate-in fade-in-0 duration-200">
+                    <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                      <BarChart3 className="w-5 h-5 text-orange-500" /> Outreach Analytics
+                    </h2>
+                    <OutreachAnalyticsView caseId={caseId} />
+                  </div>
+                )}
 
-            {/* Gap Analysis Tab */}
-            <TabsContent value="gap-analysis" className="space-y-4">
-              <EvidenceGapAnalysisDashboard caseId={caseId} />
-            </TabsContent>
-
-            {/* Timeline Tab */}
-            <TabsContent value="timeline" className="space-y-4">
-              <TimelineView
-                events={[
-                  {
-                    id: "case-created",
-                    date: caseData.createdAt ? new Date(caseData.createdAt) : new Date(),
-                    type: "case_created",
-                    title: "Case Created",
-                    description: `Case for ${caseData.clientName} was created with ${caseData.urgency} priority`,
-                    metadata: {
-                      urgency: caseData.urgency,
-                      caseType: caseData.caseType,
-                    },
-                  },
-                  ...(outreachHistory?.map((outreach: any) => ({
-                    id: `outreach-${outreach.id}`,
-                    date: new Date(outreach.initialContact),
-                    type: "lawyer_contacted" as const,
-                    title: "Lawyer Contacted",
-                    description: `Reached out to ${outreach.lawyerName || "lawyer"}`,
-                    metadata: {
-                      lawyer: outreach.lawyerName,
-                      status: outreach.status,
-                      distance: `${outreach.distanceKm} km`,
-                    },
-                  })) || []),
-                  ...(outreachHistory?.filter((o: any) => o.response).map((outreach: any) => ({
-                    id: `response-${outreach.id}`,
-                    date: outreach.lastContact ? new Date(outreach.lastContact) : new Date(outreach.initialContact),
-                    type: "response_received" as const,
-                    title: "Response Received",
-                    description: outreach.response || "Lawyer responded to outreach",
-                    metadata: {
-                      lawyer: outreach.lawyerName,
-                    },
-                  })) || []),
-                ]}
-              />
-            </TabsContent>
-
-            {/* Messages Tab */}
-            <TabsContent value="messages" className="space-y-4">
-              <CommunicationHub caseId={caseId} />
-            </TabsContent>
-
-            {/* Evidence Timeline Tab */}
-            <TabsContent value="evidence-timeline" className="space-y-4">
-              <EvidenceTimelineView caseId={caseId} />
-            </TabsContent>
-
-            {/* Outreach Analytics Tab */}
-            <TabsContent value="outreach-analytics" className="space-y-4">
-              <OutreachAnalyticsView caseId={caseId} />
-            </TabsContent>
-          </Tabs>
-        ) : (
-          <div className="text-center py-8">
-            <p className="text-muted-foreground">Case not found</p>
-          </div>
-        )}
+                {/* ═══ TIMELINE ═══ */}
+                {activeTab === "timeline" && (
+                  <div className="space-y-5 animate-in fade-in-0 duration-200">
+                    <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                      <Clock className="w-5 h-5 text-orange-500" /> Case Timeline
+                    </h2>
+                    <TimelineView
+                      events={[
+                        {
+                          id: "case-created",
+                          date: caseData.createdAt ? new Date(caseData.createdAt) : new Date(),
+                          type: "case_created",
+                          title: "Case Created",
+                          description: `Case for ${caseData.clientName} was created with ${caseData.urgency} priority`,
+                          metadata: { urgency: caseData.urgency, caseType: caseData.caseType },
+                        },
+                        ...(outreachHistory?.map((outreach: any) => ({
+                          id: `outreach-${outreach.id}`,
+                          date: new Date(outreach.initialContact),
+                          type: "lawyer_contacted" as const,
+                          title: "Lawyer Contacted",
+                          description: `Reached out to ${outreach.lawyerName || "lawyer"}`,
+                          metadata: { lawyer: outreach.lawyerName, status: outreach.status, distance: `${outreach.distanceKm} km` },
+                        })) || []),
+                        ...(outreachHistory?.filter((o: any) => o.response).map((outreach: any) => ({
+                          id: `response-${outreach.id}`,
+                          date: outreach.lastContact ? new Date(outreach.lastContact) : new Date(outreach.initialContact),
+                          type: "response_received" as const,
+                          title: "Response Received",
+                          description: outreach.response || "Lawyer responded to outreach",
+                          metadata: { lawyer: outreach.lawyerName },
+                        })) || []),
+                      ]}
+                    />
+                  </div>
+                )}
+              </>
+            )}
+          </main>
+        </div>
       </DialogContent>
     </Dialog>
   );
 }
-
