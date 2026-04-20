@@ -19,8 +19,11 @@ export default function Help() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submitTicket = trpc.support.submitTicket.useMutation({
-    onSuccess: () => {
-      toast.success("Support ticket submitted. We'll get back to you soon.");
+    onSuccess: (result) => {
+      toast.success(`Support ticket ${result.id} submitted.`);
+      toast.message("Ticket destination", {
+        description: "Your message is stored in LARO support tickets and queued for support follow-up.",
+      });
       setSupportForm({ category: "", subject: "", message: "" });
       setIsSubmitting(false);
     },

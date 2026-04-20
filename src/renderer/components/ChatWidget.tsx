@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { MessageSquare, X, Send, Minimize2, Maximize2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { useLocation } from "wouter";
 
 interface Message {
   id: string;
@@ -15,6 +16,7 @@ interface Message {
 }
 
 export default function ChatWidget({ embedded = false }: { embedded?: boolean }) {
+  const [location] = useLocation();
   const [isOpen, setIsOpen] = useState(embedded);
   const [isMinimized, setIsMinimized] = useState(false);
   const [message, setMessage] = useState("");
@@ -40,6 +42,7 @@ export default function ChatWidget({ embedded = false }: { embedded?: boolean })
       toast.error(`Failed to record answer: ${error.message ?? "Unknown error"}`);
     },
   });
+  const askAssistantMutation = trpc.assistant.ask.useMutation();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -49,13 +52,14 @@ export default function ChatWidget({ embedded = false }: { embedded?: boolean })
     scrollToBottom();
   }, [messages]);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!message.trim()) return;
 
+    const outgoingMessage = message;
     const newMessage: Message = {
       id: Date.now().toString(),
       role: "user",
-      content: message,
+      content: outgoingMessage,
       timestamp: new Date(),
     };
 
@@ -72,7 +76,7 @@ export default function ChatWidget({ embedded = false }: { embedded?: boolean })
       // Record answer to clarification question
       answerMutation.mutate({
         questionId: matchingQuestion.id,
-        answer: message,
+        answer: outgoingMessage,
       });
 
       const response: Message = {
@@ -83,16 +87,30 @@ export default function ChatWidget({ embedded = false }: { embedded?: boolean })
       };
       setMessages(prev => [...prev, response]);
     } else {
-      // General message - acknowledge
-      setTimeout(() => {
+      const caseIdFromLocalStorage =
+        typeof window !== "undefined" ? localStorage.getItem("active-case-context-id") || undefined : undefined;
+      try {
+        const result = await askAssistantMutation.mutateAsync({
+          question: outgoingMessage,
+          caseId: caseIdFromLocalStorage,
+          page: location,
+        });
         const response: Message = {
           id: (Date.now() + 1).toString(),
           role: "assistant",
-          content: "Thank you for your message! I'm here to help answer any questions about your cases. If you have specific questions, feel free to ask!",
+          content: result.answer,
           timestamp: new Date(),
         };
         setMessages(prev => [...prev, response]);
-      }, 500);
+      } catch {
+        const fallback: Message = {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: "I could not process that right now. Please try again.",
+          timestamp: new Date(),
+        };
+        setMessages(prev => [...prev, fallback]);
+      }
     }
   };
 
@@ -244,7 +262,7 @@ export default function ChatWidget({ embedded = false }: { embedded?: boolean })
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
-                  Press Enter to send, Shift+Enter for new line
+                  Press Enter to send, Shift+Enter for new line. Case detail context is used automatically when available.
                 </p>
               </div>
             </>

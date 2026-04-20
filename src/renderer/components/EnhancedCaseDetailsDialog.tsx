@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { MultiAreaOutreachProgress } from "@/components/OutreachProgressBar";
 import {
@@ -90,8 +90,8 @@ function OutreachProgressVisualization({ caseId }: { caseId: string }) {
   return (
     <MultiAreaOutreachProgress
       caseId={caseId}
-      legalAreas={data.legalAreas}
-      overallStats={data.overallStats}
+      legalAreas={data.legalAreas as any}
+      overallStats={data.overallStats as any}
     />
   );
 }
@@ -111,9 +111,16 @@ export default function EnhancedCaseDetailsDialog({
     return saved || "overview";
   });
 
+  useEffect(() => {
+    const saved = localStorage.getItem(`case-tab-${caseId}`);
+    setActiveTab(saved || "overview");
+    localStorage.setItem("active-case-context-id", caseId);
+  }, [caseId]);
+
   const handleTabChange = (value: string) => {
     setActiveTab(value);
     localStorage.setItem(`case-tab-${caseId}`, value);
+    localStorage.setItem("active-case-context-id", caseId);
   };
 
   /* ── queries ── */
@@ -152,12 +159,12 @@ export default function EnhancedCaseDetailsDialog({
   if (!open) return null;
 
   /* ── urgency colors ── */
-  const urgencyClass = (u: string | undefined) =>
+  const urgencyClass = (u: string | null | undefined) =>
     u === "High" ? "border-red-500/50 text-red-400" :
     u === "Medium" ? "border-orange-500/50 text-orange-400" :
     "border-emerald-500/50 text-emerald-400";
 
-  const statusClass = (s: string | undefined) =>
+  const statusClass = (s: string | null | undefined) =>
     s === "Matched" ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" :
     s === "Outreach" ? "bg-blue-500/15 text-blue-400 border-blue-500/30" :
     "bg-orange-500/15 text-orange-400 border-orange-500/30";
@@ -346,7 +353,7 @@ export default function EnhancedCaseDetailsDialog({
                                 <span className="text-muted-foreground/50">{item.icon}</span>
                                 <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{item.label}</span>
                               </div>
-                              <p className="text-sm font-medium text-foreground truncate" title={item.value}>{item.value}</p>
+                              <p className="text-sm font-medium text-foreground truncate" title={item.value ?? ""}>{item.value ?? "—"}</p>
                             </div>
                           ))}
                         </div>
@@ -417,7 +424,7 @@ export default function EnhancedCaseDetailsDialog({
                       <Activity className="w-5 h-5 text-orange-500" /> Case Status
                     </h2>
                     <CaseStatusWorkflow
-                      currentStatus={caseData.status}
+                      currentStatus={caseData.status || "Matching"}
                       onStatusChange={(newStatus) => {
                         updateCaseMutation.mutate(
                           { id: caseId, status: newStatus as any },
@@ -480,8 +487,10 @@ export default function EnhancedCaseDetailsDialog({
                           </CardHeader>
                           <CardContent>
                             <div className="text-center py-8 text-muted-foreground">
-                              <p>Google Drive integration has been moved to the Evidence page.</p>
-                              <p className="text-sm mt-2 text-muted-foreground/60">Go to the Evidence tab to connect and sync your Google Drive.</p>
+                              <p>Connect your source once, then sync directly into this case.</p>
+                              <p className="text-sm mt-2 text-muted-foreground/60">
+                                Use the Auto-Collection and Monitoring tabs here to control ongoing imports for this case.
+                              </p>
                             </div>
                           </CardContent>
                         </Card>

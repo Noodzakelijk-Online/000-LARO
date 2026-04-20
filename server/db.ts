@@ -32,12 +32,59 @@ function ensureSupportTicketsTable(sqlite: InstanceType<typeof Database>) {
   }
 }
 
+function ensureUserPreferencesColumns(sqlite: InstanceType<typeof Database>) {
+  try {
+    sqlite.exec(`
+      CREATE TABLE IF NOT EXISTS user_preferences (
+        id TEXT PRIMARY KEY NOT NULL,
+        userId TEXT NOT NULL,
+        key TEXT,
+        value TEXT,
+        theme TEXT,
+        dashboardWidgets TEXT,
+        notificationSettings TEXT,
+        preferredLawyers TEXT,
+        caseTemplates TEXT,
+        updatedAt INTEGER,
+        userPreferences TEXT
+      );
+    `);
+
+    const columns = sqlite
+      .prepare("PRAGMA table_info(user_preferences)")
+      .all() as Array<{ name: string }>;
+    const existing = new Set(columns.map((c) => c.name));
+
+    const missingTextColumns = [
+      "key",
+      "value",
+      "theme",
+      "dashboardWidgets",
+      "notificationSettings",
+      "preferredLawyers",
+      "caseTemplates",
+      "userPreferences",
+    ].filter((col) => !existing.has(col));
+
+    for (const column of missingTextColumns) {
+      sqlite.exec(`ALTER TABLE user_preferences ADD COLUMN ${column} TEXT;`);
+    }
+
+    if (!existing.has("updatedAt")) {
+      sqlite.exec("ALTER TABLE user_preferences ADD COLUMN updatedAt INTEGER;");
+    }
+  } catch (e) {
+    console.warn("[Database] Could not ensure user_preferences columns:", e);
+  }
+}
+
 export async function getDb() {
   if (!_db) {
     try {
       const sqlite = new Database(DB_FILE);
       _db = drizzle(sqlite);
       ensureSupportTicketsTable(sqlite);
+      ensureUserPreferencesColumns(sqlite);
       console.log("[Database] SQLite initialized at:", DB_FILE);
 
       // Attempt migration automatically

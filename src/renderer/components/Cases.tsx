@@ -10,6 +10,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, MapPin, Clock, Briefcase, FileText, Upload } from "lucide-react";
 import SmartSearchFilters from "@/components/SmartSearchFilters";
 import { BulkCaseImport } from "@/components/BulkCaseImport";
+import BulkEvidenceUpload from "@/components/BulkEvidenceUpload";
+import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
@@ -109,6 +111,7 @@ export default function Cases() {
   const [legalAreaFilter, setLegalAreaFilter] = useState<string | null>(null);
   const [dateRangeFilter, setDateRangeFilter] = useState<string | null>(null);
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
+  const [evidenceUploadCaseId, setEvidenceUploadCaseId] = useState<string | null>(null);
 
   const applySearchFilters = useCallback((query: string, filters: Record<string, string | undefined> | null | undefined) => {
     setSearchTerm(query ?? "");
@@ -173,7 +176,7 @@ export default function Cases() {
 
   return (
     <DashboardLayout>
-      <div className="p-8 space-y-8">
+      <div className="p-6 space-y-6">
         {/* Top controls: title + actions + search/filter */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
@@ -243,7 +246,7 @@ export default function Cases() {
           </Card>
         ) : (
           <>
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
               {cases.map((caseItem: any) => {
                 const legalAreas = parseLegalAreas(caseItem);
                 return (
@@ -321,7 +324,10 @@ export default function Cases() {
                       </div>
                       <Button
                         variant="outline"
-                        onClick={() => setSelectedCaseId(caseItem.id)}
+                        onClick={() => {
+                          localStorage.setItem(`case-tab-${caseItem.id}`, "evidence");
+                          setSelectedCaseId(caseItem.id);
+                        }}
                         className="mt-4 w-full border-blue-500/30 transition-all group-hover:border-blue-500/50 hover:bg-blue-500/10"
                       >
                         View Your Case Details
@@ -375,15 +381,21 @@ export default function Cases() {
       <CaseCreationWizard 
         open={newCaseOpen} 
         onOpenChange={setNewCaseOpen}
-        onComplete={(caseData) => {
-          // Urgency is now fixed to Medium per client requirements
-          createCase.mutate({
-            caseType: caseData.legalArea,
-            caseSummary: caseData.summary,
-            urgency: "Medium",
-            clientName: caseData.clientName,
-            clientEmail: caseData.clientEmail,
-          });
+        onComplete={async (caseData) => {
+          try {
+            const created = await createCase.mutateAsync({
+              caseType: caseData.legalArea || "AI Classification Pending",
+              caseSummary: caseData.summary || "",
+              urgency: "Medium",
+              clientName: caseData.clientName,
+              clientEmail: caseData.clientEmail,
+            });
+            if (caseData.uploadDocumentsAfterCreate) {
+              setEvidenceUploadCaseId(created.id);
+            }
+          } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Failed to create case");
+          }
         }}
       />
       {selectedCaseId && (
@@ -402,6 +414,14 @@ export default function Cases() {
           <BulkCaseImport />
         </DialogContent>
       </Dialog>
+      {evidenceUploadCaseId && (
+        <BulkEvidenceUpload
+          caseId={evidenceUploadCaseId}
+          open={!!evidenceUploadCaseId}
+          onClose={() => setEvidenceUploadCaseId(null)}
+          onComplete={() => setEvidenceUploadCaseId(null)}
+        />
+      )}
     </DashboardLayout>
   );
 }

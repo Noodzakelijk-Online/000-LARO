@@ -37,9 +37,10 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { ENV } from "../_core/env";
 import { getUser, getDb } from "../db";
-import { users } from "../schema";
-import { eq } from "drizzle-orm";
+import { users, cases } from "../schema";
+import { and, eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
+import { invokeLLM } from "../llm";
 
 export const appRouter = router({
   system: systemRouter,
@@ -229,6 +230,62 @@ export const appRouter = router({
     answer: protectedProcedure
       .input(z.object({ questionId: z.string(), answer: z.string() }))
       .mutation(() => ({ ok: true as const })),
+  }),
+
+  assistant: router({
+    ask: protectedProcedure
+      .input(
+        z.object({
+          question: z.string().min(1),
+          caseId: z.string().optional(),
+          page: z.string().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        let caseContext = "";
+
+        if (db && input.caseId) {
+          const rows = await db
+            .select()
+            .from(cases)
+            .where(and(eq(cases.id, input.caseId), eq(cases.userId, ctx.user.id)))
+            .limit(1);
+          if (rows.length > 0) {
+            const c = rows[0] as any;
+            caseContext = `Case type: ${c.caseType}\nStatus: ${c.status}\nSummary: ${c.caseSummary}`;
+          }
+        }
+
+        const systemPrompt = input.caseId
+          ? `You are LARO, a legal assistant focused ONLY on the selected case context.\n${caseContext}\nFirst validate the user's issue understanding, then ask 1-3 targeted follow-up questions if details are missing. Keep answers concise and practical.`
+          : "You are LARO, a legal assistant for general product and legal-workflow guidance. If the user asks case-specific questions without a selected case, ask them to open a case first.";
+
+        try {
+          const result = await invokeLLM({
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: input.question },
+            ],
+            maxTokens: 700,
+          });
+          const content = result.choices?.[0]?.message?.content;
+          const text =
+            typeof content === "string"
+              ? content
+              : Array.isArray(content)
+                ? content
+                    .map((part: any) => (part?.type === "text" ? part.text : ""))
+                    .join("\n")
+                : "";
+          return { answer: text || "I could not generate an answer right now. Please try again." };
+        } catch (error) {
+          return {
+            answer:
+              "I am currently unable to reach the AI service. Please try again in a moment.",
+          };
+        }
+      }),
   }),
   
   // OCR procedures (placeholder for now)

@@ -20,9 +20,10 @@ import {
   User,
   HardDrive,
 } from "lucide-react";
-import PersonalizationSettings from "@/components/PersonalizationSettings";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useLocation } from "wouter";
+import EvidenceConnectionsCard from "@/components/EvidenceConnectionsCard";
 
 type SettingsSection =
   | "personalization"
@@ -63,8 +64,11 @@ const DEFAULT_TOGGLES = {
 
 export default function Settings() {
   const [section, setSection] = useState<SettingsSection>("email");
+  const [, setLocation] = useLocation();
   const [testEmail, setTestEmail] = useState("");
   const [isTesting, setIsTesting] = useState(false);
+  const [isExportingSecurityData, setIsExportingSecurityData] = useState(false);
+  const [isCreatingBackup, setIsCreatingBackup] = useState(false);
   const scraperScheduleInputRef = useRef<HTMLInputElement>(null);
 
   const { data: userPref, refetch: refetchPrefs } = trpc.userPreferences.get.useQuery();
@@ -78,7 +82,9 @@ export default function Settings() {
   const toggles = userPref?.appWorkbench?.quickNotificationToggles ?? DEFAULT_TOGGLES;
 
   const { data: providerInfo } = trpc.email.getProviderInfo.useQuery();
+  const { data: healthInfo } = trpc.health.check.useQuery();
   const testEmailMutation = trpc.email.test.useMutation();
+  const exportDataMutation = trpc.gdpr.exportData.useMutation();
 
   const openScanner = useCallback(async () => {
     try {
@@ -122,6 +128,18 @@ export default function Settings() {
     } finally {
       setIsTesting(false);
     }
+  };
+
+  const downloadJsonFile = (name: string, payload: unknown) => {
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   const getProviderStatusBadge = () => {
@@ -172,37 +190,30 @@ export default function Settings() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-[280px_minmax(0,1fr)] gap-6">
-          <Card className="border-border/50 bg-card/50 h-fit shadow-sm">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg">Settings areas</CardTitle>
-              <CardDescription>Pick a category to edit</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-1">
-              {NAV_ITEMS.map((item) => {
-                const Icon = item.icon;
-                const active = section === item.id;
-                return (
-                  <Button
-                    key={item.id}
-                    variant={active ? "default" : "ghost"}
-                    className={`h-auto min-h-11 w-full flex-col items-stretch gap-0.5 py-3 px-3 text-left ${active ? "bg-orange-500 hover:bg-orange-600" : ""}`}
-                    onClick={() => setSection(item.id)}
-                  >
-                    <span className="flex items-center gap-2 font-medium">
-                      <Icon className="h-4 w-4 shrink-0 opacity-90" />
+        <div className="space-y-4">
+          <Card className="border-border/50 bg-card/40">
+            <CardContent className="pt-4">
+              <div className="flex flex-wrap gap-2">
+                {NAV_ITEMS.map((item) => {
+                  const Icon = item.icon;
+                  const active = section === item.id;
+                  return (
+                    <Button
+                      key={item.id}
+                      variant={active ? "default" : "outline"}
+                      className={active ? "bg-orange-500 hover:bg-orange-600" : ""}
+                      onClick={() => setSection(item.id)}
+                    >
+                      <Icon className="h-4 w-4 mr-2 shrink-0" />
                       {item.label}
-                    </span>
-                    <span className={`pl-6 text-xs font-normal ${active ? "text-white/90" : "text-muted-foreground"}`}>
-                      {item.description}
-                    </span>
-                  </Button>
-                );
-              })}
+                    </Button>
+                  );
+                })}
+              </div>
             </CardContent>
           </Card>
 
-          <div className="min-w-0 space-y-6">
+          <div className="min-w-0 space-y-5">
             {activeMeta && (
               <div className="rounded-lg border border-border/50 bg-card/30 px-4 py-3">
                 <p className="text-sm font-medium text-foreground">{activeMeta.label}</p>
@@ -211,9 +222,36 @@ export default function Settings() {
             )}
 
             {section === "personalization" && (
-              <div className="rounded-xl border border-border/50 bg-card/40 p-4 md:p-6">
-                <PersonalizationSettings />
-              </div>
+              <Card className="border-border/50 bg-card/50 shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-2xl">Personalization</CardTitle>
+                  <CardDescription className="mt-2">
+                    Keep this page lightweight: quick UI and behavior preferences only.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div className="rounded-lg border border-border/50 p-4">
+                      <p className="text-sm font-medium mb-1">Compact spacing</p>
+                      <p className="text-xs text-muted-foreground mb-3">Shows denser lists and cards.</p>
+                      <Switch checked={true} disabled />
+                    </div>
+                    <div className="rounded-lg border border-border/50 p-4">
+                      <p className="text-sm font-medium mb-1">Assistant follow-up prompts</p>
+                      <p className="text-xs text-muted-foreground mb-3">Ask clarifying questions when context is missing.</p>
+                      <Switch checked={true} disabled />
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2 border-t pt-3">
+                    <Button variant="outline" onClick={() => setSection("notifications")}>
+                      Notifications
+                    </Button>
+                    <Button variant="outline" onClick={() => setSection("email")}>
+                      Email Preferences
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
             )}
 
             {section === "email" && (
@@ -309,7 +347,7 @@ export default function Settings() {
             )}
 
             {section === "outreach" && (
-              <div className="space-y-6">
+              <div className="space-y-4">
                 <Card className="border-border/50 bg-card/50 shadow-sm">
                   <CardHeader>
                     <CardTitle className="text-2xl">Outreach Settings</CardTitle>
@@ -317,16 +355,16 @@ export default function Settings() {
                       Configure automated lawyer outreach parameters
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-6">
-                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="follow-up-interval" className="text-base">
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      <div className="space-y-1.5 rounded-lg border border-border/40 p-3">
+                        <Label htmlFor="follow-up-interval" className="text-sm">
                           Follow-up interval (days)
                         </Label>
                         <Input
                           id="follow-up-interval"
                           type="number"
-                          className="max-w-xs"
+                          className="max-w-[220px]"
                           value={outreach.followUpIntervalDays}
                           onChange={(e) => {
                             const v = parseInt(e.target.value, 10);
@@ -334,18 +372,18 @@ export default function Settings() {
                             updateWorkbench.mutate({ outreach: { followUpIntervalDays: v } });
                           }}
                         />
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-xs text-muted-foreground">
                           Days between follow-up emails (Day 0, 5, 10, 15)
                         </p>
                       </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="max-follow-ups" className="text-base">
+                      <div className="space-y-1.5 rounded-lg border border-border/40 p-3">
+                        <Label htmlFor="max-follow-ups" className="text-sm">
                           Maximum follow-ups
                         </Label>
                         <Input
                           id="max-follow-ups"
                           type="number"
-                          className="max-w-xs"
+                          className="max-w-[220px]"
                           value={outreach.maxFollowUps}
                           onChange={(e) => {
                             const v = parseInt(e.target.value, 10);
@@ -353,18 +391,18 @@ export default function Settings() {
                             updateWorkbench.mutate({ outreach: { maxFollowUps: v } });
                           }}
                         />
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-xs text-muted-foreground">
                           Total follow-ups before marking as &quot;No Response&quot;
                         </p>
                       </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="filter-threshold" className="text-base">
+                      <div className="space-y-1.5 rounded-lg border border-border/40 p-3">
+                        <Label htmlFor="filter-threshold" className="text-sm">
                           Permanent filter threshold
                         </Label>
                         <Input
                           id="filter-threshold"
                           type="number"
-                          className="max-w-xs"
+                          className="max-w-[220px]"
                           value={outreach.filterThreshold}
                           onChange={(e) => {
                             const v = parseInt(e.target.value, 10);
@@ -372,18 +410,18 @@ export default function Settings() {
                             updateWorkbench.mutate({ outreach: { filterThreshold: v } });
                           }}
                         />
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-xs text-muted-foreground">
                           Contacts with 0% response before filtering (6 months)
                         </p>
                       </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="batch-limit" className="text-base">
+                      <div className="space-y-1.5 rounded-lg border border-border/40 p-3">
+                        <Label htmlFor="batch-limit" className="text-sm">
                           Batch processing limit
                         </Label>
                         <Input
                           id="batch-limit"
                           type="number"
-                          className="max-w-xs"
+                          className="max-w-[220px]"
                           value={outreach.batchLimit}
                           onChange={(e) => {
                             const v = parseInt(e.target.value, 10);
@@ -391,7 +429,7 @@ export default function Settings() {
                             updateWorkbench.mutate({ outreach: { batchLimit: v } });
                           }}
                         />
-                        <p className="text-sm text-muted-foreground">Maximum lawyers to contact per case</p>
+                        <p className="text-xs text-muted-foreground">Maximum lawyers to contact per case</p>
                       </div>
                     </div>
                     <p className="flex items-center text-sm font-medium text-muted-foreground">
@@ -408,10 +446,10 @@ export default function Settings() {
                       Configure lawyer database scraping and run collection jobs
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-6">
-                    <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-                      <div className="space-y-2">
-                        <Label className="text-base">Scraping schedule</Label>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                      <div className="space-y-1.5 rounded-lg border border-border/40 p-3">
+                        <Label className="text-sm">Scraping schedule</Label>
                         <Input
                           ref={scraperScheduleInputRef}
                           value={outreach.scraperSchedule}
@@ -420,12 +458,12 @@ export default function Settings() {
                           }
                         />
                       </div>
-                      <div className="space-y-2">
-                        <Label className="text-base">Last scrape</Label>
+                      <div className="space-y-1.5 rounded-lg border border-border/40 p-3">
+                        <Label className="text-sm">Last scrape</Label>
                         <p className="text-sm text-muted-foreground">3 days ago (Success)</p>
                       </div>
-                      <div className="space-y-2">
-                        <Label className="text-base">Lawyers in database</Label>
+                      <div className="space-y-1.5 rounded-lg border border-border/40 p-3">
+                        <Label className="text-sm">Lawyers in database</Label>
                         <p className="text-sm font-semibold text-foreground">488 lawyers</p>
                       </div>
                     </div>
@@ -469,6 +507,7 @@ export default function Settings() {
                       <Switch
                         id="notify-match"
                         checked={toggles.lawyerMatch}
+                        className="border border-white/25 bg-slate-700 data-[state=checked]:bg-orange-500"
                         onCheckedChange={(v: boolean) =>
                           updateWorkbench.mutate({ quickNotificationToggles: { lawyerMatch: v } })
                         }
@@ -486,6 +525,7 @@ export default function Settings() {
                       <Switch
                         id="notify-email"
                         checked={toggles.emailActivity}
+                        className="border border-white/25 bg-slate-700 data-[state=checked]:bg-orange-500"
                         onCheckedChange={(v: boolean) =>
                           updateWorkbench.mutate({ quickNotificationToggles: { emailActivity: v } })
                         }
@@ -501,6 +541,7 @@ export default function Settings() {
                       <Switch
                         id="notify-case"
                         checked={toggles.newCase}
+                        className="border border-white/25 bg-slate-700 data-[state=checked]:bg-orange-500"
                         onCheckedChange={(v: boolean) =>
                           updateWorkbench.mutate({ quickNotificationToggles: { newCase: v } })
                         }
@@ -516,6 +557,7 @@ export default function Settings() {
                       <Switch
                         id="notify-scraper"
                         checked={toggles.scraper}
+                        className="border border-white/25 bg-slate-700 data-[state=checked]:bg-orange-500"
                         onCheckedChange={(v: boolean) =>
                           updateWorkbench.mutate({ quickNotificationToggles: { scraper: v } })
                         }
@@ -527,50 +569,51 @@ export default function Settings() {
             )}
 
             {section === "system" && (
-              <Card className="border-border/50 bg-card/50 shadow-sm">
-                <CardHeader>
-                  <CardTitle className="text-2xl">System Configuration</CardTitle>
-                  <CardDescription className="mt-2">General system settings and preferences</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="geo-range" className="text-base">
-                        Geographic range limit (km)
-                      </Label>
-                      <Input id="geo-range" type="number" defaultValue="50" className="max-w-xs" />
-                      <p className="text-sm text-muted-foreground">Maximum distance for lawyer matching</p>
-                    </div>
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="space-y-1">
-                        <Label htmlFor="auto-match" className="text-base font-medium">
-                          Automatic matching
+              <div className="space-y-4">
+                <Card className="border-border/50 bg-card/50 shadow-sm">
+                  <CardHeader>
+                    <CardTitle className="text-2xl">System Configuration</CardTitle>
+                    <CardDescription className="mt-2">General system settings and preferences</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="geo-range" className="text-base">
+                          Geographic range limit (km)
                         </Label>
-                        <p className="text-sm text-muted-foreground">Automatically match cases with lawyers</p>
+                        <Input id="geo-range" type="number" defaultValue="50" className="max-w-xs" />
+                        <p className="text-sm text-muted-foreground">Maximum distance for lawyer matching</p>
                       </div>
-                      <Switch id="auto-match" defaultChecked />
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="space-y-1">
+                          <Label htmlFor="auto-match" className="text-base font-medium">
+                            Automatic matching
+                          </Label>
+                          <p className="text-sm text-muted-foreground">Automatically match cases with lawyers</p>
+                        </div>
+                        <Switch id="auto-match" defaultChecked />
+                      </div>
                     </div>
-                  </div>
+                  </CardContent>
+                </Card>
 
-                  <div className="mt-4 space-y-4 border-t pt-6">
-                    <div>
-                      <Label className="text-base font-medium">Local computer scanner</Label>
-                      <p className="mb-4 text-sm text-muted-foreground">
-                        Open the desktop scanner to find files on this machine and attach them to a case.
-                      </p>
-                      <Button variant="outline" className="border-purple-500/30 font-semibold" onClick={openScanner}>
-                        <HardDrive className="mr-2 h-4 w-4 text-purple-500" />
-                        Scan computer for evidence
-                      </Button>
-                    </div>
-                  </div>
+                <EvidenceConnectionsCard />
 
-                  <p className="flex items-center border-t pt-4 text-sm font-medium text-muted-foreground">
-                    <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />
-                    Changes are saved automatically
-                  </p>
-                </CardContent>
-              </Card>
+                <Card className="border-border/50 bg-card/50 shadow-sm">
+                  <CardHeader>
+                    <CardTitle className="text-xl">Local Computer Scanner</CardTitle>
+                    <CardDescription>
+                      Keep scanner controls with connection sources in one place.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Button variant="outline" className="border-purple-500/30 font-semibold" onClick={openScanner}>
+                      <HardDrive className="mr-2 h-4 w-4 text-purple-500" />
+                      Start computer scanner
+                    </Button>
+                  </CardContent>
+                </Card>
+              </div>
             )}
 
             {section === "security" && (
@@ -584,22 +627,78 @@ export default function Settings() {
                     <div className="space-y-3 rounded-lg border border-border/50 p-4">
                       <Label className="text-base">Data export</Label>
                       <p className="text-sm text-muted-foreground">Export all system data</p>
-                      <Button variant="outline" size="sm" className="w-full sm:w-auto">
-                        Export data
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full sm:w-auto"
+                        disabled={isExportingSecurityData}
+                        onClick={async () => {
+                          setIsExportingSecurityData(true);
+                          try {
+                            const data = await exportDataMutation.mutateAsync();
+                            downloadJsonFile(
+                              `laro-security-export-${new Date().toISOString().slice(0, 10)}.json`,
+                              data
+                            );
+                            toast.success("Security export downloaded");
+                          } catch (error) {
+                            toast.error(error instanceof Error ? error.message : "Export failed");
+                          } finally {
+                            setIsExportingSecurityData(false);
+                          }
+                        }}
+                      >
+                        {isExportingSecurityData ? "Exporting..." : "Export data"}
                       </Button>
                     </div>
                     <div className="space-y-3 rounded-lg border border-border/50 p-4">
                       <Label className="text-base">Activity logs</Label>
                       <p className="text-sm text-muted-foreground">View system activity logs</p>
-                      <Button variant="outline" size="sm" className="w-full sm:w-auto">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full sm:w-auto"
+                        onClick={() => {
+                          const logPayload = {
+                            generatedAt: new Date().toISOString(),
+                            health: healthInfo ?? null,
+                            emailProvider: providerInfo ?? null,
+                          };
+                          downloadJsonFile(
+                            `laro-activity-log-${new Date().toISOString().slice(0, 10)}.json`,
+                            logPayload
+                          );
+                          toast.success("Activity log snapshot downloaded");
+                        }}
+                      >
                         View logs
                       </Button>
                     </div>
                     <div className="space-y-3 rounded-lg border border-border/50 p-4 sm:col-span-2">
                       <Label className="text-base">Backup &amp; restore</Label>
                       <p className="text-sm text-muted-foreground">Backup or restore system data</p>
-                      <Button variant="outline" size="sm" className="w-full sm:w-auto">
-                        Manage backups
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full sm:w-auto"
+                        disabled={isCreatingBackup}
+                        onClick={async () => {
+                          setIsCreatingBackup(true);
+                          try {
+                            const data = await exportDataMutation.mutateAsync();
+                            downloadJsonFile(
+                              `laro-backup-${Date.now()}.json`,
+                              { type: "full-backup", data, createdAt: new Date().toISOString() }
+                            );
+                            toast.success("Backup file created");
+                          } catch (error) {
+                            toast.error(error instanceof Error ? error.message : "Backup failed");
+                          } finally {
+                            setIsCreatingBackup(false);
+                          }
+                        }}
+                      >
+                        {isCreatingBackup ? "Creating..." : "Create backup"}
                       </Button>
                     </div>
                   </div>

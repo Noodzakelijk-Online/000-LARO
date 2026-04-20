@@ -192,30 +192,10 @@ export default function SmartSearchFilters({
 
   return (
     <div className="space-y-4">
-      {/* Search Bar */}
-      <Card>
-        <CardContent className="p-4 space-y-4">
-          <div className="flex gap-3">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Search cases, lawyers, or documents using natural language or keywords..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                className="pl-9 pr-10"
-              />
-            </div>
-
-            <Button onClick={handleSearch}>Search</Button>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Keyword match runs on every search. With 2+ characters, LARO also expands natural-language queries into
-            extra search terms (uses your configured AI keys when available).
-          </p>
-
-          {/* Inline Filters */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-2 border-t border-border/50">
+      {/* Inline Filters (shown first per client feedback) */}
+      <Card className={compact ? "border-border/50 bg-card/30" : ""}>
+        <CardContent className={compact ? "p-3 space-y-3" : "p-4 space-y-4"}>
+          <div className={`grid grid-cols-1 md:grid-cols-4 ${compact ? "gap-3" : "gap-4"}`}>
             <div>
               <label className="text-sm font-medium mb-1 block text-muted-foreground">Status</label>
               <Select
@@ -315,6 +295,26 @@ export default function SmartSearchFilters({
               </Select>
             </div>
           </div>
+
+          {/* Search Bar */}
+          <div className="flex gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Search cases, lawyers, or documents using natural language or keywords..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                className="pl-9 pr-10"
+              />
+            </div>
+
+            <Button onClick={handleSearch}>Search</Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Keyword match runs on every search. With 2+ characters, LARO also expands natural-language queries into
+            extra search terms (uses your configured AI keys when available).
+          </p>
         </CardContent>
       </Card>
 
@@ -323,18 +323,24 @@ export default function SmartSearchFilters({
         <div className="flex flex-wrap gap-2">
           {Object.entries(activeFilters).map(([key, value]) =>
             value ? (
-              <Badge key={key} variant="secondary" className="gap-1">
+              <Badge key={key} variant="secondary" className="gap-1 px-2 py-1">
                 {key}: {value}
-                <X
-                  className="w-3 h-3 cursor-pointer hover:text-destructive"
-                  onClick={() =>
+                <button
+                  type="button"
+                  aria-label={`Clear ${key} filter`}
+                  className="inline-flex h-4 w-4 items-center justify-center rounded hover:bg-background/50"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
                     setActiveFilters((prev) => {
                       const next = { ...prev, [key]: undefined };
                       onSearch?.(searchQuery, next);
                       return next;
-                    })
-                  }
-                />
+                    });
+                  }}
+                >
+                  <X className="w-3 h-3 cursor-pointer hover:text-destructive" />
+                </button>
               </Badge>
             ) : null
           )}

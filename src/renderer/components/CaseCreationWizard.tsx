@@ -31,6 +31,7 @@ export interface CaseData {
   summary: string;
   urgency: "Medium";
   profileSource: "account" | "custom";
+  uploadDocumentsAfterCreate: boolean;
 }
 
 interface CaseCreationWizardProps {
@@ -67,6 +68,7 @@ export default function CaseCreationWizard({
     summary: "",
     urgency: "Medium",
     profileSource: "account",
+    uploadDocumentsAfterCreate: false,
   });
 
   useEffect(() => {
@@ -79,6 +81,7 @@ export default function CaseCreationWizard({
         summary: "",
         urgency: "Medium",
         profileSource: "account",
+        uploadDocumentsAfterCreate: false,
       });
     } else {
       setCaseData(prev => ({
@@ -94,9 +97,6 @@ export default function CaseCreationWizard({
       return;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(caseData.clientEmail)) {
-      return;
-    }
-    if (!caseData.summary.trim()) {
       return;
     }
     onComplete?.({ ...caseData });
@@ -215,9 +215,22 @@ export default function CaseCreationWizard({
               className="min-h-[240px]"
             />
             <p className="text-xs text-muted-foreground">
-              Note: Case urgency is automatically determined by LARO AI based on case details.
+              Optional. You can create a case with documentation only and let LARO analyze the documents first.
             </p>
           </div>
+          <label className="flex items-start gap-3 rounded-md border border-border/60 p-3">
+            <input
+              type="checkbox"
+              checked={caseData.uploadDocumentsAfterCreate}
+              onChange={(e) =>
+                setCaseData((d) => ({ ...d, uploadDocumentsAfterCreate: e.target.checked }))
+              }
+              className="mt-1 h-4 w-4"
+            />
+            <span className="text-sm text-muted-foreground">
+              Open document upload immediately after creating this case.
+            </span>
+          </label>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>

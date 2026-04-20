@@ -10,7 +10,6 @@ import { DashboardSkeleton } from "@/components/SkeletonLoaders";
 import Home from "@/components/Home";
 import Cases from "@/components/Cases";
 import Lawyers from "@/components/Lawyers";
-import Evidence from "@/components/Evidence";
 import Help from "@/components/Help";
 import Settings from "@/components/Settings";
 import Privacy from "@/components/Privacy";
@@ -43,7 +42,9 @@ export default function DashboardApp() {
         <LawyerProfile />
       </Route>
       <Route path="/lawyers" component={Lawyers} />
-      <Route path="/evidence" component={Evidence} />
+      <Route path="/evidence">
+        <RoutePlaceholder title="Evidence is now inside each case" />
+      </Route>
       <Route path="/help" component={Help} />
 
       <Route path="/settings" component={Settings} />
