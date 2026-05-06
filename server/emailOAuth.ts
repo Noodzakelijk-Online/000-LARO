@@ -44,15 +44,26 @@ export function decryptToken(text: string): string {
  * Refresh a Gmail access token using the refresh token
  */
 export async function refreshGmailToken(refreshToken: string) {
+  const clientId = ENV.GOOGLE_CLIENT_ID || process.env.GOOGLE_OAUTH_CLIENT_ID || "";
+  const clientSecret =
+    ENV.GOOGLE_CLIENT_SECRET || process.env.GOOGLE_OAUTH_CLIENT_SECRET || "";
+  if (!clientId) {
+    throw new Error("Missing Google OAuth client ID configuration");
+  }
+
+  const body = new URLSearchParams({
+    client_id: clientId,
+    refresh_token: refreshToken,
+    grant_type: 'refresh_token',
+  });
+  if (clientSecret) {
+    body.set('client_secret', clientSecret);
+  }
+
   const response = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id:     ENV.GOOGLE_CLIENT_ID,
-      client_secret: ENV.GOOGLE_CLIENT_SECRET,
-      refresh_token: refreshToken,
-      grant_type:    'refresh_token',
-    }),
+    body,
   });
 
   const data = await response.json();
@@ -70,12 +81,18 @@ export async function refreshGmailToken(refreshToken: string) {
  * Refresh an Outlook access token using the refresh token
  */
 export async function refreshOutlookToken(refreshToken: string) {
+  const clientId = ENV.MICROSOFT_CLIENT_ID || process.env.MICROSOFT_OAUTH_CLIENT_ID || "";
+  const clientSecret = ENV.MICROSOFT_CLIENT_SECRET || process.env.MICROSOFT_OAUTH_CLIENT_SECRET || "";
+  if (!clientId || !clientSecret) {
+    throw new Error("Missing Microsoft OAuth client configuration");
+  }
+
   const response = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
-      client_id:     ENV.MICROSOFT_CLIENT_ID,
-      client_secret: ENV.MICROSOFT_CLIENT_SECRET,
+      client_id:     clientId,
+      client_secret: clientSecret,
       refresh_token: refreshToken,
       grant_type:    'refresh_token',
       scope:         'https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/User.Read offline_access',

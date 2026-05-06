@@ -2,6 +2,7 @@
  * LARO Server — Express + tRPC entry point
  */
 
+import 'dotenv/config';
 import express from 'express';
 import { createServer } from 'http';
 import { createExpressMiddleware } from '@trpc/server/adapters/express';
@@ -13,6 +14,8 @@ import { appRouter } from './routers';
 import { createContext } from './context';
 import { compressionMiddleware } from './compression';
 import { initCronScheduler } from './cronScheduler';
+import oauth2CallbacksRouter from './oauth2Callbacks';
+import { beginOAuthFlow } from './oauth2';
 
 // ─── Environment ──────────────────────────────────────────────────────────────
 
@@ -57,6 +60,38 @@ app.get('/api/health', (_req, res) => {
     uptime: process.uptime(),
   });
 });
+
+// ─── OAuth2 routes ────────────────────────────────────────────────────────────
+
+// OAuth2 initiation endpoint (redirects to Google/Outlook)
+app.get('/api/oauth/:provider/connect', (req, res) => {
+  try {
+    const { provider } = req.params;
+    const userId = req.query.userId as string;
+    
+    if (!userId) {
+      return res.status(400).json({ error: 'Missing userId parameter' });
+    }
+    
+    if (provider !== 'gmail' && provider !== 'outlook') {
+      return res.status(400).json({ error: 'Invalid provider. Use gmail or outlook' });
+    }
+    
+    console.log(`[OAuth2] Initiating ${provider} connection for user ${userId}`);
+    
+    // Generate authorization URL and redirect
+    const authUrl = beginOAuthFlow(provider as 'gmail' | 'outlook', userId);
+    res.redirect(authUrl);
+  } catch (error) {
+    console.error('[OAuth2] Connect error:', error);
+    res.status(500).json({ 
+      error: error instanceof Error ? error.message : 'Failed to initiate OAuth flow' 
+    });
+  }
+});
+
+// Mount OAuth2 callback routes
+app.use(oauth2CallbacksRouter);
 
 // ─── tRPC middleware ──────────────────────────────────────────────────────────
 

@@ -4,6 +4,7 @@
 
 import { Router } from "express";
 import {
+  consumeOAuthState,
   exchangeCodeForTokens,
   getAccountInfo,
   saveEmailAccount,
@@ -22,18 +23,12 @@ router.get('/api/oauth/gmail/callback', async (req, res) => {
       return res.status(400).send('Missing code or state parameter');
     }
     
-    // Decode state to get userId
-    const stateData = JSON.parse(Buffer.from(state as string, 'base64').toString());
-    const { userId } = stateData;
-    
-    if (!userId) {
-      return res.status(400).send('Invalid state parameter');
-    }
+    const { userId, codeVerifier } = consumeOAuthState(state as string, "gmail");
     
     console.log(`[OAuth2] Gmail callback for user ${userId}`);
     
     // Exchange code for tokens
-    const tokens = await exchangeCodeForTokens('gmail', code as string);
+    const tokens = await exchangeCodeForTokens('gmail', code as string, codeVerifier);
     
     // Get account info
     const accountInfo = await getAccountInfo('gmail', tokens.accessToken);
@@ -341,18 +336,12 @@ router.get('/api/oauth/outlook/callback', async (req, res) => {
       return res.status(400).send('Missing code or state parameter');
     }
     
-    // Decode state to get userId
-    const stateData = JSON.parse(Buffer.from(state as string, 'base64').toString());
-    const { userId } = stateData;
-    
-    if (!userId) {
-      return res.status(400).send('Invalid state parameter');
-    }
+    const { userId, codeVerifier } = consumeOAuthState(state as string, "outlook");
     
     console.log(`[OAuth2] Outlook callback for user ${userId}`);
     
     // Exchange code for tokens
-    const tokens = await exchangeCodeForTokens('outlook', code as string);
+    const tokens = await exchangeCodeForTokens('outlook', code as string, codeVerifier);
     
     // Get account info
     const accountInfo = await getAccountInfo('outlook', tokens.accessToken);

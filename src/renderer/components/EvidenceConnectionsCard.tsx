@@ -14,6 +14,13 @@ import {
   ExternalLink
 } from "lucide-react";
 import { toast } from "sonner";
+import { useContext } from "react";
+
+// Get current user context (adjust based on your auth implementation)
+const useCurrentUser = () => {
+  const { data: user } = trpc.auth.me.useQuery();
+  return user;
+};
 
 /**
  * Evidence Connections Card
@@ -32,14 +39,17 @@ interface PlatformConnection {
 }
 
 export default function EvidenceConnectionsCard() {
+  // Get current user
+  const currentUser = useCurrentUser();
+  
   // Query connection status for all platforms
-  const { data: gmailStatus, isLoading: gmailLoading } = trpc.gmailEnhanced.getStatus.useQuery();
-  const { data: outlookStatus, isLoading: outlookLoading } = trpc.outlookEnhanced.getStatus.useQuery();
-  const { data: driveStatus, isLoading: driveLoading } = trpc.googleDriveEnhanced.getStatus.useQuery();
-  const { data: oneDriveStatus, isLoading: oneDriveLoading } = trpc.oneDriveEnhanced.getStatus.useQuery();
-  const { data: slackStatus, isLoading: slackLoading } = trpc.slackEnhanced.getStatus.useQuery();
-  const { data: trelloStatus, isLoading: trelloLoading } = trpc.trelloEnhanced.getStatus.useQuery();
-  const { data: telegramStatus, isLoading: telegramLoading } = trpc.telegramEnhanced.getStatus.useQuery();
+  const { data: gmailStatus, isLoading: gmailLoading } = trpc.gmailEnhanced.getStatus.useQuery(undefined, { enabled: !!currentUser });
+  const { data: outlookStatus, isLoading: outlookLoading } = trpc.outlookEnhanced.getStatus.useQuery(undefined, { enabled: !!currentUser });
+  const { data: driveStatus, isLoading: driveLoading } = trpc.googleDrive.checkConnection.useQuery(undefined, { enabled: !!currentUser });
+  const { data: oneDriveStatus, isLoading: oneDriveLoading } = trpc.oneDriveEnhanced.getStatus.useQuery(undefined, { enabled: !!currentUser });
+  const { data: slackStatus, isLoading: slackLoading } = trpc.slackEnhanced.getStatus.useQuery(undefined, { enabled: !!currentUser });
+  const { data: trelloStatus, isLoading: trelloLoading } = trpc.trelloEnhanced.getStatus.useQuery(undefined, { enabled: !!currentUser });
+  const { data: telegramStatus, isLoading: telegramLoading } = trpc.telegramEnhanced.getStatus.useQuery(undefined, { enabled: !!currentUser });
 
   // OAuth URL mutations
   const gmailOAuthMutation = trpc.gmailEnhanced.getOAuthUrl.useMutation();
@@ -86,7 +96,7 @@ export default function EvidenceConnectionsCard() {
       color: 'bg-yellow-500',
       connected: driveStatus?.connected || false,
       lastSync: driveStatus?.lastSync ? new Date(driveStatus.lastSync) : undefined,
-      itemCount: driveStatus?.itemCount,
+      itemCount: driveStatus?.accounts?.length || 0,
     },
     {
       id: 'onedrive',
@@ -131,21 +141,49 @@ export default function EvidenceConnectionsCard() {
   ];
 
   const handleConnect = async (platformId: string) => {
+    if (!currentUser?.id) {
+      toast.error('Please sign in to connect accounts');
+      return;
+    }
+
     try {
       let authUrl: string | undefined;
 
+      // For Gmail and Google Drive, use the direct OAuth endpoint with userId
+      if (platformId === 'gmail' || platformId === 'google-drive') {
+        // Use the backend server URL (adjust if your backend is on a different port)
+        const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+        authUrl = `${backendUrl}/api/oauth/gmail/connect?userId=${currentUser.id}`;
+        
+        // Open OAuth popup
+        const popup = window.open(
+          authUrl,
+          'oauth-popup',
+          'width=600,height=700,left=200,top=200'
+        );
+
+        // Monitor popup closure
+        if (popup) {
+          const checkPopup = setInterval(() => {
+            if (popup.closed) {
+              clearInterval(checkPopup);
+              // Refresh connection status
+              setTimeout(() => {
+                window.location.reload();
+              }, 1000);
+            }
+          }, 500);
+        }
+        
+        toast.info('Opening authorization window. Please complete the OAuth flow.');
+        return;
+      }
+
+      // For other platforms, use the enhanced routers
       switch (platformId) {
-        case 'gmail':
-          const gmailResult = await gmailOAuthMutation.mutateAsync();
-          authUrl = gmailResult.authUrl;
-          break;
         case 'outlook':
           const outlookResult = await outlookOAuthMutation.mutateAsync();
           authUrl = outlookResult.authUrl;
-          break;
-        case 'google-drive':
-          const driveResult = await driveOAuthMutation.mutateAsync();
-          authUrl = driveResult.authUrl;
           break;
         case 'onedrive':
           const oneDriveResult = await oneDriveOAuthMutation.mutateAsync();

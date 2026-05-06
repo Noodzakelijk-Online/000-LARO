@@ -321,12 +321,20 @@ async function collectFilesFromGoogleDrive(
   const db = await getDb();
   if (!db) throw new Error('Database not available');
 
+  const { evidence } = await import('./schema');
+
   let found = 0;
   let downloaded = 0;
 
   try {
     // 1. Get file list from folder
     const files = await getGoogleDriveFileMetadata(folderId);
+    
+    // Get userId from case
+    const { cases } = await import('./schema');
+    const caseData = await db.select().from(cases).where(eq(cases.id, caseId)).limit(1);
+    if (!caseData[0]) throw new Error(`Case ${caseId} not found`);
+    const userId = caseData[0].userId;
     
     for (const file of files) {
       if (!file.name) continue;
@@ -337,17 +345,56 @@ async function collectFilesFromGoogleDrive(
       if (matches) {
         found++;
 
-        // 3. Check if already downloaded/exists
-        const existing = await db
+        // 3. Check if already downloaded/exists in evidence table
+        const existingEvidence = await db
           .select()
-          .from(googleDriveFiles)
-          .where(and(eq(googleDriveFiles.driveId, file.id), eq(googleDriveFiles.caseId, caseId)))
-          .limit(1);
+          .from(evidence)
+          .where(and(
+            eq(evidence.caseId, caseId),
+            eq(evidence.source, 'google_drive')
+          ));
 
-        if (existing.length === 0) {
+        const alreadyImported = existingEvidence.some(e => {
+          const metadata = e.metadata ? JSON.parse(e.metadata) : {};
+          return metadata.driveFileId === file.id;
+        });
+
+        if (alreadyImported) {
+          console.log(`[AutoCollection] File ${file.name} already imported, skipping`);
+          continue;
+        }
+
+        try {
           // 4. Download and upload to local storage/S3
-          await downloadAndUploadGoogleDriveFile(file.id, caseId);
+          const fileData = await downloadAndUploadGoogleDriveFile(file.id!, caseId, userId);
           
+          // 5. Create evidence record
+          const evidenceId = uuidv4();
+          await db.insert(evidence).values({
+            id: evidenceId,
+            caseId,
+            userId,
+            type: determineEvidenceType(fileData.mimeType),
+            source: 'google_drive',
+            title: file.name,
+            description: `Auto-collected from Google Drive`,
+            fileUrl: fileData.url,
+            fileName: fileData.fileName,
+            fileSize: fileData.size,
+            mimeType: fileData.mimeType,
+            metadata: JSON.stringify({
+              driveFileId: file.id,
+              folderId,
+              autoCollected: true,
+              collectedAt: new Date().toISOString(),
+              modifiedTime: fileData.modifiedTime,
+            }),
+            relevant: true,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+
+          // Also insert into googleDriveFiles for tracking
           await db.insert(googleDriveFiles).values({
             id: uuidv4(),
             caseId,
@@ -359,6 +406,9 @@ async function collectFilesFromGoogleDrive(
           });
           
           downloaded++;
+          console.log(`[AutoCollection] Downloaded and created evidence for: ${file.name}`);
+        } catch (downloadError) {
+          console.error(`[AutoCollection] Failed to download ${file.name}:`, downloadError);
         }
       }
     }
@@ -367,6 +417,24 @@ async function collectFilesFromGoogleDrive(
   }
 
   return { found, downloaded };
+}
+
+/**
+ * Determine evidence type from MIME type
+ */
+function determineEvidenceType(mimeType?: string): string {
+  if (!mimeType) return 'document';
+
+  if (mimeType.startsWith('image/')) return 'image';
+  if (mimeType.startsWith('video/')) return 'video';
+  if (mimeType.startsWith('audio/')) return 'audio';
+  if (mimeType.includes('pdf')) return 'document';
+  if (mimeType.includes('word') || mimeType.includes('document')) return 'document';
+  if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) return 'document';
+  if (mimeType.includes('presentation') || mimeType.includes('powerpoint')) return 'document';
+  if (mimeType.includes('text')) return 'document';
+
+  return 'document';
 }
 
 /**

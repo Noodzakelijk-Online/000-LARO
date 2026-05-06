@@ -24,6 +24,8 @@ import { userPreferencesRouter } from "./userPreferences";
 import { bulkImportRouter } from "./bulkImport";
 import { supportRouter } from "./support";
 import { evidenceAnalyticsRouter } from "./evidenceAnalytics";
+import { autoCollectionRouter } from "./autoCollection";
+import { googleDriveRouter } from "./googleDrive";
 import {
   gmailEnhancedRouter,
   outlookEnhancedRouter,
@@ -66,6 +68,8 @@ export const appRouter = router({
   bulkImport: bulkImportRouter,
   evidenceAnalytics: evidenceAnalyticsRouter,
   support: supportRouter,
+  autoCollection: autoCollectionRouter,
+  googleDrive: googleDriveRouter,
   
   gmailEnhanced: gmailEnhancedRouter,
   outlookEnhanced: outlookEnhancedRouter,

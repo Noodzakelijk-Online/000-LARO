@@ -21,9 +21,13 @@ export default defineConfig({
   },
 
   server: {
-    // Must match the port in package.json dev script:
-    // "wait-on http://localhost:5173 && npm run dev:main"
     port: 5173,
     strictPort: true,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
+    },
   },
 });

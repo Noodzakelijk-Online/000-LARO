@@ -104,27 +104,31 @@ export async function getGoogleDriveFileMetadata(folderId: string, userId?: stri
 /**
  * Download a file from Google Drive and upload it to local/S3 storage
  */
-export async function downloadAndUploadGoogleDriveFile(fileId: string, caseId: string) {
-  // Similar to above, we need to find the userId.
-  // We'll look up the case to find the owner.
+export async function downloadAndUploadGoogleDriveFile(fileId: string, caseId: string, userId?: string) {
   const db = await getDb();
   if (!db) throw new Error('Database not available');
 
-  const { cases } = await import('./schema');
-  const caseData = await db.select().from(cases).where(eq(cases.id, caseId)).limit(1);
-  if (!caseData[0]) throw new Error(`Case ${caseId} not found`);
+  // If userId not provided, look up the case to find the owner
+  let targetUserId = userId;
+  if (!targetUserId) {
+    const { cases } = await import('./schema');
+    const caseData = await db.select().from(cases).where(eq(cases.id, caseId)).limit(1);
+    if (!caseData[0]) throw new Error(`Case ${caseId} not found`);
+    targetUserId = caseData[0].userId;
+  }
 
-  const userId = caseData[0].userId;
-  const drive = await getDriveClient(userId);
+  const drive = await getDriveClient(targetUserId);
 
   // 1. Get metadata to know the filename
   const fileMetadata = await drive.files.get({
     fileId,
-    fields: 'name, mimeType',
+    fields: 'name, mimeType, size, modifiedTime',
   });
 
   const fileName = fileMetadata.data.name || 'document';
   const mimeType = fileMetadata.data.mimeType || 'application/octet-stream';
+  const fileSize = fileMetadata.data.size;
+  const modifiedTime = fileMetadata.data.modifiedTime;
 
   // 2. Download the file content
   const response = await drive.files.get(
@@ -138,5 +142,99 @@ export async function downloadAndUploadGoogleDriveFile(fileId: string, caseId: s
   const storagePath = `evidence/${caseId}/gdrive/${uuidv4()}-${fileName}`;
   const { key, url } = await storagePut(storagePath, buffer, mimeType);
 
-  return { key, url, fileName, mimeType, size: buffer.length.toString() };
+  return { 
+    key, 
+    url, 
+    fileName, 
+    mimeType, 
+    size: fileSize || buffer.length.toString(),
+    modifiedTime: modifiedTime ? new Date(modifiedTime) : new Date(),
+  };
+}
+
+/**
+ * List folders in Google Drive (root or specific parent)
+ * Used for folder browsing UI
+ */
+export async function listGoogleDriveFolders(userId: string, parentId?: string) {
+  const drive = await getDriveClient(userId);
+  
+  let query = "mimeType='application/vnd.google-apps.folder' and trashed=false";
+  
+  if (parentId) {
+    query += ` and '${parentId}' in parents`;
+  } else {
+    query += " and 'root' in parents";
+  }
+
+  const response = await drive.files.list({
+    q: query,
+    fields: 'files(id, name, modifiedTime, parents)',
+    orderBy: 'name',
+  });
+
+  return response.data.files || [];
+}
+
+/**
+ * Get all files in a folder (with optional recursive scanning)
+ */
+export async function getAllFilesInFolder(
+  userId: string, 
+  folderId: string, 
+  recursive: boolean = false
+): Promise<Array<{ id: string; name: string; mimeType?: string | null; size?: string | null; webViewLink?: string | null }>> {
+  const drive = await getDriveClient(userId);
+  
+  const allFiles: Array<{ id: string; name: string; mimeType?: string | null; size?: string | null; webViewLink?: string | null }> = [];
+  
+  async function scanFolder(currentFolderId: string) {
+    // Get all items in this folder
+    const response = await drive.files.list({
+      q: `'${currentFolderId}' in parents and trashed = false`,
+      fields: 'files(id, name, mimeType, size, webViewLink)',
+    });
+
+    const items = response.data.files || [];
+    
+    for (const item of items) {
+      if (item.mimeType === 'application/vnd.google-apps.folder') {
+        // It's a folder
+        if (recursive) {
+          await scanFolder(item.id!);
+        }
+      } else {
+        // It's a file
+        allFiles.push(item as any);
+      }
+    }
+  }
+  
+  await scanFolder(folderId);
+  return allFiles;
+}
+
+/**
+ * Search files in Google Drive by query
+ */
+export async function searchGoogleDriveFiles(
+  userId: string, 
+  query: string,
+  inFolder?: string
+) {
+  const drive = await getDriveClient(userId);
+  
+  let searchQuery = `name contains '${query}' and trashed = false and mimeType != 'application/vnd.google-apps.folder'`;
+  
+  if (inFolder) {
+    searchQuery += ` and '${inFolder}' in parents`;
+  }
+
+  const response = await drive.files.list({
+    q: searchQuery,
+    fields: 'files(id, name, mimeType, size, webViewLink, modifiedTime)',
+    orderBy: 'modifiedTime desc',
+  });
+
+  return response.data.files || [];
 }

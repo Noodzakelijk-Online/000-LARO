@@ -3,6 +3,8 @@ import { getDb } from "./db";
 import { emailAccounts } from "./schema";
 import { eq, and } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import crypto from "crypto";
+import { encryptToken } from "./emailOAuth";
 
 export interface OAuth2Config {
   clientId: string;
@@ -24,27 +26,51 @@ export interface EmailAccountInfo {
   profilePicture?: string;
 }
 
+type OAuthProvider = "gmail" | "outlook";
+
+interface OAuthStateRecord {
+  userId: string;
+  provider: OAuthProvider;
+  codeVerifier: string;
+  createdAt: number;
+}
+
+const OAUTH_STATE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const oauthStateStore = new Map<string, OAuthStateRecord>();
+
+function getOAuthRedirectBaseUrl(): string {
+  const raw = process.env.OAUTH_REDIRECT_BASE_URL || 'http://localhost:3000';
+  // Support accidental full callback values in .env by trimming to origin.
+  if (raw.includes('/api/oauth/')) {
+    return raw.split('/api/oauth/')[0].replace(/\/$/, '');
+  }
+  return raw.replace(/\/$/, '');
+}
+
 /**
  * Get OAuth2 configuration for provider
  */
 export function getOAuth2Config(provider: 'gmail' | 'outlook'): OAuth2Config {
+  const redirectBase = getOAuthRedirectBaseUrl();
   if (provider === 'gmail') {
     return {
       clientId: process.env.GOOGLE_OAUTH_CLIENT_ID || '',
       clientSecret: process.env.GOOGLE_OAUTH_CLIENT_SECRET || '',
-      redirectUri: `${process.env.OAUTH_REDIRECT_BASE_URL || 'http://localhost:3000'}/api/oauth/google/callback`,
+      redirectUri: `${redirectBase}/api/oauth/gmail/callback`,
       scopes: [
         'https://www.googleapis.com/auth/gmail.send',
         'https://www.googleapis.com/auth/gmail.readonly',
         'https://www.googleapis.com/auth/userinfo.email',
         'https://www.googleapis.com/auth/userinfo.profile',
+        'https://www.googleapis.com/auth/drive.readonly', // Google Drive read access
+        'https://www.googleapis.com/auth/drive.metadata.readonly', // Google Drive metadata
       ],
     };
   } else {
     return {
       clientId: process.env.MICROSOFT_OAUTH_CLIENT_ID || '',
       clientSecret: process.env.MICROSOFT_OAUTH_CLIENT_SECRET || '',
-      redirectUri: `${process.env.OAUTH_REDIRECT_BASE_URL || 'http://localhost:3000'}/api/oauth/outlook/callback`,
+      redirectUri: `${redirectBase}/api/oauth/outlook/callback`,
       scopes: [
         'https://graph.microsoft.com/Mail.Send',
         'https://graph.microsoft.com/Mail.Read',
@@ -52,6 +78,105 @@ export function getOAuth2Config(provider: 'gmail' | 'outlook'): OAuth2Config {
       ],
     };
   }
+}
+
+function toBase64Url(value: Buffer): string {
+  return value
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+function generatePkcePair(): { codeVerifier: string; codeChallenge: string } {
+  const codeVerifier = toBase64Url(crypto.randomBytes(64));
+  const codeChallenge = toBase64Url(
+    crypto.createHash("sha256").update(codeVerifier).digest()
+  );
+  return { codeVerifier, codeChallenge };
+}
+
+function buildOAuthState(provider: OAuthProvider, userId: string): string {
+  const payload = { provider, userId, nonce: nanoid() };
+  return toBase64Url(Buffer.from(JSON.stringify(payload)));
+}
+
+function cleanupExpiredOAuthState(): void {
+  const now = Date.now();
+  for (const [state, record] of oauthStateStore.entries()) {
+    if (now - record.createdAt > OAUTH_STATE_TTL_MS) {
+      oauthStateStore.delete(state);
+    }
+  }
+}
+
+/**
+ * Start OAuth flow with PKCE and state protection.
+ */
+export function beginOAuthFlow(provider: OAuthProvider, userId: string): string {
+  cleanupExpiredOAuthState();
+  const state = buildOAuthState(provider, userId);
+  const { codeVerifier, codeChallenge } = generatePkcePair();
+
+  oauthStateStore.set(state, {
+    userId,
+    provider,
+    codeVerifier,
+    createdAt: Date.now(),
+  });
+
+  const config = getOAuth2Config(provider);
+  if (!config.clientId) {
+    throw new Error(`${provider} OAuth client ID is not configured`);
+  }
+
+  if (provider === "gmail") {
+    const params = new URLSearchParams({
+      client_id: config.clientId,
+      redirect_uri: config.redirectUri,
+      response_type: "code",
+      scope: config.scopes.join(" "),
+      access_type: "offline",
+      prompt: "consent",
+      state,
+      code_challenge: codeChallenge,
+      code_challenge_method: "S256",
+    });
+    return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+  }
+
+  const params = new URLSearchParams({
+    client_id: config.clientId,
+    redirect_uri: config.redirectUri,
+    response_type: "code",
+    scope: config.scopes.join(" "),
+    response_mode: "query",
+    state,
+    code_challenge: codeChallenge,
+    code_challenge_method: "S256",
+  });
+  return `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?${params.toString()}`;
+}
+
+/**
+ * Consume and validate one-time OAuth state.
+ */
+export function consumeOAuthState(
+  state: string,
+  provider: OAuthProvider
+): { userId: string; codeVerifier: string } {
+  cleanupExpiredOAuthState();
+  const record = oauthStateStore.get(state);
+  if (!record) {
+    throw new Error("Invalid or expired OAuth state");
+  }
+  oauthStateStore.delete(state);
+
+  if (record.provider !== provider) {
+    throw new Error("OAuth provider mismatch");
+  }
+
+  return { userId: record.userId, codeVerifier: record.codeVerifier };
 }
 
 /**
@@ -94,7 +219,8 @@ export function getAuthorizationUrl(provider: 'gmail' | 'outlook', userId: strin
  */
 export async function exchangeCodeForTokens(
   provider: "gmail" | "outlook",
-  code: string
+  code: string,
+  codeVerifier?: string
 ): Promise<OAuth2Tokens> {
   const config = getOAuth2Config(provider);
 
@@ -102,10 +228,14 @@ export async function exchangeCodeForTokens(
     const body = new URLSearchParams({
       code,
       client_id: config.clientId,
-      client_secret: config.clientSecret,
       redirect_uri: config.redirectUri,
       grant_type: "authorization_code",
     });
+    if (codeVerifier) {
+      body.set("code_verifier", codeVerifier);
+    } else if (config.clientSecret) {
+      body.set("client_secret", config.clientSecret);
+    }
     const res = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -126,10 +256,14 @@ export async function exchangeCodeForTokens(
   const body = new URLSearchParams({
     code,
     client_id: config.clientId,
-    client_secret: config.clientSecret,
     redirect_uri: config.redirectUri,
     grant_type: "authorization_code",
   });
+  if (codeVerifier) {
+    body.set("code_verifier", codeVerifier);
+  } else if (config.clientSecret) {
+    body.set("client_secret", config.clientSecret);
+  }
   const res = await fetch("https://login.microsoftonline.com/common/oauth2/v2.0/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -191,21 +325,24 @@ export async function saveEmailAccount(
     userId,
     provider,
     email: accountInfo.email,
-    accessToken: tokens.accessToken,
-    refreshToken: tokens.refreshToken ?? null,
+    accessToken: encryptToken(tokens.accessToken),
+    refreshToken: tokens.refreshToken ? encryptToken(tokens.refreshToken) : null,
+    tokenExpiry: new Date(Date.now() + tokens.expiresIn * 1000),
+    status: "connected",
+    connectedAt: new Date(),
     metadata: JSON.stringify({
       displayName: accountInfo.displayName,
       profilePicture: accountInfo.profilePicture,
       tokenType: tokens.tokenType,
       expiresIn: tokens.expiresIn,
     }),
-    createdAt: new Date(),
+    updatedAt: new Date(),
   };
 
   if (existing[0]) {
     await db.update(emailAccounts).set(row).where(eq(emailAccounts.id, existing[0].id));
   } else {
-    await db.insert(emailAccounts).values({ id: nanoid(), ...row });
+    await db.insert(emailAccounts).values({ id: nanoid(), ...row, createdAt: new Date() });
   }
 }
 
@@ -218,9 +355,11 @@ export async function refreshAccessToken(
     const body = new URLSearchParams({
       refresh_token: refreshToken,
       client_id: config.clientId,
-      client_secret: config.clientSecret,
       grant_type: "refresh_token",
     });
+    if (config.clientSecret) {
+      body.set("client_secret", config.clientSecret);
+    }
     const res = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
