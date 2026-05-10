@@ -277,7 +277,7 @@ export class FileScanner extends EventEmitter {
       if (error.code === 'EACCES' || error.code === 'EPERM') {
         console.log(`[Scanner] Permission denied: ${filePath}`);
       } else {
-        console.error(`[Scanner] Error processing file ${filePath}:`, error.message);
+        console.error(`[Scanner error] Error processing file ${filePath}:`, error.message);
       }
     }
   }
