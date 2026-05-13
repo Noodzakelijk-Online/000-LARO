@@ -76,11 +76,11 @@ jobs:
         with:
           name: LARO-Desktop-Windows
           path: release/windows
-      - name: Download Mac artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: LARO-Desktop-Mac
-          path: release/mac
+      # - name: Download Mac artifact
+      #   uses: actions/download-artifact@v4
+      #   with:
+      #     name: LARO-Desktop-Mac
+      #     path: release/mac
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
