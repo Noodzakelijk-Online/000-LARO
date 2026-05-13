@@ -12,7 +12,9 @@ let _db: ReturnType<typeof drizzle> | null = null;
 
 // Determine DB path (using .laro.sqlite in current dir for now, 
 // will be refined in Electron to use app.getPath('userData'))
-const DB_FILE = process.env.DATABASE_URL || "laro.sqlite";
+function getDbPath() {
+  return process.env.DATABASE_URL || "laro.sqlite";
+}
 
 function ensureSupportTicketsTable(sqlite: InstanceType<typeof Database>) {
   try {
@@ -81,11 +83,12 @@ function ensureUserPreferencesColumns(sqlite: InstanceType<typeof Database>) {
 export async function getDb() {
   if (!_db) {
     try {
-      const sqlite = new Database(DB_FILE);
+      const dbPath = getDbPath();
+      const sqlite = new Database(dbPath);
       _db = drizzle(sqlite);
       ensureSupportTicketsTable(sqlite);
       ensureUserPreferencesColumns(sqlite);
-      console.log("[Database] SQLite initialized at:", DB_FILE);
+      console.log("[Database] SQLite initialized at:", dbPath);
 
       // Attempt migration automatically
       const possibleMigrationPaths = [
