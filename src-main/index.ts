@@ -65,6 +65,11 @@ async function createMainWindow(): Promise<void> {
   });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }: { url: string }) => {
+    // Force OAuth flows to open in external browser to avoid Google's "disallowed_useragent" error
+    if (url.includes('/api/oauth/')) {
+      shell.openExternal(url);
+      return { action: 'deny' };
+    }
     if (url.startsWith(LARO_URL)) return { action: 'allow' };
     shell.openExternal(url);
     return { action: 'deny' };

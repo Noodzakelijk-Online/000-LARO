@@ -95,7 +95,8 @@ export async function getDb() {
         path.join(process.cwd(), 'drizzle'),
         path.join(__dirname, '..', '..', 'drizzle'), // dist/server/.. -> dist/.. -> app/drizzle
         path.join(__dirname, '..', '..', '..', 'drizzle'), // dist/main/server/.. -> dist/main/.. -> app/drizzle
-        path.join((process as any).resourcesPath || '', 'app', 'drizzle')
+        path.join((process as any).resourcesPath || '', 'app', 'drizzle'),
+        path.join((process as any).resourcesPath || '', 'app.asar.unpacked', 'drizzle')
       ];
       
       let foundFolder = '';
@@ -136,10 +137,8 @@ export async function getDb() {
 
     } catch (error) {
       console.error("[Database] Failed to connect to SQLite or run migrations:", error);
-      // We don't null out _db here if it was already initialized, 
-      // but if migrate failed catastrophically, we might have issues.
-      // However, for "already exists" errors, we've already handled it above.
-      if (!_db) _db = null;
+      _db = null; // Reset db if initialization fails
+      throw error; // Throw so we don't silently return an empty db
     }
   }
   return _db;

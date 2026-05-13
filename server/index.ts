@@ -2,12 +2,27 @@
  * LARO Server — Express + tRPC entry point
  */
 
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import path from 'path';
+import fs from 'fs';
+
+// Try to load .env from different possible locations
+const possibleEnvPaths = [
+  path.join(process.cwd(), '.env'), // Development
+  path.join(__dirname, '..', '..', '.env'), // dist/server -> root
+  path.join((process as any).resourcesPath || '', 'app', '.env') // Packaged app inside asar
+];
+
+for (const envPath of possibleEnvPaths) {
+  if (fs.existsSync(envPath)) {
+    dotenv.config({ path: envPath });
+    break;
+  }
+}
+
 import express from 'express';
 import { createServer } from 'http';
 import { createExpressMiddleware } from '@trpc/server/adapters/express';
-import path from 'path';
-import fs from 'fs';
 import cookieParser from 'cookie-parser';
 
 import { appRouter } from './routers';

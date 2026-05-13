@@ -135,7 +135,11 @@
       "dist",
       "node_modules",
       "drizzle",
-      "package.json"
+      "package.json",
+      ".env"
+    ],
+    "asarUnpack": [
+      "drizzle/**/*"
     ],
     "extraResources": [
       {

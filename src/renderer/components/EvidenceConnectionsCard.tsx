@@ -41,6 +41,7 @@ interface PlatformConnection {
 export default function EvidenceConnectionsCard() {
   // Get current user
   const currentUser = useCurrentUser();
+  const utils = trpc.useUtils();
   
   // Query connection status for all platforms
   const { data: gmailStatus, isLoading: gmailLoading } = trpc.gmailEnhanced.getStatus.useQuery(undefined, { enabled: !!currentUser });
@@ -155,27 +156,39 @@ export default function EvidenceConnectionsCard() {
         const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
         authUrl = `${backendUrl}/api/oauth/gmail/connect?userId=${currentUser.id}`;
         
-        // Open OAuth popup
-        const popup = window.open(
-          authUrl,
-          'oauth-popup',
-          'width=600,height=700,left=200,top=200'
-        );
-
-        // Monitor popup closure
-        if (popup) {
-          const checkPopup = setInterval(() => {
-            if (popup.closed) {
-              clearInterval(checkPopup);
-              // Refresh connection status
-              setTimeout(() => {
-                window.location.reload();
-              }, 1000);
-            }
-          }, 500);
-        }
+        // Open OAuth in default system browser (handled by Electron setWindowOpenHandler)
+        window.open(authUrl, '_blank');
         
-        toast.info('Opening authorization window. Please complete the OAuth flow.');
+        toast.info('Opening authorization window in your browser. Please complete the OAuth flow.');
+
+        // Monitor connection status by polling
+        let attempts = 0;
+        const maxAttempts = 60; // 5 minutes
+        const checkConnection = setInterval(async () => {
+          attempts++;
+          try {
+            if (platformId === 'gmail') {
+              await utils.gmailEnhanced.getStatus.invalidate();
+              const status = await utils.gmailEnhanced.getStatus.fetch();
+              if (status?.connected) {
+                clearInterval(checkConnection);
+                toast.success('Gmail successfully connected!');
+              }
+            } else if (platformId === 'google-drive') {
+              await utils.googleDrive.checkConnection.invalidate();
+              const status = await utils.googleDrive.checkConnection.fetch();
+              if (status?.connected) {
+                clearInterval(checkConnection);
+                toast.success('Google Drive successfully connected!');
+              }
+            }
+          } catch(e) {
+            // Ignore fetch errors during polling
+          }
+          if (attempts >= maxAttempts) {
+            clearInterval(checkConnection);
+          }
+        }, 5000);
         return;
       }
 
