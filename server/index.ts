@@ -31,6 +31,7 @@ import { compressionMiddleware } from './compression';
 import { initCronScheduler } from './cronScheduler';
 import oauth2CallbacksRouter from './oauth2Callbacks';
 import { beginOAuthFlow } from './oauth2';
+import { getDb } from './db';
 
 // ─── Environment ──────────────────────────────────────────────────────────────
 
@@ -154,6 +155,18 @@ if (!isDev) {
 // ─── Lifecycle ──────────────────────────────────────────────────────────────
 
 export async function startServer(port: number = PORT) {
+  // Pre-warm the DB so migrations run (and any schema issue surfaces) before
+  // we start accepting requests. The first signup/login otherwise races with
+  // migration and can hit "no such table: users".
+  try {
+    await getDb();
+    console.log('[Server] Database ready.');
+  } catch (err) {
+    console.error('[Server] Database pre-warm failed:', err);
+    // Continue to listen anyway — getDb() will retry on each request, and
+    // returning here would prevent the UI from loading entirely.
+  }
+
   return new Promise<void>((resolve) => {
     httpServer.listen(port, () => {
       console.log(`[Server] Integrated backend listening on port ${port}`);

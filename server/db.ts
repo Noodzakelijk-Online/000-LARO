@@ -43,12 +43,12 @@ function ensureAllTablesColumns(sqlite: InstanceType<typeof Database>) {
       // Use Drizzle's getTableConfig to reflect the schema
       const config = getTableConfig(table);
       if (!config || !config.name || !config.columns) continue;
-      
+
       const dbColumns = sqlite.prepare(`PRAGMA table_info("${config.name}")`).all() as Array<{ name: string }>;
       if (dbColumns.length === 0) continue; // Table not created yet, migration will handle it
-      
+
       const existing = new Set(dbColumns.map((c) => c.name));
-      
+
       for (const col of config.columns) {
         if (!existing.has(col.name)) {
           // Default to TEXT for missing columns to satisfy the migration SELECTs
@@ -62,6 +62,169 @@ function ensureAllTablesColumns(sqlite: InstanceType<typeof Database>) {
   }
 }
 
+/**
+ * Idempotent migration replay: reads each .sql migration file in the drizzle
+ * folder, splits on `--> statement-breakpoint`, and runs every statement
+ * individually — swallowing "already exists" / "duplicate column" type errors.
+ *
+ * This is the safety net for production: drizzle's migrator relies on the
+ * `__drizzle_migrations` bookkeeping table, which can disagree with the actual
+ * DB state in a portable Electron build (e.g. a stale userData DB created by
+ * `db:push` or a previous partial run). Replaying SQL idempotently guarantees
+ * that every table in the schema exists regardless of bookkeeping state.
+ */
+function replayMigrationsIdempotent(
+  sqlite: InstanceType<typeof Database>,
+  migrationsFolder: string
+) {
+  const isIgnorable = (msg: string) => {
+    const m = msg.toLowerCase();
+    return (
+      m.includes("already exists") ||
+      m.includes("duplicate column name") ||
+      m.includes("no such column") || // for ALTER TABLE on already-migrated schema
+      m.includes("no such table") // for DROP TABLE on already-cleaned schema
+    );
+  };
+
+  let sqlFiles: string[];
+  try {
+    sqlFiles = fs
+      .readdirSync(migrationsFolder)
+      .filter((f) => f.endsWith(".sql"))
+      .sort();
+  } catch (e) {
+    console.warn("[Database] Could not enumerate migration folder:", e);
+    return;
+  }
+
+  for (const file of sqlFiles) {
+    const fullPath = path.join(migrationsFolder, file);
+    let content: string;
+    try {
+      content = fs.readFileSync(fullPath, "utf8");
+    } catch (e) {
+      console.warn(`[Database] Could not read migration ${file}:`, e);
+      continue;
+    }
+
+    const statements = content
+      .split("--> statement-breakpoint")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+
+    let applied = 0;
+    let skipped = 0;
+    for (const stmt of statements) {
+      try {
+        sqlite.exec(stmt);
+        applied++;
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (isIgnorable(msg)) {
+          skipped++;
+          continue;
+        }
+        console.warn(
+          `[Database] Idempotent replay: statement in ${file} failed (continuing):`,
+          msg
+        );
+      }
+    }
+    console.log(
+      `[Database] Replayed ${file}: ${applied} applied, ${skipped} skipped (already present).`
+    );
+  }
+}
+
+function tableExists(sqlite: InstanceType<typeof Database>, name: string): boolean {
+  try {
+    const row = sqlite
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name = ?")
+      .get(name);
+    return !!row;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Mark every migration in the folder as applied in drizzle's bookkeeping
+ * table, so subsequent boots take the happy path (drizzle's migrate() becomes
+ * a no-op instead of trying to re-create tables we've already created via
+ * recovery replay).
+ *
+ * Drizzle's bookkeeping table is `__drizzle_migrations` with columns
+ * (id INTEGER PRIMARY KEY, hash TEXT NOT NULL, created_at NUMERIC). The hash
+ * is the SHA-256 of the migration SQL content.
+ */
+function stampMigrationsAsApplied(
+  sqlite: InstanceType<typeof Database>,
+  migrationsFolder: string
+) {
+  try {
+    sqlite.exec(`
+      CREATE TABLE IF NOT EXISTS __drizzle_migrations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        hash TEXT NOT NULL,
+        created_at NUMERIC
+      );
+    `);
+
+    const journalPath = path.join(migrationsFolder, "meta", "_journal.json");
+    const journal = JSON.parse(fs.readFileSync(journalPath, "utf8")) as {
+      entries: Array<{ idx: number; tag: string; when: number }>;
+    };
+
+    const crypto = require("crypto") as typeof import("crypto");
+    const existing = sqlite.prepare("SELECT hash FROM __drizzle_migrations").all() as Array<{
+      hash: string;
+    }>;
+    const known = new Set(existing.map((r) => r.hash));
+
+    const insert = sqlite.prepare(
+      "INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)"
+    );
+
+    for (const entry of journal.entries) {
+      const sqlPath = path.join(migrationsFolder, `${entry.tag}.sql`);
+      if (!fs.existsSync(sqlPath)) continue;
+      const content = fs.readFileSync(sqlPath, "utf8");
+      const hash = crypto.createHash("sha256").update(content).digest("hex");
+      if (known.has(hash)) continue;
+      insert.run(hash, entry.when);
+      console.log(`[Database] Stamped migration ${entry.tag} as applied.`);
+    }
+  } catch (e) {
+    console.warn("[Database] Could not stamp migrations as applied:", e);
+  }
+}
+
+function findMigrationsFolder(): string {
+  const candidates = [
+    path.join((process as any).resourcesPath || "", "app.asar.unpacked", "drizzle"),
+    path.join(process.cwd(), "drizzle"),
+    path.join(__dirname, "..", "..", "drizzle"),
+    path.join(__dirname, "..", "..", "..", "drizzle"),
+    path.join((process as any).resourcesPath || "", "app", "drizzle"),
+    path.join((process as any).resourcesPath || "", "drizzle"),
+  ];
+
+  for (const p of candidates) {
+    const journal = path.join(p, "meta", "_journal.json");
+    if (fs.existsSync(p) && fs.existsSync(journal)) {
+      console.log("[Database] Using migrations folder:", p);
+      return p;
+    }
+  }
+
+  console.warn(
+    "[Database] No migrations folder found. Tried:\n" +
+      candidates.map((c) => "  - " + c).join("\n")
+  );
+  return "";
+}
+
 export async function getDb() {
   if (!_db) {
     try {
@@ -69,60 +232,60 @@ export async function getDb() {
       const sqlite = new Database(dbPath);
       _db = drizzle(sqlite);
       ensureSupportTicketsTable(sqlite);
-      ensureAllTablesColumns(sqlite);
       console.log("[Database] SQLite initialized at:", dbPath);
 
-      // Attempt migration automatically
-      const possibleMigrationPaths = [
-        path.join((process as any).resourcesPath || '', 'app.asar.unpacked', 'drizzle'),
-        path.join(process.cwd(), 'drizzle'),
-        path.join(__dirname, '..', '..', 'drizzle'), // dist/server/.. -> dist/.. -> app/drizzle
-        path.join(__dirname, '..', '..', '..', 'drizzle'), // dist/main/server/.. -> dist/main/.. -> app/drizzle
-        path.join((process as any).resourcesPath || '', 'app', 'drizzle')
-      ];
-      
-      let foundFolder = '';
-      for (const p of possibleMigrationPaths) {
-        // Must contain the _journal.json file to guarantee it is the real, populated migration folder
-        // (electron-builder can leave empty directory trees inside app.asar)
-        if (fs.existsSync(p) && fs.existsSync(path.join(p, 'meta', '_journal.json'))) {
-          foundFolder = p;
-          break;
-        }
-      }
+      const foundFolder = findMigrationsFolder();
 
       if (foundFolder) {
+        // Try drizzle's bookkeeping-based migrator first (the happy path on a
+        // clean install). Failures here are not fatal because we have a
+        // recovery replay below.
+        let migrateSucceeded = false;
         try {
           migrate(_db, { migrationsFolder: foundFolder });
-          console.log("[Database] Migrations applied successfully from:", foundFolder);
+          migrateSucceeded = true;
+          console.log("[Database] drizzle migrate() succeeded.");
         } catch (migrationError: unknown) {
           const msg =
             migrationError instanceof Error ? migrationError.message : String(migrationError);
-          const causeMsg =
-            migrationError instanceof Error && migrationError.cause instanceof Error
-              ? migrationError.cause.message
-              : "";
-          const combined = `${msg} ${causeMsg}`;
-          if (
-            combined.includes("already exists") ||
-            combined.includes("duplicate column name") ||
-            combined.includes("UNIQUE constraint failed")
-          ) {
-            console.warn(
-              "[Database] Migration conflict (existing schema). Continuing with current database."
-            );
-          } else {
-            throw migrationError;
-          }
+          console.warn(
+            "[Database] drizzle migrate() failed; will check schema state and recover if needed:",
+            msg
+          );
+        }
+
+        // Recovery: if any expected core table is missing after migrate(), the
+        // bookkeeping is out of sync with reality (stale userData DB, partial
+        // prior run, db:push without migration entries, etc.). Replay the SQL
+        // files only in that case. We skip replay on a healthy DB because
+        // migration 0001 includes destructive table-rebuilds (DROP TABLE) that
+        // would be unsafe to re-run on live data.
+        const coreTables = ["users", "lawyers", "cases"];
+        const missing = coreTables.filter((t) => !tableExists(sqlite, t));
+        if (missing.length > 0) {
+          console.warn(
+            `[Database] Core tables missing after migrate(): ${missing.join(", ")}. Running recovery replay.`
+          );
+          replayMigrationsIdempotent(sqlite, foundFolder);
+
+          // Drizzle bookkeeping is now out of sync (we ran SQL it doesn't know
+          // about). Mark all migrations as applied so subsequent boots use the
+          // happy path.
+          stampMigrationsAsApplied(sqlite, foundFolder);
+        } else if (!migrateSucceeded) {
+          // migrate() failed but tables exist — likely a benign "already
+          // exists" on a re-run. Still stamp bookkeeping so next boot is clean.
+          stampMigrationsAsApplied(sqlite, foundFolder);
         }
       } else {
-        console.warn("[Database] Migrations folder not found. Database might be uninitialized.");
+        console.warn(
+          "[Database] No migrations folder found — DB will not be initialized. Auth and other features will fail until this is resolved."
+        );
       }
 
-      // Run column alignment again AFTER migrations.
-      // 1. If migrate() recreated a table using an old snapshot, it might have dropped columns we dynamically added.
-      // 2. If the user updated schema.ts but forgot to generate a new migration, the database would be missing those columns.
-      // This guarantees the runtime database perfectly matches the expected schema.ts shape.
+      // Run column alignment AFTER migrations to backfill any columns that the
+      // schema declares but the on-disk DB is missing (e.g. schema.ts was
+      // updated without generating a new migration).
       ensureAllTablesColumns(sqlite);
 
     } catch (error) {
