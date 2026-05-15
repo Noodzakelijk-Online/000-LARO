@@ -74,16 +74,17 @@ export async function getDb() {
 
       // Attempt migration automatically
       const possibleMigrationPaths = [
+        path.join((process as any).resourcesPath || '', 'app.asar.unpacked', 'drizzle'),
         path.join(process.cwd(), 'drizzle'),
         path.join(__dirname, '..', '..', 'drizzle'), // dist/server/.. -> dist/.. -> app/drizzle
         path.join(__dirname, '..', '..', '..', 'drizzle'), // dist/main/server/.. -> dist/main/.. -> app/drizzle
-        path.join((process as any).resourcesPath || '', 'app', 'drizzle'),
-        path.join((process as any).resourcesPath || '', 'app.asar.unpacked', 'drizzle')
+        path.join((process as any).resourcesPath || '', 'app', 'drizzle')
       ];
       
       let foundFolder = '';
       for (const p of possibleMigrationPaths) {
-        if (fs.existsSync(p)) {
+        // Must contain the meta directory to be considered a valid drizzle migration folder
+        if (fs.existsSync(p) && fs.existsSync(path.join(p, 'meta'))) {
           foundFolder = p;
           break;
         }
