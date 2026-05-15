@@ -83,8 +83,9 @@ export async function getDb() {
       
       let foundFolder = '';
       for (const p of possibleMigrationPaths) {
-        // Must contain the meta directory to be considered a valid drizzle migration folder
-        if (fs.existsSync(p) && fs.existsSync(path.join(p, 'meta'))) {
+        // Must contain the _journal.json file to guarantee it is the real, populated migration folder
+        // (electron-builder can leave empty directory trees inside app.asar)
+        if (fs.existsSync(p) && fs.existsSync(path.join(p, 'meta', '_journal.json'))) {
           foundFolder = p;
           break;
         }
@@ -117,6 +118,12 @@ export async function getDb() {
       } else {
         console.warn("[Database] Migrations folder not found. Database might be uninitialized.");
       }
+
+      // Run column alignment again AFTER migrations.
+      // 1. If migrate() recreated a table using an old snapshot, it might have dropped columns we dynamically added.
+      // 2. If the user updated schema.ts but forgot to generate a new migration, the database would be missing those columns.
+      // This guarantees the runtime database perfectly matches the expected schema.ts shape.
+      ensureAllTablesColumns(sqlite);
 
     } catch (error) {
       console.error("[Database] Failed to connect to SQLite or run migrations:", error);
