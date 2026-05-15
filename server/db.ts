@@ -3,7 +3,9 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
+import * as schema from "./schema";
 import { InsertUser, users, lawyers, cases, outreachStatus, emailActivity, systemConfig, evidence } from "./schema";
+import { getTableConfig } from "drizzle-orm/sqlite-core";
 import { ENV } from './_core/env';
 
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
@@ -34,49 +36,29 @@ function ensureSupportTicketsTable(sqlite: InstanceType<typeof Database>) {
   }
 }
 
-function ensureUserPreferencesColumns(sqlite: InstanceType<typeof Database>) {
-  try {
-    sqlite.exec(`
-      CREATE TABLE IF NOT EXISTS user_preferences (
-        id TEXT PRIMARY KEY NOT NULL,
-        userId TEXT NOT NULL,
-        key TEXT,
-        value TEXT,
-        theme TEXT,
-        dashboardWidgets TEXT,
-        notificationSettings TEXT,
-        preferredLawyers TEXT,
-        caseTemplates TEXT,
-        updatedAt INTEGER,
-        userPreferences TEXT
-      );
-    `);
-
-    const columns = sqlite
-      .prepare("PRAGMA table_info(user_preferences)")
-      .all() as Array<{ name: string }>;
-    const existing = new Set(columns.map((c) => c.name));
-
-    const missingTextColumns = [
-      "key",
-      "value",
-      "theme",
-      "dashboardWidgets",
-      "notificationSettings",
-      "preferredLawyers",
-      "caseTemplates",
-      "userPreferences",
-    ].filter((col) => !existing.has(col));
-
-    for (const column of missingTextColumns) {
-      sqlite.exec(`ALTER TABLE user_preferences ADD COLUMN ${column} TEXT;`);
+function ensureAllTablesColumns(sqlite: InstanceType<typeof Database>) {
+  for (const key of Object.keys(schema)) {
+    const table = (schema as any)[key];
+    try {
+      // Use Drizzle's getTableConfig to reflect the schema
+      const config = getTableConfig(table);
+      if (!config || !config.name || !config.columns) continue;
+      
+      const dbColumns = sqlite.prepare(`PRAGMA table_info("${config.name}")`).all() as Array<{ name: string }>;
+      if (dbColumns.length === 0) continue; // Table not created yet, migration will handle it
+      
+      const existing = new Set(dbColumns.map((c) => c.name));
+      
+      for (const col of config.columns) {
+        if (!existing.has(col.name)) {
+          // Default to TEXT for missing columns to satisfy the migration SELECTs
+          sqlite.exec(`ALTER TABLE "${config.name}" ADD COLUMN "${col.name}" TEXT;`);
+          console.log(`[Database] Added missing column ${config.name}.${col.name} before migration.`);
+        }
+      }
+    } catch (e) {
+      // Ignore exports that aren't tables
     }
-
-    if (!existing.has("updatedAt")) {
-      sqlite.exec("ALTER TABLE user_preferences ADD COLUMN updatedAt INTEGER;");
-    }
-  } catch (e) {
-    console.warn("[Database] Could not ensure user_preferences columns:", e);
   }
 }
 
@@ -87,7 +69,7 @@ export async function getDb() {
       const sqlite = new Database(dbPath);
       _db = drizzle(sqlite);
       ensureSupportTicketsTable(sqlite);
-      ensureUserPreferencesColumns(sqlite);
+      ensureAllTablesColumns(sqlite);
       console.log("[Database] SQLite initialized at:", dbPath);
 
       // Attempt migration automatically
