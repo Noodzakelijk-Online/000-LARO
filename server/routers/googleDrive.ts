@@ -12,12 +12,134 @@ import { getDb } from "../db";
 import { emailAccounts, evidence } from "../schema";
 import { eq, and } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
+import { beginOAuthFlow } from "../oauth2";
+import { pullEvidenceByKeywords } from "../autoCollectionService";
 
 /**
  * Google Drive Router
  * Handles folder browsing, file discovery, and evidence collection from Google Drive
  */
 export const googleDriveRouter = router({
+  /**
+   * Status endpoint used by GoogleDriveIntegration.tsx. Reports both whether
+   * the user has Drive access (via Gmail OAuth — same connection) and a
+   * rough per-case summary so the legacy UI keeps working.
+   */
+  getStatus: protectedProcedure
+    .input(z.object({ caseId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) {
+        return { connected: false, status: null };
+      }
+
+      const accounts = await db
+        .select()
+        .from(emailAccounts)
+        .where(and(eq(emailAccounts.userId, ctx.user.id), eq(emailAccounts.provider, "gmail")));
+
+      const connected = accounts.length > 0;
+
+      // Count Drive-sourced evidence for the case.
+      let itemsCollected = 0;
+      try {
+        const rows = await db
+          .select()
+          .from(evidence)
+          .where(and(eq(evidence.caseId, input.caseId), eq(evidence.source, "google_drive")));
+        itemsCollected = rows.length;
+      } catch {
+        itemsCollected = 0;
+      }
+
+      return {
+        connected,
+        status: connected
+          ? {
+              id: accounts[0].id,
+              status: "connected",
+              itemsCollected: String(itemsCollected),
+              lastSyncedAt: accounts[0].connectedAt,
+            }
+          : null,
+      };
+    }),
+
+  /**
+   * Return the OAuth URL the renderer should open to connect Google Drive.
+   * Drive access piggy-backs on the Gmail OAuth scopes, so this just kicks
+   * off the Gmail flow.
+   */
+  connect: protectedProcedure.mutation(async ({ ctx }) => {
+    const url = beginOAuthFlow("gmail", ctx.user.id);
+    return { authUrl: url };
+  }),
+
+  /**
+   * Disconnect: removes the Gmail/Drive credentials for the user. Note this
+   * removes Gmail access too because they share one OAuth token.
+   */
+  disconnect: protectedProcedure
+    .input(z.object({ caseId: z.string().optional(), sourceId: z.string().optional() }))
+    .mutation(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+      await db
+        .delete(emailAccounts)
+        .where(and(eq(emailAccounts.userId, ctx.user.id), eq(emailAccounts.provider, "gmail")));
+      return { success: true };
+    }),
+
+  /**
+   * Kick off a Drive sync for a case. Without keywords we don't know what to
+   * pull, so this is a thin wrapper that returns a no-op result if no
+   * auto-collection settings exist yet.
+   */
+  startSync: protectedProcedure
+    .input(z.object({ caseId: z.string(), sourceId: z.string().optional() }))
+    .mutation(async ({ ctx, input }) => {
+      // Best effort: if the case has saved auto-collection keywords, use them.
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+      const { autoCollectionSettings } = await import("../schema");
+      const settings = await db
+        .select()
+        .from(autoCollectionSettings)
+        .where(eq(autoCollectionSettings.caseId, input.caseId))
+        .limit(1);
+      const keywords = settings[0]?.keywords ? (() => {
+        try { return JSON.parse(settings[0].keywords as string); } catch { return []; }
+      })() : [];
+
+      if (!keywords.length) {
+        return {
+          success: true,
+          progress: {
+            totalFiles: 0,
+            processedFiles: 0,
+            extractedContent: 0,
+            errors: ["No keywords configured. Set keywords in Auto-Collection first."],
+          },
+        };
+      }
+
+      const result = await pullEvidenceByKeywords({
+        caseId: input.caseId,
+        userId: ctx.user.id,
+        keywords,
+      });
+
+      return {
+        success: true,
+        progress: {
+          totalFiles: result.driveFiles + result.gmailAttachments,
+          processedFiles: result.driveFiles + result.gmailAttachments,
+          extractedContent: result.gmailMessages,
+          errors: result.errors,
+        },
+      };
+    }),
+
   /**
    * Check if user has Google Drive connected
    */

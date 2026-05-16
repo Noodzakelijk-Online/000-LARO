@@ -119,6 +119,73 @@ export const casesRouter = router({
       return { success: true };
     }),
 
+  // Hard-delete a case and cascade through every related table that has a
+  // `caseId` column. Schema-introspection driven so it stays correct as the
+  // schema grows. Ownership-checked so a user can only delete their own cases.
+  delete: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const existing = await db
+        .select({ id: casesTable.id })
+        .from(casesTable)
+        .where(and(eq(casesTable.id, input.id), eq(casesTable.userId, ctx.user.id)))
+        .limit(1);
+
+      if (!existing.length) {
+        throw new Error("Case not found or you do not have permission to delete it");
+      }
+
+      // Find every table (other than `cases` itself) that has a `caseId`
+      // column, then DELETE FROM each WHERE caseId = ?. Wrapped in a
+      // transaction so partial failures roll back.
+      const sqliteDb: any = (db as any).$client ?? (db as any).session?.client;
+      if (!sqliteDb) {
+        // Fallback: use drizzle's raw SQL (better-sqlite3 driver is sync).
+        db.run(sql`DELETE FROM cases WHERE id = ${input.id} AND userId = ${ctx.user.id}`);
+        return { success: true };
+      }
+
+      const tables = sqliteDb
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__%' AND name != 'cases'"
+        )
+        .all() as Array<{ name: string }>;
+
+      const tablesWithCaseId: string[] = [];
+      for (const t of tables) {
+        try {
+          const cols = sqliteDb
+            .prepare(`PRAGMA table_info("${t.name}")`)
+            .all() as Array<{ name: string }>;
+          if (cols.some((c) => c.name === "caseId")) {
+            tablesWithCaseId.push(t.name);
+          }
+        } catch {
+          // Ignore tables we can't introspect.
+        }
+      }
+
+      const tx = sqliteDb.transaction((caseId: string, userId: string) => {
+        for (const tableName of tablesWithCaseId) {
+          try {
+            sqliteDb.prepare(`DELETE FROM "${tableName}" WHERE caseId = ?`).run(caseId);
+          } catch (err) {
+            console.warn(`[cases.delete] Failed to delete from ${tableName}:`, err);
+          }
+        }
+        sqliteDb
+          .prepare(`DELETE FROM cases WHERE id = ? AND userId = ?`)
+          .run(caseId, userId);
+      });
+
+      tx(input.id, ctx.user.id);
+
+      return { success: true };
+    }),
+
   outreachProgress: publicProcedure
     .input(z.object({ caseId: z.string() }))
     .query(async ({ input }) => {

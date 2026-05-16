@@ -186,13 +186,13 @@ export async function getAllFilesInFolder(
 ): Promise<Array<{ id: string; name: string; mimeType?: string | null; size?: string | null; webViewLink?: string | null }>> {
   const drive = await getDriveClient(userId);
   
-  const allFiles: Array<{ id: string; name: string; mimeType?: string | null; size?: string | null; webViewLink?: string | null }> = [];
-  
+  const allFiles: Array<{ id: string; name: string; mimeType?: string | null; size?: string | null; webViewLink?: string | null; modifiedTime?: string | null }> = [];
+
   async function scanFolder(currentFolderId: string) {
     // Get all items in this folder
     const response = await drive.files.list({
       q: `'${currentFolderId}' in parents and trashed = false`,
-      fields: 'files(id, name, mimeType, size, webViewLink)',
+      fields: 'files(id, name, mimeType, size, webViewLink, modifiedTime)',
     });
 
     const items = response.data.files || [];

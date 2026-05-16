@@ -78,17 +78,7 @@ export default function EvidenceConnectionsCard() {
       connected: gmailStatus?.connected || false,
       lastSync: gmailStatus?.lastSync ? new Date(gmailStatus.lastSync) : undefined,
       itemCount: gmailStatus?.itemCount,
-    },
-    {
-      id: 'outlook',
-      name: 'Outlook',
-      icon: <Mail className="w-5 h-5" />,
-      description: 'Connect your Outlook account to collect email evidence',
-      color: 'bg-blue-500',
-      connected: outlookStatus?.connected || false,
-      lastSync: outlookStatus?.lastSync ? new Date(outlookStatus.lastSync) : undefined,
-      itemCount: outlookStatus?.itemCount,
-    },
+    },    
     {
       id: 'google-drive',
       name: 'Google Drive',
@@ -96,48 +86,8 @@ export default function EvidenceConnectionsCard() {
       description: 'Connect Google Drive to collect document evidence',
       color: 'bg-yellow-500',
       connected: driveStatus?.connected || false,
-      lastSync: driveStatus?.lastSync ? new Date(driveStatus.lastSync) : undefined,
+      lastSync: undefined,
       itemCount: driveStatus?.accounts?.length || 0,
-    },
-    {
-      id: 'onedrive',
-      name: 'OneDrive',
-      icon: <Cloud className="w-5 h-5" />,
-      description: 'Connect OneDrive to collect document evidence',
-      color: 'bg-blue-600',
-      connected: oneDriveStatus?.connected || false,
-      lastSync: oneDriveStatus?.lastSync ? new Date(oneDriveStatus.lastSync) : undefined,
-      itemCount: oneDriveStatus?.itemCount,
-    },
-    {
-      id: 'slack',
-      name: 'Slack',
-      icon: <MessageSquare className="w-5 h-5" />,
-      description: 'Connect Slack to collect team communication evidence',
-      color: 'bg-purple-500',
-      connected: slackStatus?.connected || false,
-      lastSync: slackStatus?.lastSync ? new Date(slackStatus.lastSync) : undefined,
-      itemCount: slackStatus?.itemCount,
-    },
-    {
-      id: 'trello',
-      name: 'Trello',
-      icon: <TrelloIcon className="w-5 h-5" />,
-      description: 'Connect Trello to collect project management evidence',
-      color: 'bg-blue-400',
-      connected: trelloStatus?.connected || false,
-      lastSync: trelloStatus?.lastSync ? new Date(trelloStatus.lastSync) : undefined,
-      itemCount: trelloStatus?.itemCount,
-    },
-    {
-      id: 'telegram',
-      name: 'Telegram',
-      icon: <Send className="w-5 h-5" />,
-      description: 'Import Telegram chat exports (JSON format)',
-      color: 'bg-sky-500',
-      connected: telegramStatus?.connected || false,
-      lastSync: telegramStatus?.lastSync ? new Date(telegramStatus.lastSync) : undefined,
-      itemCount: telegramStatus?.itemCount,
     },
   ];
 
@@ -197,22 +147,7 @@ export default function EvidenceConnectionsCard() {
         case 'outlook':
           const outlookResult = await outlookOAuthMutation.mutateAsync();
           authUrl = outlookResult.authUrl;
-          break;
-        case 'onedrive':
-          const oneDriveResult = await oneDriveOAuthMutation.mutateAsync();
-          authUrl = oneDriveResult.authUrl;
-          break;
-        case 'slack':
-          const slackResult = await slackOAuthMutation.mutateAsync();
-          authUrl = slackResult.authUrl;
-          break;
-        case 'trello':
-          const trelloResult = await trelloOAuthMutation.mutateAsync();
-          authUrl = trelloResult.authUrl;
-          break;
-        case 'telegram':
-          toast.info('Telegram requires manual export. Please export your chats from Telegram Desktop and upload the JSON file.');
-          return;
+          break;        
         default:
           toast.error('Unknown platform');
           return;
@@ -232,22 +167,10 @@ export default function EvidenceConnectionsCard() {
       switch (platformId) {
         case 'gmail':
           await gmailDisconnectMutation.mutateAsync();
-          break;
-        case 'outlook':
-          await outlookDisconnectMutation.mutateAsync();
-          break;
+          break;        
         case 'google-drive':
           await driveDisconnectMutation.mutateAsync();
-          break;
-        case 'onedrive':
-          await oneDriveDisconnectMutation.mutateAsync();
-          break;
-        case 'slack':
-          await slackDisconnectMutation.mutateAsync();
-          break;
-        case 'trello':
-          await trelloDisconnectMutation.mutateAsync();
-          break;
+          break;        
         default:
           toast.error('Unknown platform');
           return;
@@ -337,24 +260,14 @@ export default function EvidenceConnectionsCard() {
 
                 <div className="flex gap-2">
                   {platform.connected ? (
-                    <>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1"
-                        onClick={() => handleDisconnect(platform.id)}
-                      >
-                        Disconnect
-                      </Button>
-                      <Button
-                        variant="default"
-                        size="sm"
-                        className="flex-1"
-                        onClick={() => toast.info('Sync functionality coming soon')}
-                      >
-                        Sync Now
-                      </Button>
-                    </>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => handleDisconnect(platform.id)}
+                    >
+                      Disconnect
+                    </Button>
                   ) : (
                     <Button
                       variant="default"

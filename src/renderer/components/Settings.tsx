@@ -86,20 +86,65 @@ export default function Settings() {
   const testEmailMutation = trpc.email.test.useMutation();
   const exportDataMutation = trpc.gdpr.exportData.useMutation();
 
+  // Stored list of folders to include whenever LARO runs a keyword pull. We
+  // keep this in localStorage so it works without an extra DB migration; the
+  // case-view "Pull evidence by keyword" panel reads from here when sending
+  // localFolderPaths to the server.
+  const LARO_FOLDERS_KEY = "laroDefaultLocalScanFolders";
+
+  const readDefaultFolders = (): string[] => {
+    try {
+      const raw = localStorage.getItem(LARO_FOLDERS_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const writeDefaultFolders = (paths: string[]) => {
+    localStorage.setItem(LARO_FOLDERS_KEY, JSON.stringify(paths));
+    // Surface the change to other components in the same window.
+    window.dispatchEvent(new CustomEvent("laro:default-folders-changed"));
+  };
+
+  const [scannerFolders, setScannerFolders] = useState<string[]>(readDefaultFolders());
+
   const openScanner = useCallback(async () => {
     try {
-      if (typeof window !== "undefined" && window.electronAPI?.openScanPanel) {
-        await window.electronAPI.openScanPanel();
-        toast.success("Evidence scanner opened");
+      // Electron environment → native folder picker. No token page, no
+      // separate window. Just pick a folder and we remember it.
+      if (typeof window !== "undefined" && window.electronAPI?.selectFolder) {
+        const result = await window.electronAPI.selectFolder();
+        const picked = Array.isArray(result) ? result : result ? [result as unknown as string] : null;
+        if (!picked || picked.length === 0) return; // user cancelled
+        const merged = Array.from(new Set([...readDefaultFolders(), ...picked]));
+        writeDefaultFolders(merged);
+        setScannerFolders(merged);
+        toast.success(
+          picked.length === 1
+            ? `Added "${picked[0]}" — will scan during keyword pulls`
+            : `Added ${picked.length} folders — they'll be scanned during keyword pulls`,
+          {
+            description:
+              "Open a case → Evidence → Pull evidence by keyword to run the scan now.",
+          }
+        );
         return;
       }
-      toast.message("Scanner is only available in the LARO Desktop app", {
-        description: "Run the app with Electron (npm run dev), or use the menu: Evidence → Scan Local Files.",
+      // Browser fallback — no native dialog available.
+      toast.message("Folder picker requires the LARO Desktop app", {
+        description: "Run the app with Electron to pick local folders.",
       });
     } catch {
-      toast.error("Could not open the scanner window");
+      toast.error("Could not open the folder picker");
     }
   }, []);
+
+  const removeScannerFolder = (p: string) => {
+    const next = scannerFolders.filter((x) => x !== p);
+    writeDefaultFolders(next);
+    setScannerFolders(next);
+  };
 
   const handleTestEmail = async () => {
     if (!testEmail || !testEmail.includes("@")) {
@@ -443,44 +488,22 @@ export default function Settings() {
                   <CardHeader>
                     <CardTitle className="text-2xl">Scraper</CardTitle>
                     <CardDescription className="mt-2">
-                      Configure lawyer database scraping and run collection jobs
+                      Configure how often LARO refreshes its lawyer database.
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                      <div className="space-y-1.5 rounded-lg border border-border/40 p-3">
-                        <Label className="text-sm">Scraping schedule</Label>
-                        <Input
-                          ref={scraperScheduleInputRef}
-                          value={outreach.scraperSchedule}
-                          onChange={(e) =>
-                            updateWorkbench.mutate({ outreach: { scraperSchedule: e.target.value } })
-                          }
-                        />
-                      </div>
-                      <div className="space-y-1.5 rounded-lg border border-border/40 p-3">
-                        <Label className="text-sm">Last scrape</Label>
-                        <p className="text-sm text-muted-foreground">3 days ago (Success)</p>
-                      </div>
-                      <div className="space-y-1.5 rounded-lg border border-border/40 p-3">
-                        <Label className="text-sm">Lawyers in database</Label>
-                        <p className="text-sm font-semibold text-foreground">488 lawyers</p>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-3 border-t pt-4">
-                      <Button onClick={() => toast.success("Scraper started")}>Run scraper now</Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          scraperScheduleInputRef.current?.focus();
-                          scraperScheduleInputRef.current?.select();
-                          toast.message("Edit the schedule field above", {
-                            description: "Your changes apply as you type.",
-                          });
-                        }}
-                      >
-                        Configure schedule
-                      </Button>
+                    <div className="space-y-1.5 rounded-lg border border-border/40 p-3 max-w-md">
+                      <Label className="text-sm">Scraping schedule</Label>
+                      <Input
+                        ref={scraperScheduleInputRef}
+                        value={outreach.scraperSchedule}
+                        onChange={(e) =>
+                          updateWorkbench.mutate({ outreach: { scraperSchedule: e.target.value } })
+                        }
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Saved automatically as you type.
+                      </p>
                     </div>
                   </CardContent>
                 </Card>
@@ -603,14 +626,48 @@ export default function Settings() {
                   <CardHeader>
                     <CardTitle className="text-xl">Local Computer Scanner</CardTitle>
                     <CardDescription>
-                      Keep scanner controls with connection sources in one place.
+                      Pick folders on this computer that LARO should scan for
+                      evidence when you run a keyword pull on a case.
                     </CardDescription>
                   </CardHeader>
-                  <CardContent>
-                    <Button variant="outline" className="border-purple-500/30 font-semibold" onClick={openScanner}>
+                  <CardContent className="space-y-3">
+                    <Button
+                      variant="outline"
+                      className="border-purple-500/30 font-semibold"
+                      onClick={openScanner}
+                    >
                       <HardDrive className="mr-2 h-4 w-4 text-purple-500" />
-                      Start computer scanner
+                      Add folder to scan
                     </Button>
+
+                    {scannerFolders.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        No folders selected. Add one or more — they'll be
+                        included automatically when you click "Pull evidence by
+                        keyword" inside a case.
+                      </p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {scannerFolders.map((p) => (
+                          <div
+                            key={p}
+                            className="flex items-center justify-between gap-2 rounded-md border border-border/40 bg-background/50 px-3 py-1.5 text-sm"
+                          >
+                            <span className="truncate" title={p}>
+                              {p}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2 text-muted-foreground hover:text-destructive"
+                              onClick={() => removeScannerFolder(p)}
+                            >
+                              Remove
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </div>

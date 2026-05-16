@@ -26,6 +26,7 @@ import { supportRouter } from "./support";
 import { evidenceAnalyticsRouter } from "./evidenceAnalytics";
 import { autoCollectionRouter } from "./autoCollection";
 import { googleDriveRouter } from "./googleDrive";
+import { notificationsRouter } from "./notifications";
 import {
   gmailEnhancedRouter,
   outlookEnhancedRouter,
@@ -70,6 +71,7 @@ export const appRouter = router({
   support: supportRouter,
   autoCollection: autoCollectionRouter,
   googleDrive: googleDriveRouter,
+  notifications: notificationsRouter,
   
   gmailEnhanced: gmailEnhancedRouter,
   outlookEnhanced: outlookEnhancedRouter,

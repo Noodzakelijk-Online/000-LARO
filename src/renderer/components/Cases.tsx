@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, MapPin, Clock, Briefcase, FileText, Upload } from "lucide-react";
+import { Plus, MapPin, Clock, Briefcase, FileText, Upload, Trash2 } from "lucide-react";
 import SmartSearchFilters from "@/components/SmartSearchFilters";
 import { BulkCaseImport } from "@/components/BulkCaseImport";
 import BulkEvidenceUpload from "@/components/BulkEvidenceUpload";
@@ -103,6 +103,17 @@ function parseLegalAreas(caseItem: any): string[] {
 export default function Cases() {
   const [newCaseOpen, setNewCaseOpen] = useState(false);
   const createCase = trpc.cases.create.useMutation();
+  const utils = trpc.useUtils();
+  const deleteCase = trpc.cases.delete.useMutation({
+    onSuccess: () => {
+      toast.success("Case deleted");
+      utils.cases.list.invalidate();
+    },
+    onError: (err) => {
+      toast.error(`Failed to delete case: ${err.message}`);
+    },
+  });
+  const [caseToDelete, setCaseToDelete] = useState<{ id: string; name: string } | null>(null);
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState("");
@@ -322,16 +333,33 @@ export default function Cases() {
                           {caseItem.urgency} Priority
                         </Badge>
                       </div>
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          localStorage.setItem(`case-tab-${caseItem.id}`, "evidence");
-                          setSelectedCaseId(caseItem.id);
-                        }}
-                        className="mt-4 w-full border-blue-500/30 transition-all group-hover:border-blue-500/50 hover:bg-blue-500/10"
-                      >
-                        View Your Case Details
-                      </Button>
+                      <div className="mt-4 flex gap-2">
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            localStorage.setItem(`case-tab-${caseItem.id}`, "evidence");
+                            setSelectedCaseId(caseItem.id);
+                          }}
+                          className="flex-1 border-blue-500/30 transition-all group-hover:border-blue-500/50 hover:bg-blue-500/10"
+                        >
+                          View Your Case Details
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          aria-label="Delete case"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCaseToDelete({
+                              id: caseItem.id,
+                              name: caseItem.clientName || caseItem.caseType || caseItem.id,
+                            });
+                          }}
+                          className="border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </CardContent>
                   </Card>
                 );
@@ -422,6 +450,50 @@ export default function Cases() {
           onComplete={() => setEvidenceUploadCaseId(null)}
         />
       )}
+
+      <Dialog
+        open={!!caseToDelete}
+        onOpenChange={(open: boolean) => {
+          if (!open && !deleteCase.isLoading) setCaseToDelete(null);
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete this case?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            This will permanently delete{" "}
+            <span className="font-medium text-foreground">
+              {caseToDelete?.name}
+            </span>{" "}
+            and all its evidence, outreach, deadlines, and related data. This cannot be undone.
+          </p>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              variant="outline"
+              onClick={() => setCaseToDelete(null)}
+              disabled={deleteCase.isLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="bg-red-500 hover:bg-red-600"
+              disabled={deleteCase.isLoading}
+              onClick={async () => {
+                if (!caseToDelete) return;
+                try {
+                  await deleteCase.mutateAsync({ id: caseToDelete.id });
+                  setCaseToDelete(null);
+                } catch {
+                  // toast already shown by onError
+                }
+              }}
+            >
+              {deleteCase.isLoading ? "Deleting…" : "Delete permanently"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

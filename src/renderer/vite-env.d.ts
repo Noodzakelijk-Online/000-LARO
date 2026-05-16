@@ -6,6 +6,7 @@ interface Window {
     openScanPanel: () => Promise<void>;
     getConfig: () => Promise<unknown>;
     setConfig: (config: unknown) => Promise<unknown>;
+    selectFolder: () => Promise<string[] | null>;
   };
 }
 

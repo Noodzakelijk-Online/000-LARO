@@ -45,6 +45,11 @@ import {
   TrendingUp,
   Shield,
   ChevronRight,
+  Sparkles,
+  Loader2,
+  FolderPlus,
+  Plus,
+  Folder,
 } from "lucide-react";
 import { LegalAreasSelect } from "@/components/LegalAreasSelect";
 import { EvidenceCollection } from "@/components/EvidenceCollection";
@@ -54,7 +59,6 @@ import EvidenceTimelineView from "@/components/EvidenceTimelineView";
 import OutreachAnalyticsView from "@/components/OutreachAnalyticsView";
 import { EvidenceGapAnalysisDashboard } from "@/components/EvidenceGapAnalysisDashboard";
 import EnhancedEvidenceUpload from "@/components/EnhancedEvidenceUpload";
-import { AutoCollectionSettings } from "@/components/AutoCollectionSettings";
 import { CollectionMonitoringDashboard } from "@/components/CollectionMonitoringDashboard";
 import ProgressTrackingDashboard from "@/components/ProgressTrackingDashboard";
 import { exportCaseSummary, printCaseSummary } from "@/lib/export";
@@ -65,6 +69,306 @@ interface EnhancedCaseDetailsDialogProps {
   caseId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+}
+
+/**
+ * One-shot keyword pull panel — the acceptance-test entry point. User types
+ * keywords, clicks Pull, and LARO autonomously fetches matching evidence
+ * from every connected source (Gmail, Google Drive, local folders) into the
+ * case.
+ */
+function KeywordEvidencePull({ caseId }: { caseId: string }) {
+  const [keywordsRaw, setKeywordsRaw] = useState("");
+  const [showFolderInput, setShowFolderInput] = useState(false);
+  const [newFolderPath, setNewFolderPath] = useState("");
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [matchMode, setMatchMode] = useState<"all" | "any">("any");
+  const [dateStart, setDateStart] = useState("");
+  const [dateEnd, setDateEnd] = useState("");
+
+  const utils = trpc.useUtils();
+
+  const { data: driveStatus } = trpc.googleDrive.checkConnection.useQuery(undefined, {
+    refetchOnWindowFocus: false,
+  });
+  const { data: localFolderData, refetch: refetchLocalFolders } =
+    trpc.autoCollection.getLocalFolders.useQuery({ caseId });
+
+  const pullMutation = trpc.autoCollection.pullByKeywords.useMutation({
+    onSuccess: (data) => {
+      const r = data.result;
+      const total = r.gmailMessages + r.gmailAttachments + r.driveFiles + r.localFiles;
+      if (total === 0) {
+        toast.message("Pull complete — no new matches", {
+          description: r.errors.length
+            ? `Some sources errored: ${r.errors[0]}`
+            : "No items matched your keywords. Try different terms or connect a source.",
+        });
+      } else {
+        toast.success(`Pulled ${total} item${total === 1 ? "" : "s"} into the case`, {
+          description: `Gmail: ${r.gmailMessages} email(s), ${r.gmailAttachments} attachment(s). Drive: ${r.driveFiles}. Local: ${r.localFiles}.`,
+        });
+      }
+      if (r.errors.length) {
+        console.warn("[KeywordPull] errors:", r.errors);
+      }
+      // Refresh evidence + monitoring views.
+      (utils.evidenceFiles as any)?.byCase?.invalidate?.({ caseId });
+      (utils.autoCollection as any)?.getLogs?.invalidate?.({ caseId });
+    },
+    onError: (err) => {
+      toast.error(`Pull failed: ${err.message}`);
+    },
+  });
+
+  const addFolderMutation = trpc.autoCollection.setLocalFolders.useMutation({
+    onSuccess: () => {
+      toast.success("Local folder added");
+      setNewFolderPath("");
+      setShowFolderInput(false);
+      refetchLocalFolders();
+    },
+    onError: (err) => toast.error(`Failed to add folder: ${err.message}`),
+  });
+
+  const connectMutation = trpc.googleDrive.connect.useMutation({
+    onSuccess: (data) => {
+      if (data?.authUrl) {
+        window.open(data.authUrl, "_blank", "width=520,height=720");
+        toast.message("Complete the Google sign-in in the new window");
+      } else {
+        toast.error("No auth URL returned");
+      }
+    },
+    onError: (err) => toast.error(`Could not start Google sign-in: ${err.message}`),
+  });
+
+  const currentLocalFolders = localFolderData?.paths || [];
+
+  // Read the user-level default folders that Settings → Local Computer
+  // Scanner adds. We merge them with per-case folders so a folder added in
+  // Settings is included in every keyword pull without re-typing the path.
+  const readDefaultFolders = (): string[] => {
+    try {
+      const raw = localStorage.getItem("laroDefaultLocalScanFolders");
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const handlePull = () => {
+    const keywords = keywordsRaw
+      .split(/[,\n]/)
+      .map((k) => k.trim())
+      .filter(Boolean);
+    if (keywords.length === 0) {
+      toast.error("Enter at least one keyword (comma-separated for multiple).");
+      return;
+    }
+    const defaultFolders = readDefaultFolders();
+    const localFolderPaths = Array.from(
+      new Set([...defaultFolders, ...currentLocalFolders]),
+    );
+    pullMutation.mutate({
+      caseId,
+      keywords,
+      matchMode,
+      // Send the union so the server scans both case-level and user-default folders.
+      localFolderPaths: localFolderPaths.length > 0 ? localFolderPaths : undefined,
+      dateStart: dateStart ? new Date(dateStart) : undefined,
+      dateEnd: dateEnd ? new Date(dateEnd) : undefined,
+    });
+  };
+
+  const handleAddFolder = () => {
+    const p = newFolderPath.trim();
+    if (!p) return;
+    const next = Array.from(new Set([...currentLocalFolders, p]));
+    addFolderMutation.mutate({ caseId, paths: next });
+  };
+
+  const handleRemoveFolder = (p: string) => {
+    const next = currentLocalFolders.filter((x) => x !== p);
+    addFolderMutation.mutate({ caseId, paths: next });
+  };
+
+  const handleConnectDrive = () => {
+    connectMutation.mutate();
+  };
+
+  return (
+    <Card className="border-purple-500/30 bg-gradient-to-br from-purple-500/5 to-pink-500/5">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Sparkles className="w-5 h-5 text-purple-400" />
+          Pull evidence by keyword
+        </CardTitle>
+        <CardDescription>
+          Type one or more keywords and LARO will autonomously pull matching
+          emails, Drive files, and local files into this case.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="keyword-pull">Keywords (comma-separated)</Label>
+          <div className="flex gap-2">
+            <Input
+              id="keyword-pull"
+              placeholder="contract, invoice, NDA…"
+              value={keywordsRaw}
+              onChange={(e) => setKeywordsRaw(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !pullMutation.isLoading) handlePull();
+              }}
+              className="bg-background"
+            />
+            <Button
+              onClick={handlePull}
+              disabled={pullMutation.isLoading}
+              className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
+            >
+              {pullMutation.isLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Pulling…
+                </>
+              ) : (
+                <>
+                  <Search className="w-4 h-4 mr-2" />
+                  Pull now
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-border/40">
+          {/* Gmail / Drive */}
+          <div className="space-y-1">
+            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              Gmail & Drive
+            </div>
+            {driveStatus?.connected ? (
+              <Badge variant="outline" className="border-green-500/40 text-green-400">
+                <CheckCircle2 className="w-3 h-3 mr-1" /> Connected
+              </Badge>
+            ) : (
+              <Button size="sm" variant="outline" onClick={handleConnectDrive}>
+                Connect Google
+              </Button>
+            )}
+          </div>
+
+          {/* Local folders */}
+          <div className="space-y-1 sm:col-span-2">
+            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              Local folders to scan
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {currentLocalFolders.map((p) => (
+                <Badge
+                  key={p}
+                  variant="secondary"
+                  className="gap-1 max-w-[280px]"
+                  title={p}
+                >
+                  <Folder className="w-3 h-3 shrink-0" />
+                  <span className="truncate">{p}</span>
+                  <button
+                    onClick={() => handleRemoveFolder(p)}
+                    className="ml-1 hover:text-destructive"
+                    aria-label={`Remove ${p}`}
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </Badge>
+              ))}
+              {currentLocalFolders.length === 0 && !showFolderInput && (
+                <span className="text-xs text-muted-foreground">None configured</span>
+              )}
+              {showFolderInput ? (
+                <div className="flex w-full gap-1.5">
+                  <Input
+                    placeholder="/Users/me/Scans"
+                    value={newFolderPath}
+                    onChange={(e) => setNewFolderPath(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleAddFolder();
+                      if (e.key === "Escape") {
+                        setShowFolderInput(false);
+                        setNewFolderPath("");
+                      }
+                    }}
+                    className="h-8 text-xs"
+                    autoFocus
+                  />
+                  <Button size="sm" onClick={handleAddFolder}>
+                    Add
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setShowFolderInput(true)}
+                  className="h-7 px-2"
+                >
+                  <FolderPlus className="w-3 h-3 mr-1" /> Add folder
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="pt-3 border-t border-border/40">
+          <button
+            type="button"
+            onClick={() => setShowAdvanced((v) => !v)}
+            className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+          >
+            <ChevronRight
+              className={`w-3 h-3 transition-transform ${showAdvanced ? "rotate-90" : ""}`}
+            />
+            Advanced options
+          </button>
+          {showAdvanced && (
+            <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Match mode</Label>
+                <select
+                  value={matchMode}
+                  onChange={(e) => setMatchMode(e.target.value as "all" | "any")}
+                  className="w-full h-9 rounded-md border border-border bg-background px-2 text-sm"
+                >
+                  <option value="any">Match ANY keyword</option>
+                  <option value="all">Match ALL keywords</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">From</Label>
+                <Input
+                  type="date"
+                  value={dateStart}
+                  onChange={(e) => setDateStart(e.target.value)}
+                  className="h-9 bg-background"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">To</Label>
+                <Input
+                  type="date"
+                  value={dateEnd}
+                  onChange={(e) => setDateEnd(e.target.value)}
+                  className="h-9 bg-background"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 /* ─── nav items ─── */
@@ -465,11 +769,11 @@ export default function EnhancedCaseDetailsDialog({
                     <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
                       <FileText className="w-5 h-5 text-orange-500" /> Evidence Management
                     </h2>
+                    <KeywordEvidencePull caseId={caseId} />
                     <Tabs defaultValue="upload" className="w-full">
                       <TabsList className="w-full justify-start gap-1 h-auto bg-card/40 border border-border/30 rounded-xl p-1">
                         <TabsTrigger value="upload" className="text-xs rounded-lg">Upload</TabsTrigger>
                         <TabsTrigger value="google-drive" className="text-xs rounded-lg">Google Drive</TabsTrigger>
-                        <TabsTrigger value="auto-collection" className="text-xs rounded-lg">Auto-Collection</TabsTrigger>
                         <TabsTrigger value="monitoring" className="text-xs rounded-lg">Monitoring</TabsTrigger>
                       </TabsList>
                       <TabsContent value="upload" className="mt-4 space-y-4">
@@ -482,21 +786,15 @@ export default function EnhancedCaseDetailsDialog({
                       <TabsContent value="google-drive" className="mt-4">
                         <Card className="border-border/30 bg-card/40">
                           <CardHeader>
-                            <CardTitle className="flex items-center gap-2 text-base"><CloudDownload className="w-5 h-5" /> Import from Google Drive</CardTitle>
-                            <CardDescription>Select files from your connected Google Drive account to add as evidence.</CardDescription>
+                            <CardTitle className="flex items-center gap-2 text-base"><CloudDownload className="w-5 h-5" /> Browse Google Drive</CardTitle>
+                            <CardDescription>Pick specific Drive files to attach. For keyword-based imports use the panel above.</CardDescription>
                           </CardHeader>
                           <CardContent>
                             <div className="text-center py-8 text-muted-foreground">
-                              <p>Connect your source once, then sync directly into this case.</p>
-                              <p className="text-sm mt-2 text-muted-foreground/60">
-                                Use the Auto-Collection and Monitoring tabs here to control ongoing imports for this case.
-                              </p>
+                              <p>Connect Google in the "Pull evidence by keyword" panel above, then select files here.</p>
                             </div>
                           </CardContent>
                         </Card>
-                      </TabsContent>
-                      <TabsContent value="auto-collection" className="mt-4">
-                        <AutoCollectionSettings caseId={caseId} />
                       </TabsContent>
                       <TabsContent value="monitoring" className="mt-4">
                         <CollectionMonitoringDashboard caseId={caseId} />

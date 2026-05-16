@@ -50,8 +50,6 @@ export default function EnhancedEvidenceUpload({ caseId }: { caseId?: string }) 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
-  const analyzeDocumentMutation = trpc.documentAnalysis.analyze.useMutation();
-
   const categorizeFile = async (file: File): Promise<{ category: string; confidence: number }> => {
     // Simple file type based categorization
     const extension = file.name.split('.').pop()?.toLowerCase();

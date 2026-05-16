@@ -9,10 +9,20 @@ import {
   keywordMatches,
   emailMessages,
   googleDriveFiles,
+  emailAccounts,
+  evidence as evidenceTable,
+  cases as casesTable,
 } from './schema';
 import { v4 as uuidv4 } from 'uuid';
 import { google } from 'googleapis';
 import { downloadAndUploadGoogleDriveFile, getGoogleDriveFileMetadata } from './googleDriveService';
+import { decryptToken, encryptToken, refreshGmailToken } from './emailOAuth';
+import { searchGmailEmails, getGmailMessage, getGmailAttachment } from './gmailService';
+import { getAllFilesInFolder } from './googleDriveService';
+import { storagePut } from './storage';
+import * as fs from 'fs/promises';
+import * as path from 'path';
+import * as nodeFs from 'fs';
 
 /**
  * Evidence Auto-Collection Service
@@ -560,4 +570,644 @@ export async function getKeywordMatches(caseId: string) {
     .where(eq(keywordMatches.caseId, caseId));
 
   return matches;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// One-shot keyword pull: pulls evidence from every connected source for a case
+// in a single call, without requiring saved auto-collection settings.
+// ────────────────────────────────────────────────────────────────────────────
+
+export interface PullByKeywordsResult {
+  gmailMessages: number;
+  gmailAttachments: number;
+  driveFiles: number;
+  localFiles: number;
+  errors: string[];
+}
+
+/**
+ * Read & decrypt a Gmail access token for the user, refreshing if expired.
+ * Returns null when the user has no connected Gmail account.
+ */
+async function getFreshGmailAccessToken(userId: string): Promise<{ accessToken: string; accountId: string; email: string } | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const rows = await db
+    .select()
+    .from(emailAccounts)
+    .where(and(eq(emailAccounts.userId, userId), eq(emailAccounts.provider, 'gmail')))
+    .limit(1);
+
+  const account = rows[0];
+  if (!account || !account.accessToken) return null;
+
+  let accessToken = decryptToken(account.accessToken);
+
+  // Refresh if expired (or within 60s of expiry).
+  const expiryMs = account.tokenExpiry ? new Date(account.tokenExpiry).getTime() : 0;
+  if (expiryMs && expiryMs - Date.now() < 60_000 && account.refreshToken) {
+    try {
+      const refreshed = await refreshGmailToken(decryptToken(account.refreshToken));
+      accessToken = refreshed.accessToken;
+      await db
+        .update(emailAccounts)
+        .set({
+          accessToken: encryptToken(accessToken),
+          tokenExpiry: new Date(refreshed.expiryDate),
+        })
+        .where(eq(emailAccounts.id, account.id));
+    } catch (err) {
+      console.warn('[AutoCollection] Gmail token refresh failed:', err);
+    }
+  }
+
+  return { accessToken, accountId: account.id, email: account.email || '' };
+}
+
+/**
+ * Pull matching emails (and their attachments) from Gmail for the given case
+ * + user using Gmail's native query syntax. Each matching email becomes an
+ * evidence record; each attachment is downloaded and becomes its own evidence
+ * record so attorneys can preview/download from the case view.
+ */
+async function pullFromGmail(
+  caseId: string,
+  userId: string,
+  keywords: string[],
+  matchMode: 'all' | 'any',
+  errors: string[],
+  dateStart?: Date,
+  dateEnd?: Date,
+): Promise<{ messages: number; attachments: number }> {
+  const db = await getDb();
+  if (!db) return { messages: 0, attachments: 0 };
+
+  const cred = await getFreshGmailAccessToken(userId);
+  if (!cred) return { messages: 0, attachments: 0 };
+
+  // Build a Gmail-syntax query. For "any", OR keywords together; for "all",
+  // AND them (Gmail's default is AND).
+  const quoted = keywords.map((k) => (k.includes(' ') ? `"${k.replace(/"/g, '')}"` : k));
+  const keywordPart =
+    matchMode === 'any' ? `(${quoted.join(' OR ')})` : quoted.join(' ');
+  // Gmail uses after:/before: with YYYY/MM/DD.
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+  const datePart = [
+    dateStart ? `after:${fmt(dateStart)}` : '',
+    dateEnd ? `before:${fmt(dateEnd)}` : '',
+  ].filter(Boolean).join(' ');
+  const query = [keywordPart, datePart].filter(Boolean).join(' ');
+
+  let threads: { id: string }[] = [];
+  try {
+    threads = await searchGmailEmails(cred.accessToken, { maxResults: 30 }).then(
+      // Cast: searchGmailEmails returns GmailThread[]
+      (t: any[]) => t.map((row) => ({ id: row.id })),
+    );
+    // searchGmailEmails ignores the query arg; bypass it by calling listGmailThreads directly.
+  } catch {
+    threads = [];
+  }
+
+  // Re-list with the real keyword query (searchGmailEmails only handles structured filters).
+  try {
+    const params = new URLSearchParams({ maxResults: '30', q: query });
+    const res = await fetch(
+      `https://www.googleapis.com/gmail/v1/users/me/messages?${params.toString()}`,
+      { headers: { Authorization: `Bearer ${cred.accessToken}` } },
+    );
+    const data = (await res.json()) as { messages?: { id: string; threadId: string }[]; error?: { message: string } };
+    if (data.error) throw new Error(data.error.message);
+    threads = (data.messages || []).map((m) => ({ id: m.id }));
+  } catch (err) {
+    errors.push(`Gmail search failed: ${err instanceof Error ? err.message : String(err)}`);
+    return { messages: 0, attachments: 0 };
+  }
+
+  let messagesIngested = 0;
+  let attachmentsIngested = 0;
+
+  for (const t of threads) {
+    try {
+      const msg = await getGmailMessage(cred.accessToken, t.id);
+      const headers = (msg.payload?.headers || []).reduce<Record<string, string>>(
+        (acc, h) => ((acc[h.name.toLowerCase()] = h.value), acc),
+        {},
+      );
+      const subject = headers.subject || '(no subject)';
+      const from = headers.from || 'unknown';
+      const date = msg.internalDate
+        ? new Date(parseInt(msg.internalDate, 10))
+        : new Date();
+
+      // Dedupe: skip if we already have an evidence row tagged with this gmailMessageId.
+      const existing = await db
+        .select()
+        .from(evidenceTable)
+        .where(and(eq(evidenceTable.caseId, caseId), eq(evidenceTable.source, 'gmail')));
+      const already = existing.some((e) => {
+        try {
+          const meta = e.metadata ? JSON.parse(e.metadata) : {};
+          return meta.gmailMessageId === msg.id;
+        } catch {
+          return false;
+        }
+      });
+      if (already) continue;
+
+      // Build a plain-text body excerpt.
+      let body = '';
+      const collectBody = (payload: any) => {
+        if (!payload) return;
+        if (payload.body?.data && payload.mimeType?.startsWith('text/')) {
+          try {
+            body += Buffer.from(payload.body.data, 'base64').toString('utf-8') + '\n';
+          } catch {}
+        }
+        if (payload.parts) payload.parts.forEach(collectBody);
+      };
+      collectBody(msg.payload);
+
+      await db.insert(evidenceTable).values({
+        id: uuidv4(),
+        caseId,
+        userId,
+        type: 'email',
+        source: 'gmail',
+        title: subject,
+        description: `From ${from} on ${date.toISOString()}`,
+        fileUrl: null,
+        fileName: null,
+        fileSize: null,
+        mimeType: 'message/rfc822',
+        metadata: JSON.stringify({
+          gmailMessageId: msg.id,
+          gmailThreadId: (msg as any).threadId,
+          from,
+          subject,
+          date: date.toISOString(),
+          bodyExcerpt: body.slice(0, 2000),
+          accountId: cred.accountId,
+          autoCollected: true,
+        }),
+        relevant: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      messagesIngested++;
+
+      // Download attachments.
+      const attachments: { partId: string; filename: string; mimeType: string; attachmentId: string }[] = [];
+      const collectAttachments = (payload: any) => {
+        if (!payload) return;
+        if (payload.filename && payload.body?.attachmentId) {
+          attachments.push({
+            partId: payload.partId,
+            filename: payload.filename,
+            mimeType: payload.mimeType || 'application/octet-stream',
+            attachmentId: payload.body.attachmentId,
+          });
+        }
+        if (payload.parts) payload.parts.forEach(collectAttachments);
+      };
+      collectAttachments(msg.payload);
+
+      for (const att of attachments) {
+        try {
+          const a = await getGmailAttachment(cred.accessToken, msg.id, att.attachmentId);
+          if (!a?.data) continue;
+          // Gmail uses URL-safe base64.
+          const normalized = a.data.replace(/-/g, '+').replace(/_/g, '/');
+          const buf = Buffer.from(normalized, 'base64');
+          const storageKey = `evidence/${caseId}/gmail/${uuidv4()}-${att.filename}`;
+          const { url } = await storagePut(storageKey, buf, att.mimeType);
+          await db.insert(evidenceTable).values({
+            id: uuidv4(),
+            caseId,
+            userId,
+            type: determineEvidenceType(att.mimeType),
+            source: 'gmail',
+            title: att.filename,
+            description: `Attachment from email "${subject}"`,
+            fileUrl: url,
+            fileName: att.filename,
+            fileSize: String(buf.length),
+            mimeType: att.mimeType,
+            metadata: JSON.stringify({
+              gmailMessageId: msg.id,
+              attachmentId: att.attachmentId,
+              parentSubject: subject,
+              autoCollected: true,
+            }),
+            relevant: true,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+          attachmentsIngested++;
+        } catch (err) {
+          errors.push(`Attachment "${att.filename}" failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+    } catch (err) {
+      errors.push(`Gmail message fetch failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  return { messages: messagesIngested, attachments: attachmentsIngested };
+}
+
+/**
+ * Pull files from Google Drive that match keywords by filename.
+ * If folderIds is empty, falls back to scanning the user's "root" folder.
+ */
+async function pullFromDrive(
+  caseId: string,
+  userId: string,
+  keywords: string[],
+  matchMode: 'all' | 'any',
+  folderIds: string[],
+  errors: string[],
+  dateStart?: Date,
+  dateEnd?: Date,
+): Promise<{ files: number }> {
+  const db = await getDb();
+  if (!db) return { files: 0 };
+
+  // Verify the user has Drive access via Gmail OAuth.
+  const cred = await getFreshGmailAccessToken(userId);
+  if (!cred) return { files: 0 };
+
+  const folders = folderIds.length > 0 ? folderIds : ['root'];
+  let downloaded = 0;
+
+  for (const folderId of folders) {
+    try {
+      const files = await getAllFilesInFolder(userId, folderId, true);
+      for (const file of files) {
+        if (!file.name || !file.id) continue;
+        if (!matchesKeywords(file.name, keywords, matchMode)) continue;
+        // Date filter (Drive returns modifiedTime as ISO string).
+        const mod = (file as any).modifiedTime ? new Date((file as any).modifiedTime) : null;
+        if (dateStart && mod && mod < dateStart) continue;
+        if (dateEnd && mod && mod > dateEnd) continue;
+
+        // Dedupe.
+        const existing = await db
+          .select()
+          .from(evidenceTable)
+          .where(and(eq(evidenceTable.caseId, caseId), eq(evidenceTable.source, 'google_drive')));
+        const already = existing.some((e) => {
+          try {
+            const meta = e.metadata ? JSON.parse(e.metadata) : {};
+            return meta.driveFileId === file.id;
+          } catch {
+            return false;
+          }
+        });
+        if (already) continue;
+
+        try {
+          const fileData = await downloadAndUploadGoogleDriveFile(file.id, caseId, userId);
+          await db.insert(evidenceTable).values({
+            id: uuidv4(),
+            caseId,
+            userId,
+            type: determineEvidenceType(fileData.mimeType),
+            source: 'google_drive',
+            title: file.name,
+            description: 'Auto-collected from Google Drive',
+            fileUrl: fileData.url,
+            fileName: fileData.fileName,
+            fileSize: fileData.size,
+            mimeType: fileData.mimeType,
+            metadata: JSON.stringify({
+              driveFileId: file.id,
+              folderId,
+              autoCollected: true,
+              collectedAt: new Date().toISOString(),
+              modifiedTime: fileData.modifiedTime,
+            }),
+            relevant: true,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+          downloaded++;
+        } catch (err) {
+          errors.push(`Drive file "${file.name}" failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+    } catch (err) {
+      errors.push(`Drive folder ${folderId} failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  return { files: downloaded };
+}
+
+/**
+ * Recursively scan a local directory for files whose names match keywords.
+ * Limits depth and file count so we never lock up the server on huge trees.
+ */
+async function scanLocalDirectory(
+  rootPath: string,
+  keywords: string[],
+  matchMode: 'all' | 'any',
+  errors: string[],
+  maxFiles = 500,
+  maxDepth = 6,
+): Promise<{ absPath: string; name: string }[]> {
+  const matches: { absPath: string; name: string }[] = [];
+
+  async function walk(dir: string, depth: number) {
+    if (matches.length >= maxFiles || depth > maxDepth) return;
+    let entries: any[] = [];
+    try {
+      entries = await fs.readdir(dir, { withFileTypes: true });
+    } catch (err) {
+      errors.push(`Cannot read directory ${dir}: ${err instanceof Error ? err.message : String(err)}`);
+      return;
+    }
+    for (const entry of entries) {
+      if (matches.length >= maxFiles) return;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        // Skip common noise.
+        if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
+        await walk(full, depth + 1);
+      } else if (entry.isFile()) {
+        if (matchesKeywords(entry.name, keywords, matchMode)) {
+          matches.push({ absPath: full, name: entry.name });
+        }
+      }
+    }
+  }
+
+  await walk(rootPath, 0);
+  return matches;
+}
+
+/**
+ * Pull matching files from one or more local folders. Files are copied into
+ * the evidence storage layer (S3 if configured, on-disk fallback otherwise)
+ * so they live alongside the case forever, independent of the source folder.
+ */
+async function pullFromLocalFolders(
+  caseId: string,
+  userId: string,
+  keywords: string[],
+  matchMode: 'all' | 'any',
+  folderPaths: string[],
+  errors: string[],
+  dateStart?: Date,
+  dateEnd?: Date,
+): Promise<{ files: number }> {
+  const db = await getDb();
+  if (!db) return { files: 0 };
+  if (!folderPaths.length) return { files: 0 };
+
+  let ingested = 0;
+
+  for (const folderPath of folderPaths) {
+    if (!folderPath || !nodeFs.existsSync(folderPath)) {
+      errors.push(`Local folder not found: ${folderPath}`);
+      continue;
+    }
+
+    const found = await scanLocalDirectory(folderPath, keywords, matchMode, errors);
+
+    for (const file of found) {
+      try {
+        // Dedupe by absolute path.
+        const existing = await db
+          .select()
+          .from(evidenceTable)
+          .where(and(eq(evidenceTable.caseId, caseId), eq(evidenceTable.source, 'local')));
+        const already = existing.some((e) => {
+          try {
+            const meta = e.metadata ? JSON.parse(e.metadata) : {};
+            return meta.absPath === file.absPath;
+          } catch {
+            return false;
+          }
+        });
+        if (already) continue;
+
+        const stat = await fs.stat(file.absPath);
+        if (dateStart && stat.mtime < dateStart) continue;
+        if (dateEnd && stat.mtime > dateEnd) continue;
+        const buf = await fs.readFile(file.absPath);
+        const ext = path.extname(file.name).toLowerCase();
+        const mimeType = guessMimeFromExt(ext);
+        const storageKey = `evidence/${caseId}/local/${uuidv4()}-${file.name}`;
+        const { url } = await storagePut(storageKey, buf, mimeType);
+
+        await db.insert(evidenceTable).values({
+          id: uuidv4(),
+          caseId,
+          userId,
+          type: determineEvidenceType(mimeType),
+          source: 'local',
+          title: file.name,
+          description: `Auto-collected from local folder ${folderPath}`,
+          fileUrl: url,
+          fileName: file.name,
+          fileSize: String(stat.size),
+          mimeType,
+          metadata: JSON.stringify({
+            absPath: file.absPath,
+            sourceFolder: folderPath,
+            autoCollected: true,
+            collectedAt: new Date().toISOString(),
+            modifiedTime: stat.mtime.toISOString(),
+          }),
+          relevant: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+        ingested++;
+      } catch (err) {
+        errors.push(`Local file "${file.absPath}" failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+  }
+
+  return { files: ingested };
+}
+
+function guessMimeFromExt(ext: string): string {
+  switch (ext) {
+    case '.pdf': return 'application/pdf';
+    case '.docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    case '.doc': return 'application/msword';
+    case '.xlsx': return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    case '.xls': return 'application/vnd.ms-excel';
+    case '.pptx': return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+    case '.txt': return 'text/plain';
+    case '.csv': return 'text/csv';
+    case '.png': return 'image/png';
+    case '.jpg':
+    case '.jpeg': return 'image/jpeg';
+    case '.heic': return 'image/heic';
+    case '.mp4': return 'video/mp4';
+    case '.mov': return 'video/quicktime';
+    case '.mp3': return 'audio/mpeg';
+    case '.wav': return 'audio/wav';
+    case '.eml': return 'message/rfc822';
+    default: return 'application/octet-stream';
+  }
+}
+
+/**
+ * Read configured local folder paths for a case (stored in
+ * autoCollectionSettings.metadata as JSON).
+ */
+async function getConfiguredLocalFolders(caseId: string): Promise<string[]> {
+  const s = await getAutoCollectionSettings(caseId);
+  if (!s?.metadata) return [];
+  try {
+    const meta = typeof s.metadata === 'string' ? JSON.parse(s.metadata) : s.metadata;
+    return Array.isArray(meta.localFolderPaths) ? meta.localFolderPaths : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * One-shot autonomous pull: given a case and a set of keywords, pull matching
+ * evidence from every connected source (Gmail, Google Drive, local folders)
+ * in a single call. This is the entry point used by the case-view "Pull
+ * evidence by keyword" panel.
+ */
+export async function pullEvidenceByKeywords(params: {
+  caseId: string;
+  userId: string;
+  keywords: string[];
+  matchMode?: 'all' | 'any';
+  driveFolderIds?: string[];
+  localFolderPaths?: string[];
+  dateStart?: Date;
+  dateEnd?: Date;
+}): Promise<PullByKeywordsResult> {
+  const matchMode = params.matchMode || 'any';
+  const errors: string[] = [];
+
+  if (!params.keywords || params.keywords.length === 0) {
+    throw new Error('At least one keyword is required');
+  }
+
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
+
+  // Resolve sources. Fall back to settings-configured sources, then to defaults.
+  const settings = await getAutoCollectionSettings(params.caseId);
+
+  let driveFolderIds = params.driveFolderIds;
+  if (!driveFolderIds || driveFolderIds.length === 0) {
+    if (settings?.googleDriveFolderIds) {
+      try {
+        driveFolderIds = JSON.parse(settings.googleDriveFolderIds);
+      } catch {
+        driveFolderIds = [];
+      }
+    }
+  }
+  driveFolderIds = driveFolderIds || [];
+
+  let localFolderPaths = params.localFolderPaths;
+  if (!localFolderPaths || localFolderPaths.length === 0) {
+    localFolderPaths = await getConfiguredLocalFolders(params.caseId);
+  }
+
+  const [gmail, drive, local] = await Promise.all([
+    pullFromGmail(params.caseId, params.userId, params.keywords, matchMode, errors, params.dateStart, params.dateEnd).catch((err) => {
+      errors.push(`Gmail pull failed: ${err instanceof Error ? err.message : String(err)}`);
+      return { messages: 0, attachments: 0 };
+    }),
+    pullFromDrive(params.caseId, params.userId, params.keywords, matchMode, driveFolderIds, errors, params.dateStart, params.dateEnd).catch((err) => {
+      errors.push(`Drive pull failed: ${err instanceof Error ? err.message : String(err)}`);
+      return { files: 0 };
+    }),
+    pullFromLocalFolders(params.caseId, params.userId, params.keywords, matchMode, localFolderPaths, errors, params.dateStart, params.dateEnd).catch((err) => {
+      errors.push(`Local pull failed: ${err instanceof Error ? err.message : String(err)}`);
+      return { files: 0 };
+    }),
+  ]);
+
+  // Log this run.
+  try {
+    await db.insert(autoCollectionLogs).values({
+      id: uuidv4(),
+      caseId: params.caseId,
+      settingsId: settings?.id || null,
+      userId: params.userId,
+      runStartedAt: new Date(),
+      runCompletedAt: new Date(),
+      status: errors.length === 0 ? 'completed' : 'completed_with_errors',
+      emailsFound: String(gmail.messages),
+      emailsProcessed: String(gmail.messages),
+      filesFound: String(drive.files + local.files + gmail.attachments),
+      filesDownloaded: String(drive.files + local.files + gmail.attachments),
+      errorCount: String(errors.length),
+      errorMessage: errors.slice(0, 3).join('; ') || null,
+      executionTimeSeconds: '0',
+    });
+  } catch (err) {
+    console.warn('[AutoCollection] Failed to log one-shot run:', err);
+  }
+
+  return {
+    gmailMessages: gmail.messages,
+    gmailAttachments: gmail.attachments,
+    driveFiles: drive.files,
+    localFiles: local.files,
+    errors,
+  };
+}
+
+/**
+ * Save the list of local folder paths a case wants auto-scanned. Stored in
+ * the existing `autoCollectionSettings.metadata` text column.
+ */
+export async function setLocalFolderPaths(caseId: string, userId: string, paths: string[]): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
+
+  const existing = await getAutoCollectionSettings(caseId);
+  const meta = existing?.metadata
+    ? (() => {
+        try {
+          return JSON.parse(existing.metadata);
+        } catch {
+          return {};
+        }
+      })()
+    : {};
+  meta.localFolderPaths = paths;
+
+  if (existing) {
+    await db
+      .update(autoCollectionSettings)
+      .set({ metadata: JSON.stringify(meta) })
+      .where(eq(autoCollectionSettings.caseId, caseId));
+  } else {
+    await db.insert(autoCollectionSettings).values({
+      id: uuidv4(),
+      caseId,
+      userId,
+      keywords: JSON.stringify([]),
+      keywordMatchMode: 'any',
+      emailAccountIds: JSON.stringify([]),
+      autoDownloadAttachments: true,
+      autoDownloadGoogleDriveFiles: true,
+      isEnabled: true,
+      status: 'active',
+      metadata: JSON.stringify(meta),
+    });
+  }
+}
+
+export async function getLocalFolderPaths(caseId: string): Promise<string[]> {
+  return getConfiguredLocalFolders(caseId);
 }
