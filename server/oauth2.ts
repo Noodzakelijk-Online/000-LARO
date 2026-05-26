@@ -28,6 +28,7 @@ export interface EmailAccountInfo {
 
 type OAuthProvider = "gmail" | "outlook";
 
+
 interface OAuthStateRecord {
   userId: string;
   provider: OAuthProvider;
@@ -233,7 +234,8 @@ export async function exchangeCodeForTokens(
     });
     if (codeVerifier) {
       body.set("code_verifier", codeVerifier);
-    } else if (config.clientSecret) {
+    }
+    if (config.clientSecret) {
       body.set("client_secret", config.clientSecret);
     }
     const res = await fetch("https://oauth2.googleapis.com/token", {

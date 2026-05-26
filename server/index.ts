@@ -10,7 +10,8 @@ import fs from 'fs';
 const possibleEnvPaths = [
   path.join(process.cwd(), '.env'), // Development
   path.join(__dirname, '..', '..', '.env'), // dist/server -> root
-  path.join((process as any).resourcesPath || '', 'app', '.env') // Packaged app inside asar
+  path.join((process as any).resourcesPath || '', '.env'), // Packaged app: extraResources lands here
+  path.join((process as any).resourcesPath || '', 'app', '.env') // Legacy fallback
 ];
 
 for (const envPath of possibleEnvPaths) {

@@ -135,8 +135,7 @@
       "dist",
       "node_modules",
       "drizzle",
-      "package.json",
-      ".env"
+      "package.json"
     ],
     "asarUnpack": [
       "drizzle/**/*"
@@ -148,6 +147,10 @@
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": ".env",
+        "to": ".env"
       }
     ],
     "mac": {
