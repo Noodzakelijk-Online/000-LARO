@@ -28,6 +28,17 @@ jobs:
         run: npm run build:renderer
       - name: Build main process
         run: npm run build:main
+      - name: Write .env from secret (bundled into the app via extraResources)
+        shell: bash
+        env:
+          DOTENV: ${{ secrets.DOTENV }}
+        run: |
+          printf '%s' "$DOTENV" > .env
+          if ! grep -q '^GOOGLE_OAUTH_CLIENT_ID=.' .env; then
+            echo "::error::DOTENV secret is missing or GOOGLE_OAUTH_CLIENT_ID is empty. Set it with: gh secret set DOTENV < .env"
+            exit 1
+          fi
+          echo "Wrote .env with $(grep -cE '^[A-Za-z].*=' .env) variables."
       - name: Package Windows installer
         run: npx electron-builder --win --publish never
         env:
