@@ -4,7 +4,7 @@ import { emailAccounts } from "./schema";
 import { eq, and } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import crypto from "crypto";
-import { encryptToken } from "./emailOAuth";
+import { encryptToken, decryptToken } from "./emailOAuth";
 
 export interface OAuth2Config {
   clientId: string;
@@ -29,15 +29,15 @@ export interface EmailAccountInfo {
 type OAuthProvider = "gmail" | "outlook";
 
 
-interface OAuthStateRecord {
+interface OAuthStatePayload {
   userId: string;
   provider: OAuthProvider;
   codeVerifier: string;
+  nonce: string;
   createdAt: number;
 }
 
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000; // 10 minutes
-const oauthStateStore = new Map<string, OAuthStateRecord>();
 
 function getOAuthRedirectBaseUrl(): string {
   const raw = process.env.OAUTH_REDIRECT_BASE_URL || 'http://localhost:3000';
@@ -89,6 +89,11 @@ function toBase64Url(value: Buffer): string {
     .replace(/=+$/g, "");
 }
 
+function fromBase64Url(value: string): Buffer {
+  const b64 = value.replace(/-/g, "+").replace(/_/g, "/");
+  return Buffer.from(b64, "base64");
+}
+
 function generatePkcePair(): { codeVerifier: string; codeChallenge: string } {
   const codeVerifier = toBase64Url(crypto.randomBytes(64));
   const codeChallenge = toBase64Url(
@@ -97,34 +102,32 @@ function generatePkcePair(): { codeVerifier: string; codeChallenge: string } {
   return { codeVerifier, codeChallenge };
 }
 
-function buildOAuthState(provider: OAuthProvider, userId: string): string {
-  const payload = { provider, userId, nonce: nanoid() };
-  return toBase64Url(Buffer.from(JSON.stringify(payload)));
-}
-
-function cleanupExpiredOAuthState(): void {
-  const now = Date.now();
-  for (const [state, record] of oauthStateStore.entries()) {
-    if (now - record.createdAt > OAUTH_STATE_TTL_MS) {
-      oauthStateStore.delete(state);
-    }
-  }
+/**
+ * Build a self-contained, encrypted OAuth state. Everything the callback needs
+ * (userId, provider, PKCE codeVerifier) is encrypted into the state itself, so
+ * the flow survives server/process restarts without any server-side storage.
+ */
+function buildOAuthState(
+  provider: OAuthProvider,
+  userId: string,
+  codeVerifier: string
+): string {
+  const payload: OAuthStatePayload = {
+    provider,
+    userId,
+    codeVerifier,
+    nonce: nanoid(),
+    createdAt: Date.now(),
+  };
+  return toBase64Url(Buffer.from(encryptToken(JSON.stringify(payload)), "utf8"));
 }
 
 /**
  * Start OAuth flow with PKCE and state protection.
  */
 export function beginOAuthFlow(provider: OAuthProvider, userId: string): string {
-  cleanupExpiredOAuthState();
-  const state = buildOAuthState(provider, userId);
   const { codeVerifier, codeChallenge } = generatePkcePair();
-
-  oauthStateStore.set(state, {
-    userId,
-    provider,
-    codeVerifier,
-    createdAt: Date.now(),
-  });
+  const state = buildOAuthState(provider, userId, codeVerifier);
 
   const config = getOAuth2Config(provider);
   if (!config.clientId) {
@@ -166,18 +169,32 @@ export function consumeOAuthState(
   state: string,
   provider: OAuthProvider
 ): { userId: string; codeVerifier: string } {
-  cleanupExpiredOAuthState();
-  const record = oauthStateStore.get(state);
-  if (!record) {
+  let payload: OAuthStatePayload;
+  try {
+    const decrypted = decryptToken(fromBase64Url(state).toString("utf8"));
+    payload = JSON.parse(decrypted) as OAuthStatePayload;
+  } catch {
     throw new Error("Invalid or expired OAuth state");
   }
-  oauthStateStore.delete(state);
 
-  if (record.provider !== provider) {
+  if (
+    !payload ||
+    typeof payload.userId !== "string" ||
+    typeof payload.codeVerifier !== "string" ||
+    typeof payload.createdAt !== "number"
+  ) {
+    throw new Error("Invalid or expired OAuth state");
+  }
+
+  if (Date.now() - payload.createdAt > OAUTH_STATE_TTL_MS) {
+    throw new Error("Invalid or expired OAuth state");
+  }
+
+  if (payload.provider !== provider) {
     throw new Error("OAuth provider mismatch");
   }
 
-  return { userId: record.userId, codeVerifier: record.codeVerifier };
+  return { userId: payload.userId, codeVerifier: payload.codeVerifier };
 }
 
 /**
