@@ -23,6 +23,8 @@ export const users = sqliteTable("users", {
   subscriptionStatus: text("subscriptionStatus").default("free"),
   subscriptionTier: text("subscriptionTier").default("free"),
   emailPreferences: text("emailPreferences"),
+  resetCodeHash: text("resetCodeHash"),
+  resetCodeExpiresAt: text("resetCodeExpiresAt"),
   paymentFailedAt: integer("paymentFailedAt", { mode: "timestamp" }),
   gracePeriodEndsAt: integer("gracePeriodEndsAt", { mode: "timestamp" }),
   createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),

@@ -38,7 +38,9 @@ import { createEvidenceFile, getEvidenceStats } from "../evidence";
 import { z } from "zod";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import { ENV } from "../_core/env";
+import { sendPasswordResetEmail } from "../systemEmail";
 import { getUser, getDb } from "../db";
 import { users, cases } from "../schema";
 import { and, eq } from "drizzle-orm";
@@ -221,6 +223,83 @@ export const appRouter = router({
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
       return { success: true } as const;
     }),
+
+    // Step 1 of password reset: email the user a one-time code. Always returns
+    // success regardless of whether the email exists, to avoid leaking which
+    // addresses have accounts (no user enumeration).
+    requestPasswordReset: publicProcedure
+      .input(z.object({ email: z.string().email() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+
+        const TTL_MINUTES = 15;
+        const user = (
+          await db.select().from(users).where(eq(users.email, input.email)).limit(1)
+        )[0];
+
+        // Only generate + send a code for accounts that have a password set
+        // (OAuth-only accounts have nothing to reset).
+        if (user && user.password) {
+          const code = String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
+          const codeHash = crypto.createHash("sha256").update(code).digest("hex");
+          const expiresAt = Date.now() + TTL_MINUTES * 60 * 1000;
+
+          await db
+            .update(users)
+            .set({ resetCodeHash: codeHash, resetCodeExpiresAt: String(expiresAt) })
+            .where(eq(users.id, user.id));
+
+          try {
+            await sendPasswordResetEmail(user.email!, code, TTL_MINUTES);
+          } catch (e) {
+            console.error("[auth.requestPasswordReset] email send failed:", e);
+            // Don't surface delivery errors to the client (avoids enumeration
+            // and matches the dev console-fallback behaviour).
+          }
+        }
+
+        return { success: true } as const;
+      }),
+
+    // Step 2 of password reset: verify the code and set a new password.
+    resetPassword: publicProcedure
+      .input(
+        z.object({
+          email: z.string().email(),
+          code: z.string().regex(/^\d{6}$/, "Enter the 6-digit code"),
+          newPassword: z.string().min(8),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+
+        const user = (
+          await db.select().from(users).where(eq(users.email, input.email)).limit(1)
+        )[0];
+
+        const invalid = new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Invalid or expired reset code",
+        });
+
+        if (!user || !user.resetCodeHash || !user.resetCodeExpiresAt) throw invalid;
+        if (Date.now() > Number(user.resetCodeExpiresAt)) throw invalid;
+
+        const candidateHash = crypto.createHash("sha256").update(input.code).digest("hex");
+        const a = Buffer.from(candidateHash);
+        const b = Buffer.from(user.resetCodeHash);
+        if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) throw invalid;
+
+        const hashedPassword = await bcrypt.hash(input.newPassword, 10);
+        await db
+          .update(users)
+          .set({ password: hashedPassword, resetCodeHash: null, resetCodeExpiresAt: null })
+          .where(eq(users.id, user.id));
+
+        return { success: true } as const;
+      }),
 
     getApiToken: protectedProcedure.query(({ ctx }) => {
       const token = jwt.sign({ userId: ctx.user.id }, ENV.JWT_SECRET, {

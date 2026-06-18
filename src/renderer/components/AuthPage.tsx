@@ -5,39 +5,74 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Lock, Mail, User, ArrowRight, ShieldCheck } from "lucide-react";
+import { Lock, Mail, User, ArrowRight, ShieldCheck, KeyRound } from "lucide-react";
+
+type AuthMode = "signin" | "signup" | "forgot" | "reset";
 
 export default function AuthPage() {
-  const [isLogin, setIsLogin] = useState(true);
+  const [mode, setMode] = useState<AuthMode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [code, setCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   const utils = trpc.useUtils();
   const loginMutation = trpc.auth.login.useMutation();
   const signupMutation = trpc.auth.signup.useMutation();
+  const requestResetMutation = trpc.auth.requestPasswordReset.useMutation();
+  const resetPasswordMutation = trpc.auth.resetPassword.useMutation();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      if (isLogin) {
+      if (mode === "signin") {
         await loginMutation.mutateAsync({ email, password });
         toast.success("Welcome back to LARO!");
-      } else {
+        await utils.auth.me.invalidate();
+      } else if (mode === "signup") {
         await signupMutation.mutateAsync({ email, password, name });
         toast.success("Account created! Welcome to LARO.");
+        await utils.auth.me.invalidate();
+      } else if (mode === "forgot") {
+        await requestResetMutation.mutateAsync({ email });
+        toast.success("If an account exists for that email, a reset code has been sent.");
+        setMode("reset");
+      } else if (mode === "reset") {
+        await resetPasswordMutation.mutateAsync({ email, code, newPassword });
+        toast.success("Password reset. You can now sign in.");
+        setPassword("");
+        setCode("");
+        setNewPassword("");
+        setMode("signin");
       }
-
-      // Refresh user state
-      await utils.auth.me.invalidate();
     } catch (error: any) {
-      toast.error(error.message || "Authentication failed");
+      toast.error(error.message || "Something went wrong");
     } finally {
       setLoading(false);
     }
+  };
+
+  const titles: Record<AuthMode, string> = {
+    signin: "Sign In",
+    signup: "Create Account",
+    forgot: "Reset Password",
+    reset: "Enter Reset Code",
+  };
+  const descriptions: Record<AuthMode, string> = {
+    signin: "Enter your credentials to access your legal dashboard",
+    signup: "Join LARO to start consolidating your legal evidence",
+    forgot: "Enter your email and we'll send you a 6-digit reset code",
+    reset: "Enter the code from your email and choose a new password",
+  };
+  const submitLabels: Record<AuthMode, string> = {
+    signin: "Sign In",
+    signup: "Sign Up",
+    forgot: "Send Reset Code",
+    reset: "Reset Password",
   };
 
   return (
@@ -56,18 +91,12 @@ export default function AuthPage() {
 
         <Card className="border-border/50 bg-card/50 backdrop-blur-xl shadow-2xl">
           <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl font-bold">
-              {isLogin ? "Sign In" : "Create Account"}
-            </CardTitle>
-            <CardDescription>
-              {isLogin
-                ? "Enter your credentials to access your legal dashboard"
-                : "Join LARO to start consolidating your legal evidence"}
-            </CardDescription>
+            <CardTitle className="text-2xl font-bold">{titles[mode]}</CardTitle>
+            <CardDescription>{descriptions[mode]}</CardDescription>
           </CardHeader>
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">
-              {!isLogin && (
+              {mode === "signup" && (
                 <div className="space-y-2">
                   <Label htmlFor="name">Full Name</Label>
                   <div className="relative">
@@ -79,12 +108,14 @@ export default function AuthPage() {
                       className="pl-10 h-12 bg-background/50 border-border/50 focus:border-primary/50"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      required={!isLogin}
+                      required
                     />
                   </div>
                 </div>
               )}
 
+              {/* Email — shown for every mode except the final reset step,
+                  where it's locked to the address the code was sent to. */}
               <div className="space-y-2">
                 <Label htmlFor="email">Email Address</Label>
                 <div className="relative">
@@ -97,25 +128,79 @@ export default function AuthPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
+                    disabled={mode === "reset"}
                   />
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="password"
-                    placeholder="••••••••"
-                    type="password"
-                    className="pl-10 h-12 bg-background/50 border-border/50 focus:border-primary/50"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
+              {mode === "reset" && (
+                <div className="space-y-2">
+                  <Label htmlFor="code">Reset Code</Label>
+                  <div className="relative">
+                    <KeyRound className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="code"
+                      placeholder="123456"
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      className="pl-10 h-12 tracking-[0.5em] bg-background/50 border-border/50 focus:border-primary/50"
+                      value={code}
+                      onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                      required
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {(mode === "signin" || mode === "signup") && (
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="password"
+                      placeholder="••••••••"
+                      type="password"
+                      className="pl-10 h-12 bg-background/50 border-border/50 focus:border-primary/50"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+
+              {mode === "reset" && (
+                <div className="space-y-2">
+                  <Label htmlFor="newPassword">New Password</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="newPassword"
+                      placeholder="At least 8 characters"
+                      type="password"
+                      minLength={8}
+                      className="pl-10 h-12 bg-background/50 border-border/50 focus:border-primary/50"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+
+              {mode === "signin" && (
+                <div className="text-right">
+                  <button
+                    type="button"
+                    onClick={() => setMode("forgot")}
+                    className="text-sm text-muted-foreground hover:text-primary transition-colors underline-offset-4 hover:underline"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
+              )}
             </CardContent>
             <CardFooter className="flex flex-col space-y-4 pt-4">
               <Button
@@ -130,25 +215,48 @@ export default function AuthPage() {
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
-                    {isLogin ? "Sign In" : "Sign Up"}
+                    {submitLabels[mode]}
                     <ArrowRight className="w-4 h-4" />
                   </div>
                 )}
               </Button>
 
-              <div className="text-center">
-                <button
-                  type="button"
-                  onClick={() => setIsLogin(!isLogin)}
-                  className="text-sm text-muted-foreground hover:text-primary transition-colors underline-offset-4 hover:underline"
-                >
-                  {isLogin ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
-                </button>
+              <div className="text-center space-y-2">
+                {(mode === "signin" || mode === "signup") && (
+                  <button
+                    type="button"
+                    onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
+                    className="text-sm text-muted-foreground hover:text-primary transition-colors underline-offset-4 hover:underline"
+                  >
+                    {mode === "signin"
+                      ? "Don't have an account? Sign up"
+                      : "Already have an account? Sign in"}
+                  </button>
+                )}
+
+                {mode === "reset" && (
+                  <button
+                    type="button"
+                    onClick={() => setMode("forgot")}
+                    className="block w-full text-sm text-muted-foreground hover:text-primary transition-colors underline-offset-4 hover:underline"
+                  >
+                    Didn't get a code? Resend
+                  </button>
+                )}
+
+                {(mode === "forgot" || mode === "reset") && (
+                  <button
+                    type="button"
+                    onClick={() => setMode("signin")}
+                    className="block w-full text-sm text-muted-foreground hover:text-primary transition-colors underline-offset-4 hover:underline"
+                  >
+                    Back to sign in
+                  </button>
+                )}
               </div>
             </CardFooter>
           </form>
         </Card>
-
       </div>
     </div>
   );
