@@ -24,6 +24,15 @@ export function compressionMiddleware(
 
   // Override res.send
   res.send = function (data: any): Response {
+    // Mirror Express's default Content-Type inference BEFORE we turn the body
+    // into a Buffer below. Express only defaults string bodies to text/html
+    // when it does the sending; once we compress to a Buffer, originalSend
+    // would instead default to application/octet-stream, which makes browsers
+    // download the response (e.g. the OAuth callback HTML) instead of rendering it.
+    if (typeof data === "string" && !res.getHeader("Content-Type")) {
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+    }
+
     const contentType = res.getHeader("Content-Type") as string || "";
     
     // Skip if already compressed or not compressible
