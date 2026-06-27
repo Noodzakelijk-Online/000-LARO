@@ -11,6 +11,7 @@ import { outreachRouter } from "./outreach";
 import { savedSearchesRouter } from "./savedSearches";
 import { workflowRouter } from "./workflow";
 import { evidenceFilesRouter } from "./evidenceFiles";
+import { evidenceTimelineRouter } from "./evidenceTimeline";
 import { documentAnalysisRouter } from "./documentAnalysis";
 import { searchRouter } from "./search";
 import { messagesRouter } from "./messages";
@@ -58,6 +59,7 @@ export const appRouter = router({
   savedSearches: savedSearchesRouter,
   workflow: workflowRouter,
   evidenceFiles: evidenceFilesRouter,
+  evidenceTimeline: evidenceTimelineRouter,
   documentAnalysis: documentAnalysisRouter,
   search: searchRouter,
   messages: messagesRouter,
