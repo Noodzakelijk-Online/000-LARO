@@ -8,7 +8,10 @@ import { initDatabase as initAgentDb, closeDatabase as closeAgentDb, createScan,
 import { FileScanner } from './scanner';
 import { FileUploader } from './uploader';
 import { initAutoUpdater } from './autoUpdater';
-import { startServer } from '../server/index';
+// NOTE: server/index.ts reads `.env` (dotenv) at import time, so it is imported
+// lazily in startApp() AFTER we pin NODE_ENV from app.isPackaged. This guarantees
+// a packaged build runs the server in production mode even if the bundled .env
+// (or DOTENV secret) mistakenly contains NODE_ENV=development.
 
 const PORT = 3000;
 const LARO_URL = `http://localhost:${PORT}`;
@@ -178,8 +181,21 @@ app.whenReady().then(async () => {
   // Initialize Agent DB (scanning state)
   initAgentDb();
 
-  // Start the integrated backend server
+  // Start the integrated backend server.
+  // Pin NODE_ENV from the packaging state BEFORE importing the server (whose
+  // module-level dotenv.config() must not be able to override it — dotenv leaves
+  // already-set env vars untouched). This is what keeps a packaged build serving
+  // the renderer (otherwise NODE_ENV=development disables static serving -> 404).
+  if (!process.env.NODE_ENV) {
+    process.env.NODE_ENV = app.isPackaged ? 'production' : 'development';
+  } else if (app.isPackaged && process.env.NODE_ENV !== 'production') {
+    console.warn(
+      `[Electron] Overriding NODE_ENV="${process.env.NODE_ENV}" -> "production" in packaged build`
+    );
+    process.env.NODE_ENV = 'production';
+  }
   try {
+    const { startServer } = await import('../server/index');
     await startServer(PORT);
     console.log('[Electron] Integrated server started on port', PORT);
   } catch (err) {
