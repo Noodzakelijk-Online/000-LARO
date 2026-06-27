@@ -10,6 +10,7 @@ import {
   cases,
   evidence,
   evidenceFiles,
+  emailAccounts,
 } from "./schema";
 import { eq, and, desc, asc, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -186,6 +187,26 @@ export class GapDetectionService {
       .where(eq(evidenceFiles.caseId, caseId))
       .orderBy(asc(evidenceFiles.uploadedAt));
 
+    // Build the set of the case owner's connected email addresses so we can
+    // infer whether a pulled email was sent (outbound) or received (inbound).
+    const connectedEmails = new Set<string>();
+    const caseRow = (
+      await db.select({ userId: cases.userId }).from(cases).where(eq(cases.id, caseId)).limit(1)
+    )[0];
+    if (caseRow?.userId) {
+      const accounts = await db
+        .select({ email: emailAccounts.email })
+        .from(emailAccounts)
+        .where(eq(emailAccounts.userId, caseRow.userId));
+      for (const a of accounts) {
+        if (a.email) connectedEmails.add(a.email.toLowerCase());
+      }
+    }
+
+    // Pull an email address out of a "Name <addr@x.com>" style header value.
+    const extractEmail = (raw: unknown): string =>
+      (String(raw ?? "").match(/[^<\s]+@[^>\s]+/)?.[0] || "").toLowerCase();
+
     const events: TimelineEvent[] = [];
 
     // Add communications to timeline
@@ -228,16 +249,37 @@ export class GapDetectionService {
       });
     });
 
-    // Add evidence items to timeline — these ARE documented events
+    // Add evidence items to timeline — these ARE documented events.
+    // For pulled emails, recover the real sent date and direction from metadata
+    // so communication-gap and unanswered-email detection actually work.
     evidenceData.forEach((item) => {
+      let meta: any = {};
+      try {
+        meta = item.metadata ? JSON.parse(item.metadata) : {};
+      } catch {
+        meta = {};
+      }
+
+      const isEmail = (item.type || "").toLowerCase() === "email";
+      const emailDate = isEmail && meta.date ? new Date(meta.date) : null;
+      const date =
+        emailDate && !isNaN(emailDate.getTime()) ? emailDate : item.createdAt ?? new Date();
+
+      let direction: "inbound" | "outbound" | undefined;
+      const fromAddr = extractEmail(meta.from);
+      if (isEmail && fromAddr) {
+        direction = connectedEmails.has(fromAddr) ? "outbound" : "inbound";
+      }
+
       events.push({
         id: item.id,
-        date: item.createdAt ?? new Date(),
+        date,
         type: item.type || "document",
         title: item.title || item.fileName || "Evidence document",
         description: item.description || undefined,
+        direction,
         hasDocumentation: true, // Evidence items are by definition documented
-        participants: [],
+        participants: fromAddr ? [fromAddr] : [],
       });
     });
 
