@@ -749,7 +749,7 @@ export default function EnhancedCaseDetailsDialog({
                     <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
                       <TrendingUp className="w-5 h-5 text-orange-500" /> Progress Tracking
                     </h2>
-                    <ProgressTrackingDashboard caseId={caseId} />
+                    <ProgressTrackingDashboard caseId={caseId} onNavigateTab={handleTabChange} />
                   </div>
                 )}
 

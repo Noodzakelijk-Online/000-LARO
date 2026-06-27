@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar, FileText, Mail, Upload, Image, Video, Music, File, Search, Filter, Download } from "lucide-react";
 import { format } from "date-fns";
+import { toast } from "sonner";
 
 /**
  * Evidence Timeline View Component
@@ -85,6 +86,55 @@ export default function EvidenceTimelineView({ caseId }: EvidenceTimelineViewPro
     }
   };
 
+  // Export the currently-filtered timeline as a CSV download.
+  const handleExport = () => {
+    if (!evidence || evidence.length === 0) {
+      toast.message("Nothing to export", { description: "No evidence matches the current filters." });
+      return;
+    }
+    const header = ["Date", "Type", "Source", "Title", "Description", "Tags"];
+    const escape = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const rows = evidence.map((item: any) =>
+      [
+        item.createdAt ? new Date(item.createdAt).toISOString() : "",
+        item.type ?? "",
+        item.source ?? "",
+        item.title ?? "",
+        String(item.description ?? "").replace(/\s+/g, " "),
+        safeParseTags(item.tags).join("; "),
+      ]
+        .map(escape)
+        .join(",")
+    );
+    const csv = [header.map(escape).join(","), ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `evidence-timeline${caseId ? `-${caseId}` : ""}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${evidence.length} item${evidence.length === 1 ? "" : "s"}`);
+  };
+
+  // Open the underlying file, or show a preview for items without one (e.g. emails).
+  const handleView = (item: any) => {
+    if (item.fileUrl) {
+      window.open(item.fileUrl, "_blank");
+      return;
+    }
+    let body = "";
+    try {
+      const meta = item.metadata ? JSON.parse(item.metadata) : {};
+      body = meta.bodyExcerpt || "";
+    } catch {
+      /* ignore */
+    }
+    toast(item.title || "Evidence", {
+      description: body || item.description || "No preview available for this item.",
+    });
+  };
+
   return (
     <div className="space-y-6">
       {/* Filters */}
@@ -136,7 +186,7 @@ export default function EvidenceTimelineView({ caseId }: EvidenceTimelineViewPro
             <p className="text-sm text-muted-foreground">
               {evidence && Array.isArray(evidence) ? evidence.length : 0} items found
             </p>
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" onClick={handleExport} disabled={!evidence || evidence.length === 0}>
               <Download className="h-4 w-4 mr-2" />
               Export Timeline
             </Button>
@@ -228,7 +278,7 @@ export default function EvidenceTimelineView({ caseId }: EvidenceTimelineViewPro
                           </div>
 
                           {/* Actions */}
-                          <Button variant="ghost" size="sm">
+                          <Button variant="ghost" size="sm" onClick={() => handleView(item)}>
                             View
                           </Button>
                         </div>

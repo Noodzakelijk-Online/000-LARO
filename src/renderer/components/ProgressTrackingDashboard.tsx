@@ -52,7 +52,25 @@ interface CaseProgress {
   }[];
 }
 
-export default function ProgressTrackingDashboard({ caseProgress, caseId }: { caseProgress?: CaseProgress; caseId?: string }) {
+// Maps a derived next-action id (from cases.progress) to the dialog tab that
+// lets the user actually do it, so "Take Action" navigates somewhere useful.
+const ACTION_TAB: Record<string, string> = {
+  "na-evidence": "evidence",
+  "na-contact": "matching",
+  "na-followup": "outreach",
+  "na-engage": "outreach",
+  "na-resolve": "status",
+};
+
+export default function ProgressTrackingDashboard({
+  caseProgress,
+  caseId,
+  onNavigateTab,
+}: {
+  caseProgress?: CaseProgress;
+  caseId?: string;
+  onNavigateTab?: (tabId: string) => void;
+}) {
   // When only a caseId is passed (the case-details dialog), fetch a real,
   // derived progress snapshot from the backend.
   const { data: fetched } = trpc.cases.progress.useQuery(
@@ -271,7 +289,13 @@ export default function ProgressTrackingDashboard({ caseProgress, caseId }: { ca
                     </div>
                   )}
                 </div>
-                <Button size="sm">Take Action</Button>
+                <Button
+                  size="sm"
+                  onClick={() => onNavigateTab?.(ACTION_TAB[action.id] ?? "overview")}
+                  disabled={!onNavigateTab}
+                >
+                  Take Action
+                </Button>
               </div>
             ))}
           </div>
