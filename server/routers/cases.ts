@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { publicProcedure, router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { cases as casesTable, outreachStatus, lawyers } from '../schema';
+import { cases as casesTable, outreachStatus, lawyers, evidence } from '../schema';
 import { eq, desc, and, sql } from "drizzle-orm";
 import { sanitizeLegalAreas } from "../legalAreasValidator";
 
@@ -238,7 +238,200 @@ export const casesRouter = router({
         .from(outreachStatus)
         .leftJoin(lawyers, eq(outreachStatus.lawyerId, lawyers.id))
         .where(eq(outreachStatus.caseId, caseId));
-        
+
       return results;
+    }),
+
+  // Derived case-progress snapshot for the Progress tab. Everything here is
+  // computed from real data (case status, evidence count, outreach responses)
+  // rather than stored — so it stays in sync as the user pulls evidence and
+  // runs outreach.
+  progress: publicProcedure
+    .input(z.object({ caseId: z.string() }))
+    .query(async ({ input }) => {
+      const empty = {
+        caseId: input.caseId,
+        caseTitle: "",
+        overallProgress: 0,
+        healthScore: 0,
+        milestones: [] as any[],
+        nextActions: [] as any[],
+        deadlines: [] as any[],
+        recentActivity: [] as any[],
+      };
+
+      const db = await getDb();
+      if (!db) return empty;
+
+      const c = (
+        await db.select().from(casesTable).where(eq(casesTable.id, input.caseId)).limit(1)
+      )[0];
+      if (!c) return empty;
+
+      const createdAt = c.createdAt ?? new Date();
+
+      const [evCountRow] = await db
+        .select({ n: sql<number>`count(*)` })
+        .from(evidence)
+        .where(eq(evidence.caseId, input.caseId));
+      const evidenceCount = Number(evCountRow?.n ?? 0);
+
+      const outreaches = await db
+        .select()
+        .from(outreachStatus)
+        .where(eq(outreachStatus.caseId, input.caseId));
+      const outreachCount = outreaches.length;
+      const responded = outreaches.filter(
+        (o) => !!o.response || String(o.responseReceived).toLowerCase() === "yes"
+      ).length;
+      const engaged = outreaches.some((o) =>
+        ["interested", "accepted", "engaged"].includes(String(o.status || "").toLowerCase())
+      );
+
+      const status = String(c.status || "active").toLowerCase();
+      const isResolved = ["closed", "resolved", "completed", "won", "settled"].some((s) =>
+        status.includes(s)
+      );
+
+      const milestones = [
+        {
+          id: "created",
+          title: "Case Created",
+          description: "Case intake completed",
+          status: "completed" as const,
+          completedAt: createdAt,
+        },
+        {
+          id: "evidence",
+          title: "Evidence Collected",
+          description:
+            evidenceCount > 0
+              ? `${evidenceCount} evidence item(s) collected`
+              : "Collect evidence for this case",
+          status: evidenceCount > 0 ? ("completed" as const) : ("current" as const),
+        },
+        {
+          id: "matched",
+          title: "Lawyers Contacted",
+          description:
+            outreachCount > 0
+              ? `${outreachCount} lawyer(s) contacted`
+              : "Match and contact lawyers",
+          status:
+            outreachCount > 0
+              ? ("completed" as const)
+              : evidenceCount > 0
+              ? ("current" as const)
+              : ("upcoming" as const),
+        },
+        {
+          id: "engaged",
+          title: "Lawyer Engaged",
+          description: engaged
+            ? "A lawyer is engaged on this case"
+            : responded > 0
+            ? `${responded} response(s) received`
+            : "Awaiting lawyer responses",
+          status: engaged
+            ? ("completed" as const)
+            : outreachCount > 0
+            ? ("current" as const)
+            : ("upcoming" as const),
+        },
+        {
+          id: "resolved",
+          title: "Case Resolved",
+          description: isResolved ? "Case closed" : "Resolve the case",
+          status: isResolved ? ("completed" as const) : ("upcoming" as const),
+        },
+      ];
+
+      const completed = milestones.filter((m) => m.status === "completed").length;
+      const overallProgress = Math.round((completed / milestones.length) * 100);
+
+      let healthScore =
+        Math.min(evidenceCount * 10, 40) +
+        Math.min(outreachCount * 10, 30) +
+        Math.min(responded * 10, 20) +
+        (engaged ? 10 : 0);
+      healthScore = Math.min(healthScore, 100);
+
+      const nextActions: any[] = [];
+      if (evidenceCount === 0)
+        nextActions.push({
+          id: "na-evidence",
+          title: "Collect evidence",
+          description: "Pull emails/Drive files or upload documents for this case.",
+          priority: "high",
+        });
+      if (outreachCount === 0)
+        nextActions.push({
+          id: "na-contact",
+          title: "Contact lawyers",
+          description: "Match with lawyers and start outreach.",
+          priority: evidenceCount > 0 ? "high" : "medium",
+        });
+      if (outreachCount > 0 && responded === 0)
+        nextActions.push({
+          id: "na-followup",
+          title: "Follow up with lawyers",
+          description: "No responses yet — send follow-ups.",
+          priority: "medium",
+        });
+      if (responded > 0 && !engaged)
+        nextActions.push({
+          id: "na-engage",
+          title: "Engage a responding lawyer",
+          description: "Review responses and engage a lawyer.",
+          priority: "high",
+        });
+      if (nextActions.length === 0 && !isResolved)
+        nextActions.push({
+          id: "na-resolve",
+          title: "Drive toward resolution",
+          description: "Keep the case moving toward closure.",
+          priority: "low",
+        });
+
+      const recentEvidence = await db
+        .select()
+        .from(evidence)
+        .where(eq(evidence.caseId, input.caseId))
+        .orderBy(desc(evidence.createdAt))
+        .limit(5);
+
+      const recentActivity = [
+        ...recentEvidence.map((e) => ({
+          id: `ev-${e.id}`,
+          type: "evidence",
+          description: `Evidence added: ${e.title}`,
+          timestamp: e.createdAt ?? createdAt,
+        })),
+        ...outreaches.map((o) => ({
+          id: `or-${o.id}`,
+          type: "outreach",
+          description: `Outreach ${o.status || "started"}`.trim(),
+          timestamp: o.initialContact ?? o.lastContact ?? createdAt,
+        })),
+        {
+          id: "act-created",
+          type: "case",
+          description: "Case created",
+          timestamp: createdAt,
+        },
+      ]
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+        .slice(0, 8);
+
+      return {
+        caseId: c.id,
+        caseTitle: c.clientName || c.caseType || "Case",
+        overallProgress,
+        healthScore,
+        milestones,
+        nextActions,
+        deadlines: [] as any[],
+        recentActivity,
+      };
     }),
 });

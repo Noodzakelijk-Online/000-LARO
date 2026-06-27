@@ -15,6 +15,7 @@ import { evidenceTimelineRouter } from "./evidenceTimeline";
 import { documentAnalysisRouter } from "./documentAnalysis";
 import { searchRouter } from "./search";
 import { messagesRouter } from "./messages";
+import { messageTemplatesRouter } from "./messageTemplates";
 import { lawyerRatingRouter } from "./lawyerRating";
 import { trelloEnhancedRouter } from "./trelloEnhanced";
 import { telegramEnhancedRouter } from "./telegramEnhanced";
@@ -63,6 +64,7 @@ export const appRouter = router({
   documentAnalysis: documentAnalysisRouter,
   search: searchRouter,
   messages: messagesRouter,
+  messageTemplates: messageTemplatesRouter,
   lawyerRating: lawyerRatingRouter,
   trelloEnhanced: trelloEnhancedRouter,
   telegramEnhanced: telegramEnhancedRouter,

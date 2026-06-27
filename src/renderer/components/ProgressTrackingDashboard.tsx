@@ -12,6 +12,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { trpc } from "@/lib/trpc";
 
 interface Milestone {
   id: string;
@@ -52,8 +53,15 @@ interface CaseProgress {
 }
 
 export default function ProgressTrackingDashboard({ caseProgress, caseId }: { caseProgress?: CaseProgress; caseId?: string }) {
-  // Provide safe defaults if no data is supplied (e.g. when only caseId is passed)
-  const progress: CaseProgress = caseProgress ?? {
+  // When only a caseId is passed (the case-details dialog), fetch a real,
+  // derived progress snapshot from the backend.
+  const { data: fetched } = trpc.cases.progress.useQuery(
+    { caseId: caseId ?? "" },
+    { enabled: !caseProgress && !!caseId }
+  );
+
+  // Provide safe defaults if no data is supplied yet.
+  const progress: CaseProgress = caseProgress ?? (fetched as CaseProgress | undefined) ?? {
     caseId: caseId ?? "",
     caseTitle: "",
     overallProgress: 0,
