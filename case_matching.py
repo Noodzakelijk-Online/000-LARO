@@ -1,18 +1,35 @@
 # Legal AI Case Matching Module
 
-import nltk
-import pandas as pd
-import numpy as np
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
-from nltk.stem import WordNetLemmatizer
+import re
 
-# Download required NLTK resources
-nltk.download('punkt')
-nltk.download('stopwords')
-nltk.download('wordnet')
+try:
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.metrics.pairwise import cosine_similarity
+except ImportError:
+    TfidfVectorizer = None
+    cosine_similarity = None
+
+try:
+    from nltk.corpus import stopwords
+    from nltk.tokenize import word_tokenize
+    from nltk.stem import WordNetLemmatizer
+except ImportError:
+    stopwords = None
+    word_tokenize = None
+    WordNetLemmatizer = None
+
+
+class _FallbackLemmatizer:
+    def lemmatize(self, token):
+        return token
+
+
+FALLBACK_STOP_WORDS = {
+    "a", "an", "and", "are", "as", "at", "be", "been", "but", "by", "for", "from",
+    "has", "have", "he", "her", "his", "i", "in", "is", "it", "its", "me", "my",
+    "of", "on", "or", "our", "she", "that", "the", "their", "they", "this", "to",
+    "was", "we", "were", "with", "you", "your"
+}
 
 class LegalCaseMatcher:
     """
@@ -22,8 +39,11 @@ class LegalCaseMatcher:
     
     def __init__(self):
         """Initialize the case matcher with legal field definitions and models."""
-        self.lemmatizer = WordNetLemmatizer()
-        self.stop_words = set(stopwords.words('english'))
+        self.lemmatizer = WordNetLemmatizer() if WordNetLemmatizer else _FallbackLemmatizer()
+        try:
+            self.stop_words = set(stopwords.words('english')) if stopwords else FALLBACK_STOP_WORDS
+        except LookupError:
+            self.stop_words = FALLBACK_STOP_WORDS
         
         # Legal field definitions with keywords and descriptions
         self.legal_fields = {
@@ -86,14 +106,19 @@ class LegalCaseMatcher:
             self.field_corpus.append(field_text)
             self.field_names.append(field_id)
         
-        # Initialize TF-IDF vectorizer
-        self.vectorizer = TfidfVectorizer(stop_words='english')
-        self.field_vectors = self.vectorizer.fit_transform(self.field_corpus)
+        # Initialize TF-IDF vectorizer when scikit-learn is installed; otherwise
+        # use deterministic keyword matching so local startup still works.
+        self.vectorizer = TfidfVectorizer(stop_words='english') if TfidfVectorizer else None
+        self.field_vectors = self.vectorizer.fit_transform(self.field_corpus) if self.vectorizer else None
     
     def preprocess_text(self, text):
         """Preprocess the input text for analysis."""
-        # Tokenize text
-        tokens = word_tokenize(text.lower())
+        # Tokenize text. Use NLTK when installed with data, otherwise keep local
+        # startup working with a deterministic regex tokenizer.
+        try:
+            tokens = word_tokenize(text.lower()) if word_tokenize else re.findall(r"\b\w+\b", text.lower())
+        except LookupError:
+            tokens = re.findall(r"\b\w+\b", text.lower())
         
         # Remove stopwords and lemmatize
         processed_tokens = [
@@ -118,14 +143,23 @@ class LegalCaseMatcher:
         # Preprocess the case description
         processed_description = self.preprocess_text(case_description)
         
-        # Vectorize the processed description
-        case_vector = self.vectorizer.transform([processed_description])
-        
-        # Calculate similarity scores
-        similarity_scores = cosine_similarity(case_vector, self.field_vectors)[0]
-        
-        # Create a list of (field_id, score) tuples
-        field_scores = list(zip(self.field_names, similarity_scores))
+        if self.vectorizer and cosine_similarity is not None:
+            # Vectorize the processed description
+            case_vector = self.vectorizer.transform([processed_description])
+            
+            # Calculate similarity scores
+            similarity_scores = cosine_similarity(case_vector, self.field_vectors)[0]
+            
+            # Create a list of (field_id, score) tuples
+            field_scores = list(zip(self.field_names, similarity_scores))
+        else:
+            lowered = processed_description.lower()
+            field_scores = []
+            for field_id, field_data in self.legal_fields.items():
+                keywords = field_data["keywords"]
+                hits = sum(1 for keyword in keywords if keyword.lower() in lowered)
+                score = hits / max(len(keywords), 1)
+                field_scores.append((field_id, score))
         
         # Sort by score in descending order
         field_scores.sort(key=lambda x: x[1], reverse=True)

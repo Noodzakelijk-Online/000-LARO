@@ -1,0 +1,1765 @@
+﻿import io
+import gc
+import os
+import tempfile
+import unittest
+import datetime as dt
+from unittest import mock
+
+from legal_ledger import LegalLedger, LawyerOutreach
+
+
+class TestLegalLedgerService(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.db_url = "sqlite:///" + os.path.join(self.tmp.name, "ledger.sqlite3")
+        self.ledger = LegalLedger(self.db_url)
+        self.ledger.create_all()
+
+    def tearDown(self):
+        self.ledger.close()
+        self.tmp.cleanup()
+
+    def test_persists_case_documents_timeline_evidence_and_papertrail(self):
+        case = self.ledger.create_case({
+            "user_id": "robert",
+            "title": "Vivare repair delay",
+            "description": "Housing repair dispute",
+            "legal_domain": "tenancy_law",
+            "desired_outcome": "Repair and compensation",
+            "parties": [{"name": "Vivare", "role": "housing provider"}],
+        }, actor="robert")
+        self.assertEqual(case["parties"][0]["name"], "Vivare")
+        self.assertEqual(case["parties"][0]["role"], "housing provider")
+
+        document = self.ledger.add_document(case["case_id"], {
+            "source_type": "manual",
+            "original_filename": "notice.txt",
+            "title": "Repair notice",
+            "document_type": "notice",
+            "extracted_text": "On 2024-03-10 Vivare received notice. Repair deadline 2024-03-24.",
+            "summary": "Repair notice and deadline.",
+            "relevance_score": 0.91,
+        }, actor="robert")
+        fetched_document = self.ledger.get_document(case["case_id"], document["document_id"])
+        self.assertEqual(fetched_document["title"], "Repair notice")
+
+        event = self.ledger.add_event(case["case_id"], {
+            "event_date": "2024-03-10",
+            "title": "Vivare received notice",
+            "description": "Notice sent and received.",
+            "created_from_document_id": document["document_id"],
+            "source_confidence": 0.91,
+        }, actor="robert")
+
+        claim = self.ledger.add_claim(case["case_id"], {
+            "statement": "Vivare was notified about the repair issue.",
+            "asserted_by": "Robert",
+        }, actor="robert")
+
+        link = self.ledger.add_evidence_link(case["case_id"], {
+            "document_id": document["document_id"],
+            "target_type": "claim",
+            "target_id": claim["id"],
+            "snippet": "Vivare received notice",
+            "relationship": "supports",
+        }, actor="robert")
+
+        contradiction = self.ledger.add_contradiction(case["case_id"], {
+            "title": "Notice date conflict",
+            "description": "One source says March 10, another says March 11.",
+            "source_refs": [{"document_id": document["document_id"]}],
+        }, actor="system")
+
+        deadline = self.ledger.add_deadline(case["case_id"], {
+            "due_date": "2024-03-24",
+            "title": "Repair deadline",
+            "source_document_id": document["document_id"],
+        }, actor="system")
+
+        open_loop = self.ledger.add_open_loop(case["case_id"], {
+            "title": "Confirm repair status",
+            "next_action": "Ask Robert whether repair happened.",
+        }, actor="system")
+
+        graph = self.ledger.papertrail_graph(case["case_id"])
+        command_center = self.ledger.command_center("robert")
+
+        self.assertEqual(len(self.ledger.list_cases("robert")), 1)
+        self.assertEqual(len(self.ledger.list_documents(case["case_id"])), 1)
+        self.assertEqual(len(self.ledger.list_timeline(case["case_id"])), 1)
+        self.assertEqual(link["relationship"], "supports")
+        self.assertEqual(contradiction["status"], "needs_review")
+        self.assertEqual(deadline["requires_approval"], True)
+        self.assertEqual(open_loop["status"], "open")
+        confirmed_deadline = self.ledger.update_deadline(case["case_id"], deadline["id"], {"action": "confirm"}, actor="robert")
+        self.assertEqual(confirmed_deadline["status"], "confirmed")
+        self.assertFalse(confirmed_deadline["requires_approval"])
+        resolved_loop = self.ledger.update_open_loop(case["case_id"], open_loop["id"], {"action": "resolve"}, actor="robert")
+        self.assertEqual(resolved_loop["status"], "resolved")
+        self.assertTrue(any(node["id"] == f"document:{document['document_id']}" for node in graph["nodes"]))
+        self.assertTrue(any(edge["to"] == f"event:{event['id']}" for edge in graph["edges"]))
+        self.assertEqual(command_center["counts"]["active_cases"], 1)
+        self.assertEqual(command_center["counts"]["cases_needing_evidence"], 0)
+        self.assertTrue(command_center["next_actions"])
+        audit_actions = [item["action"] for item in self.ledger.list_audit_events(case["case_id"])]
+        self.assertIn("confirmed", audit_actions)
+        self.assertIn("resolved", audit_actions)
+        self.assertGreaterEqual(len(audit_actions), 9)
+
+    def test_case_operating_state_derives_primary_action_and_depth(self):
+        case = self.ledger.create_case({
+            "user_id": "robert",
+            "title": "CAK operating state",
+            "description": "Administrative decision needs reconstruction.",
+            "legal_domain": "administrative_law",
+            "parties": [{"name": "CAK", "role": "counterparty"}],
+        }, actor="robert")
+
+        initial_state = self.ledger.case_operating_state(case["case_id"])
+        self.assertEqual(initial_state["primary_action"]["target"], "review")
+        self.assertEqual(initial_state["primary_action"]["queue_type"], "gap")
+        self.assertEqual(initial_state["recommended_depth"], "guided")
+        self.assertTrue(initial_state["safety"]["external_actions_blocked_without_approval"])
+
+        document = self.ledger.add_document(case["case_id"], {
+            "title": "CAK notice",
+            "extracted_text": "Notice dated 2024-04-01.",
+        }, actor="robert")
+        event = self.ledger.add_event(case["case_id"], {
+            "event_date": "2024-04-01",
+            "title": "CAK sent notice",
+            "created_from_document_id": document["document_id"],
+        }, actor="system")
+        claim = self.ledger.add_claim(case["case_id"], {
+            "statement": "CAK sent the notice on 2024-04-01.",
+            "status": "needs_review",
+        }, actor="system")
+        self.ledger.add_evidence_link(case["case_id"], {
+            "document_id": document["document_id"],
+            "target_type": "claim",
+            "target_id": claim["id"],
+            "snippet": "Notice dated 2024-04-01.",
+        }, actor="system")
+
+        state = self.ledger.case_operating_state(case["case_id"])
+        self.assertEqual(state["primary_action"]["target"], "timeline")
+        self.assertEqual(state["primary_action"]["item_id"], event["id"])
+        self.assertGreaterEqual(state["traceability"]["documents"], 1)
+        self.assertEqual(state["review_queue"]["counts"]["timeline"], 1)
+        self.assertTrue(any(lane["key"] == "traceability" for lane in state["readiness"]["lanes"]))
+
+    def test_case_review_queue_unifies_exact_persisted_targets(self):
+        due_date = (dt.date.today() + dt.timedelta(days=2)).isoformat()
+        case = self.ledger.create_case({
+            "user_id": "robert",
+            "title": "Unified review queue",
+            "description": "One worklist should route to exact records.",
+        }, actor="robert")
+        document = self.ledger.add_document(case["case_id"], {
+            "title": "Queue source",
+            "extracted_text": "Decision and deadline source.",
+        }, actor="robert")
+        event = self.ledger.add_event(case["case_id"], {
+            "event_date": due_date,
+            "title": "Suggested event",
+            "created_from_document_id": document["document_id"],
+        }, actor="system")
+        claim = self.ledger.add_claim(case["case_id"], {
+            "statement": "The institution missed the deadline.",
+            "status": "needs_review",
+        }, actor="system")
+        evidence = self.ledger.add_evidence_link(case["case_id"], {
+            "document_id": document["document_id"],
+            "target_type": "claim",
+            "target_id": claim["id"],
+            "snippet": "Decision and deadline source.",
+        }, actor="system")
+        contradiction = self.ledger.add_contradiction(case["case_id"], {
+            "title": "Date conflict",
+            "description": "Two sources disagree about the date.",
+            "severity": "high",
+        }, actor="system")
+        gap = self.ledger.add_missing_evidence_warning(case["case_id"], {
+            "title": "Proof of receipt missing",
+            "suggested_action": "Find the receipt confirmation.",
+            "severity": "high",
+        }, actor="system")
+        deadline = self.ledger.add_deadline(case["case_id"], {
+            "due_date": due_date,
+            "title": "Submit objection",
+        }, actor="system")
+        loop = self.ledger.add_open_loop(case["case_id"], {
+            "title": "Confirm receipt date",
+            "next_action": "Ask Robert to confirm when the letter arrived.",
+        }, actor="system")
+        outreach = self.ledger.create_outreach_draft(case["case_id"], {
+            "lawyer_name": "Review Queue Lawyer",
+            "lawyer_email": "queue@example-law.nl",
+            "draft_body": "Draft only, do not send.",
+        }, actor="robert")
+
+        queue = self.ledger.case_review_queue(case["case_id"])
+        items_by_type = {item["queue_type"]: item for item in queue["items"] if item["queue_type"] != "gap"}
+        gap_items = [item for item in queue["items"] if item["queue_type"] == "gap"]
+
+        self.assertEqual(queue["case_id"], case["case_id"])
+        self.assertGreaterEqual(queue["count"], 8)
+        self.assertEqual(items_by_type["approval"]["item_id"], outreach["approval_id"])
+        self.assertEqual(items_by_type["deadline"]["item_id"], deadline["id"])
+        self.assertEqual(items_by_type["timeline"]["item_id"], event["id"])
+        self.assertEqual(items_by_type["claim"]["item_id"], claim["id"])
+        self.assertEqual(items_by_type["evidence"]["item_id"], evidence["id"])
+        self.assertEqual(items_by_type["contradiction"]["item_id"], contradiction["id"])
+        self.assertTrue(any(item["item_id"] == gap["id"] for item in gap_items))
+        self.assertEqual(items_by_type["loop"]["item_id"], loop["id"])
+        self.assertEqual(items_by_type["approval"]["source"]["status"], "pending")
+        self.assertEqual(items_by_type["deadline"]["target"], "review")
+        self.assertEqual(items_by_type["timeline"]["target"], "timeline")
+        self.assertEqual(items_by_type["evidence"]["target"], "evidence")
+        self.assertEqual(queue["counts"]["approval"], 1)
+
+    def test_case_update_replaces_parties_and_preserves_case_context(self):
+        case = self.ledger.create_case({
+            "user_id": "robert",
+            "title": "Administrative dispute",
+            "parties": [{"name": "CAK", "party_type": "government_body", "role": "counterparty"}],
+        }, actor="robert")
+
+        updated = self.ledger.update_case(case["case_id"], {
+            "court_or_institution": "Rechtbank Gelderland",
+            "opposing_parties": ["CAK", "Debt collector"],
+            "parties": [
+                {"name": "CAK", "party_type": "government_body", "role": "decision maker"},
+                {"name": "Debt collector", "party_type": "organization", "role": "counterparty"},
+            ],
+        }, actor="robert")
+
+        self.assertEqual(updated["court_or_institution"], "Rechtbank Gelderland")
+        self.assertEqual(updated["opposing_parties"], ["CAK", "Debt collector"])
+        self.assertEqual([item["name"] for item in updated["parties"]], ["CAK", "Debt collector"])
+        self.assertEqual(updated["parties"][0]["role"], "decision maker")
+
+        refreshed = self.ledger.get_case(case["case_id"])
+        self.assertEqual(len(refreshed["parties"]), 2)
+        graph = self.ledger.papertrail_graph(case["case_id"])
+        party_labels = [node["label"] for node in graph["nodes"] if node["type"] == "party"]
+        self.assertEqual(party_labels, ["CAK", "Debt collector"])
+
+    def test_case_identifiers_resolve_external_references(self):
+        case = self.ledger.create_case({
+            "user_id": "robert",
+            "title": "CAK dossier",
+            "court_or_institution": "CAK",
+            "case_identifiers": [
+                {
+                    "identifier_type": "dossier_number",
+                    "identifier_value": "202020440",
+                    "source_party": "CAK",
+                    "source_type": "google_drive",
+                    "source_uri": "gdrive://file/abc",
+                }
+            ],
+            "sub_case_ids": [" bezwaar-2024-001 "],
+        }, actor="robert")
+
+        self.assertEqual(case["identifiers_count"], 2)
+        self.assertEqual(
+            [item["identifier_value"] for item in case["identifiers"]],
+            ["202020440", "bezwaar-2024-001"],
+        )
+
+        added = self.ledger.add_case_identifier(case["case_id"], {
+            "type": "court_reference",
+            "value": "RBGEL-24-123",
+            "source_party": "Rechtbank Gelderland",
+            "notes": "Reference from incoming court letter.",
+        }, actor="robert")
+        self.assertEqual(added["identifier_type"], "court_reference")
+
+        duplicate = self.ledger.add_case_identifier(case["case_id"], {
+            "identifier_type": "court_reference",
+            "identifier_value": "RBGEL-24-123",
+            "source_party": "Rechtbank Gelderland",
+            "source_uri": "gmail://message/123",
+        }, actor="system")
+        self.assertEqual(duplicate["id"], added["id"])
+        self.assertEqual(duplicate["source_uri"], "gmail://message/123")
+
+        match = self.ledger.lookup_case_identifier("RBGEL-24-123", identifier_type="court_reference")
+        self.assertEqual(match["case"]["case_id"], case["case_id"])
+        self.assertEqual(match["identifier"]["source_party"], "Rechtbank Gelderland")
+
+        identifiers = self.ledger.list_case_identifiers(case["case_id"])
+        self.assertEqual(len(identifiers), 3)
+        graph = self.ledger.papertrail_graph(case["case_id"])
+        identifier_nodes = [node for node in graph["nodes"] if node["type"] == "identifier"]
+        self.assertEqual(len(identifier_nodes), 3)
+        self.assertTrue(any(edge["type"] == "identified_by" for edge in graph["edges"]))
+
+    def test_claim_review_actions_are_persisted_and_audited(self):
+        case = self.ledger.create_case({
+            "user_id": "robert",
+            "title": "Claim review case",
+        }, actor="robert")
+        claim = self.ledger.add_claim(case["case_id"], {
+            "statement": "CAK sent the decision late.",
+            "status": "needs_review",
+        }, actor="system")
+
+        confirmed = self.ledger.update_claim(case["case_id"], claim["id"], {"action": "confirm"}, actor="robert")
+        self.assertEqual(confirmed["status"], "confirmed")
+
+        reopened = self.ledger.update_claim(case["case_id"], claim["id"], {"action": "reopen"}, actor="robert")
+        self.assertEqual(reopened["status"], "needs_review")
+
+        dismissed = self.ledger.update_claim(case["case_id"], claim["id"], {"action": "dismiss"}, actor="robert")
+        self.assertEqual(dismissed["status"], "dismissed")
+
+        audit_actions = [item["action"] for item in self.ledger.list_audit_events(case["case_id"])]
+        self.assertIn("confirmed", audit_actions)
+        self.assertIn("reopened", audit_actions)
+        self.assertIn("dismissed", audit_actions)
+
+    def test_evidence_link_review_actions_are_persisted_and_audited(self):
+        case = self.ledger.create_case({
+            "user_id": "robert",
+            "title": "Evidence review case",
+        }, actor="robert")
+        document = self.ledger.add_document(case["case_id"], {
+            "title": "CAK letter",
+            "original_filename": "cak-letter.txt",
+            "extracted_text": "The notice was sent on 2024-04-01.",
+        }, actor="robert")
+        claim = self.ledger.add_claim(case["case_id"], {
+            "statement": "CAK sent the notice on 2024-04-01.",
+            "status": "needs_review",
+        }, actor="system")
+        link = self.ledger.add_evidence_link(case["case_id"], {
+            "document_id": document["document_id"],
+            "target_type": "claim",
+            "target_id": claim["id"],
+            "snippet": "The notice was sent on 2024-04-01.",
+            "relationship": "supports",
+            "strength": "medium",
+        }, actor="system")
+
+        confirmed = self.ledger.update_evidence_link(case["case_id"], link["id"], {"action": "confirm"}, actor="robert")
+        self.assertTrue(confirmed["user_confirmed"])
+        self.assertEqual(confirmed["relationship"], "supports")
+
+        rejected = self.ledger.update_evidence_link(case["case_id"], link["id"], {"action": "reject"}, actor="robert")
+        self.assertFalse(rejected["user_confirmed"])
+        self.assertEqual(rejected["relationship"], "rejected_suggestion")
+
+        reopened = self.ledger.update_evidence_link(case["case_id"], link["id"], {"action": "reopen"}, actor="robert")
+        self.assertFalse(reopened["user_confirmed"])
+        self.assertEqual(reopened["relationship"], "needs_review")
+
+        audit_actions = [item["action"] for item in self.ledger.list_audit_events(case["case_id"])]
+        self.assertIn("confirmed", audit_actions)
+        self.assertIn("rejected", audit_actions)
+        self.assertIn("reopened", audit_actions)
+
+    def test_outreach_draft_creates_pending_high_risk_approval(self):
+        case = self.ledger.create_case({"user_id": "robert", "title": "CAK dispute"}, actor="robert")
+        outreach = self.ledger.create_outreach_draft(case["case_id"], {
+            "lawyer_name": "Test Lawyer",
+            "lawyer_email": "lawyer@example.com",
+            "subject": "Case inquiry",
+            "draft_body": "Please review this case.",
+        }, actor="robert")
+
+        approvals = self.ledger.list_approvals(case_id=case["case_id"], status="pending")
+
+        self.assertEqual(outreach["status"], "waiting_approval")
+        self.assertEqual(len(approvals), 1)
+        self.assertEqual(approvals[0]["risk_level"], "high")
+        self.assertEqual(approvals[0]["action"], "send_external_legal_email")
+        approved = self.ledger.resolve_approval(approvals[0]["id"], "approved", actor="robert")
+        outreach = self.ledger.list_outreach(case["case_id"])[0]
+
+        self.assertEqual(approved["status"], "approved")
+        self.assertEqual(outreach["status"], "approved_to_send")
+        self.assertGreaterEqual(len(self.ledger.list_audit_events(case["case_id"])), 3)
+
+        second_outreach = self.ledger.create_outreach_draft(case["case_id"], {
+            "lawyer_name": "Reject Lawyer",
+            "lawyer_email": "reject@example.com",
+            "draft_body": "Do not send this.",
+        }, actor="robert")
+        rejected = self.ledger.resolve_approval(second_outreach["approval_id"], "rejected", actor="robert", reason="Not appropriate.")
+        second_outreach = next(item for item in self.ledger.list_outreach(case["case_id"]) if item["id"] == second_outreach["id"])
+
+        self.assertEqual(rejected["status"], "rejected")
+        self.assertEqual(second_outreach["status"], "approval_rejected")
+
+    def test_generated_formal_drafts_are_approval_gated_and_traceable(self):
+        case = self.ledger.create_case({"user_id": "robert", "title": "Formal CAK letter"}, actor="robert")
+        draft = self.ledger.create_draft(case["case_id"], {
+            "draft_type": "formal_letter",
+            "title": "Formal objection to CAK",
+            "body": "Dear CAK, this is a draft objection.",
+        }, actor="robert")
+
+        approvals = self.ledger.list_approvals(case_id=case["case_id"], status="pending")
+
+        self.assertEqual(draft["status"], "waiting_approval")
+        self.assertEqual(draft["risk_level"], "high")
+        self.assertEqual(len(approvals), 1)
+        self.assertEqual(approvals[0]["entity_type"], "Draft")
+        self.assertEqual(approvals[0]["entity_id"], draft["id"])
+        self.assertEqual(approvals[0]["action"], "send_formal_legal_letter")
+
+        approved = self.ledger.resolve_approval(draft["approval_id"], "approved", actor="robert")
+        self.assertEqual(approved["status"], "approved")
+        approved_draft = self.ledger.get_draft(case["case_id"], draft["id"])
+        self.assertEqual(approved_draft["status"], "approved_for_external_use")
+
+        bundle = self.ledger.case_bundle(case["case_id"])
+        self.assertEqual(bundle["drafts"][0]["id"], draft["id"])
+        graph = self.ledger.papertrail_graph(case["case_id"])
+        self.assertTrue(any(node["id"] == f"draft:{draft['id']}" for node in graph["nodes"]))
+        self.assertTrue(any(edge["from"] == f"draft:{draft['id']}" and edge["to"] == f"approval:{draft['approval_id']}" for edge in graph["edges"]))
+        audit = self.ledger.list_audit_events(case["case_id"])
+        self.assertTrue(any(item["entity_type"] == "Draft" and item["action"] == "created" for item in audit))
+        self.assertTrue(any(item["entity_type"] == "Draft" and item["action"] == "approval_approved" for item in audit))
+
+    def test_internal_summary_draft_can_be_submitted_for_approval_later(self):
+        case = self.ledger.create_case({"user_id": "robert", "title": "Internal summary"}, actor="robert")
+        draft = self.ledger.create_draft(case["case_id"], {
+            "draft_type": "case_summary",
+            "title": "Lawyer-ready summary",
+            "body": "Internal working summary.",
+        }, actor="system")
+
+        self.assertEqual(draft["status"], "draft")
+        self.assertIsNone(draft["approval_id"])
+
+        submitted = self.ledger.update_draft(case["case_id"], draft["id"], {
+            "action": "submit_for_approval",
+            "approval_reason": "Share this summary with a lawyer.",
+        }, actor="robert")
+        self.assertEqual(submitted["status"], "waiting_approval")
+        self.assertIsNotNone(submitted["approval_id"])
+        approvals = self.ledger.list_approvals(case_id=case["case_id"], status="pending")
+        self.assertEqual(approvals[0]["entity_type"], "Draft")
+        self.assertEqual(approvals[0]["action"], "approve_generated_draft_external_use")
+
+    def test_lawyer_responses_are_persisted_classified_and_audited(self):
+        case = self.ledger.create_case({"user_id": "robert", "title": "CAK response tracking"}, actor="robert")
+        outreach = self.ledger.create_outreach_draft(case["case_id"], {
+            "lawyer_name": "Response Lawyer",
+            "lawyer_email": "response@example-law.nl",
+            "subject": "Case inquiry",
+            "draft_body": "Please review this case.",
+        }, actor="robert")
+        self.ledger.resolve_approval(outreach["approval_id"], "approved", actor="robert")
+        with self.ledger.session_scope() as session:
+            item = session.get(LawyerOutreach, outreach["id"])
+            item.status = "sent"
+
+        awaiting = self.ledger.command_center("robert")
+        self.assertEqual(awaiting["counts"]["cases_awaiting_lawyer_response"], 1)
+
+        response = self.ledger.add_lawyer_response(case["case_id"], outreach["id"], {
+            "response_type": "pre_assessment_positive",
+            "content": "Interested, please send the evidence bundle.",
+            "received_at": "2026-07-01T09:00:00Z",
+        }, actor="robert")
+
+        self.assertEqual(response["response_type"], "interested")
+        self.assertEqual(response["lawyer_email"], "response@example-law.nl")
+        self.assertEqual(response["timestamp"], "2026-07-01T09:00:00Z")
+        responses = self.ledger.list_lawyer_responses(case["case_id"])
+        self.assertEqual(len(responses), 1)
+        outreach_after = self.ledger.list_outreach(case["case_id"])[0]
+        self.assertEqual(outreach_after["status"], "response_interested")
+        no_longer_awaiting = self.ledger.command_center("robert")
+        self.assertEqual(no_longer_awaiting["counts"]["cases_awaiting_lawyer_response"], 0)
+        audit = self.ledger.list_audit_events(case["case_id"])
+        self.assertTrue(any(item["entity_type"] == "LawyerResponse" and item["action"] == "recorded" for item in audit))
+        self.assertTrue(any(item["entity_type"] == "LawyerOutreach" and item["action"] == "response_recorded" for item in audit))
+
+    def test_command_center_surfaces_operational_review_queues(self):
+        due_date = (dt.date.today() + dt.timedelta(days=3)).isoformat()
+        case = self.ledger.create_case({
+            "user_id": "robert",
+            "title": "Urgent housing file",
+            "description": "Needs evidence and legal follow-up.",
+            "risk_level": "high",
+        }, actor="robert")
+        self.ledger.add_deadline(case["case_id"], {
+            "due_date": due_date,
+            "title": "Submit objection",
+        }, actor="system")
+        self.ledger.add_open_loop(case["case_id"], {
+            "title": "Robert must confirm dates",
+            "next_action": "Confirm receipt and notice dates.",
+            "risk_level": "high",
+        }, actor="system")
+        self.ledger.add_contradiction(case["case_id"], {
+            "title": "Notice date conflict",
+            "description": "Two sources conflict on the notice date.",
+            "severity": "high",
+        }, actor="system")
+        self.ledger.add_missing_evidence_warning(case["case_id"], {
+            "title": "Payment proof missing",
+            "suggested_action": "Find bank statement or receipt.",
+            "severity": "high",
+        }, actor="system")
+        outreach = self.ledger.create_outreach_draft(case["case_id"], {
+            "lawyer_name": "Housing Lawyer",
+            "lawyer_email": "housing@example-law.nl",
+            "draft_body": "Please review this urgent case.",
+        }, actor="robert")
+        with self.ledger.session_scope() as session:
+            item = session.get(LawyerOutreach, outreach["id"])
+            item.status = "sent"
+
+        dashboard = self.ledger.command_center("robert")
+
+        self.assertEqual(dashboard["counts"]["active_cases"], 1)
+        self.assertEqual(dashboard["counts"]["urgent_deadlines"], 1)
+        self.assertEqual(dashboard["counts"]["cases_needing_robert"], 1)
+        self.assertEqual(dashboard["counts"]["cases_needing_evidence"], 1)
+        self.assertEqual(dashboard["counts"]["pending_outreach_approval"], 1)
+        self.assertEqual(dashboard["counts"]["cases_awaiting_lawyer_response"], 1)
+        self.assertGreaterEqual(dashboard["counts"]["high_risk_items"], 4)
+        self.assertEqual(dashboard["review_queues"]["cases_needing_robert"][0]["case_id"], case["case_id"])
+        self.assertEqual(dashboard["urgent_deadlines"][0]["due_date"], due_date)
+        self.assertEqual(dashboard["pending_outreach_approval"][0]["action"], "send_external_legal_email")
+        self.assertEqual(dashboard["awaiting_lawyer_response"][0]["status"], "sent")
+        self.assertTrue(any(item["item_type"] == "deadline" for item in dashboard["high_risk_items"]))
+        next_actions_by_target = {item["target"]: item for item in dashboard["next_actions"]}
+        self.assertEqual(next_actions_by_target["approvals"]["queue_type"], "approval")
+        self.assertIsNotNone(next_actions_by_target["approvals"]["item_id"])
+        self.assertEqual(next_actions_by_target["deadlines"]["queue_type"], "deadline")
+        self.assertIsNotNone(next_actions_by_target["deadlines"]["item_id"])
+        self.assertEqual(next_actions_by_target["contradictions"]["queue_type"], "contradiction")
+        self.assertIsNotNone(next_actions_by_target["contradictions"]["item_id"])
+        self.assertEqual(next_actions_by_target["missing-evidence"]["queue_type"], "gap")
+        self.assertIsNotNone(next_actions_by_target["missing-evidence"]["item_id"])
+        self.assertEqual(next_actions_by_target["open-loops"]["queue_type"], "loop")
+        self.assertIsNotNone(next_actions_by_target["open-loops"]["item_id"])
+
+    def test_missing_evidence_and_bundle_are_generated_from_persisted_records(self):
+        case = self.ledger.create_case({
+            "user_id": "robert",
+            "title": "CAK proof dispute",
+            "description": "Need to prove payment and notice.",
+        }, actor="robert")
+        claim = self.ledger.add_claim(case["case_id"], {
+            "statement": "Robert paid the invoice before the deadline.",
+            "asserted_by": "Robert",
+        }, actor="robert")
+
+        warnings = self.ledger.list_missing_evidence(case["case_id"])
+        self.assertTrue(any(item["warning_type"] == "case_without_documents" for item in warnings))
+        self.assertTrue(any(item["claim_id"] == claim["id"] and item["status"] == "needs_review" for item in warnings))
+
+        document = self.ledger.add_document(case["case_id"], {
+            "title": "Payment confirmation",
+            "document_type": "bank_record",
+            "extracted_text": "Payment was sent before the deadline.",
+        }, actor="robert")
+        self.ledger.add_evidence_link(case["case_id"], {
+            "document_id": document["document_id"],
+            "target_type": "claim",
+            "target_id": claim["id"],
+            "snippet": "Payment was sent before the deadline.",
+        }, actor="robert")
+
+        refreshed = self.ledger.list_missing_evidence(case["case_id"])
+        self.assertTrue(all(item["status"] == "resolved" for item in refreshed))
+
+        summary = self.ledger.case_summary(case["case_id"])
+        red_line = self.ledger.red_line_thread(case["case_id"])
+        bundle = self.ledger.case_bundle(case["case_id"])
+
+        self.assertEqual(len(summary["claims"]["supported"]), 1)
+        self.assertEqual(len(summary["claims"]["unsupported"]), 0)
+        self.assertIn("Supported claims: 1", red_line["body"])
+        self.assertIn(f"doc {document['document_id']}: Payment confirmation", red_line["body"])
+        self.assertIn("source: doc", red_line["body"])
+        self.assertIn("source_documents", red_line["sections"])
+        self.assertIn("source_linked_chronology", red_line["sections"])
+        self.assertIn("next_actions", red_line["sections"])
+        self.assertEqual(bundle["share_status"], "internal_only_until_approved")
+        self.assertTrue(bundle["external_sharing_requires_approval"])
+        self.assertFalse(bundle["external_sharing_allowed"])
+        self.assertEqual(bundle["source_documents"][0]["document_id"], document["document_id"])
+        self.assertIn("source_linked_timeline", bundle)
+        self.assertIn("next_actions", bundle)
+
+        approval = self.ledger.request_case_bundle_share_approval(case["case_id"], actor="robert")
+        duplicate = self.ledger.request_case_bundle_share_approval(case["case_id"], actor="robert")
+        self.assertEqual(approval["id"], duplicate["id"])
+        self.assertEqual(approval["entity_type"], "CaseBundle")
+        self.assertEqual(approval["action"], "share_case_bundle_externally")
+        self.assertEqual(approval["risk_level"], "high")
+
+        pending_bundle = self.ledger.case_bundle(case["case_id"])
+        self.assertEqual(pending_bundle["share_status"], "external_share_approval_pending")
+        self.assertEqual(pending_bundle["external_sharing_approval"]["id"], approval["id"])
+        self.assertFalse(pending_bundle["external_sharing_allowed"])
+
+        approved = self.ledger.resolve_approval(approval["id"], "approved", actor="robert")
+        self.assertEqual(approved["status"], "approved")
+        approved_bundle = self.ledger.case_bundle(case["case_id"])
+        self.assertEqual(approved_bundle["share_status"], "external_share_approved")
+        self.assertTrue(approved_bundle["external_sharing_allowed"])
+
+    def test_timeline_suggestions_can_be_edited_approved_and_rejected(self):
+        case = self.ledger.create_case({"user_id": "robert", "title": "CAK timeline review"}, actor="robert")
+        document = self.ledger.add_document(case["case_id"], {
+            "title": "CAK decision",
+            "document_type": "decision",
+            "extracted_text": "Decision dated 2024-05-01. Objection deadline 2024-05-15.",
+        }, actor="robert")
+
+        suggested = self.ledger.add_event(case["case_id"], {
+            "event_date": "2024-05-01",
+            "title": "Timeline suggestion",
+            "description": "Decision dated 2024-05-01.",
+            "event_type": "suggested_from_document",
+            "created_from_document_id": document["document_id"],
+            "user_confirmed": False,
+        }, actor="system")
+
+        self.assertEqual(suggested["review_status"], "needs_review")
+        graph = self.ledger.papertrail_graph(case["case_id"])
+        event_edge = next(edge for edge in graph["edges"] if edge["to"] == f"event:{suggested['id']}")
+        self.assertFalse(event_edge["user_confirmed"])
+
+        edited = self.ledger.update_event(case["case_id"], suggested["id"], {
+            "action": "edit",
+            "event_date": "2024-05-02",
+            "title": "CAK decision received",
+            "description": "Robert received the CAK decision.",
+        }, actor="robert")
+        self.assertEqual(edited["event_date"], "2024-05-02")
+        self.assertEqual(edited["title"], "CAK decision received")
+        self.assertEqual(edited["review_status"], "needs_review")
+
+        approved = self.ledger.update_event(case["case_id"], suggested["id"], {"action": "approve"}, actor="robert")
+        self.assertTrue(approved["user_confirmed"])
+        self.assertEqual(approved["event_type"], "confirmed_from_document")
+        self.assertEqual(approved["review_status"], "confirmed")
+
+        graph = self.ledger.papertrail_graph(case["case_id"])
+        event_edge = next(edge for edge in graph["edges"] if edge["to"] == f"event:{suggested['id']}")
+        self.assertTrue(event_edge["user_confirmed"])
+
+        rejected = self.ledger.add_event(case["case_id"], {
+            "event_date": "2024-05-15",
+            "title": "Wrong objection deadline",
+            "description": "Candidate extracted deadline that should be rejected.",
+            "event_type": "suggested_from_document",
+            "created_from_document_id": document["document_id"],
+            "user_confirmed": False,
+        }, actor="system")
+        rejected = self.ledger.update_event(case["case_id"], rejected["id"], {"action": "reject"}, actor="robert")
+        self.assertEqual(rejected["review_status"], "rejected")
+        self.assertEqual(rejected["event_type"], "rejected_suggestion")
+
+        summary = self.ledger.case_summary(case["case_id"])
+        titles = [event["title"] for event in summary["factual_reconstruction"]["known_events"]]
+        self.assertIn("CAK decision received", titles)
+        self.assertNotIn("Wrong objection deadline", titles)
+
+
+class TestLegalLedgerApi(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        cls.ledger_url = "sqlite:///" + os.path.join(cls.tmp.name, "api-ledger.sqlite3")
+        os.environ["LARO_LEDGER_DATABASE_URL"] = cls.ledger_url
+        os.environ["LARO_UPLOAD_ROOT"] = os.path.join(cls.tmp.name, "uploads")
+        import app as app_module
+        from legal_ledger import LegalLedger
+
+        cls.app_module = app_module
+        cls.previous_ledger = app_module.legal_ledger
+        cls.previous_config_ledger = app_module.app.config.get("legal_ledger")
+        cls.previous_config_url = app_module.app.config.get("LARO_LEDGER_DATABASE_URL")
+        cls.ledger = LegalLedger(cls.ledger_url)
+        cls.ledger.create_all()
+        app_module.legal_ledger = cls.ledger
+        app_module.app.config["legal_ledger"] = cls.ledger
+        app_module.app.config["LARO_LEDGER_DATABASE_URL"] = cls.ledger_url
+        app_module.cases.clear()
+        app_module.documents.clear()
+        app_module.document_analysis.clear()
+        app_module.evidence_timelines.clear()
+        app_module.outreach_campaigns.clear()
+        app_module.lawyer_matches.clear()
+        app_module.outreach_target_matches.clear()
+        cls.client = app_module.app.test_client()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.ledger.close()
+        gc.collect()
+        cls.app_module.legal_ledger = cls.previous_ledger
+        cls.app_module.app.config["legal_ledger"] = cls.previous_config_ledger
+        if cls.previous_config_url is None:
+            cls.app_module.app.config.pop("LARO_LEDGER_DATABASE_URL", None)
+        else:
+            cls.app_module.app.config["LARO_LEDGER_DATABASE_URL"] = cls.previous_config_url
+        cls.tmp.cleanup()
+
+    def setUp(self):
+        token = self.app_module.auth_system._create_session("ledger@example.com", "user")
+        self.headers = {"Authorization": f"Bearer {token}"}
+
+    def test_case_ledger_api_slice(self):
+        local_login = self.client.post("/api/auth/session-login", json={"email": "robert.local@laro"})
+        self.assertEqual(local_login.status_code, 200)
+        self.assertIn("token", local_login.get_json())
+
+        created = self.client.post("/api/cases", json={
+            "title": "CAK billing dispute",
+            "description": "Invoices and decisions need review.",
+            "legal_domain": "administrative_law",
+            "parties": ["CAK"],
+        }, headers=self.headers)
+        self.assertEqual(created.status_code, 201)
+        case_id = created.get_json()["case_id"]
+        self.assertEqual([item["name"] for item in created.get_json()["parties"]], ["CAK"])
+
+        context_update = self.client.patch(f"/api/cases/{case_id}", json={
+            "court_or_institution": "Rechtbank Gelderland",
+            "opposing_parties": ["CAK", "Incassobureau"],
+            "parties": [
+                {"name": "CAK", "party_type": "government_body", "role": "decision maker"},
+                {"name": "Incassobureau", "party_type": "organization", "role": "counterparty"},
+            ],
+        }, headers=self.headers)
+        self.assertEqual(context_update.status_code, 200)
+        self.assertEqual(context_update.get_json()["court_or_institution"], "Rechtbank Gelderland")
+        self.assertEqual([item["name"] for item in context_update.get_json()["parties"]], ["CAK", "Incassobureau"])
+
+        identifier = self.client.post(f"/api/cases/{case_id}/identifiers", json={
+            "identifier_type": "dossier_number",
+            "identifier_value": "202020440",
+            "source_party": "CAK",
+            "source_type": "google_drive",
+        }, headers=self.headers)
+        self.assertEqual(identifier.status_code, 201)
+        self.assertEqual(identifier.get_json()["identifier_value"], "202020440")
+
+        identifiers = self.client.get(f"/api/cases/{case_id}/identifiers", headers=self.headers)
+        self.assertEqual(identifiers.status_code, 200)
+        self.assertEqual(identifiers.get_json()["count"], 1)
+
+        identifier_lookup = self.client.get(
+            "/api/case-identifiers/lookup?identifier=202020440&type=dossier_number",
+            headers=self.headers,
+        )
+        self.assertEqual(identifier_lookup.status_code, 200)
+        self.assertEqual(identifier_lookup.get_json()["case"]["case_id"], case_id)
+
+        document = self.client.post(f"/api/cases/{case_id}/documents", json={
+            "title": "CAK decision",
+            "document_type": "decision",
+            "extracted_text": "Decision dated 2024-04-01.",
+        }, headers=self.headers)
+        self.assertEqual(document.status_code, 201)
+        document_id = document.get_json()["document_id"]
+
+        event = self.client.post(f"/api/cases/{case_id}/timeline", json={
+            "event_date": "2024-04-01",
+            "title": "CAK issued decision",
+            "created_from_document_id": document_id,
+            "description": "Decision received.",
+        }, headers=self.headers)
+        self.assertEqual(event.status_code, 201)
+        self.assertNotIn(case_id, self.app_module.documents)
+        self.assertNotIn(case_id, self.app_module.evidence_timelines)
+
+        claim = self.client.post(f"/api/cases/{case_id}/claims", json={
+            "statement": "The CAK decision was received after the stated deadline.",
+            "status": "needs_review",
+        }, headers=self.headers)
+        self.assertEqual(claim.status_code, 201)
+        claim_id = claim.get_json()["id"]
+
+        claim_review = self.client.patch(
+            f"/api/cases/{case_id}/claims/{claim_id}",
+            json={"action": "confirm"},
+            headers=self.headers,
+        )
+        self.assertEqual(claim_review.status_code, 200)
+        self.assertEqual(claim_review.get_json()["status"], "confirmed")
+
+        evidence = self.client.post(f"/api/cases/{case_id}/evidence", json={
+            "document_id": document_id,
+            "target_type": "claim",
+            "target_id": claim_id,
+            "snippet": "Decision dated 2024-04-01.",
+            "relationship": "supports",
+        }, headers=self.headers)
+        self.assertEqual(evidence.status_code, 201)
+        evidence_id = evidence.get_json()["id"]
+
+        evidence_review = self.client.patch(
+            f"/api/cases/{case_id}/evidence/{evidence_id}",
+            json={"action": "confirm"},
+            headers=self.headers,
+        )
+        self.assertEqual(evidence_review.status_code, 200)
+        self.assertTrue(evidence_review.get_json()["user_confirmed"])
+
+        outreach = self.client.post(f"/api/cases/{case_id}/outreach", json={
+            "lawyer_name": "Advocaat Test",
+            "lawyer_email": "advocaat@example.com",
+            "draft_body": "Draft only, do not send.",
+        }, headers=self.headers)
+        self.assertEqual(outreach.status_code, 201)
+        self.assertEqual(outreach.get_json()["status"], "waiting_approval")
+
+        draft = self.client.post(f"/api/cases/{case_id}/drafts", json={
+            "draft_type": "formal_letter",
+            "title": "Formal CAK objection",
+            "body": "Draft only. Do not send externally without approval.",
+        }, headers=self.headers)
+        self.assertEqual(draft.status_code, 201)
+        draft_payload = draft.get_json()
+        self.assertEqual(draft_payload["status"], "waiting_approval")
+        self.assertEqual(draft_payload["risk_level"], "high")
+        self.assertIsNotNone(draft_payload["approval_id"])
+
+        listed_drafts = self.client.get(f"/api/cases/{case_id}/drafts", headers=self.headers)
+        self.assertEqual(listed_drafts.status_code, 200)
+        self.assertEqual(listed_drafts.get_json()["count"], 1)
+        self.assertEqual(listed_drafts.get_json()["drafts"][0]["id"], draft_payload["id"])
+
+        command_center = self.client.get("/api/cases/command-center", headers=self.headers)
+        self.assertEqual(command_center.status_code, 200)
+        self.assertGreaterEqual(command_center.get_json()["counts"]["active_cases"], 1)
+        self.assertIn("review_queues", command_center.get_json())
+        self.assertGreaterEqual(command_center.get_json()["counts"]["pending_outreach_approval"], 1)
+
+        command_alias = self.client.get("/api/command-center", headers=self.headers)
+        dashboard_alias = self.client.get("/api/dashboard/command-center", headers=self.headers)
+        self.assertEqual(command_alias.status_code, 200)
+        self.assertEqual(dashboard_alias.status_code, 200)
+        self.assertEqual(command_alias.get_json()["counts"]["active_cases"], command_center.get_json()["counts"]["active_cases"])
+        self.assertIn("urgent_deadlines", dashboard_alias.get_json()["counts"])
+
+        operating_state = self.client.get(f"/api/cases/{case_id}/operating-state", headers=self.headers)
+        self.assertEqual(operating_state.status_code, 200)
+        operating_payload = operating_state.get_json()
+        self.assertIn("primary_action", operating_payload)
+        self.assertIn("readiness", operating_payload)
+        self.assertTrue(operating_payload["safety"]["external_actions_blocked_without_approval"])
+
+        review_queue = self.client.get(f"/api/cases/{case_id}/review-queue", headers=self.headers)
+        self.assertEqual(review_queue.status_code, 200)
+        review_payload = review_queue.get_json()
+        self.assertEqual(review_payload["case_id"], case_id)
+        self.assertGreaterEqual(review_payload["count"], 1)
+        self.assertTrue(any(item["queue_type"] == "approval" and item["item_id"] for item in review_payload["items"]))
+
+        approvals = self.client.get("/api/approvals?status=pending", headers=self.headers)
+        self.assertEqual(approvals.status_code, 200)
+        self.assertGreaterEqual(approvals.get_json()["count"], 1)
+        approval_id = outreach.get_json()["approval_id"]
+
+        resolved = self.client.patch(f"/api/approvals/{approval_id}", json={"status": "approved"}, headers=self.headers)
+        self.assertEqual(resolved.status_code, 200)
+        self.assertEqual(resolved.get_json()["status"], "approved")
+
+        resolved_draft = self.client.patch(f"/api/approvals/{draft_payload['approval_id']}", json={"status": "approved"}, headers=self.headers)
+        self.assertEqual(resolved_draft.status_code, 200)
+        fetched_draft = self.client.get(f"/api/cases/{case_id}/drafts/{draft_payload['id']}", headers=self.headers)
+        self.assertEqual(fetched_draft.status_code, 200)
+        self.assertEqual(fetched_draft.get_json()["status"], "approved_for_external_use")
+
+        outreach_list = self.client.get(f"/api/cases/{case_id}/outreach", headers=self.headers)
+        self.assertEqual(outreach_list.status_code, 200)
+        self.assertEqual(outreach_list.get_json()["outreach"][0]["status"], "approved_to_send")
+        outreach_id = outreach.get_json()["id"]
+
+        recorded_response = self.client.post(
+            f"/api/cases/{case_id}/outreach/{outreach_id}/responses",
+            json={
+                "response_type": "more_information_needed",
+                "content": "Please send the timeline and documents first.",
+                "received_at": "2026-07-01T10:30:00Z",
+            },
+            headers=self.headers,
+        )
+        self.assertEqual(recorded_response.status_code, 201)
+        self.assertEqual(recorded_response.get_json()["response_type"], "more_info")
+
+        response_list = self.client.get(f"/api/cases/{case_id}/outreach/responses", headers=self.headers)
+        self.assertEqual(response_list.status_code, 200)
+        self.assertEqual(response_list.get_json()["count"], 1)
+        self.assertEqual(response_list.get_json()["responses"][0]["lawyer_email"], "advocaat@example.com")
+
+        status = self.client.get(f"/api/outreach/{case_id}/status", headers=self.headers)
+        self.assertEqual(status.status_code, 200)
+        self.assertEqual(status.get_json()["statistics"]["responses_received"], 1)
+        self.assertEqual(status.get_json()["statistics"]["more_info_requests"], 1)
+
+        analytics = self.client.get(f"/api/outreach/{case_id}/analytics", headers=self.headers)
+        self.assertEqual(analytics.status_code, 200)
+        self.assertEqual(analytics.get_json()["responses_received"], 1)
+        self.assertEqual(analytics.get_json()["categories"]["lawyers"]["responded"], 1)
+
+        graph = self.client.get(f"/api/cases/{case_id}/papertrail", headers=self.headers)
+        self.assertEqual(graph.status_code, 200)
+        self.assertTrue(graph.get_json()["nodes"])
+        self.assertTrue(graph.get_json()["edges"])
+        party_nodes = [node["label"] for node in graph.get_json()["nodes"] if node["type"] == "party"]
+        self.assertEqual(party_nodes, ["CAK", "Incassobureau"])
+        identifier_nodes = [node["label"] for node in graph.get_json()["nodes"] if node["type"] == "identifier"]
+        self.assertEqual(identifier_nodes, ["202020440"])
+        draft_nodes = [node for node in graph.get_json()["nodes"] if node["type"] == "draft"]
+        self.assertEqual(draft_nodes[0]["id"], f"draft:{draft_payload['id']}")
+        self.assertEqual(draft_nodes[0]["status"], "approved_for_external_use")
+
+        missing = self.client.get(f"/api/cases/{case_id}/missing-evidence", headers=self.headers)
+        self.assertEqual(missing.status_code, 200)
+        self.assertIn("missing_evidence", missing.get_json())
+
+        summary = self.client.get(f"/api/cases/{case_id}/summary", headers=self.headers)
+        self.assertEqual(summary.status_code, 200)
+        self.assertIn("risk_review", summary.get_json())
+
+        red_line = self.client.get(f"/api/cases/{case_id}/red-line", headers=self.headers)
+        self.assertEqual(red_line.status_code, 200)
+        self.assertIn("Chronology:", red_line.get_json()["body"])
+
+        bundle = self.client.get(f"/api/cases/{case_id}/bundle", headers=self.headers)
+        self.assertEqual(bundle.status_code, 200)
+        self.assertTrue(bundle.get_json()["external_sharing_requires_approval"])
+        self.assertEqual(bundle.get_json()["share_status"], "internal_only_until_approved")
+        self.assertEqual(bundle.get_json()["drafts"][0]["id"], draft_payload["id"])
+
+    def test_legacy_case_endpoints_are_ledger_backed(self):
+        created = self.client.post("/api/cases", json={
+            "title": "Legacy compatible ledger case",
+            "description": "Older callers should still receive durable case data.",
+            "legal_domain": "administrative_law",
+            "desired_outcome": "Correct the decision",
+        }, headers=self.headers)
+        self.assertEqual(created.status_code, 201)
+        case_id = created.get_json()["case_id"]
+
+        document = self.client.post(f"/api/cases/{case_id}/documents", json={
+            "title": "Source decision",
+            "document_type": "decision",
+            "extracted_text": "Decision text for durable legacy endpoint test.",
+        }, headers=self.headers)
+        self.assertEqual(document.status_code, 201)
+
+        event = self.client.post(f"/api/cases/{case_id}/timeline", json={
+            "event_date": "2024-05-01",
+            "title": "Decision received",
+            "description": "The source decision was received.",
+            "created_from_document_id": document.get_json()["document_id"],
+        }, headers=self.headers)
+        self.assertEqual(event.status_code, 201)
+
+        self.app_module.cases.clear()
+        legacy_list = self.client.get("/api/user/cases", headers=self.headers)
+        self.assertEqual(legacy_list.status_code, 200)
+        legacy_cases = legacy_list.get_json()["cases"]
+        legacy_case = next(item for item in legacy_cases if item["case_id"] == case_id)
+        self.assertEqual(legacy_case["title"], "Legacy compatible ledger case")
+        self.assertEqual(legacy_case["documents_count"], 1)
+        self.assertEqual(legacy_case["timeline_count"], 1)
+        self.assertEqual(self.app_module.cases, {})
+
+        legacy_detail = self.client.get(f"/api/case/{case_id}", headers=self.headers)
+        self.assertEqual(legacy_detail.status_code, 200)
+        self.assertEqual(legacy_detail.get_json()["case_id"], case_id)
+        self.assertEqual(legacy_detail.get_json()["documents_count"], 1)
+        self.assertEqual(self.app_module.cases, {})
+
+    def test_legacy_document_endpoints_are_ledger_backed_after_cache_clear(self):
+        created = self.client.post("/api/cases", json={
+            "title": "Legacy document compatibility case",
+            "description": "Documents, analysis, and timeline should survive cache clears.",
+            "legal_domain": "administrative_law",
+        }, headers=self.headers)
+        self.assertEqual(created.status_code, 201)
+        case_id = created.get_json()["case_id"]
+
+        pasted = self.client.post(f"/api/cases/{case_id}/documents", json={
+            "title": "Pasted decision with analysis",
+            "document_type": "manual_note",
+            "extracted_text": (
+                "Decision dated 2024-05-01. CAK stated Robert must pay 125 euro. "
+                "Objection deadline 2024-05-15."
+            ),
+            "analyze": True,
+        }, headers=self.headers)
+        self.assertEqual(pasted.status_code, 201)
+        document_id = pasted.get_json()["document"]["document_id"]
+
+        self.app_module.documents.clear()
+        self.app_module.document_analysis.clear()
+        self.app_module.evidence_timelines.clear()
+
+        documents = self.client.get(f"/api/documents/{case_id}", headers=self.headers)
+        self.assertEqual(documents.status_code, 200)
+        self.assertEqual(documents.get_json()["documents"][0]["document_id"], document_id)
+        self.assertEqual(
+            documents.get_json()["documents"][0]["metadata"]["legal_analysis"]["document_type"],
+            "decision",
+        )
+
+        analysis = self.client.get(f"/api/documents/{case_id}/analysis", headers=self.headers)
+        self.assertEqual(analysis.status_code, 200)
+        self.assertEqual(analysis.get_json()["document_count"], 1)
+        analysis_map = analysis.get_json()["analysis"]
+        self.assertIn(str(document_id), {str(key) for key in analysis_map.keys()})
+        document_analysis = analysis_map[str(document_id)]
+        self.assertEqual(document_analysis["document"]["document_id"], document_id)
+        self.assertTrue(document_analysis["document"]["has_extracted_text"])
+        self.assertIn("source_links", document_analysis)
+        self.assertIn("timeline_events", document_analysis)
+        self.assertGreaterEqual(document_analysis["reading_status"]["timeline_events"], 1)
+        self.assertTrue(document_analysis["legal_safety"]["requires_human_review"])
+
+        timeline = self.client.get(f"/api/documents/{case_id}/timeline", headers=self.headers)
+        self.assertEqual(timeline.status_code, 200)
+        self.assertGreaterEqual(timeline.get_json()["event_count"], 1)
+        self.assertEqual(timeline.get_json()["storage"], "legal_ledger")
+        self.assertTrue(timeline.get_json()["source_linked_timeline"])
+        self.assertTrue(
+            any(item["created_from_document_id"] == document_id for item in timeline.get_json()["timeline"])
+        )
+        self.assertTrue(
+            any(item["source"]["document_id"] == document_id for item in timeline.get_json()["source_linked_timeline"])
+        )
+
+    def test_case_analysis_creates_ledger_case_without_demo_cache(self):
+        self.app_module.cases.clear()
+        with mock.patch.object(self.app_module.case_matcher, "match_legal_fields", return_value=["administrative_law"]), \
+             mock.patch.object(self.app_module.case_matcher, "analyze_case_complexity", return_value={"complexity_level": "High"}), \
+             mock.patch.object(self.app_module.case_matcher, "generate_case_summary", return_value="Decision dispute summary."), \
+             mock.patch.object(self.app_module, "publish_event") as publish_event, \
+             mock.patch.object(self.app_module.timeseries_manager, "record_case_event"):
+            response = self.client.post("/api/case/analyze", json={
+                "case_description": "The government decision and billing history need reconstruction.",
+                "title": "Analysis-created durable case",
+            }, headers=self.headers)
+
+        self.assertEqual(response.status_code, 201)
+        case_id = response.get_json()["case_id"]
+        self.assertEqual(self.app_module.cases, {})
+        publish_event.assert_called_once()
+
+        stored = self.client.get(f"/api/cases/{case_id}", headers=self.headers)
+        self.assertEqual(stored.status_code, 200)
+        self.assertEqual(stored.get_json()["title"], "Analysis-created durable case")
+        self.assertEqual(stored.get_json()["legal_domain"], "administrative_law")
+
+        legacy_list = self.client.get("/api/user/cases", headers=self.headers)
+        self.assertEqual(legacy_list.status_code, 200)
+        returned_case_ids = [item["case_id"] for item in legacy_list.get_json()["cases"]]
+        self.assertIn(case_id, returned_case_ids)
+        self.assertEqual(self.app_module.cases, {})
+
+        share_approval = self.client.post(
+            f"/api/cases/{case_id}/bundle/share-approval",
+            json={"reason": "Prepare for lawyer review."},
+            headers=self.headers,
+        )
+        self.assertEqual(share_approval.status_code, 201)
+        share_payload = share_approval.get_json()
+        self.assertEqual(share_payload["entity_type"], "CaseBundle")
+        self.assertEqual(share_payload["action"], "share_case_bundle_externally")
+        self.assertEqual(share_payload["status"], "pending")
+
+        duplicate_share_approval = self.client.post(
+            f"/api/cases/{case_id}/bundle/share-approval",
+            json={"reason": "Duplicate request should return pending approval."},
+            headers=self.headers,
+        )
+        self.assertEqual(duplicate_share_approval.status_code, 201)
+        self.assertEqual(duplicate_share_approval.get_json()["id"], share_payload["id"])
+
+        pending_bundle = self.client.get(f"/api/cases/{case_id}/bundle", headers=self.headers)
+        self.assertEqual(pending_bundle.status_code, 200)
+        self.assertEqual(pending_bundle.get_json()["share_status"], "external_share_approval_pending")
+        self.assertFalse(pending_bundle.get_json()["external_sharing_allowed"])
+
+        resolved_share = self.client.patch(
+            f"/api/approvals/{share_payload['id']}",
+            json={"status": "approved"},
+            headers=self.headers,
+        )
+        self.assertEqual(resolved_share.status_code, 200)
+        approved_bundle = self.client.get(f"/api/cases/{case_id}/bundle", headers=self.headers)
+        self.assertEqual(approved_bundle.get_json()["share_status"], "external_share_approved")
+        self.assertTrue(approved_bundle.get_json()["external_sharing_allowed"])
+
+    def test_legacy_outreach_start_creates_approval_gated_drafts_without_sending(self):
+        created = self.client.post("/api/cases", json={
+            "title": "Legacy outreach safety case",
+            "description": "CAK decision and objection deadline need legal review.",
+            "legal_domain": "ADMINISTRATIVE_LAW",
+            "current_summary": "Robert needs help objecting to a CAK administrative decision.",
+        }, headers=self.headers)
+        self.assertEqual(created.status_code, 201)
+        case_id = created.get_json()["case_id"]
+
+        started = self.client.post("/api/outreach/start", json={
+            "case_id": case_id,
+            "legal_field": "ADMINISTRATIVE_LAW",
+            "max_lawyers": 2,
+            "postcode_or_city": "Amsterdam",
+            "radius_km": 100,
+            "candidate_lawyers": [
+                {
+                    "lawyer_id": 901,
+                    "name": "Approval Gate Lawyer",
+                    "email": "approval.gate@example-law.nl",
+                    "city": "Amsterdam",
+                    "distance_km": 8,
+                    "legal_fields": ["ADMINISTRATIVE_LAW"],
+                    "nova_rechtsgebieden": ["bestuursrecht", "bezwaar"],
+                    "specialization_associations": ["VAR"],
+                    "financed_legal_aid": True,
+                    "response_rate": 0.6,
+                    "acceptance_rate": 0.2,
+                }
+            ],
+        }, headers=self.headers)
+        self.assertEqual(started.status_code, 200)
+        payload = started.get_json()
+
+        self.assertTrue(payload["approval_required"])
+        self.assertEqual(payload["external_messages_sent"], 0)
+        self.assertEqual(payload["status"], "waiting_approval")
+        self.assertGreaterEqual(payload["draft_count"], 1)
+        self.assertEqual(payload["outreach_count"], payload["draft_count"])
+        self.assertNotIn(case_id, self.app_module.cases)
+        self.assertNotIn(case_id, self.app_module.outreach_campaigns)
+        self.assertNotIn(case_id, self.app_module.lawyer_matches)
+
+        outreach_list = self.client.get(f"/api/cases/{case_id}/outreach", headers=self.headers)
+        self.assertEqual(outreach_list.status_code, 200)
+        outreach_records = outreach_list.get_json()["outreach"]
+        self.assertEqual(len(outreach_records), payload["draft_count"])
+        self.assertTrue(all(item["status"] == "waiting_approval" for item in outreach_records))
+
+        approvals = self.client.get(f"/api/approvals?case_id={case_id}&status=pending", headers=self.headers)
+        self.assertEqual(approvals.status_code, 200)
+        approval_payload = approvals.get_json()
+        self.assertEqual(approval_payload["count"], payload["draft_count"])
+        self.assertTrue(all(item["action"] == "send_external_legal_email" for item in approval_payload["approvals"]))
+        self.assertTrue(all(item["risk_level"] == "high" for item in approval_payload["approvals"]))
+
+        status = self.client.get(f"/api/outreach/{case_id}/status", headers=self.headers)
+        self.assertEqual(status.status_code, 200)
+        status_payload = status.get_json()
+        self.assertTrue(status_payload["approval_required"])
+        self.assertEqual(status_payload["external_messages_sent"], 0)
+        self.assertEqual(status_payload["statistics"]["waiting_approval"], payload["draft_count"])
+
+        self.app_module.lawyer_matches.clear()
+        persisted_lawyer_matches = self.client.get(f"/api/lawyers/{case_id}/matches", headers=self.headers)
+        self.assertEqual(persisted_lawyer_matches.status_code, 200)
+        self.assertEqual(
+            persisted_lawyer_matches.get_json()["matched_lawyers"][0]["name"],
+            "Approval Gate Lawyer",
+        )
+
+        follow_up = self.client.post(f"/api/outreach/{case_id}/follow-up", headers=self.headers)
+        self.assertEqual(follow_up.status_code, 409)
+        self.assertEqual(follow_up.get_json()["follow_ups_sent"], 0)
+        self.assertEqual(follow_up.get_json()["external_messages_sent"], 0)
+        self.assertTrue(follow_up.get_json()["approval_required"])
+
+    def test_legacy_matching_search_billing_and_analytics_use_persisted_cases(self):
+        created = self.client.post("/api/cases", json={
+            "title": "Persisted compatibility case",
+            "description": "Administrative CAK objection with proof of payment and deadline evidence.",
+            "legal_domain": "ADMINISTRATIVE_LAW",
+            "desired_outcome": "Prepare objection and find a lawyer.",
+            "court_or_institution": "CAK",
+        }, headers=self.headers)
+        self.assertEqual(created.status_code, 201)
+        case_id = created.get_json()["case_id"]
+
+        document = self.client.post(f"/api/cases/{case_id}/documents", json={
+            "title": "CAK payment proof",
+            "extracted_text": "CAK stated Robert must pay 125 euro. Payment proof was requested.",
+        }, headers=self.headers)
+        self.assertEqual(document.status_code, 201)
+
+        self.app_module.cases.clear()
+        self.app_module.documents.clear()
+        self.app_module.outreach_campaigns.clear()
+
+        lawyers = self.client.post("/api/lawyers/match", json={
+            "case_id": case_id,
+            "max_results": 2,
+            "candidate_lawyers": [
+                {
+                    "lawyer_id": "admin-1",
+                    "name": "Persisted Case Lawyer",
+                    "email": "persisted.case@example-law.nl",
+                    "legal_fields": ["ADMINISTRATIVE_LAW"],
+                    "nova_rechtsgebieden": ["bestuursrecht", "bezwaar"],
+                    "city": "Amsterdam",
+                    "financed_legal_aid": True,
+                }
+            ],
+        }, headers=self.headers)
+        self.assertEqual(lawyers.status_code, 200)
+        self.assertEqual(lawyers.get_json()["matched_lawyers"][0]["name"], "Persisted Case Lawyer")
+        self.assertNotIn(case_id, self.app_module.lawyer_matches)
+
+        stored_lawyers = self.client.get(f"/api/lawyers/{case_id}/matches", headers=self.headers)
+        self.assertEqual(stored_lawyers.status_code, 200)
+        self.assertEqual(stored_lawyers.get_json()["matched_lawyers"][0]["name"], "Persisted Case Lawyer")
+        self.app_module.lawyer_matches[case_id] = {
+            "matched_lawyers": [{"name": "Stale Demo Cache Lawyer"}]
+        }
+        persisted_over_stale_lawyers = self.client.get(f"/api/lawyers/{case_id}/matches", headers=self.headers)
+        self.assertEqual(persisted_over_stale_lawyers.status_code, 200)
+        self.assertEqual(
+            persisted_over_stale_lawyers.get_json()["matched_lawyers"][0]["name"],
+            "Persisted Case Lawyer",
+        )
+
+        media = self.client.post("/api/outreach/targets/match", json={
+            "case_id": case_id,
+            "target_type": "media",
+            "candidate_targets": [
+                {
+                    "target_id": "radar-test",
+                    "name": "Radar",
+                    "target_type": "media",
+                    "description": "Consumer program covering government and payment disputes.",
+                    "legal_fields": ["ADMINISTRATIVE_LAW"],
+                    "topics": ["consumer", "government"],
+                }
+            ],
+        }, headers=self.headers)
+        self.assertEqual(media.status_code, 200)
+        self.assertEqual(media.get_json()["matched_targets"][0]["name"], "Radar")
+        self.assertNotIn(case_id, self.app_module.outreach_target_matches)
+
+        stored_media = self.client.get(f"/api/outreach/{case_id}/targets/media", headers=self.headers)
+        self.assertEqual(stored_media.status_code, 200)
+        self.assertEqual(stored_media.get_json()["matched_targets"][0]["name"], "Radar")
+        self.app_module.outreach_target_matches[case_id] = {
+            "media": {"matched_targets": [{"name": "Stale Demo Cache Media"}]}
+        }
+        persisted_over_stale_media = self.client.get(f"/api/outreach/{case_id}/targets/media", headers=self.headers)
+        self.assertEqual(persisted_over_stale_media.status_code, 200)
+        self.assertEqual(
+            persisted_over_stale_media.get_json()["matched_targets"][0]["name"],
+            "Radar",
+        )
+
+        self.app_module.lawyer_matches.clear()
+        self.app_module.outreach_target_matches.clear()
+
+        restarted_lawyers = self.client.get(f"/api/lawyers/{case_id}/matches", headers=self.headers)
+        self.assertEqual(restarted_lawyers.status_code, 200)
+        self.assertEqual(restarted_lawyers.get_json()["matched_lawyers"][0]["name"], "Persisted Case Lawyer")
+
+        restarted_media = self.client.get(f"/api/outreach/{case_id}/targets/media", headers=self.headers)
+        self.assertEqual(restarted_media.status_code, 200)
+        self.assertEqual(restarted_media.get_json()["matched_targets"][0]["name"], "Radar")
+
+        outreach = self.client.post(f"/api/cases/{case_id}/outreach", json={
+            "lawyer_name": "Persisted Case Lawyer",
+            "lawyer_email": "persisted.case@example-law.nl",
+            "legal_field": "ADMINISTRATIVE_LAW",
+            "draft_body": "Draft only. Await approval.",
+        }, headers=self.headers)
+        self.assertEqual(outreach.status_code, 201)
+
+        analytics = self.client.get(f"/api/outreach/{case_id}/analytics", headers=self.headers)
+        self.assertEqual(analytics.status_code, 200)
+        self.assertEqual(analytics.get_json()["total_outreaches"], 1)
+        self.assertGreaterEqual(analytics.get_json()["matched_targets"], 2)
+
+        billing = self.client.get(f"/api/billing/{case_id}", headers=self.headers)
+        self.assertEqual(billing.status_code, 200)
+        self.assertGreater(billing.get_json()["resource_usage"]["storage_bytes_used"], 0)
+
+        search = self.client.get("/api/search?q=payment", headers=self.headers)
+        self.assertEqual(search.status_code, 200)
+        search_payload = search.get_json()
+        self.assertTrue(any(item.get("case_id") == case_id for item in search_payload["results"]))
+        self.assertTrue(any(
+            item.get("result_type") == "document" and item.get("target") == "documents"
+            for item in search_payload["results"]
+        ))
+        self.assertGreaterEqual(search_payload["facets"]["document"], 1)
+
+    def test_upload_document_persists_extraction_and_timeline_suggestions(self):
+        created = self.client.post("/api/cases", json={
+            "title": "Upload evidence case",
+            "description": "Testing local upload intake.",
+            "legal_domain": "administrative_law",
+        }, headers=self.headers)
+        self.assertEqual(created.status_code, 201)
+        case_id = created.get_json()["case_id"]
+
+        upload = self.client.post(
+            f"/api/cases/{case_id}/documents/upload",
+            data={
+                "file": (
+                    io.BytesIO(b"Decision dated 2024-05-01. CAK stated Robert must pay 125 euro. Robert objected to the payment basis. Objection deadline 2024-05-15."),
+                    "decision.txt",
+                ),
+                "title": "Decision upload",
+            },
+            content_type="multipart/form-data",
+            headers=self.headers,
+        )
+
+        self.assertEqual(upload.status_code, 201)
+        payload = upload.get_json()
+        self.assertEqual(payload["document"]["title"], "Decision upload")
+        self.assertIn("Decision dated", payload["document"]["extracted_text"])
+        self.assertEqual(payload["document"]["source_type"], "manual_upload")
+        self.assertTrue(payload["storage"]["content_hash"])
+        self.assertTrue(payload["timeline_suggestions"])
+        self.assertFalse(payload["timeline_suggestions"][0]["user_confirmed"])
+        self.assertTrue(payload["deadline_suggestions"])
+        self.assertTrue(payload["open_loop_suggestions"])
+        self.assertTrue(payload["claim_suggestions"])
+        self.assertEqual(payload["claim_suggestions"][0]["status"], "needs_review")
+        self.assertEqual(payload["claim_suggestions"][0]["claim_type"], "document_statement")
+        self.assertEqual(payload["claim_suggestions"][0]["asserted_by"], "document_intelligence")
+        self.assertNotIn(case_id, self.app_module.documents)
+        self.assertGreaterEqual(payload["evidence_links_created"], 4)
+        target_types = {link["target_type"] for link in payload["evidence_links"]}
+        self.assertIn("event", target_types)
+        self.assertIn("claim", target_types)
+        self.assertIn("deadline", target_types)
+        self.assertIn("open_loop", target_types)
+        self.assertTrue(any("Objection deadline" in link["snippet"] for link in payload["evidence_links"]))
+        self.assertTrue(any("Robert must pay 125 euro" in link["snippet"] for link in payload["evidence_links"]))
+        self.assertEqual(payload["deadline_suggestions"][0]["due_date"], "2024-05-15")
+        self.assertEqual(payload["deadline_suggestions"][0]["status"], "needs_review")
+        self.assertEqual(payload["deadline_suggestions"][0]["source_document_id"], payload["document"]["document_id"])
+        suggestion_id = payload["timeline_suggestions"][0]["id"]
+
+        approved = self.client.patch(f"/api/cases/{case_id}/timeline/{suggestion_id}", json={
+            "action": "approve",
+            "title": "Decision deadline reviewed",
+            "description": "Robert reviewed and accepted the extracted event.",
+        }, headers=self.headers)
+        self.assertEqual(approved.status_code, 200)
+        approved_payload = approved.get_json()
+        self.assertTrue(approved_payload["user_confirmed"])
+        self.assertEqual(approved_payload["review_status"], "confirmed")
+        self.assertEqual(approved_payload["title"], "Decision deadline reviewed")
+
+        documents = self.client.get(f"/api/cases/{case_id}/documents", headers=self.headers)
+        self.assertEqual(documents.status_code, 200)
+        self.assertEqual(len(documents.get_json()["documents"]), 1)
+
+        document_id = payload["document"]["document_id"]
+        document_detail = self.client.get(f"/api/cases/{case_id}/documents/{document_id}", headers=self.headers)
+        self.assertEqual(document_detail.status_code, 200)
+        self.assertTrue(document_detail.get_json()["can_open_file"])
+        self.assertEqual(document_detail.get_json()["file_url"], f"/api/cases/{case_id}/documents/{document_id}/file")
+
+        document_file = self.client.get(f"/api/cases/{case_id}/documents/{document_id}/file", headers=self.headers)
+        self.assertEqual(document_file.status_code, 200)
+        self.assertIn(b"Objection deadline 2024-05-15", document_file.data)
+        document_file.close()
+
+        timeline = self.client.get(f"/api/cases/{case_id}/timeline", headers=self.headers)
+        self.assertEqual(timeline.status_code, 200)
+        self.assertTrue(timeline.get_json()["timeline"])
+
+        evidence = self.client.get(f"/api/cases/{case_id}/evidence", headers=self.headers)
+        self.assertEqual(evidence.status_code, 200)
+        evidence_payload = evidence.get_json()["evidence_links"]
+        self.assertTrue(any(link["target_type"] == "deadline" for link in evidence_payload))
+        self.assertTrue(any(link["target_type"] == "open_loop" for link in evidence_payload))
+        self.assertTrue(any(link["target_type"] == "claim" for link in evidence_payload))
+
+        claims = self.client.get(f"/api/cases/{case_id}/claims", headers=self.headers)
+        self.assertEqual(claims.status_code, 200)
+        claim_payload = claims.get_json()["claims"]
+        self.assertTrue(any(claim["status"] == "needs_review" and "Robert must pay 125 euro" in claim["statement"] for claim in claim_payload))
+
+        deadlines = self.client.get(f"/api/cases/{case_id}/deadlines", headers=self.headers)
+        self.assertEqual(deadlines.status_code, 200)
+        self.assertTrue(any(item["due_date"] == "2024-05-15" and item["requires_approval"] for item in deadlines.get_json()["deadlines"]))
+        deadline_id = deadlines.get_json()["deadlines"][0]["id"]
+        confirmed_deadline = self.client.patch(f"/api/cases/{case_id}/deadlines/{deadline_id}", json={"action": "confirm"}, headers=self.headers)
+        self.assertEqual(confirmed_deadline.status_code, 200)
+        self.assertEqual(confirmed_deadline.get_json()["status"], "confirmed")
+        self.assertFalse(confirmed_deadline.get_json()["requires_approval"])
+
+        loops = self.client.get(f"/api/cases/{case_id}/open-loops", headers=self.headers)
+        self.assertEqual(loops.status_code, 200)
+        self.assertTrue(any("objection" in item["description"].lower() for item in loops.get_json()["open_loops"]))
+        loop_id = loops.get_json()["open_loops"][0]["id"]
+        resolved_loop = self.client.patch(f"/api/cases/{case_id}/open-loops/{loop_id}", json={"action": "resolve"}, headers=self.headers)
+        self.assertEqual(resolved_loop.status_code, 200)
+        self.assertEqual(resolved_loop.get_json()["status"], "resolved")
+
+        audit = self.client.get(f"/api/audit?case_id={case_id}", headers=self.headers)
+        self.assertEqual(audit.status_code, 200)
+        audit_actions = [item["action"] for item in audit.get_json()["audit_events"]]
+        self.assertIn("confirmed", audit_actions)
+        self.assertIn("resolved", audit_actions)
+
+    def test_manual_text_document_can_run_document_intelligence(self):
+        created = self.client.post("/api/cases", json={
+            "title": "Pasted evidence case",
+            "description": "Testing pasted legal text intake.",
+            "legal_domain": "administrative_law",
+            "court_or_institution": "CAK",
+        }, headers=self.headers)
+        self.assertEqual(created.status_code, 201)
+        case_id = created.get_json()["case_id"]
+
+        pasted = self.client.post(f"/api/cases/{case_id}/documents", json={
+            "title": "Pasted CAK decision",
+            "document_type": "manual_note",
+            "extracted_text": "Decision dated 2024-05-01. CAK stated Robert must pay 125 euro. Robert objected. Objection deadline 2024-05-15.",
+            "analyze": True,
+        }, headers=self.headers)
+
+        self.assertEqual(pasted.status_code, 201)
+        payload = pasted.get_json()
+        self.assertEqual(payload["document"]["source_type"], "manual_text")
+        self.assertEqual(payload["document"]["metadata"]["input_mode"], "pasted_text_fast_add")
+        self.assertTrue(payload["timeline_suggestions"])
+        self.assertTrue(payload["deadline_suggestions"])
+        self.assertTrue(payload["open_loop_suggestions"])
+        self.assertTrue(payload["claim_suggestions"])
+        self.assertGreaterEqual(payload["evidence_links_created"], 4)
+        self.assertEqual(payload["storage"]["content_hash"], payload["document"]["content_hash"])
+        self.assertNotIn(case_id, self.app_module.documents)
+        self.assertNotIn(case_id, self.app_module.document_analysis)
+
+        document_id = payload["document"]["document_id"]
+        detail = self.client.get(f"/api/cases/{case_id}/documents/{document_id}", headers=self.headers)
+        self.assertEqual(detail.status_code, 200)
+        self.assertFalse(detail.get_json()["can_open_file"])
+        self.assertIsNone(detail.get_json()["file_url"])
+
+        timeline = self.client.get(f"/api/cases/{case_id}/timeline", headers=self.headers)
+        self.assertTrue(any(item["created_from_document_id"] == document_id for item in timeline.get_json()["timeline"]))
+
+    def test_case_comprehension_dossier_summarizes_source_linked_reading(self):
+        created = self.client.post("/api/cases", json={
+            "title": "CAK deep reading case",
+            "description": "Testing case-level source comprehension.",
+            "legal_domain": "administrative_law",
+            "court_or_institution": "CAK",
+        }, headers=self.headers)
+        self.assertEqual(created.status_code, 201)
+        case_id = created.get_json()["case_id"]
+
+        pasted = self.client.post(f"/api/cases/{case_id}/documents", json={
+            "title": "CAK objection decision",
+            "document_type": "decision",
+            "extracted_text": (
+                "Decision dated 2024-05-01. CAK stated Robert must pay 125 euro. "
+                "Robert objected to the payment basis. Objection deadline 2024-05-15. "
+                "CAK requested proof of payment."
+            ),
+            "analyze": True,
+        }, headers=self.headers)
+        self.assertEqual(pasted.status_code, 201)
+        document_id = pasted.get_json()["document"]["document_id"]
+
+        dossier = self.client.get(f"/api/cases/{case_id}/comprehension", headers=self.headers)
+        self.assertEqual(dossier.status_code, 200)
+        payload = dossier.get_json()
+        self.assertEqual(payload["case_id"], case_id)
+        self.assertEqual(payload["reading_status"]["documents_total"], 1)
+        self.assertEqual(payload["reading_status"]["documents_readable"], 1)
+        self.assertGreaterEqual(payload["reading_status"]["source_links"], 4)
+        self.assertTrue(payload["legal_safety"]["facts_are_source_summaries"])
+        self.assertTrue(payload["legal_safety"]["no_external_action_taken"])
+
+        source = payload["source_documents"][0]
+        self.assertEqual(source["document_id"], document_id)
+        self.assertEqual(source["title"], "CAK objection decision")
+        self.assertTrue(source["readable"])
+        self.assertTrue(source["dates"])
+        self.assertTrue(source["obligations"])
+
+        self.assertTrue(payload["chronology"])
+        first_event = payload["chronology"][0]
+        self.assertEqual(first_event["source"]["document_id"], document_id)
+        self.assertIn(first_event["review_status"], {"needs_review", "confirmed"})
+
+        self.assertTrue(payload["positions"]["all"])
+        self.assertTrue(any(item["supporting_sources"] for item in payload["positions"]["all"]))
+        self.assertTrue(any(item["target"] in {"timeline", "claims", "review", "bundle"} for item in payload["next_actions"]))
+
+    def test_document_aggregation_persists_comprehension_artifacts(self):
+        created = self.client.post("/api/cases", json={
+            "title": "Aggregated source case",
+            "description": "Testing legacy aggregation into the ledger intelligence path.",
+            "legal_domain": "administrative_law",
+        }, headers=self.headers)
+        self.assertEqual(created.status_code, 201)
+        case_id = created.get_json()["case_id"]
+
+        aggregate_path = os.path.join(self.tmp.name, "aggregated-cak-source.txt")
+        with open(aggregate_path, "w", encoding="utf-8") as handle:
+            handle.write(
+                "Decision dated 2024-05-01. CAK stated Robert must pay 125 euro. "
+                "Objection deadline 2024-05-15. CAK requested proof of payment."
+            )
+
+        aggregate = self.client.post("/api/documents/aggregate", json={
+            "case_id": case_id,
+            "source": "manual",
+            "file_path": aggregate_path,
+            "document_name": "Aggregated CAK decision.txt",
+        }, headers=self.headers)
+
+        self.assertEqual(aggregate.status_code, 200)
+        payload = aggregate.get_json()
+        self.assertEqual(payload["document_count"], 1)
+        self.assertTrue(payload["persisted_documents"])
+        self.assertTrue(payload["persisted_timeline"])
+        self.assertTrue(payload["persisted_evidence_links"])
+        self.assertTrue(payload["persisted_claims"])
+        self.assertTrue(payload["persisted_deadlines"])
+        self.assertEqual(payload["persisted_documents"][0]["metadata"]["legal_analysis"]["document_type"], "decision")
+        self.assertEqual(payload["comprehension"]["reading_status"]["documents_readable"], 1)
+        self.assertGreaterEqual(payload["comprehension"]["reading_status"]["source_links"], 4)
+        self.assertNotIn(case_id, self.app_module.documents)
+        self.assertNotIn(case_id, self.app_module.document_analysis)
+        self.assertNotIn(case_id, self.app_module.evidence_timelines)
+
+        dossier = self.client.get(f"/api/cases/{case_id}/comprehension", headers=self.headers)
+        self.assertEqual(dossier.status_code, 200)
+        self.assertTrue(dossier.get_json()["chronology"])
+        self.assertTrue(any(item["supporting_sources"] for item in dossier.get_json()["positions"]["all"]))
+
+    def test_source_batch_import_reads_meta_tagged_gmail_and_drive_records(self):
+        created = self.client.post("/api/cases", json={
+            "title": "Meta tagged source case",
+            "description": "Testing Gmail and Drive source import into comprehension.",
+            "legal_domain": "administrative_law",
+        }, headers=self.headers)
+        self.assertEqual(created.status_code, 201)
+        case_id = created.get_json()["case_id"]
+
+        source_batch = {
+            "source_type": "gmail",
+            "meta_tag": "LARO:CAK",
+            "documents": [
+                {
+                    "id": "gmail-msg-1",
+                    "subject": "CAK objection deadline",
+                    "from": "cak@example.nl",
+                    "to": "robert@example.nl",
+                    "plain_text": (
+                        "Decision dated 2024-05-01. CAK stated Robert must pay 125 euro. "
+                        "Objection deadline 2024-05-15."
+                    ),
+                    "labels": ["LARO:CAK"],
+                },
+                {
+                    "source_type": "google_drive",
+                    "file_id": "drive-file-1",
+                    "name": "Proof request letter",
+                    "web_view_link": "https://drive.example/drive-file-1",
+                    "content": "Follow-up dated 2024-05-02. CAK requested proof of payment before 2024-05-20.",
+                    "tags": ["LARO:CAK"],
+                },
+            ],
+        }
+
+        imported = self.client.post(
+            f"/api/cases/{case_id}/documents/import-sources",
+            json=source_batch,
+            headers=self.headers,
+        )
+
+        self.assertEqual(imported.status_code, 201)
+        payload = imported.get_json()
+        self.assertEqual(payload["imported_count"], 2)
+        self.assertEqual(payload["skipped_count"], 0)
+        self.assertEqual(payload["meta_tag"], "LARO:CAK")
+        self.assertGreaterEqual(payload["artifact_counts"]["timeline_suggestions"], 2)
+        self.assertGreaterEqual(payload["artifact_counts"]["evidence_links"], 4)
+        self.assertEqual(payload["comprehension"]["reading_status"]["documents_readable"], 2)
+        self.assertNotIn(case_id, self.app_module.documents)
+        self.assertNotIn(case_id, self.app_module.document_analysis)
+
+        documents = self.client.get(f"/api/cases/{case_id}/documents", headers=self.headers)
+        source_uris = {item["source_uri"] for item in documents.get_json()["documents"]}
+        self.assertIn("gmail://message/gmail-msg-1", source_uris)
+        self.assertIn("https://drive.example/drive-file-1", source_uris)
+        self.assertTrue(all(item["metadata"].get("legal_analysis") for item in documents.get_json()["documents"]))
+        self.assertTrue(all(item["metadata"].get("meta_tag") == "LARO:CAK" for item in documents.get_json()["documents"]))
+
+        duplicate = self.client.post(
+            f"/api/cases/{case_id}/documents/import-sources",
+            json=source_batch,
+            headers=self.headers,
+        )
+        self.assertEqual(duplicate.status_code, 201)
+        duplicate_payload = duplicate.get_json()
+        self.assertEqual(duplicate_payload["imported_count"], 0)
+        self.assertEqual(duplicate_payload["skipped_count"], 2)
+        self.assertTrue(all(item["reason"] == "duplicate_source_uri" for item in duplicate_payload["skipped_documents"]))
+
+        dossier = self.client.get(f"/api/cases/{case_id}/comprehension", headers=self.headers)
+        self.assertEqual(dossier.status_code, 200)
+        self.assertEqual(dossier.get_json()["reading_status"]["documents_total"], 2)
+        self.assertTrue(dossier.get_json()["chronology"])
+        self.assertTrue(any(item["source"]["source_uri"] for item in dossier.get_json()["chronology"]))
+
+    def test_upload_document_surfaces_contradictions_and_missing_evidence(self):
+        created = self.client.post("/api/cases", json={
+            "title": "Conflicting evidence case",
+            "description": "Testing conflict review from uploaded sources.",
+            "legal_domain": "administrative_law",
+        }, headers=self.headers)
+        self.assertEqual(created.status_code, 201)
+        case_id = created.get_json()["case_id"]
+
+        first_upload = self.client.post(
+            f"/api/cases/{case_id}/documents/upload",
+            data={
+                "file": (
+                    io.BytesIO(b"Decision dated 2024-05-01. Objection deadline 2024-05-15. CAK stated Robert must pay 125 euro."),
+                    "first-decision.txt",
+                ),
+                "title": "First decision",
+            },
+            content_type="multipart/form-data",
+            headers=self.headers,
+        )
+        self.assertEqual(first_upload.status_code, 201)
+
+        second_upload = self.client.post(
+            f"/api/cases/{case_id}/documents/upload",
+            data={
+                "file": (
+                    io.BytesIO(b"Follow-up dated 2024-05-02. Objection deadline 2024-05-20. CAK stated proof of payment missing."),
+                    "follow-up.txt",
+                ),
+                "title": "Follow-up letter",
+            },
+            content_type="multipart/form-data",
+            headers=self.headers,
+        )
+        self.assertEqual(second_upload.status_code, 201)
+        payload = second_upload.get_json()
+
+        self.assertTrue(payload["contradiction_suggestions"])
+        self.assertEqual(payload["contradiction_suggestions"][0]["status"], "needs_review")
+        self.assertEqual(payload["contradiction_suggestions"][0]["contradiction_type"], "date_conflict")
+        self.assertTrue(any(ref.get("date") == "2024-05-20" for ref in payload["contradiction_suggestions"][0]["source_refs"]))
+        self.assertTrue(payload["missing_evidence_suggestions"])
+        self.assertEqual(payload["missing_evidence_suggestions"][0]["warning_type"], "document_requested_evidence")
+        target_types = {link["target_type"] for link in payload["evidence_links"]}
+        self.assertIn("contradiction", target_types)
+        self.assertIn("missing_evidence", target_types)
+
+        contradictions = self.client.get(f"/api/cases/{case_id}/contradictions", headers=self.headers)
+        self.assertEqual(contradictions.status_code, 200)
+        self.assertTrue(any("2024-05-20" in item["description"] for item in contradictions.get_json()["contradictions"]))
+
+        missing = self.client.get(f"/api/cases/{case_id}/missing-evidence", headers=self.headers)
+        self.assertEqual(missing.status_code, 200)
+        self.assertTrue(any(item["warning_type"] == "document_requested_evidence" for item in missing.get_json()["missing_evidence"]))
+
+        graph = self.client.get(f"/api/cases/{case_id}/papertrail", headers=self.headers)
+        self.assertEqual(graph.status_code, 200)
+        graph_nodes = {node["type"] for node in graph.get_json()["nodes"]}
+        graph_edges = {edge["type"] for edge in graph.get_json()["edges"]}
+        self.assertIn("contradiction", graph_nodes)
+        self.assertIn("missing_evidence", graph_nodes)
+        self.assertIn("conflicts_with", graph_edges)
+        self.assertIn("indicates_gap", graph_edges)
+
+        contradiction_id = contradictions.get_json()["contradictions"][0]["id"]
+        resolved_contradiction = self.client.patch(
+            f"/api/cases/{case_id}/contradictions/{contradiction_id}",
+            json={"action": "resolve"},
+            headers=self.headers,
+        )
+        self.assertEqual(resolved_contradiction.status_code, 200)
+        self.assertEqual(resolved_contradiction.get_json()["status"], "resolved")
+
+        reopened_contradiction = self.client.patch(
+            f"/api/cases/{case_id}/contradictions/{contradiction_id}",
+            json={"action": "reopen"},
+            headers=self.headers,
+        )
+        self.assertEqual(reopened_contradiction.status_code, 200)
+        self.assertEqual(reopened_contradiction.get_json()["status"], "needs_review")
+
+        warning_id = next(
+            item["id"]
+            for item in missing.get_json()["missing_evidence"]
+            if item["warning_type"] == "document_requested_evidence"
+        )
+        dismissed_warning = self.client.patch(
+            f"/api/cases/{case_id}/missing-evidence/{warning_id}",
+            json={"action": "dismiss"},
+            headers=self.headers,
+        )
+        self.assertEqual(dismissed_warning.status_code, 200)
+        self.assertEqual(dismissed_warning.get_json()["status"], "dismissed")
+
+        resolved_warning = self.client.patch(
+            f"/api/cases/{case_id}/missing-evidence/{warning_id}",
+            json={"action": "resolve"},
+            headers=self.headers,
+        )
+        self.assertEqual(resolved_warning.status_code, 200)
+        self.assertEqual(resolved_warning.get_json()["status"], "resolved")
+
+        audit = self.client.get(f"/api/audit?case_id={case_id}", headers=self.headers)
+        self.assertEqual(audit.status_code, 200)
+        audit_events = audit.get_json()["audit_events"]
+        self.assertTrue(any(item["entity_type"] == "Contradiction" and item["action"] == "resolved" for item in audit_events))
+        self.assertTrue(any(item["entity_type"] == "Contradiction" and item["action"] == "reopened" for item in audit_events))
+        self.assertTrue(any(item["entity_type"] == "MissingEvidenceWarning" and item["action"] == "dismissed" for item in audit_events))
+        self.assertTrue(any(item["entity_type"] == "MissingEvidenceWarning" and item["action"] == "resolved" for item in audit_events))
+
+    def test_document_file_route_blocks_paths_outside_upload_store(self):
+        created = self.client.post("/api/cases", json={
+            "title": "Unsafe document path case",
+            "description": "Path boundary check.",
+            "legal_domain": "privacy",
+        }, headers=self.headers)
+        self.assertEqual(created.status_code, 201)
+        case_id = created.get_json()["case_id"]
+
+        document = self.client.post(f"/api/cases/{case_id}/documents", json={
+            "title": "Outside file",
+            "source_type": "manual",
+            "local_path": __file__,
+            "extracted_text": "This metadata should not make the source file downloadable.",
+        }, headers=self.headers)
+        self.assertEqual(document.status_code, 201)
+        document_id = document.get_json()["document_id"]
+
+        document_detail = self.client.get(f"/api/cases/{case_id}/documents/{document_id}", headers=self.headers)
+        self.assertEqual(document_detail.status_code, 200)
+        self.assertFalse(document_detail.get_json()["can_open_file"])
+
+        document_file = self.client.get(f"/api/cases/{case_id}/documents/{document_id}/file", headers=self.headers)
+        self.assertEqual(document_file.status_code, 403)
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+

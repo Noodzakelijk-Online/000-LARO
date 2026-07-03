@@ -505,10 +505,11 @@ class TimeSeriesManager:
                 for i, value in enumerate(series['values']):
                     time_point = start_time + timedelta(minutes=i*5)
                     time_str = time_point.strftime('%Y-%m-%d %H:%M:%S')
+                    metric_value = value[0] if isinstance(value, (list, tuple)) else value
                     
                     metrics['values_by_time'].append({
                         'time': time_str,
-                        'value': value[0]
+                        'value': metric_value
                     })
         
         # Get component breakdown
@@ -531,6 +532,8 @@ class TimeSeriesManager:
             for series in component_result['series']:
                 component_name = series.get('tags', {}).get('component', 'Unknown')
                 avg_value = series.get('values', [0])[0]
+                if isinstance(avg_value, (list, tuple)):
+                    avg_value = avg_value[0] if avg_value else 0
                 
                 metrics['components'].append({
                     'component': component_name,

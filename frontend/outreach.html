@@ -1,0 +1,1274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LARO | Outreach</title>
+    <link rel="stylesheet" href="css/dark-theme.css">
+    <style>
+        :root {
+            --outreach-bg: #07101f;
+            --outreach-panel: #0b1528;
+            --outreach-panel-strong: #101d34;
+            --outreach-border: #22314c;
+            --outreach-muted: #99a7bd;
+            --outreach-orange: #ff6b00;
+            --outreach-green: #5fb7ad;
+            --outreach-soft-orange: rgba(255, 107, 0, 0.15);
+        }
+
+        body {
+            background: var(--outreach-bg);
+            color: var(--dark-text-primary);
+        }
+
+        .navbar {
+            background: #080d18;
+            border-bottom: 1px solid var(--outreach-border);
+            box-shadow: none;
+        }
+
+        .navbar-logo h1 {
+            -webkit-text-fill-color: var(--dark-text-primary);
+            background: none;
+            color: var(--dark-text-primary);
+            font-size: 1.35rem;
+            letter-spacing: 0;
+        }
+
+        .outreach-shell {
+            margin-left: 250px;
+            min-height: calc(100vh - 70px);
+            padding: 2rem;
+        }
+
+        .case-bar,
+        .filter-panel,
+        .target-card,
+        .metric-card,
+        .analytics-section {
+            background: var(--outreach-panel);
+            border: 1px solid var(--outreach-border);
+            border-radius: 8px;
+        }
+
+        .case-bar {
+            align-items: center;
+            display: flex;
+            gap: 1.25rem;
+            justify-content: space-between;
+            margin-bottom: 1.5rem;
+            padding: 1.25rem 1.5rem;
+        }
+
+        .case-title {
+            align-items: center;
+            display: flex;
+            gap: 0.9rem;
+            margin: 0;
+        }
+
+        .case-icon,
+        .target-avatar {
+            align-items: center;
+            background: var(--outreach-soft-orange);
+            border: 1px solid rgba(255, 107, 0, 0.45);
+            border-radius: 8px;
+            color: var(--outreach-orange);
+            display: inline-flex;
+            font-weight: 800;
+            justify-content: center;
+        }
+
+        .case-icon {
+            border-radius: 12px;
+            height: 52px;
+            width: 52px;
+        }
+
+        .case-kicker,
+        .muted {
+            color: var(--outreach-muted);
+        }
+
+        .case-kicker {
+            font-size: 0.95rem;
+            margin: 0.15rem 0 0;
+        }
+
+        .case-actions,
+        .tabs,
+        .chips,
+        .subnav {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+
+        .subnav {
+            margin: 0.45rem 0 0 2.35rem;
+        }
+
+        .subnav a {
+            color: var(--outreach-muted);
+            font-size: 0.88rem;
+            font-weight: 700;
+            text-decoration: none;
+        }
+
+        .subnav a.is-active,
+        .subnav a:hover {
+            color: var(--outreach-orange);
+        }
+
+        .page-heading {
+            align-items: center;
+            display: flex;
+            gap: 0.8rem;
+            justify-content: space-between;
+            margin: 2rem 0 1.25rem;
+        }
+
+        .page-heading h2 {
+            font-size: 1.45rem;
+            margin: 0;
+        }
+
+        .tab-button {
+            background: var(--outreach-panel);
+            border: 1px solid var(--outreach-border);
+            border-radius: 6px;
+            color: var(--dark-text-primary);
+            cursor: pointer;
+            font-weight: 800;
+            padding: 0.65rem 0.9rem;
+        }
+
+        .tab-button.is-active {
+            background: var(--outreach-soft-orange);
+            border-color: rgba(255, 107, 0, 0.55);
+            color: var(--outreach-orange);
+        }
+
+        .outreach-depth {
+            display: grid;
+            gap: 0.45rem;
+            min-width: min(420px, 100%);
+        }
+
+        .depth-switcher {
+            background: var(--outreach-panel-strong);
+            border: 1px solid var(--outreach-border);
+            border-radius: 8px;
+            display: grid;
+            gap: 0.35rem;
+            grid-template-columns: repeat(3, 1fr);
+            padding: 0.35rem;
+        }
+
+        .depth-button {
+            background: transparent;
+            border: 1px solid transparent;
+            border-radius: 6px;
+            color: var(--outreach-muted);
+            cursor: pointer;
+            font-weight: 800;
+            min-height: 38px;
+            padding: 0.45rem 0.7rem;
+        }
+
+        .depth-button.is-active {
+            background: var(--outreach-soft-orange);
+            border-color: rgba(255, 107, 0, 0.55);
+            color: var(--outreach-orange);
+        }
+
+        .depth-note {
+            color: var(--outreach-muted);
+            font-size: 0.86rem;
+            margin: 0;
+        }
+
+        .focus-command-panel {
+            background: var(--outreach-panel);
+            border: 1px solid var(--outreach-border);
+            border-radius: 8px;
+            display: grid;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            padding: 1.25rem;
+        }
+
+        .focus-command-head {
+            align-items: start;
+            display: flex;
+            gap: 1rem;
+            justify-content: space-between;
+        }
+
+        .focus-command-head h2 {
+            font-size: 1.35rem;
+            margin: 0 0 0.25rem;
+        }
+
+        .focus-command-head p {
+            margin: 0;
+        }
+
+        .focus-progress-strip {
+            display: grid;
+            gap: 0.75rem;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        .focus-stat {
+            background: var(--outreach-panel-strong);
+            border: 1px solid var(--outreach-border);
+            border-radius: 8px;
+            padding: 0.85rem;
+        }
+
+        .focus-stat strong {
+            display: block;
+            font-size: 1.35rem;
+            margin-bottom: 0.2rem;
+        }
+
+        .focus-stat span {
+            color: var(--outreach-muted);
+            font-size: 0.82rem;
+        }
+
+        .focus-command-grid {
+            display: grid;
+            gap: 0.9rem;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .focus-command-card {
+            background: var(--outreach-panel-strong);
+            border: 1px solid var(--outreach-border);
+            border-radius: 8px;
+            color: var(--dark-text-primary);
+            cursor: pointer;
+            display: grid;
+            gap: 0.45rem;
+            min-height: 122px;
+            padding: 1rem;
+            text-align: left;
+        }
+
+        .focus-command-card:hover {
+            border-color: rgba(255, 107, 0, 0.55);
+        }
+
+        .focus-command-card strong {
+            font-size: 1rem;
+        }
+
+        .focus-command-card span {
+            color: var(--outreach-muted);
+            font-size: 0.88rem;
+            line-height: 1.45;
+        }
+
+        .focus-command-card i {
+            color: var(--outreach-orange);
+            font-style: normal;
+            font-weight: 900;
+        }
+
+        body[data-outreach-depth="focus"] .guided-depth,
+        body[data-outreach-depth="focus"] .expert-depth,
+        body[data-outreach-depth="guided"] .expert-depth {
+            display: none !important;
+        }
+
+        body[data-outreach-depth="focus"] .subnav a:not([data-subnav="overview"]) {
+            display: none;
+        }
+
+        .filter-panel {
+            display: grid;
+            gap: 1rem;
+            grid-template-columns: 1fr 210px 210px auto;
+            margin-bottom: 1.75rem;
+            padding: 1.25rem;
+        }
+
+        .field-label {
+            color: var(--outreach-muted);
+            display: block;
+            font-size: 0.82rem;
+            font-weight: 700;
+            margin-bottom: 0.45rem;
+            text-transform: uppercase;
+        }
+
+        .field-input,
+        .field-select {
+            background: var(--outreach-panel-strong);
+            border: 1px solid var(--outreach-border);
+            border-radius: 6px;
+            color: var(--dark-text-primary);
+            min-height: 42px;
+            padding: 0.65rem 0.85rem;
+            width: 100%;
+        }
+
+        .refresh-wrap {
+            align-items: end;
+            display: flex;
+        }
+
+        .expert-controls {
+            border-top: 1px solid var(--outreach-border);
+            display: grid;
+            gap: 1rem;
+            grid-column: 1 / -1;
+            grid-template-columns: 180px repeat(2, minmax(0, 1fr));
+            padding-top: 1rem;
+        }
+
+        .toggle-field {
+            align-items: center;
+            background: var(--outreach-panel-strong);
+            border: 1px solid var(--outreach-border);
+            border-radius: 6px;
+            color: var(--outreach-muted);
+            display: flex;
+            font-weight: 700;
+            gap: 0.6rem;
+            min-height: 42px;
+            padding: 0.65rem 0.85rem;
+        }
+
+        .results-header {
+            align-items: center;
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .results-header h3 {
+            color: var(--outreach-muted);
+            font-size: 1.05rem;
+            margin: 0;
+        }
+
+        .result-list {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .view-panel[hidden] {
+            display: none;
+        }
+
+        .analytics-grid {
+            display: grid;
+            gap: 1rem;
+            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+            margin-bottom: 1.5rem;
+        }
+
+        .metric-card {
+            min-height: 132px;
+            padding: 1.15rem;
+        }
+
+        .metric-title {
+            align-items: center;
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1.3rem;
+        }
+
+        .metric-title h3 {
+            font-size: 0.98rem;
+            margin: 0;
+        }
+
+        .metric-icon {
+            color: var(--dark-text-primary);
+            font-weight: 900;
+        }
+
+        .metric-value {
+            font-size: 2rem;
+            font-weight: 900;
+            line-height: 1;
+            margin-bottom: 0.45rem;
+        }
+
+        .metric-detail {
+            color: var(--outreach-muted);
+            font-size: 0.88rem;
+        }
+
+        .metric-detail.good {
+            color: var(--outreach-green);
+        }
+
+        .metric-detail.warn {
+            color: var(--outreach-orange);
+        }
+
+        .analytics-section {
+            margin-bottom: 1.5rem;
+            padding: 1.25rem;
+        }
+
+        .section-title {
+            align-items: center;
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .section-title h3 {
+            font-size: 1.15rem;
+            margin: 0;
+        }
+
+        .progress-list,
+        .history-list,
+        .insight-list {
+            display: grid;
+            gap: 0.85rem;
+        }
+
+        .progress-row {
+            display: grid;
+            gap: 1rem;
+            grid-template-columns: 170px minmax(0, 1fr) 280px;
+            padding: 0.75rem 0;
+        }
+
+        .progress-row + .progress-row {
+            border-top: 1px solid var(--outreach-border);
+        }
+
+        .progress-name {
+            font-weight: 900;
+        }
+
+        .progress-track {
+            background: #172542;
+            border-radius: 999px;
+            height: 9px;
+            margin-top: 0.35rem;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            background: linear-gradient(90deg, var(--outreach-orange), var(--outreach-green));
+            display: block;
+            height: 100%;
+        }
+
+        .progress-stats {
+            color: var(--outreach-muted);
+            display: flex;
+            flex-wrap: wrap;
+            font-size: 0.86rem;
+            gap: 0.7rem;
+            justify-content: flex-end;
+        }
+
+        .history-item,
+        .insight-card {
+            background: var(--outreach-panel-strong);
+            border: 1px solid var(--outreach-border);
+            border-radius: 8px;
+            padding: 0.95rem 1rem;
+        }
+
+        .history-item {
+            align-items: center;
+            display: grid;
+            gap: 1rem;
+            grid-template-columns: minmax(0, 1fr) auto;
+        }
+
+        .history-item h4,
+        .insight-card h4 {
+            font-size: 0.98rem;
+            margin: 0 0 0.25rem;
+        }
+
+        .insight-list {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .insight-card[data-tone="success"] {
+            border-color: rgba(95, 183, 173, 0.45);
+        }
+
+        .insight-card[data-tone="warning"] {
+            border-color: rgba(255, 107, 0, 0.45);
+        }
+
+        .target-card {
+            display: grid;
+            gap: 1rem;
+            grid-template-columns: minmax(0, 1fr) 220px;
+            padding: 1.2rem;
+        }
+
+        .target-topline {
+            align-items: flex-start;
+            display: flex;
+            gap: 0.9rem;
+        }
+
+        .target-avatar {
+            flex: 0 0 auto;
+            height: 48px;
+            width: 48px;
+        }
+
+        .target-name {
+            font-size: 1.15rem;
+            font-weight: 800;
+            margin: 0 0 0.25rem;
+        }
+
+        .target-meta,
+        .reasons {
+            color: var(--outreach-muted);
+            font-size: 0.9rem;
+            line-height: 1.45;
+            margin: 0;
+        }
+
+        .chip {
+            border: 1px solid var(--outreach-border);
+            border-radius: 999px;
+            color: var(--dark-text-primary);
+            font-size: 0.78rem;
+            padding: 0.2rem 0.55rem;
+        }
+
+        .chip.positive {
+            border-color: rgba(95, 183, 173, 0.55);
+            color: var(--outreach-green);
+        }
+
+        .score-wrap {
+            align-items: center;
+            display: flex;
+            gap: 0.75rem;
+            justify-content: flex-end;
+            margin-bottom: 0.75rem;
+        }
+
+        .score-number {
+            color: var(--outreach-orange);
+            font-size: 1.65rem;
+            font-weight: 900;
+            line-height: 1;
+        }
+
+        .score-label {
+            color: var(--outreach-muted);
+            font-size: 0.76rem;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+
+        .score-bars {
+            display: grid;
+            gap: 0.45rem;
+        }
+
+        .score-row {
+            display: grid;
+            gap: 0.35rem;
+            grid-template-columns: 94px 1fr;
+        }
+
+        .score-row span {
+            color: var(--outreach-muted);
+            font-size: 0.76rem;
+        }
+
+        .bar {
+            background: #172542;
+            border-radius: 999px;
+            height: 7px;
+            overflow: hidden;
+        }
+
+        .bar > i {
+            background: linear-gradient(90deg, var(--outreach-orange), var(--outreach-green));
+            display: block;
+            height: 100%;
+        }
+
+        .source-link {
+            border: 1px solid var(--outreach-border);
+            border-radius: 6px;
+            color: var(--dark-text-primary);
+            display: inline-flex;
+            font-size: 0.82rem;
+            font-weight: 800;
+            padding: 0.4rem 0.65rem;
+            text-decoration: none;
+        }
+
+        .source-link:hover {
+            border-color: var(--outreach-orange);
+            color: var(--outreach-orange);
+        }
+
+        .source-link-button {
+            background: transparent;
+            cursor: pointer;
+            font: inherit;
+        }
+
+        .empty-state {
+            align-items: center;
+            background: var(--outreach-panel);
+            border: 1px solid var(--outreach-border);
+            border-radius: 8px;
+            color: var(--outreach-muted);
+            display: none;
+            justify-content: center;
+            min-height: 180px;
+            text-align: center;
+        }
+
+        .empty-state.is-visible {
+            display: flex;
+        }
+
+        .toast-note {
+            background: var(--outreach-orange);
+            border-radius: 8px;
+            bottom: 1rem;
+            color: #fff;
+            font-weight: 700;
+            opacity: 0;
+            padding: 0.75rem 1rem;
+            pointer-events: none;
+            position: fixed;
+            right: 1rem;
+            transform: translateY(10px);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+            z-index: 20;
+        }
+
+        .toast-note.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        @media (max-width: 992px) {
+            .sidebar {
+                transform: none;
+            }
+
+            .outreach-shell {
+                margin-left: 250px;
+            }
+        }
+
+        @media (max-width: 860px) {
+            .d-flex {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                height: auto;
+                position: static;
+                width: 100%;
+            }
+
+            .outreach-shell {
+                margin-left: 0;
+                padding: 1rem;
+            }
+
+            .case-bar,
+            .page-heading,
+            .results-header {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
+            .filter-panel,
+            .target-card,
+            .analytics-grid,
+            .focus-progress-strip,
+            .focus-command-grid,
+            .expert-controls,
+            .progress-row,
+            .history-item,
+            .insight-list {
+                grid-template-columns: 1fr;
+            }
+
+            .score-wrap,
+            .refresh-wrap,
+            .progress-stats {
+                justify-content: flex-start;
+            }
+        }
+    </style>
+</head>
+<body data-outreach-depth="focus">
+    <nav class="navbar">
+        <div class="container-fluid px-4 d-flex justify-content-between align-items-center">
+            <a class="navbar-logo" href="dashboard_dark.html"><h1>LARO</h1></a>
+            <div class="case-actions">
+                <a class="btn btn-outline" href="dashboard_dark.html">Dashboard</a>
+                <a class="btn btn-outline" href="evidence_timeline.html">Evidence Timeline</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="d-flex">
+        <aside class="sidebar">
+            <ul class="sidebar-menu">
+                <li class="sidebar-item"><a href="dashboard_dark.html" class="sidebar-link"><span class="sidebar-icon">[]</span> Overview</a></li>
+                <li class="sidebar-item"><a href="case_command_center.html" class="sidebar-link"><span class="sidebar-icon">C</span> Command Center</a></li>
+                <li class="sidebar-item"><a href="dashboard_dark.html#documents" class="sidebar-link"><span class="sidebar-icon">E</span> Evidence</a></li>
+                <li class="sidebar-item"><a href="evidence_timeline.html" class="sidebar-link"><span class="sidebar-icon">T</span> Evidence Timeline</a></li>
+                <li class="sidebar-item"><a href="#" class="sidebar-link"><span class="sidebar-icon">G</span> Gap Analysis</a></li>
+                <li class="sidebar-item">
+                    <a href="outreach.html" class="sidebar-link active"><span class="sidebar-icon">O</span> Outreach</a>
+                    <div class="subnav" aria-label="Outreach sections">
+                        <a href="#overview" data-subnav="overview">Overview</a>
+                        <a href="#lawyers" data-subnav="lawyers">Lawyers</a>
+                        <a href="#media" data-subnav="media">Media</a>
+                        <a href="#organizations" data-subnav="organizations">Organizations</a>
+                    </div>
+                </li>
+            </ul>
+        </aside>
+
+        <main class="outreach-shell">
+            <section class="case-bar">
+                <div>
+                    <h1 class="case-title"><span class="case-icon">O</span> AI Classification Pending</h1>
+                    <p class="case-kicker">Noodzakelijk Online - Created 5/22/2026 - Outreach matching</p>
+                </div>
+                <div class="case-actions">
+                    <span class="badge badge-warning">Matching</span>
+                    <span class="badge">Medium</span>
+                </div>
+                <div class="outreach-depth" aria-label="Outreach detail level">
+                    <div class="depth-switcher">
+                        <button class="depth-button is-active" type="button" data-depth="focus">Focus</button>
+                        <button class="depth-button" type="button" data-depth="guided">Guided</button>
+                        <button class="depth-button" type="button" data-depth="expert">Expert</button>
+                    </div>
+                    <p class="depth-note" id="outreachDepthNote">Start with outcomes and the next useful action.</p>
+                </div>
+            </section>
+
+            <section class="focus-command-panel" id="outreachFocusPanel">
+                <div class="focus-command-head">
+                    <div>
+                        <h2>Outreach control room</h2>
+                        <p class="muted">Track progress first. Open matching detail only when a decision is needed.</p>
+                    </div>
+                    <span class="badge badge-warning" id="focusSourceMode">no live data</span>
+                </div>
+                <div class="focus-progress-strip" id="focusProgressStrip"></div>
+                <div class="focus-command-grid">
+                    <button class="focus-command-card" type="button" data-focus-action="overview">
+                        <i>1</i>
+                        <strong>Review progress</strong>
+                        <span>See contacted, response, acceptance, and pending outreach work in one place.</span>
+                    </button>
+                    <button class="focus-command-card" type="button" data-focus-action="lawyers">
+                        <i>2</i>
+                        <strong>Match lawyers</strong>
+                        <span>Open lawyer matching and run the current case against legal-field filters.</span>
+                    </button>
+                    <button class="focus-command-card" type="button" data-focus-action="media">
+                        <i>3</i>
+                        <strong>Widen outreach</strong>
+                        <span>Review media and organizations when legal outreach needs outside pressure or support.</span>
+                    </button>
+                </div>
+            </section>
+
+            <div class="page-heading guided-depth">
+                <h2 id="pageTitle">Outreach</h2>
+                <div class="tabs" aria-label="Outreach category tabs">
+                    <button class="tab-button" data-tab="overview">Overview</button>
+                    <button class="tab-button" data-tab="lawyers">Lawyers</button>
+                    <button class="tab-button" data-tab="media">Media</button>
+                    <button class="tab-button" data-tab="organizations">Organizations</button>
+                </div>
+            </div>
+
+            <section class="view-panel guided-depth" id="analyticsView" aria-label="Outreach analytics">
+                <div class="analytics-grid guided-depth" id="analyticsMetrics"></div>
+
+                <section class="analytics-section">
+                    <div class="section-title">
+                        <h3>Category Progress</h3>
+                        <span class="muted" id="analyticsSource">no live data</span>
+                    </div>
+                    <div class="progress-list" id="categoryProgress"></div>
+                </section>
+
+                <section class="analytics-section guided-depth">
+                    <div class="section-title">
+                        <h3>Outreach History</h3>
+                        <span class="muted">latest activity</span>
+                    </div>
+                    <div class="history-list" id="outreachHistory"></div>
+                </section>
+
+                <section class="analytics-section guided-depth">
+                    <div class="section-title">
+                        <h3>Performance Insights</h3>
+                    </div>
+                    <div class="insight-list" id="performanceInsights"></div>
+                </section>
+            </section>
+
+            <section class="view-panel" id="matchingView" hidden>
+                <section class="filter-panel" aria-label="Outreach filters">
+                    <label>
+                        <span class="field-label" id="primaryLabel">Case location</span>
+                        <input class="field-input" id="primaryInput" value="Amsterdam">
+                    </label>
+                    <label>
+                        <span class="field-label" id="fieldLabel">Legal field</span>
+                        <select class="field-select" id="legalField">
+                            <option value="ADMINISTRATIVE_LAW">Administrative law</option>
+                            <option value="EMPLOYMENT_LAW">Employment law</option>
+                            <option value="PROPERTY_LAW">Tenancy/property</option>
+                            <option value="CONTRACT_LAW">Contract/consumer</option>
+                            <option value="FAMILY_LAW">Family law</option>
+                        </select>
+                    </label>
+                    <label>
+                        <span class="field-label">Results</span>
+                        <select class="field-select" id="maxResults">
+                            <option value="10">Top 10</option>
+                            <option value="20">Top 20</option>
+                            <option value="30" selected>Top 30</option>
+                        </select>
+                    </label>
+                    <div class="refresh-wrap">
+                        <button class="btn btn-primary" id="refreshMatches">Refresh</button>
+                    </div>
+                    <div class="expert-controls expert-depth" aria-label="Advanced outreach matching controls">
+                        <label>
+                            <span class="field-label">Radius</span>
+                            <select class="field-select" id="radiusKm">
+                                <option value="25">25 km</option>
+                                <option value="50" selected>50 km</option>
+                                <option value="100">100 km</option>
+                                <option value="250">250 km</option>
+                                <option value="999">National</option>
+                            </select>
+                        </label>
+                        <label class="toggle-field">
+                            <input type="checkbox" id="legalAidOnly" checked>
+                            Require financed legal aid
+                        </label>
+                        <label class="toggle-field">
+                            <input type="checkbox" id="preferAssociation" checked>
+                            Prefer specialization association
+                        </label>
+                    </div>
+                </section>
+
+                <section class="results-header">
+                    <h3 id="resultCount">Matched targets (0)</h3>
+                    <span class="muted" id="sourceMode">no live data</span>
+                </section>
+
+                <section>
+                    <div class="result-list" id="resultList"></div>
+                    <div class="empty-state" id="emptyState">
+                        <div><strong>No matches found.</strong><br>Broaden the category or reduce strict filters.</div>
+                    </div>
+                </section>
+            </section>
+        </main>
+    </div>
+
+    <div class="toast-note" id="toastNote">Matches refreshed</div>
+
+    <script>
+        const fallbackLawyers = [];
+        const fallbackMedia = [];
+        const fallbackOrganizations = [];
+
+        const EMPTY_OUTREACH_ANALYTICS = {
+            case_id: 1,
+            total_outreaches: 0,
+            matched_targets: 0,
+            contacted_targets: 0,
+            responses_received: 0,
+            accepted_targets: 0,
+            response_rate: 0,
+            acceptance_rate: 0,
+            avg_response_time_hours: null,
+            categories: {
+                lawyers: { label: "lawyers", matched: 0, contacted: 0, responded: 0, accepted: 0, ready: 0, progress_percent: 0 },
+                media: { label: "media", matched: 0, contacted: 0, responded: 0, accepted: 0, ready: 0, progress_percent: 0 },
+                organizations: { label: "organizations", matched: 0, contacted: 0, responded: 0, accepted: 0, ready: 0, progress_percent: 0 }
+            },
+            history: [],
+            insights: []
+        };
+
+        const DEPTH_MODES = ["focus", "guided", "expert"];
+        const DEPTH_NOTES = {
+            focus: "Start with outcomes and the next useful action.",
+            guided: "Show category tabs and matching workflow without advanced tuning.",
+            expert: "Expose granular filters and score breakdowns for deep review."
+        };
+        const state = { activeTab: "overview", matches: [], analytics: EMPTY_OUTREACH_ANALYTICS, depth: "focus" };
+
+        function currentFallback() {
+            if (state.activeTab === "media") return fallbackMedia;
+            if (state.activeTab === "organizations") return fallbackOrganizations;
+            return fallbackLawyers;
+        }
+
+        function labelForTab(tab) {
+            if (tab === "overview") return "Outreach";
+            return tab === "organizations" ? "Organizations" : tab.charAt(0).toUpperCase() + tab.slice(1);
+        }
+
+        function initials(name) {
+            return String(name || "").split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
+        }
+
+        function barWidth(value, max) {
+            return `${Math.max(4, Math.min(100, Math.round((Number(value || 0) / max) * 100)))}%`;
+        }
+
+        function setOutreachDepth(depth, options = {}) {
+            const nextDepth = DEPTH_MODES.includes(depth) ? depth : "focus";
+            state.depth = nextDepth;
+            document.body.dataset.outreachDepth = nextDepth;
+            try {
+                localStorage.setItem("laroOutreachDepth", nextDepth);
+            } catch (error) {
+                // Local storage may be unavailable in locked-down browser contexts.
+            }
+            document.querySelectorAll("[data-depth]").forEach((button) => {
+                const active = button.dataset.depth === nextDepth;
+                button.classList.toggle("is-active", active);
+                button.setAttribute("aria-pressed", String(active));
+            });
+            const note = document.getElementById("outreachDepthNote");
+            if (note) note.textContent = DEPTH_NOTES[nextDepth];
+            if (nextDepth === "focus" && state.activeTab !== "overview" && !options.keepTab) {
+                setActiveTab("overview");
+            }
+        }
+
+        function setActiveTab(tab) {
+            if (tab !== "overview" && state.depth === "focus") {
+                setOutreachDepth(tab === "organizations" ? "expert" : "guided", { keepTab: true });
+            }
+            state.activeTab = tab;
+            document.getElementById("pageTitle").textContent = tab === "overview" ? "Outreach Analytics" : `${labelForTab(tab)} Outreach`;
+            document.querySelectorAll(".tab-button").forEach((button) => button.classList.toggle("is-active", button.dataset.tab === tab));
+            document.querySelectorAll("[data-subnav]").forEach((link) => link.classList.toggle("is-active", link.dataset.subnav === tab));
+            history.replaceState(null, "", `#${tab}`);
+            document.getElementById("analyticsView").hidden = tab !== "overview";
+            document.getElementById("matchingView").hidden = tab === "overview";
+
+            if (tab === "overview") {
+                refreshAnalytics();
+                return;
+            }
+
+            document.getElementById("primaryLabel").textContent = tab === "lawyers" ? "Case location" : "Case angle";
+            document.getElementById("primaryInput").value = "";
+            document.getElementById("fieldLabel").textContent = tab === "lawyers" ? "Legal field" : "Primary issue";
+            refreshMatches();
+        }
+
+        function payloadFromControls() {
+            const targetType = state.activeTab === "organizations" ? "organization" : state.activeTab === "media" ? "media" : "lawyer";
+            return {
+                case_id: Number(new URLSearchParams(window.location.search).get("case_id") || 1),
+                target_type: targetType,
+                legal_fields: [document.getElementById("legalField").value],
+                evidence_topics: document.getElementById("primaryInput").value.split(/\s+/).filter(Boolean),
+                postcode_or_city: document.getElementById("primaryInput").value,
+                radius_km: Number(document.getElementById("radiusKm")?.value || 50),
+                requires_financed_legal_aid: Boolean(document.getElementById("legalAidOnly")?.checked),
+                prefer_specialization_association: Boolean(document.getElementById("preferAssociation")?.checked),
+                max_results: Number(document.getElementById("maxResults").value)
+            };
+        }
+
+        async function refreshMatches() {
+            const payload = payloadFromControls();
+            const caseId = new URLSearchParams(window.location.search).get("case_id");
+            if (!caseId) {
+                state.matches = [];
+                renderMatches("no live data");
+                showToast("Load a case to run outreach matching");
+                return;
+            }
+
+            const endpoint = state.activeTab === "lawyers" ? "/api/lawyers/match" : "/api/outreach/targets/match";
+            try {
+                const response = await fetch(endpoint, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+                if (!response.ok) throw new Error("Matching API unavailable");
+                const body = await response.json();
+                state.matches = state.activeTab === "lawyers" ? body.matched_lawyers || [] : body.matched_targets || [];
+                renderMatches(body.source_mode || "api");
+                showToast(`${labelForTab(state.activeTab)} matches refreshed`);
+                await refreshAnalytics();
+            } catch (error) {
+                state.matches = [];
+                renderMatches("no live data");
+                await refreshAnalytics();
+                showToast("No live outreach matches available");
+            }
+        }
+
+        async function refreshAnalytics() {
+            const caseId = new URLSearchParams(window.location.search).get("case_id");
+            if (!caseId) {
+                state.analytics = EMPTY_OUTREACH_ANALYTICS;
+                renderAnalytics("no live data");
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/outreach/${caseId}/analytics`);
+                if (!response.ok) throw new Error("Analytics API unavailable");
+                state.analytics = await response.json();
+                renderAnalytics("api");
+            } catch (error) {
+                state.analytics = EMPTY_OUTREACH_ANALYTICS;
+                renderAnalytics("no live data");
+            }
+        }
+
+        function formatRate(value) {
+            return `${Number(value || 0).toFixed(1)}%`;
+        }
+
+        function categoryLabel(key) {
+            if (key === "lawyers") return "Lawyers";
+            if (key === "media") return "Media";
+            return "Organizations";
+        }
+
+        function renderAnalytics(sourceMode) {
+            const analytics = state.analytics || EMPTY_OUTREACH_ANALYTICS;
+            const metrics = [
+                { title: "Total Outreaches", value: analytics.total_outreaches || 0, detail: `${analytics.matched_targets || 0} matched targets available`, icon: "O" },
+                { title: "Contacted", value: analytics.contacted_targets || 0, detail: "unique targets contacted", icon: "C" },
+                { title: "Response Rate", value: formatRate(analytics.response_rate), detail: analytics.responses_received ? `${analytics.responses_received} responses received` : "waiting for first response", icon: "R", tone: analytics.responses_received ? "good" : "warn" },
+                { title: "Acceptance Rate", value: formatRate(analytics.acceptance_rate), detail: analytics.accepted_targets ? `${analytics.accepted_targets} accepted or interested` : "no acceptances yet", icon: "A", tone: analytics.accepted_targets ? "good" : "warn" },
+                { title: "Avg Response Time", value: analytics.avg_response_time_hours == null ? "N/A" : `${analytics.avg_response_time_hours}h`, detail: "from sent message to reply", icon: "T" }
+            ];
+
+            document.getElementById("analyticsSource").textContent = sourceMode;
+            document.getElementById("analyticsMetrics").innerHTML = metrics.map((metric) => `
+                <article class="metric-card">
+                    <div class="metric-title"><h3>${metric.title}</h3><span class="metric-icon">${metric.icon}</span></div>
+                    <div class="metric-value">${metric.value}</div>
+                    <div class="metric-detail ${metric.tone || ""}">${metric.detail}</div>
+                </article>
+            `).join("");
+
+            const categories = analytics.categories || {};
+            document.getElementById("categoryProgress").innerHTML = ["lawyers", "media", "organizations"].map((key) => {
+                const item = categories[key] || { matched: 0, contacted: 0, responded: 0, accepted: 0, ready: 0, progress_percent: 0 };
+                return `
+                    <article class="progress-row">
+                        <div>
+                            <div class="progress-name">${categoryLabel(key)}</div>
+                            <div class="muted">${item.ready || 0} ready</div>
+                        </div>
+                        <div>
+                            <div class="progress-track"><i class="progress-fill" style="width:${Math.min(100, Math.max(0, Number(item.progress_percent || 0)))}%"></i></div>
+                        </div>
+                        <div class="progress-stats">
+                            <span>${item.matched || 0} matched</span>
+                            <span>${item.contacted || 0} contacted</span>
+                            <span>${item.responded || 0} responses</span>
+                            <span>${item.accepted || 0} accepted</span>
+                        </div>
+                    </article>
+                `;
+            }).join("");
+
+            const history = analytics.history || [];
+            document.getElementById("outreachHistory").innerHTML = history.length ? history.map((item) => `
+                <article class="history-item">
+                    <div>
+                        <h4>${item.title}</h4>
+                        <p class="muted">${categoryLabel(item.category || "lawyers")} - ${item.detail || item.status || "Activity recorded"}</p>
+                    </div>
+                    <span class="chip positive">${item.status || "ready"}</span>
+                </article>
+            `).join("") : `<div class="empty-state is-visible"><div><strong>No outreach activity yet.</strong><br>Start matching to populate this overview.</div></div>`;
+
+            const insights = analytics.insights || [];
+            document.getElementById("performanceInsights").innerHTML = insights.map((item) => `
+                <article class="insight-card" data-tone="${item.tone || "info"}">
+                    <h4>${item.title}</h4>
+                    <p class="muted">${item.detail}</p>
+                </article>
+            `).join("");
+            renderFocusSummary(sourceMode);
+        }
+
+        function renderFocusSummary(sourceMode) {
+            const analytics = state.analytics || EMPTY_OUTREACH_ANALYTICS;
+            const progressStrip = document.getElementById("focusProgressStrip");
+            const sourceBadge = document.getElementById("focusSourceMode");
+            if (sourceBadge) sourceBadge.textContent = sourceMode || "no live data";
+            if (!progressStrip) return;
+            const stats = [
+                { label: "Matched targets", value: analytics.matched_targets || 0 },
+                { label: "Contacted", value: analytics.contacted_targets || 0 },
+                { label: "Responses", value: analytics.responses_received || 0 },
+                { label: "Acceptance", value: formatRate(analytics.acceptance_rate) }
+            ];
+            progressStrip.innerHTML = stats.map((stat) => `
+                <article class="focus-stat">
+                    <strong>${stat.value}</strong>
+                    <span>${stat.label}</span>
+                </article>
+            `).join("");
+        }
+
+        function renderMatches(sourceMode) {
+            const list = document.getElementById("resultList");
+            const empty = document.getElementById("emptyState");
+            const count = document.getElementById("resultCount");
+            const source = document.getElementById("sourceMode");
+            list.innerHTML = "";
+            count.textContent = `Matched ${labelForTab(state.activeTab)} (${state.matches.length})`;
+            source.textContent = sourceMode;
+            empty.classList.toggle("is-visible", state.matches.length === 0);
+
+            state.matches.forEach((target) => {
+                const breakdown = target.score_breakdown || {};
+                const channels = target.channels || target.nova_rechtsgebieden || target.legal_fields || [];
+                const sourceUrl = target.contact_url || target.profile_url || target.url || "";
+                const sourceAction = sourceUrl
+                    ? `<a class="source-link" href="${sourceUrl}" target="_blank" rel="noopener">Open</a>`
+                    : `<button type="button" class="source-link source-link-button" data-missing-source>Open</button>`;
+                const card = document.createElement("article");
+                card.className = "target-card";
+                card.innerHTML = `
+                    <div>
+                        <div class="target-topline">
+                            <div class="target-avatar">${initials(target.name)}</div>
+                            <div>
+                                <h4 class="target-name">${target.name}</h4>
+                                <p class="target-meta">${target.subtype || "outreach target"}${target.parent_org ? ` - ${target.parent_org}` : ""}${target.city ? ` - ${target.city}` : ""}</p>
+                            </div>
+                        </div>
+                        <div class="chips">
+                            ${channels.slice(0, 5).map((item) => `<span class="chip">${String(item).replace(/_/g, " ").toLowerCase()}</span>`).join("")}
+                            ${(target.topics || []).slice(0, 2).map((item) => `<span class="chip positive">${item}</span>`).join("")}
+                        </div>
+                        <p class="reasons">${(target.match_reasons || []).slice(0, 3).join(" - ")}</p>
+                    </div>
+                    <div>
+                        <div class="score-wrap">
+                            <div class="score-label">Match<br>score</div>
+                            <div class="score-number">${Math.round(target.match_score || 0)}</div>
+                        </div>
+                        <div class="score-bars expert-depth">
+                            <div class="score-row"><span>Topics</span><div class="bar"><i style="width:${barWidth(breakdown.topics || breakdown.case_terms || 0, 35)}"></i></div></div>
+                            <div class="score-row"><span>Legal</span><div class="bar"><i style="width:${barWidth(breakdown.legal_field || breakdown.legal_area || 0, 20)}"></i></div></div>
+                            <div class="score-row"><span>Impact</span><div class="bar"><i style="width:${barWidth(breakdown.impact || breakdown.location || 0, 15)}"></i></div></div>
+                            <div class="score-row"><span>Action</span><div class="bar"><i style="width:${barWidth(breakdown.actionability || breakdown.specialization || 0, 15)}"></i></div></div>
+                        </div>
+                        <div class="case-actions" style="justify-content:flex-end; margin-top:1rem;">
+                            ${sourceAction}
+                        </div>
+                    </div>
+                `;
+                list.appendChild(card);
+            });
+
+            list.querySelectorAll("[data-missing-source]").forEach((button) => {
+                button.addEventListener("click", () => showToast("No source URL is available for this target yet"));
+            });
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById("toastNote");
+            toast.textContent = message;
+            toast.classList.add("show");
+            clearTimeout(window.outreachToastTimer);
+            window.outreachToastTimer = setTimeout(() => toast.classList.remove("show"), 5000);
+        }
+
+        document.querySelectorAll(".tab-button").forEach((button) => {
+            button.addEventListener("click", () => setActiveTab(button.dataset.tab));
+        });
+        document.querySelectorAll("[data-depth]").forEach((button) => {
+            button.addEventListener("click", () => setOutreachDepth(button.dataset.depth));
+        });
+        document.querySelectorAll("[data-focus-action]").forEach((button) => {
+            button.addEventListener("click", () => {
+                const action = button.dataset.focusAction;
+                if (action === "overview") {
+                    setOutreachDepth("guided", { keepTab: true });
+                    setActiveTab("overview");
+                    return;
+                }
+                setOutreachDepth(action === "organizations" ? "expert" : "guided", { keepTab: true });
+                setActiveTab(action);
+            });
+        });
+        document.querySelectorAll("[data-subnav]").forEach((link) => {
+            link.addEventListener("click", (event) => {
+                event.preventDefault();
+                setActiveTab(link.dataset.subnav);
+            });
+        });
+        document.querySelectorAll('.sidebar-link[href="#"], [data-action-message]').forEach((link) => {
+            link.addEventListener("click", (event) => {
+                event.preventDefault();
+                showToast(link.dataset.actionMessage || "Gap Analysis will appear after live evidence is classified.");
+            });
+        });
+        document.getElementById("refreshMatches").addEventListener("click", refreshMatches);
+        document.getElementById("maxResults").addEventListener("change", refreshMatches);
+        document.getElementById("legalField").addEventListener("change", refreshMatches);
+        document.getElementById("primaryInput").addEventListener("change", refreshMatches);
+        document.getElementById("radiusKm").addEventListener("change", refreshMatches);
+        document.getElementById("legalAidOnly").addEventListener("change", refreshMatches);
+        document.getElementById("preferAssociation").addEventListener("change", refreshMatches);
+
+        const initialHash = window.location.hash.replace("#", "");
+        let storedDepth = "focus";
+        try {
+            storedDepth = localStorage.getItem("laroOutreachDepth") || "focus";
+        } catch (error) {
+            storedDepth = "focus";
+        }
+        setOutreachDepth(["lawyers", "media", "organizations"].includes(initialHash) && storedDepth === "focus" ? "guided" : storedDepth, { keepTab: true });
+        setActiveTab(["overview", "lawyers", "media", "organizations"].includes(initialHash) ? initialHash : "overview");
+    </script>
+    <script src="js/click-actions.js"></script>
+</body>
+</html>
+
+
+

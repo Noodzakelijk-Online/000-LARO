@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LARO | Lawyer Matching</title>
+    <meta http-equiv="refresh" content="0; url=outreach.html#lawyers">
+    <link rel="stylesheet" href="css/dark-theme.css">
+    <style>
+        :root {
+            --match-bg: #07101f;
+            --match-panel: #0b1528;
+            --match-panel-strong: #101d34;
+            --match-border: #22314c;
+            --match-muted: #99a7bd;
+            --match-orange: #ff6b00;
+            --match-green: #5fb7ad;
+            --match-soft-orange: rgba(255, 107, 0, 0.15);
+        }
+
+        body {
+            background: var(--match-bg);
+            color: var(--dark-text-primary);
+        }
+
+        .navbar {
+            background: #080d18;
+            border-bottom: 1px solid var(--match-border);
+            box-shadow: none;
+        }
+
+        .navbar-logo h1 {
+            -webkit-text-fill-color: var(--dark-text-primary);
+            background: none;
+            color: var(--dark-text-primary);
+            font-size: 1.35rem;
+            letter-spacing: 0;
+        }
+
+        .container-fluid {
+            box-sizing: border-box;
+            width: 100%;
+        }
+
+        .px-4 {
+            padding-left: 1.5rem;
+            padding-right: 1.5rem;
+        }
+
+        .matching-shell {
+            margin-left: 250px;
+            min-height: calc(100vh - 70px);
+            padding: 2rem;
+        }
+
+        .case-bar,
+        .filter-panel,
+        .result-panel {
+            background: var(--match-panel);
+            border: 1px solid var(--match-border);
+            border-radius: 8px;
+        }
+
+        .case-bar {
+            align-items: center;
+            display: flex;
+            gap: 1.25rem;
+            justify-content: space-between;
+            margin-bottom: 1.5rem;
+            padding: 1.25rem 1.5rem;
+        }
+
+        .case-title {
+            align-items: center;
+            display: flex;
+            gap: 0.9rem;
+            margin: 0;
+        }
+
+        .case-icon {
+            align-items: center;
+            background: var(--match-soft-orange);
+            border: 1px solid rgba(255, 107, 0, 0.45);
+            border-radius: 12px;
+            color: var(--match-orange);
+            display: inline-flex;
+            height: 52px;
+            justify-content: center;
+            width: 52px;
+        }
+
+        .case-kicker {
+            color: var(--match-muted);
+            font-size: 0.95rem;
+            margin: 0.15rem 0 0;
+        }
+
+        .case-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+
+        .page-heading {
+            align-items: center;
+            display: flex;
+            gap: 0.8rem;
+            margin: 2rem 0 1.25rem;
+        }
+
+        .page-heading h2 {
+            font-size: 1.45rem;
+            margin: 0;
+        }
+
+        .heading-icon {
+            color: var(--match-orange);
+            font-size: 1.6rem;
+        }
+
+        .filter-panel {
+            display: grid;
+            gap: 1rem;
+            grid-template-columns: 1fr 190px 210px;
+            margin-bottom: 1.75rem;
+            padding: 1.25rem;
+        }
+
+        .field-label {
+            color: var(--match-muted);
+            display: block;
+            font-size: 0.82rem;
+            font-weight: 700;
+            margin-bottom: 0.45rem;
+            text-transform: uppercase;
+        }
+
+        .field-input,
+        .field-select {
+            background: var(--match-panel-strong);
+            border: 1px solid var(--match-border);
+            border-radius: 6px;
+            color: var(--dark-text-primary);
+            min-height: 42px;
+            padding: 0.65rem 0.85rem;
+            width: 100%;
+        }
+
+        .radius-row {
+            align-items: center;
+            display: grid;
+            gap: 1rem;
+            grid-column: 1 / -1;
+            grid-template-columns: 1fr auto;
+        }
+
+        .radius-value {
+            color: var(--match-orange);
+            font-weight: 800;
+            min-width: 68px;
+            text-align: right;
+        }
+
+        input[type="range"] {
+            accent-color: var(--match-orange);
+            width: 100%;
+        }
+
+        .toggle-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            grid-column: 1 / 3;
+        }
+
+        .toggle {
+            align-items: center;
+            color: var(--dark-text-primary);
+            display: inline-flex;
+            gap: 0.55rem;
+            font-size: 0.94rem;
+        }
+
+        .toggle input {
+            accent-color: var(--match-orange);
+            height: 18px;
+            width: 18px;
+        }
+
+        .refresh-wrap {
+            align-items: end;
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .results-header {
+            align-items: center;
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .results-header h3 {
+            color: var(--match-muted);
+            font-size: 1.05rem;
+            margin: 0;
+        }
+
+        .source-link {
+            border: 1px solid var(--match-border);
+            border-radius: 6px;
+            color: var(--dark-text-primary);
+            font-size: 0.82rem;
+            font-weight: 700;
+            padding: 0.4rem 0.65rem;
+            text-decoration: none;
+        }
+
+        .source-link:hover {
+            border-color: var(--match-orange);
+            color: var(--match-orange);
+        }
+
+        .result-list {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .lawyer-card {
+            background: var(--match-panel);
+            border: 1px solid var(--match-border);
+            border-radius: 8px;
+            display: grid;
+            gap: 1rem;
+            grid-template-columns: minmax(0, 1fr) 210px;
+            padding: 1.2rem;
+        }
+
+        .lawyer-topline {
+            align-items: flex-start;
+            display: flex;
+            gap: 0.9rem;
+        }
+
+        .lawyer-avatar {
+            align-items: center;
+            background: var(--match-soft-orange);
+            border: 1px solid rgba(255, 107, 0, 0.45);
+            border-radius: 8px;
+            color: var(--match-orange);
+            display: inline-flex;
+            flex: 0 0 auto;
+            font-weight: 800;
+            height: 48px;
+            justify-content: center;
+            width: 48px;
+        }
+
+        .lawyer-name {
+            font-size: 1.15rem;
+            font-weight: 800;
+            margin: 0 0 0.25rem;
+        }
+
+        .lawyer-meta {
+            color: var(--match-muted);
+            font-size: 0.9rem;
+            line-height: 1.45;
+            margin: 0;
+        }
+
+        .chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.45rem;
+            margin-top: 0.9rem;
+        }
+
+        .chip {
+            border: 1px solid var(--match-border);
+            border-radius: 999px;
+            color: var(--dark-text-primary);
+            font-size: 0.78rem;
+            padding: 0.2rem 0.55rem;
+        }
+
+        .chip.positive {
+            border-color: rgba(95, 183, 173, 0.55);
+            color: var(--match-green);
+        }
+
+        .match-score {
+            align-items: center;
+            display: flex;
+            gap: 0.75rem;
+            justify-content: flex-end;
+            margin-bottom: 0.75rem;
+        }
+
+        .score-number {
+            color: var(--match-orange);
+            font-size: 1.65rem;
+            font-weight: 900;
+            line-height: 1;
+        }
+
+        .score-label {
+            color: var(--match-muted);
+            font-size: 0.76rem;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+
+        .score-bars {
+            display: grid;
+            gap: 0.45rem;
+        }
+
+        .score-row {
+            display: grid;
+            gap: 0.35rem;
+            grid-template-columns: 92px 1fr;
+        }
+
+        .score-row span {
+            color: var(--match-muted);
+            font-size: 0.76rem;
+        }
+
+        .bar {
+            background: #172542;
+            border-radius: 999px;
+            height: 7px;
+            overflow: hidden;
+        }
+
+        .bar > i {
+            background: linear-gradient(90deg, var(--match-orange), var(--match-green));
+            display: block;
+            height: 100%;
+        }
+
+        .reasons {
+            color: var(--match-muted);
+            font-size: 0.86rem;
+            line-height: 1.5;
+            margin-top: 0.9rem;
+        }
+
+        .empty-state {
+            align-items: center;
+            background: var(--match-panel);
+            border: 1px solid var(--match-border);
+            border-radius: 8px;
+            color: var(--match-muted);
+            display: none;
+            justify-content: center;
+            min-height: 180px;
+            text-align: center;
+        }
+
+        .empty-state.is-visible {
+            display: flex;
+        }
+
+        .toast-note {
+            background: var(--match-orange);
+            border-radius: 8px;
+            bottom: 1rem;
+            color: #fff;
+            font-weight: 700;
+            opacity: 0;
+            padding: 0.75rem 1rem;
+            pointer-events: none;
+            position: fixed;
+            right: 1rem;
+            transform: translateY(10px);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+            z-index: 20;
+        }
+
+        .toast-note.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        @media (max-width: 992px) {
+            .sidebar {
+                transform: none;
+            }
+
+            .matching-shell {
+                margin-left: 250px;
+            }
+        }
+
+        @media (max-width: 860px) {
+            .d-flex {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                height: auto;
+                position: static;
+                width: 100%;
+            }
+
+            .matching-shell {
+                margin-left: 0;
+                padding: 1rem;
+            }
+
+            .case-bar,
+            .results-header {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
+            .filter-panel,
+            .lawyer-card {
+                grid-template-columns: 1fr;
+            }
+
+            .toggle-row,
+            .radius-row {
+                grid-column: 1;
+            }
+
+            .match-score,
+            .refresh-wrap {
+                justify-content: flex-start;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container-fluid px-4 d-flex justify-content-between align-items-center">
+            <a class="navbar-logo" href="dashboard_dark.html">
+                <h1>LARO</h1>
+            </a>
+            <div class="case-actions">
+                <a class="btn btn-outline" href="dashboard_dark.html">Dashboard</a>
+                <a class="btn btn-outline" href="evidence_timeline.html">Evidence Timeline</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="d-flex">
+        <aside class="sidebar">
+            <ul class="sidebar-menu">
+                <li class="sidebar-item"><a href="dashboard_dark.html" class="sidebar-link"><span class="sidebar-icon">[]</span> Overview</a></li>
+                <li class="sidebar-item"><a href="dashboard_dark.html#documents" class="sidebar-link"><span class="sidebar-icon">E</span> Evidence</a></li>
+                <li class="sidebar-item"><a href="evidence_timeline.html" class="sidebar-link"><span class="sidebar-icon">T</span> Evidence Timeline</a></li>
+                <li class="sidebar-item"><a href="#" class="sidebar-link"><span class="sidebar-icon">G</span> Gap Analysis</a></li>
+                <li class="sidebar-item"><a href="lawyer_matching.html" class="sidebar-link active"><span class="sidebar-icon">L</span> Lawyers</a></li>
+            </ul>
+        </aside>
+
+        <main class="matching-shell">
+            <section class="case-bar">
+                <div>
+                    <h1 class="case-title">
+                        <span class="case-icon">L</span>
+                        AI Classification Pending
+                    </h1>
+                    <p class="case-kicker">Noodzakelijk Online - Created 5/22/2026 - NOvA filter-based matching</p>
+                </div>
+                <div class="case-actions">
+                    <span class="badge badge-warning">Matching</span>
+                    <span class="badge">Medium</span>
+                </div>
+            </section>
+
+            <div class="page-heading">
+                <span class="heading-icon">L</span>
+                <h2>Lawyer Matching</h2>
+            </div>
+
+            <section class="filter-panel" aria-label="Lawyer matching filters">
+                <label>
+                    <span class="field-label">Case location</span>
+                    <input class="field-input" id="locationInput" value="Amsterdam" placeholder="Postcode or city">
+                </label>
+                <label>
+                    <span class="field-label">Legal field</span>
+                    <select class="field-select" id="legalField">
+                        <option value="ADMINISTRATIVE_LAW">Administrative law</option>
+                        <option value="EMPLOYMENT_LAW">Employment law</option>
+                        <option value="PROPERTY_LAW">Tenancy/property</option>
+                        <option value="FAMILY_LAW">Family law</option>
+                        <option value="CRIMINAL_LAW">Criminal law</option>
+                    </select>
+                </label>
+                <label>
+                    <span class="field-label">Results</span>
+                    <select class="field-select" id="maxResults">
+                        <option value="10">Top 10</option>
+                        <option value="20">Top 20</option>
+                        <option value="30" selected>Top 30</option>
+                    </select>
+                </label>
+                <div class="radius-row">
+                    <label>
+                        <span class="field-label">Search radius</span>
+                        <input id="radiusInput" type="range" min="5" max="75" step="5" value="50">
+                    </label>
+                    <span class="radius-value" id="radiusValue">50 km</span>
+                </div>
+                <div class="toggle-row">
+                    <label class="toggle"><input type="checkbox" id="legalAid" checked> Financed legal aid</label>
+                    <label class="toggle"><input type="checkbox" id="specialization" checked> Specialization association</label>
+                </div>
+                <div class="refresh-wrap">
+                    <button class="btn btn-primary" id="refreshMatches">Refresh</button>
+                </div>
+            </section>
+
+            <section class="results-header">
+                <h3 id="resultCount">Matched Lawyers (0)</h3>
+                <a class="source-link" id="novaSearchLink" href="https://zoekeenadvocaat.advocatenorde.nl/zoeken" target="_blank" rel="noopener">Open NOvA search</a>
+            </section>
+
+            <section class="result-panel">
+                <div class="result-list" id="resultList"></div>
+                <div class="empty-state" id="emptyState">
+                    <div>
+                        <strong>No matching lawyers found.</strong><br>
+                        Increase the radius or remove a strict filter.
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div class="toast-note" id="toastNote">Matches refreshed</div>
+
+    <script>
+        const EMPTY_MATCHES = [];
+
+        let currentMatches = EMPTY_MATCHES;
+        let currentSearchUrl = "https://zoekeenadvocaat.advocatenorde.nl/zoeken";
+
+        function initials(name) {
+            return String(name || "").split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
+        }
+
+        function labelFromField(field) {
+            return String(field || "").replace(/_/g, " ").toLowerCase();
+        }
+
+        function barWidth(value, max) {
+            return `${Math.max(4, Math.min(100, Math.round((Number(value || 0) / max) * 100)))}%`;
+        }
+
+        function renderMatches() {
+            const list = document.getElementById("resultList");
+            const emptyState = document.getElementById("emptyState");
+            const count = document.getElementById("resultCount");
+            const novaLink = document.getElementById("novaSearchLink");
+            list.innerHTML = "";
+            count.textContent = `Matched Lawyers (${currentMatches.length})`;
+            novaLink.href = currentSearchUrl;
+            emptyState.classList.toggle("is-visible", currentMatches.length === 0);
+
+            currentMatches.forEach((lawyer) => {
+                const breakdown = lawyer.score_breakdown || {};
+                const card = document.createElement("article");
+                card.className = "lawyer-card";
+                card.innerHTML = `
+                    <div>
+                        <div class="lawyer-topline">
+                            <div class="lawyer-avatar">${initials(lawyer.name)}</div>
+                            <div>
+                                <h4 class="lawyer-name">${lawyer.name}</h4>
+                                <p class="lawyer-meta">${lawyer.firm_name || "Independent practice"} - ${lawyer.city || "Netherlands"}${lawyer.distance_km !== undefined ? ` - ${lawyer.distance_km} km` : ""}</p>
+                            </div>
+                        </div>
+                        <div class="chips">
+                            ${(lawyer.nova_rechtsgebieden || lawyer.legal_fields || []).slice(0, 4).map((field) => `<span class="chip">${labelFromField(field)}</span>`).join("")}
+                            ${lawyer.financed_legal_aid ? '<span class="chip positive">toevoeging</span>' : ""}
+                            ${(lawyer.specialization_associations || []).map((item) => `<span class="chip positive">${item}</span>`).join("")}
+                        </div>
+                        <div class="reasons">${(lawyer.match_reasons || []).slice(0, 3).join(" - ")}</div>
+                    </div>
+                    <div>
+                        <div class="match-score">
+                            <div class="score-label">Match<br>score</div>
+                            <div class="score-number">${Math.round(lawyer.match_score || 0)}</div>
+                        </div>
+                        <div class="score-bars">
+                            <div class="score-row"><span>Legal area</span><div class="bar"><i style="width:${barWidth(breakdown.legal_area, 45)}"></i></div></div>
+                            <div class="score-row"><span>Case terms</span><div class="bar"><i style="width:${barWidth(breakdown.case_terms, 15)}"></i></div></div>
+                            <div class="score-row"><span>Location</span><div class="bar"><i style="width:${barWidth(breakdown.location, 15)}"></i></div></div>
+                            <div class="score-row"><span>Extras</span><div class="bar"><i style="width:${barWidth((breakdown.specialization || 0) + (breakdown.financed_legal_aid || 0), 18)}"></i></div></div>
+                        </div>
+                        <div class="case-actions" style="justify-content:flex-end; margin-top:1rem;">
+                            <a class="source-link" href="${lawyer.profile_url || currentSearchUrl}" target="_blank" rel="noopener">View</a>
+                        </div>
+                    </div>
+                `;
+                list.appendChild(card);
+            });
+        }
+
+        function payloadFromControls() {
+            return {
+                case_id: Number(new URLSearchParams(window.location.search).get("case_id") || 1),
+                legal_fields: [document.getElementById("legalField").value],
+                postcode_or_city: document.getElementById("locationInput").value,
+                radius_km: Number(document.getElementById("radiusInput").value),
+                requires_financed_legal_aid: document.getElementById("legalAid").checked,
+                prefer_specialization_association: document.getElementById("specialization").checked,
+                max_results: Number(document.getElementById("maxResults").value)
+            };
+        }
+
+        async function refreshMatches() {
+            const payload = payloadFromControls();
+            const params = new URLSearchParams(window.location.search);
+            const caseId = params.get("case_id");
+            if (!caseId) {
+                currentSearchUrl = buildNovaUrl(payload);
+                currentMatches = EMPTY_MATCHES;
+                renderMatches();
+                showToast("Load a case to run lawyer matching");
+                return;
+            }
+
+            try {
+                const response = await fetch("/api/lawyers/match", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+                if (!response.ok) {
+                    throw new Error("Lawyer matching API unavailable");
+                }
+                const body = await response.json();
+                currentMatches = body.matched_lawyers || [];
+                currentSearchUrl = body.nova_search_url || buildNovaUrl(payload);
+                renderMatches();
+                showToast("Matches refreshed");
+            } catch (error) {
+                currentSearchUrl = buildNovaUrl(payload);
+                currentMatches = EMPTY_MATCHES;
+                renderMatches();
+                showToast("No live lawyer matches available");
+            }
+        }
+
+        function buildNovaUrl(payload) {
+            const params = new URLSearchParams();
+            params.set("filters[rechtsgebieden]", payload.legal_fields[0]);
+            params.set("locatie[adres]", payload.postcode_or_city);
+            params.set("locatie[straal]", payload.radius_km);
+            if (payload.requires_financed_legal_aid) params.set("filters[toevoegingen]", "1");
+            if (payload.prefer_specialization_association) params.set("filters[specialisatie]", "1");
+            return `https://zoekeenadvocaat.advocatenorde.nl/zoeken?${params.toString()}`;
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById("toastNote");
+            toast.textContent = message;
+            toast.classList.add("show");
+            clearTimeout(window.matchToastTimer);
+            window.matchToastTimer = setTimeout(() => toast.classList.remove("show"), 5000);
+        }
+
+        document.getElementById("radiusInput").addEventListener("input", (event) => {
+            document.getElementById("radiusValue").textContent = `${event.target.value} km`;
+        });
+        document.getElementById("refreshMatches").addEventListener("click", refreshMatches);
+        ["legalField", "maxResults", "legalAid", "specialization"].forEach((id) => {
+            document.getElementById(id).addEventListener("change", refreshMatches);
+        });
+        document.getElementById("locationInput").addEventListener("change", refreshMatches);
+        document.querySelectorAll('.sidebar-link[href="#"], [data-action-message]').forEach((link) => {
+            link.addEventListener("click", (event) => {
+                event.preventDefault();
+                showToast(link.dataset.actionMessage || "Gap Analysis will appear after live evidence is classified.");
+            });
+        });
+
+        refreshMatches();
+    </script>
+    <script src="js/click-actions.js"></script>
+</body>
+</html>
+

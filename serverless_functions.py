@@ -14,9 +14,15 @@ from typing import Dict, List, Any, Optional
 from serverless_architecture import serverless_function, event_handler, publish_event
 from db_optimization import db_manager
 from timeseries_manager import timeseries_manager
+from document_intelligence import DocumentIntelligenceEngine
+from lawyer_matching import LawyerMatchingEngine
+from outreach_target_matching import OutreachTargetEngine
 
 # Configure logging
 logger = logging.getLogger('legal_ai_platform.serverless_functions')
+document_intelligence = DocumentIntelligenceEngine()
+lawyer_matching_engine = LawyerMatchingEngine()
+outreach_target_engine = OutreachTargetEngine()
 
 # Case Processing Functions
 @serverless_function(options={
@@ -190,7 +196,7 @@ def process_document(payload, context):
         start_time = time.time()
         
         # 1. Extract text from document
-        text = extract_document_text(document_data.get('content', ''))
+        text = extract_document_text(document_data)
         
         # 2. Analyze document content
         analysis = analyze_document_content(text)
@@ -246,32 +252,35 @@ def process_document(payload, context):
             'body': {'error': f"Error processing document: {str(e)}"}
         }
 
-def extract_document_text(content):
+def extract_document_text(document_data):
     """Extract text from document content"""
-    # In a real implementation, this would use OCR or text extraction tools
-    # For this example, we'll assume the content is already text
-    return content
+    if isinstance(document_data, str):
+        document_data = {'content': document_data}
+    return document_intelligence.extract_text_from_document(document_data or {})
 
 def analyze_document_content(text):
     """Analyze document content"""
-    # In a real implementation, this would use NLP to analyze content
-    # For this example, we'll use simple metrics
     word_count = len(text.split())
-    sentence_count = len(text.split('.'))
+    sentence_count = len([part for part in text.split('.') if part.strip()])
+    legal_analysis = document_intelligence.analyze_text(text)
     
     return {
         'word_count': word_count,
         'sentence_count': sentence_count,
-        'average_words_per_sentence': word_count / max(sentence_count, 1)
+        'average_words_per_sentence': word_count / max(sentence_count, 1),
+        'legal_analysis': legal_analysis
     }
 
 def generate_document_metadata(text, analysis):
     """Generate document metadata"""
-    # In a real implementation, this would extract key information
-    # For this example, we'll use simple metadata
+    legal_analysis = analysis.get('legal_analysis', {})
     return {
         'length': len(text),
         'complexity': 'high' if analysis['average_words_per_sentence'] > 20 else 'medium' if analysis['average_words_per_sentence'] > 10 else 'low',
+        'document_type': legal_analysis.get('document_type', 'unknown'),
+        'topics': legal_analysis.get('topics', []),
+        'relevance_score': legal_analysis.get('evidence', {}).get('relevance_score', 0.0),
+        'confidence': legal_analysis.get('processing', {}).get('confidence', 'low'),
         'timestamp': time.time()
     }
 
@@ -404,20 +413,24 @@ def match_lawyers(payload, context):
         }
     
     try:
-        # Get case data
         case_data = payload.get('case_data', {})
-        legal_fields = case_data.get('legal_fields', [])
+        match_preferences = payload.get('match_preferences', {})
+        match_input = {
+            **case_data,
+            **match_preferences,
+            'max_results': payload.get('max_results') or match_preferences.get('max_results') or case_data.get('max_results') or 30
+        }
+        legal_fields = match_input.get('legal_fields', [])
         
         # Perform lawyer matching
         start_time = time.time()
+        match_result = lawyer_matching_engine.match(
+            match_input,
+            records=payload.get('candidate_lawyers'),
+            max_results=payload.get('max_results')
+        )
+        ranked_lawyers = match_result['matched_lawyers']
         
-        # 1. Find lawyers with matching specializations
-        matched_lawyers = find_matching_lawyers(legal_fields)
-        
-        # 2. Rank lawyers by relevance
-        ranked_lawyers = rank_lawyers_by_relevance(matched_lawyers, case_data)
-        
-        # 3. Calculate processing time
         processing_time = time.time() - start_time
         
         # Record processing metrics
@@ -427,7 +440,10 @@ def match_lawyers(payload, context):
             category=legal_fields[0] if legal_fields else 'UNKNOWN',
             details={
                 'lawyer_count': len(ranked_lawyers),
-                'processing_time': processing_time
+                'processing_time': processing_time,
+                'source_mode': match_result.get('source_mode'),
+                'nova_search_url': match_result.get('nova_search_url'),
+                'search_criteria': match_result.get('search_criteria')
             }
         )
         
@@ -437,6 +453,10 @@ def match_lawyers(payload, context):
             'body': {
                 'case_id': case_id,
                 'matched_lawyers': ranked_lawyers,
+                'search_criteria': match_result.get('search_criteria'),
+                'source_mode': match_result.get('source_mode'),
+                'nova_search_url': match_result.get('nova_search_url'),
+                'available_count': match_result.get('available_count'),
                 'processing_time': processing_time
             }
         }
@@ -461,76 +481,86 @@ def match_lawyers(payload, context):
         }
 
 def find_matching_lawyers(legal_fields):
-    """Find lawyers with matching specializations"""
-    # In a real implementation, this would query the database
-    # For this example, we'll use mock data
-    mock_lawyers = [
-        {
-            'id': '1',
-            'name': 'Alice Johnson',
-            'email': 'alice@lawfirm.com',
-            'specialization': 'FAMILY_LAW',
-            'experience': 10,
-            'success_rate': 0.85
-        },
-        {
-            'id': '2',
-            'name': 'Bob Williams',
-            'email': 'bob@lawfirm.com',
-            'specialization': 'CRIMINAL_LAW',
-            'experience': 15,
-            'success_rate': 0.9
-        },
-        {
-            'id': '3',
-            'name': 'Carol Davis',
-            'email': 'carol@lawfirm.com',
-            'specialization': 'CONTRACT_LAW',
-            'experience': 8,
-            'success_rate': 0.8
-        },
-        {
-            'id': '4',
-            'name': 'David Miller',
-            'email': 'david@lawfirm.com',
-            'specialization': 'PROPERTY_LAW',
-            'experience': 12,
-            'success_rate': 0.87
-        },
-        {
-            'id': '5',
-            'name': 'Eve Wilson',
-            'email': 'eve@lawfirm.com',
-            'specialization': 'EMPLOYMENT_LAW',
-            'experience': 7,
-            'success_rate': 0.82
-        }
-    ]
-    
-    # Filter lawyers by specialization
-    matched_lawyers = []
-    for lawyer in mock_lawyers:
-        if lawyer['specialization'] in legal_fields:
-            matched_lawyers.append(lawyer)
-    
-    return matched_lawyers
+    """Find lawyers with matching specializations."""
+    result = lawyer_matching_engine.match({'legal_fields': legal_fields, 'max_results': 200})
+    return result['matched_lawyers']
 
 def rank_lawyers_by_relevance(lawyers, case_data):
-    """Rank lawyers by relevance to the case"""
-    # In a real implementation, this would use a sophisticated ranking algorithm
-    # For this example, we'll use a simple score based on experience and success rate
-    for lawyer in lawyers:
-        # Calculate a score based on experience and success rate
-        experience_score = min(lawyer['experience'] / 10, 1.0)  # Cap at 1.0
-        success_score = lawyer['success_rate']
-        
-        # Combine scores (weighted)
-        lawyer['relevance_score'] = (experience_score * 0.4) + (success_score * 0.6)
-    
-    # Sort by relevance score (descending)
-    ranked_lawyers = sorted(lawyers, key=lambda x: x['relevance_score'], reverse=True)
-    
-    return ranked_lawyers
+    """Rank lawyers by relevance to the case."""
+    result = lawyer_matching_engine.match(case_data or {}, records=lawyers, max_results=len(lawyers) or 30)
+    return result['matched_lawyers']
+
+@serverless_function(options={
+    'timeout': 60000,
+    'memory_size': 256,
+})
+def match_outreach_targets(payload, context):
+    """Match media or organization outreach targets to a case."""
+    logger.info(f"Matching outreach targets: {payload}")
+
+    case_id = payload.get('case_id')
+    if not case_id:
+        return {
+            'statusCode': 400,
+            'body': {'error': 'Case ID is required'}
+        }
+
+    try:
+        case_data = payload.get('case_data', {})
+        match_preferences = payload.get('match_preferences', {})
+        target_type = payload.get('target_type') or match_preferences.get('target_type') or case_data.get('target_type') or 'media'
+        match_input = {
+            **case_data,
+            **match_preferences,
+            'target_type': target_type,
+            'max_results': payload.get('max_results') or match_preferences.get('max_results') or case_data.get('max_results') or 30
+        }
+
+        start_time = time.time()
+        match_result = outreach_target_engine.match(
+            match_input,
+            records=payload.get('candidate_targets'),
+            max_results=payload.get('max_results')
+        )
+        processing_time = time.time() - start_time
+
+        timeseries_manager.record_case_event(
+            case_id=str(case_id),
+            event_type=f'{target_type}_targets_matched',
+            category=target_type,
+            details={
+                'target_count': len(match_result.get('matched_targets', [])),
+                'processing_time': processing_time,
+                'source_mode': match_result.get('source_mode'),
+                'search_criteria': match_result.get('search_criteria')
+            }
+        )
+
+        return {
+            'statusCode': 200,
+            'body': {
+                'case_id': case_id,
+                **match_result,
+                'processing_time': processing_time
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"Error matching outreach targets for case {case_id}: {e}")
+        timeseries_manager.record_system_metric(
+            metric_type='error',
+            value=1.0,
+            component='match_outreach_targets',
+            details={
+                'case_id': case_id,
+                'error': str(e)
+            }
+        )
+
+        return {
+            'statusCode': 500,
+            'body': {'error': f"Error matching outreach targets: {str(e)}"}
+        }
 
 # Initialize serverless functions
 def init_serverless_functions():

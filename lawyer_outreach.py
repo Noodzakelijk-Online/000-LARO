@@ -11,6 +11,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
 from typing import List, Dict, Any, Optional, Tuple
+from lawyer_matching import LawyerMatchingEngine, normalize_lawyer_record
 
 class LawyerOutreachSystem:
     """
@@ -34,48 +35,32 @@ class LawyerOutreachSystem:
         self.max_follow_ups = max_follow_ups # Max follow-ups per lawyer
         self.follow_up_interval_days = follow_up_interval_days # Days between follow-ups
 
-    def load_lawyer_database(self, legal_field: str = None) -> List[Dict[str, Any]]:
+    def load_lawyer_database(self, legal_field: str = None, match_criteria: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """
         Load *all active* lawyers from the database, optionally filtered by legal field.
-        (Simulated data)
+        Uses the same NOvA-oriented matcher as the API so outreach starts from
+        explainable search criteria rather than a random sample.
         """
-        legal_fields = [
-            'family_law', 'criminal_law', 'corporate_law', 'employment_law',
-            'real_estate_law', 'immigration_law', 'intellectual_property_law', 'tax_law'
-        ]
-        cities = [
-            'Amsterdam', 'Rotterdam', 'The Hague', 'Utrecht', 'Eindhoven',
-            'Groningen', 'Tilburg', 'Almere', 'Breda', 'Nijmegen'
-        ]
-        sample_lawyers = []
-        # Simulate a larger pool to ensure enough match the field
-        for i in range(1, 201):
-            lawyer_fields = random.sample(legal_fields, random.randint(1, 3))
-            is_active = random.random() > 0.1 # Simulate 90% active
+        engine = LawyerMatchingEngine()
+        criteria = dict(match_criteria or {})
+        if legal_field:
+            criteria.setdefault('legal_fields', [legal_field])
+        criteria.setdefault('max_results', 200)
+        candidate_lawyers = criteria.pop('candidate_lawyers', None)
 
-            # Only include active lawyers matching the field (if specified)
-            if is_active and (not legal_field or legal_field in lawyer_fields):
-                lawyer = {
-                    'lawyer_id': i,
-                    'nova_id': f"NOVA{100000 + i}",
-                    'email': f"lawyer{i}@example.com",
-                    'first_name': f"FirstName{i}",
-                    'last_name': f"LastName{i}",
-                    'phone': f"+31 6 {random.randint(10000000, 99999999)}",
-                    'firm_name': f"Law Firm {i // 10 + 1}",
-                    'city': random.choice(cities),
-                    'legal_fields': lawyer_fields,
-                    'response_rate': random.uniform(0.1, 0.6), # Still useful for analytics
-                    'acceptance_rate': random.uniform(0.01, 0.1),
-                    'is_active': is_active
-                }
-                sample_lawyers.append(lawyer)
+        if candidate_lawyers is not None:
+            lawyers = [normalize_lawyer_record(lawyer) for lawyer in candidate_lawyers]
+        elif criteria.get('legal_fields'):
+            match_result = engine.match(criteria, records=criteria.get('records'), max_results=criteria.get('max_results', 200))
+            lawyers = match_result['matched_lawyers']
+        else:
+            lawyers = []
 
         if legal_field:
-            print(f"Loaded {len(sample_lawyers)} active lawyers specializing in {legal_field}")
+            print(f"Loaded {len(lawyers)} active lawyers matching {legal_field}")
         else:
-            print(f"Loaded {len(sample_lawyers)} active lawyers from all fields")
-        return sample_lawyers
+            print(f"Loaded {len(lawyers)} active lawyers from the NOvA-oriented cache")
+        return lawyers
 
     def prepare_email_content(self, lawyer: Dict[str, Any], case_summary: str,
                              is_follow_up: bool = False, follow_up_number: int = 0) -> Dict[str, str]:
@@ -199,12 +184,26 @@ On behalf of the client
             print(f"Initial email sent to {lawyer['email']} with subject: {email_content['subject']}")
             return outreach_record
 
-    def send_initial_outreach(self, case_summary: str, legal_field: str) -> List[Dict[str, Any]]:
+    def send_initial_outreach(
+        self,
+        case_summary: str,
+        legal_field: str,
+        max_lawyers: Optional[int] = None,
+        preferred_lawyers: Optional[List[Any]] = None,
+        match_criteria: Optional[Dict[str, Any]] = None
+    ) -> List[Dict[str, Any]]:
         """
         Send initial outreach emails with pre-assessment request to ALL relevant active lawyers.
         """
-        target_lawyers = self.load_lawyer_database(legal_field)
-        # No sorting or limiting needed here - reach out to all relevant active lawyers
+        target_lawyers = self.load_lawyer_database(legal_field, match_criteria=match_criteria)
+        if preferred_lawyers:
+            preferred_ids = {str(value) for value in preferred_lawyers}
+            target_lawyers = [
+                lawyer for lawyer in target_lawyers
+                if str(lawyer.get('id')) in preferred_ids or str(lawyer.get('lawyer_id')) in preferred_ids
+            ]
+        if max_lawyers:
+            target_lawyers = target_lawyers[:int(max_lawyers)]
         
         initial_outreach_records = []
         for lawyer in target_lawyers:

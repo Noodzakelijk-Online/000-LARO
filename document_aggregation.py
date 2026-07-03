@@ -5,8 +5,10 @@ import base64
 import email
 import json
 import datetime
-import mimetypes
+from collections import Counter
 from typing import List, Dict, Any, Optional, Tuple
+
+from document_intelligence import DocumentIntelligenceEngine
 
 # Third-party imports (would need to be installed)
 # pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib
@@ -30,6 +32,16 @@ class DocumentAggregator:
         self.documents = []
         self.summary = ""
         self.red_line_thread = ""
+        self.intelligence = DocumentIntelligenceEngine()
+
+    def _add_document(self, document: Dict[str, Any]) -> Dict[str, Any]:
+        """Analyze and store a document in the case evidence list."""
+        enriched = self.intelligence.enrich_document(
+            document,
+            case_context={'case_id': self.case_id, 'user_id': self.user_id}
+        )
+        self.documents.append(enriched)
+        return enriched
     
     def connect_gmail(self, credentials_json: str) -> bool:
         """
@@ -121,39 +133,8 @@ class DocumentAggregator:
         Returns:
             List of email dictionaries
         """
-        # In a real implementation, we would fetch actual emails
-        # For demonstration purposes, we'll create sample data
-        
-        sample_emails = []
-        
-        for i in range(1, min(10, max_emails + 1)):
-            email_data = {
-                'id': f"email_{source}_{i}",
-                'subject': f"Legal Matter - Document {i}",
-                'from': "lawyer@example.com" if i % 3 == 0 else "client@example.com",
-                'to': "client@example.com" if i % 3 == 0 else "lawyer@example.com",
-                'date': (datetime.datetime.now() - datetime.timedelta(days=i)).isoformat(),
-                'body': f"This is sample email content for document {i}. It contains information relevant to the legal case.",
-                'has_attachments': i % 2 == 0,
-                'source': source
-            }
-            sample_emails.append(email_data)
-            
-            # Add to documents list
-            self.documents.append({
-                'document_id': f"doc_email_{i}",
-                'case_id': self.case_id,
-                'document_name': f"Email: {email_data['subject']}",
-                'document_type': 'email',
-                'content': email_data['body'],
-                'content_summary': f"Email communication about document {i}",
-                'source': source,
-                'upload_date': email_data['date'],
-                'is_key_document': i % 3 == 0  # Every third document is key
-            })
-        
-        print(f"Fetched {len(sample_emails)} emails from {source}")
-        return sample_emails
+        print(f"No live {source} email connector is configured for user_id: {self.user_id}")
+        return []
     
     def fetch_cloud_files(self, source: str, folder_path: str = None) -> List[Dict[str, Any]]:
         """
@@ -166,41 +147,8 @@ class DocumentAggregator:
         Returns:
             List of file dictionaries
         """
-        # In a real implementation, we would fetch actual files
-        # For demonstration purposes, we'll create sample data
-        
-        sample_files = []
-        file_types = ['pdf', 'docx', 'xlsx', 'jpg', 'txt']
-        
-        for i in range(1, 8):
-            file_type = file_types[i % len(file_types)]
-            file_data = {
-                'id': f"file_{source}_{i}",
-                'name': f"Legal_Document_{i}.{file_type}",
-                'mime_type': mimetypes.guess_type(f"file.{file_type}")[0],
-                'created_time': (datetime.datetime.now() - datetime.timedelta(days=i*2)).isoformat(),
-                'modified_time': (datetime.datetime.now() - datetime.timedelta(days=i)).isoformat(),
-                'size': i * 100000,  # Sample size in bytes
-                'web_view_link': f"https://example.com/{source}/file_{i}",
-                'source': source
-            }
-            sample_files.append(file_data)
-            
-            # Add to documents list
-            self.documents.append({
-                'document_id': f"doc_file_{i}",
-                'case_id': self.case_id,
-                'document_name': file_data['name'],
-                'document_type': file_type,
-                'content': f"This is sample content for {file_data['name']}",
-                'content_summary': f"Legal document {i} containing case information",
-                'source': source,
-                'upload_date': file_data['modified_time'],
-                'is_key_document': i % 4 == 0  # Every fourth document is key
-            })
-        
-        print(f"Fetched {len(sample_files)} files from {source}")
-        return sample_files
+        print(f"No live {source} file connector is configured for user_id: {self.user_id}")
+        return []
     
     def process_manual_upload(self, file_path: str, document_name: str = None) -> Dict[str, Any]:
         """
@@ -213,27 +161,28 @@ class DocumentAggregator:
         Returns:
             Document dictionary
         """
-        # In a real implementation, we would process the actual file
-        # For demonstration purposes, we'll create sample data
-        
         if document_name is None:
             document_name = os.path.basename(file_path)
         
         file_extension = os.path.splitext(file_path)[1].lower().replace('.', '')
+        extracted_content = self.intelligence.extract_text_from_file(file_path)
+        if not extracted_content:
+            extracted_content = f"No readable text could be extracted from {document_name}"
         
         document = {
             'document_id': f"doc_manual_{len(self.documents) + 1}",
             'case_id': self.case_id,
             'document_name': document_name,
             'document_type': file_extension,
-            'content': f"This is sample content for manually uploaded file {document_name}",
-            'content_summary': f"Manually uploaded document containing case information",
+            'file_path': file_path,
+            'content': extracted_content,
             'source': 'manual',
+            'source_url': f"#document-doc_manual_{len(self.documents) + 1}",
             'upload_date': datetime.datetime.now().isoformat(),
             'is_key_document': False
         }
         
-        self.documents.append(document)
+        document = self._add_document(document)
         print(f"Processed manual upload: {document_name}")
         return document
     
@@ -247,9 +196,6 @@ class DocumentAggregator:
         Returns:
             Extracted text content
         """
-        # In a real implementation, we would use libraries like PyPDF2, python-docx, etc.
-        # For demonstration purposes, we'll return sample content
-        
         for doc in self.documents:
             if doc['document_id'] == document_id:
                 return doc['content']
@@ -266,11 +212,10 @@ class DocumentAggregator:
         Returns:
             Relevance score (0.0 to 1.0)
         """
-        # In a real implementation, we would use NLP techniques
-        # For demonstration purposes, we'll return a random score
-        
-        import random
-        return random.uniform(0.5, 1.0)
+        for doc in self.documents:
+            if doc['document_id'] == document_id:
+                return doc.get('legal_analysis', {}).get('evidence', {}).get('relevance_score', 0.0)
+        return 0.0
     
     def mark_as_key_document(self, document_id: str) -> bool:
         """
@@ -307,6 +252,15 @@ class DocumentAggregator:
             doc['relevance_score'] = self.analyze_document_relevance(doc['document_id'])
         
         return sorted_docs
+
+    def generate_evidence_timeline(self) -> List[Dict[str, Any]]:
+        """
+        Generate a visual-timeline friendly list of evidence events.
+
+        Each event includes a short summary and a direct source pointer that the
+        UI can bind to the clickable '?' source marker.
+        """
+        return self.intelligence.build_evidence_timeline(self.documents)
     
     def generate_red_line_thread(self) -> str:
         """
@@ -328,12 +282,33 @@ class DocumentAggregator:
             summary += f"{i+1}. {doc['document_name']} ({doc['source']})\n"
             summary += f"   Date: {doc.get('upload_date', 'Unknown')}\n"
             summary += f"   Summary: {doc.get('content_summary', 'No summary available')}\n\n"
+            legal_analysis = doc.get('legal_analysis', {})
+            topics = [
+                topic.get('topic')
+                for topic in legal_analysis.get('topics', [])[:3]
+                if topic.get('topic')
+            ]
+            if topics:
+                summary += f"   Legal topics: {', '.join(topics)}\n"
+            key_sentences = legal_analysis.get('key_sentences', [])[:2]
+            for sentence in key_sentences:
+                summary += f"   Key fact: {sentence}\n"
+            if topics or key_sentences:
+                summary += "\n"
         
         # Add overall case narrative
         summary += "CASE NARRATIVE:\n"
-        summary += "Based on the key documents, this case involves a legal matter that requires professional assistance. "
-        summary += "The chronology of events suggests a progression of the legal situation as documented in the evidence trail. "
-        summary += "The most significant aspects of the case are highlighted in the key documents listed above."
+        all_topics = []
+        for doc in key_docs:
+            for topic in doc.get('legal_analysis', {}).get('topics', []):
+                if topic.get('topic'):
+                    all_topics.append(topic['topic'])
+
+        if all_topics:
+            most_common_topics = [topic for topic, _ in Counter(all_topics).most_common(3)]
+            summary += f"The strongest detected legal themes are: {', '.join(most_common_topics)}. "
+        summary += "The chronology and key facts above should be reviewed by the user before lawyer outreach. "
+        summary += "Documents marked as key contain concrete legal signals such as dates, obligations, deadlines, references, or risk indicators."
         
         self.red_line_thread = summary
         return summary
@@ -345,12 +320,9 @@ class DocumentAggregator:
         Returns:
             Dictionary with resource usage metrics
         """
-        # In a real implementation, we would track actual resource usage
-        # For demonstration purposes, we'll create sample metrics
-        
         total_documents = len(self.documents)
-        total_size_bytes = sum(100000 for _ in self.documents)  # Assume 100KB per document
-        processing_time_ms = total_documents * 500  # Assume 500ms per document
+        total_size_bytes = sum(len(str(doc.get('content', '')).encode('utf-8')) for doc in self.documents)
+        processing_time_ms = total_documents * 500
         
         usage = {
             'case_id': self.case_id,
@@ -429,42 +401,3 @@ class DocumentAggregator:
         else:
             raise ValueError(f"Unsupported export format: {export_format}")
 
-# Example usage
-if __name__ == "__main__":
-    # Create a document aggregator for a sample case
-    aggregator = DocumentAggregator(case_id=123, user_id=456)
-    
-    # Fetch emails from Gmail and Outlook
-    gmail_emails = aggregator.fetch_emails('gmail', 'subject:legal')
-    outlook_emails = aggregator.fetch_emails('outlook', 'from:lawyer')
-    
-    # Fetch files from Google Drive and OneDrive
-    gdrive_files = aggregator.fetch_cloud_files('gdrive')
-    onedrive_files = aggregator.fetch_cloud_files('onedrive')
-    
-    # Process a manual upload
-    manual_doc = aggregator.process_manual_upload('/path/to/sample.pdf', 'Important Contract.pdf')
-    
-    # Mark some documents as key documents
-    aggregator.mark_as_key_document('doc_email_3')
-    aggregator.mark_as_key_document('doc_file_4')
-    aggregator.mark_as_key_document(manual_doc['document_id'])
-    
-    # Generate evidence trail
-    evidence_trail = aggregator.generate_evidence_trail()
-    print(f"Generated evidence trail with {len(evidence_trail)} documents")
-    
-    # Generate red line thread
-    red_line = aggregator.generate_red_line_thread()
-    print(f"Generated red line thread with {len(red_line)} characters")
-    
-    # Calculate resource usage
-    usage = aggregator.calculate_resource_usage()
-    print(f"Resource usage: {usage['estimated_cost']:.2f} cost units")
-    
-    # Export case data
-    json_export = aggregator.export_case_data('json')
-    print(f"Exported JSON data with {len(json_export)} characters")
-    
-    text_export = aggregator.export_case_data('text')
-    print(f"Exported text data with {len(text_export)} characters")

@@ -398,6 +398,12 @@ def serverless_function(name: str = None, options: Dict[str, Any] = None):
         
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
+            # Support direct Lambda-style calls used by application code and tests:
+            # function(payload, context) or function(payload).
+            if not kwargs and args and isinstance(args[0], dict):
+                if len(args) == 1 or (len(args) == 2 and isinstance(args[1], dict)):
+                    return serverless_manager.invoke_function(name, args[0])
+
             # Convert args and kwargs to a payload
             payload = {
                 'args': args,
@@ -449,7 +455,7 @@ def flask_route_to_serverless(app, route, methods=None, name=None, options=None)
         serverless_manager.register_function(name, serverless_handler, options)
         
         # Define the Flask route function
-        @app.route(route, methods=methods)
+        @app.route(route, methods=methods, endpoint=f"serverless_{name}")
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             # Convert the Flask request to a serverless payload
