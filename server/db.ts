@@ -18,6 +18,82 @@ function getDbPath() {
   return process.env.DATABASE_URL || "laro.sqlite";
 }
 
+/**
+ * Phase 005 — persistence hardening.
+ *
+ * Apply connection PRAGMAs that SQLite does NOT persist across connections:
+ *  - WAL journal mode: better read/write concurrency for the in-process server.
+ *  - foreign_keys ON: enforce referential integrity where FKs are declared
+ *    (they are being introduced incrementally; enabling this now makes any new
+ *    FK actually enforced instead of silently ignored).
+ *  - busy_timeout: wait instead of throwing SQLITE_BUSY under brief contention.
+ */
+function applyConnectionPragmas(sqlite: InstanceType<typeof Database>) {
+  try {
+    sqlite.pragma("journal_mode = WAL");
+    sqlite.pragma("foreign_keys = ON");
+    sqlite.pragma("busy_timeout = 5000");
+    console.log("[Database] Applied PRAGMAs: WAL, foreign_keys=ON, busy_timeout=5000.");
+  } catch (e) {
+    console.warn("[Database] Could not apply connection PRAGMAs:", e);
+  }
+}
+
+/**
+ * Phase 005 — data integrity via indexes and a unique constraint on user email.
+ *
+ * The schema historically shipped with almost no indexes and no unique
+ * constraint on `users.email`, allowing duplicate accounts and unindexed hot
+ * lookups. These are created idempotently at boot (IF NOT EXISTS) so they apply
+ * to existing on-disk databases without a destructive migration.
+ *
+ * The unique email index is created defensively: if a legacy DB already contains
+ * duplicate emails the CREATE fails, and we log a clear warning instead of
+ * crashing boot (the duplicates must then be reconciled — see Phase 054).
+ */
+function ensureIndexes(sqlite: InstanceType<typeof Database>) {
+  // Unique email — enforce one account per address. Signup already checks for
+  // an existing email, so this closes the race/duplicate gap at the DB level.
+  try {
+    sqlite.exec(
+      `CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique ON users(email) WHERE email IS NOT NULL;`
+    );
+  } catch (e) {
+    console.warn(
+      "[Database] Could not create unique index users_email_unique (likely pre-existing duplicate emails; reconcile then retry):",
+      e
+    );
+  }
+
+  // Hot-path indexes for the highest-traffic lookups (outreach, evidence, email,
+  // messaging, lawyer rating). All idempotent.
+  const indexStatements = [
+    `CREATE INDEX IF NOT EXISTS outreach_status_caseId_idx ON outreach_status(caseId);`,
+    `CREATE INDEX IF NOT EXISTS outreach_status_lawyerId_idx ON outreach_status(lawyerId);`,
+    `CREATE INDEX IF NOT EXISTS outreach_status_status_idx ON outreach_status(status);`,
+    `CREATE INDEX IF NOT EXISTS email_messages_accountId_idx ON email_messages(accountId);`,
+    `CREATE INDEX IF NOT EXISTS email_activity_caseId_idx ON email_activity(caseId);`,
+    `CREATE INDEX IF NOT EXISTS lawyer_interactions_lawyerId_idx ON lawyer_interactions(lawyerId);`,
+    `CREATE INDEX IF NOT EXISTS evidence_items_userId_idx ON evidence_items(userId);`,
+    `CREATE INDEX IF NOT EXISTS unified_messages_userId_idx ON unified_messages(userId);`,
+    `CREATE INDEX IF NOT EXISTS notifications_userId_idx ON notifications(userId);`,
+    `CREATE INDEX IF NOT EXISTS audit_logs_userId_idx ON audit_logs(userId);`,
+  ];
+  for (const stmt of indexStatements) {
+    try {
+      sqlite.exec(stmt);
+    } catch (e) {
+      // A table may not exist yet on a partially-migrated DB; ignore and let a
+      // later boot create it once migrations have run.
+      const msg = e instanceof Error ? e.message : String(e);
+      if (!msg.toLowerCase().includes("no such table")) {
+        console.warn("[Database] Could not create index:", stmt, msg);
+      }
+    }
+  }
+  console.log("[Database] Ensured integrity indexes (Phase 005).");
+}
+
 function ensureSupportTicketsTable(sqlite: InstanceType<typeof Database>) {
   try {
     sqlite.exec(`
@@ -231,6 +307,7 @@ export async function getDb() {
       const dbPath = getDbPath();
       const sqlite = new Database(dbPath);
       _db = drizzle(sqlite);
+      applyConnectionPragmas(sqlite); // Phase 005: WAL, foreign_keys, busy_timeout
       ensureSupportTicketsTable(sqlite);
       console.log("[Database] SQLite initialized at:", dbPath);
 
@@ -287,6 +364,10 @@ export async function getDb() {
       // schema declares but the on-disk DB is missing (e.g. schema.ts was
       // updated without generating a new migration).
       ensureAllTablesColumns(sqlite);
+
+      // Phase 005: create integrity indexes + unique email constraint AFTER the
+      // tables exist. Idempotent, so safe on every boot.
+      ensureIndexes(sqlite);
 
     } catch (error) {
       console.error("[Database] Failed to connect to SQLite or run migrations:", error);

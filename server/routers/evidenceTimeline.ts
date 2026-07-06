@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { publicProcedure, router } from "../_core/trpc";
+import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { evidence } from "../schema";
 import { and, desc, eq, like, or } from "drizzle-orm";
@@ -13,7 +13,7 @@ import { and, desc, eq, like, or } from "drizzle-orm";
  * pulled Gmail/Drive items appear here automatically, newest first.
  */
 export const evidenceTimelineRouter = router({
-  getTimeline: publicProcedure
+  getTimeline: protectedProcedure
     .input(
       z
         .object({
@@ -28,7 +28,7 @@ export const evidenceTimelineRouter = router({
       const db = await getDb();
       if (!db) return [];
 
-      const userId = ctx.user?.id || "demo-user-123";
+      const userId = ctx.user.id;
 
       const conditions = [eq(evidence.userId, userId)];
       if (input?.caseId) conditions.push(eq(evidence.caseId, input.caseId));

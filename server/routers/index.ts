@@ -1,4 +1,4 @@
-import { COOKIE_NAME, ONE_YEAR_MS } from "../../shared/const";
+import { COOKIE_NAME, SESSION_MAX_AGE_MS, SESSION_EXPIRES_IN } from "../../shared/const";
 import { getSessionCookieOptions } from "../cookies";
 import { systemRouter } from '../_core/systemRouter';
 import { publicProcedure, router, protectedProcedure } from '../_core/trpc';
@@ -167,11 +167,11 @@ export const appRouter = router({
           createdAt: new Date(),
         });
 
-        const token = jwt.sign({ userId }, ENV.JWT_SECRET, { expiresIn: "365d" });
+        const token = jwt.sign({ userId }, ENV.JWT_SECRET, { expiresIn: SESSION_EXPIRES_IN });
         const cookieOptions = getSessionCookieOptions(ctx.req);
         ctx.res.cookie(COOKIE_NAME, token, {
           ...cookieOptions,
-          maxAge: ONE_YEAR_MS,
+          maxAge: SESSION_MAX_AGE_MS,
         });
 
         return { success: true };
@@ -205,13 +205,13 @@ export const appRouter = router({
         }
 
         const token = jwt.sign({ userId: user.id }, ENV.JWT_SECRET, {
-          expiresIn: "365d",
+          expiresIn: SESSION_EXPIRES_IN,
         });
 
         const cookieOptions = getSessionCookieOptions(ctx.req);
         ctx.res.cookie(COOKIE_NAME, token, {
           ...cookieOptions,
-          maxAge: ONE_YEAR_MS,
+          maxAge: SESSION_MAX_AGE_MS,
         });
 
         return { success: true, user: {
@@ -307,7 +307,7 @@ export const appRouter = router({
 
     getApiToken: protectedProcedure.query(({ ctx }) => {
       const token = jwt.sign({ userId: ctx.user.id }, ENV.JWT_SECRET, {
-        expiresIn: "365d",
+        expiresIn: SESSION_EXPIRES_IN,
       });
       return { token };
     }),

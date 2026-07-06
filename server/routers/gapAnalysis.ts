@@ -1,4 +1,5 @@
-import { router, publicProcedure, protectedProcedure } from "../_core/trpc";
+import { router, protectedProcedure } from "../_core/trpc";
+import { assertCaseOwnership } from "../_core/authz";
 import { z } from "zod";
 import { gapDetectionService } from "../gapDetection";
 import { kvkIntegrationService } from "../kvkIntegration";
@@ -39,9 +40,10 @@ export const gapAnalysisRouter = router({
   /**
    * Run gap analysis for a case
    */
-  analyze: publicProcedure
+  analyze: protectedProcedure
     .input(z.object({ caseId: z.string() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await assertCaseOwnership(input.caseId, ctx.user.id); // Phase 008
       const result = await gapDetectionService.analyzeCase(input.caseId);
       return result;
     }),
@@ -49,9 +51,10 @@ export const gapAnalysisRouter = router({
   /**
    * Get communication gaps for a case
    */
-  getGaps: publicProcedure
+  getGaps: protectedProcedure
     .input(z.object({ caseId: z.string() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await assertCaseOwnership(input.caseId, ctx.user.id);
       const db = await getDb();
       if (!db) return [];
 
@@ -95,9 +98,10 @@ export const gapAnalysisRouter = router({
   /**
    * Get expected documents for a case
    */
-  getExpectedDocuments: publicProcedure
+  getExpectedDocuments: protectedProcedure
     .input(z.object({ caseId: z.string() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await assertCaseOwnership(input.caseId, ctx.user.id);
       const db = await getDb();
       if (!db) return [];
 
@@ -115,9 +119,10 @@ export const gapAnalysisRouter = router({
   /**
    * Get suspicious patterns for a case
    */
-  getPatterns: publicProcedure
+  getPatterns: protectedProcedure
     .input(z.object({ caseId: z.string() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await assertCaseOwnership(input.caseId, ctx.user.id);
       const db = await getDb();
       if (!db) return [];
 
@@ -148,9 +153,10 @@ export const gapAnalysisRouter = router({
   /**
    * Get legal inferences for a case
    */
-  getInferences: publicProcedure
+  getInferences: protectedProcedure
     .input(z.object({ caseId: z.string() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await assertCaseOwnership(input.caseId, ctx.user.id);
       const db = await getDb();
       if (!db) return [];
 
@@ -194,9 +200,10 @@ export const gapAnalysisRouter = router({
   /**
    * Get case strength analysis
    */
-  getCaseStrength: publicProcedure
+  getCaseStrength: protectedProcedure
     .input(z.object({ caseId: z.string() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await assertCaseOwnership(input.caseId, ctx.user.id);
       const db = await getDb();
       if (!db) return null;
 
@@ -222,9 +229,10 @@ export const gapAnalysisRouter = router({
   /**
    * Get complete gap analysis summary for a case
    */
-  getSummary: publicProcedure
+  getSummary: protectedProcedure
     .input(z.object({ caseId: z.string() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await assertCaseOwnership(input.caseId, ctx.user.id);
       const db = await getDb();
       if (!db) {
         return {
@@ -364,7 +372,7 @@ export const gapAnalysisRouter = router({
   /**
    * Look up company information via KvK (Dutch business registry)
    */
-  lookupCompany: publicProcedure
+  lookupCompany: protectedProcedure
     .input(
       z.object({
         kvkNumber: z.string().optional(),
@@ -424,7 +432,7 @@ export const gapAnalysisRouter = router({
   /**
    * Search court records for opponent's litigation history
    */
-  searchCourtRecords: publicProcedure
+  searchCourtRecords: protectedProcedure
     .input(
       z.object({
         companyName: z.string(),
@@ -443,7 +451,7 @@ export const gapAnalysisRouter = router({
   /**
    * Get opponent's complete litigation history
    */
-  getOpponentHistory: publicProcedure
+  getOpponentHistory: protectedProcedure
     .input(z.object({ companyName: z.string() }))
     .query(async ({ input }) => {
       return await rechtspraakIntegrationService.getOpponentHistory(input.companyName);
@@ -452,7 +460,7 @@ export const gapAnalysisRouter = router({
   /**
    * Generate legal document based on gap analysis
    */
-  generateDocument: publicProcedure
+  generateDocument: protectedProcedure
     .input(
       z.object({
         caseId: z.string(),
@@ -466,6 +474,7 @@ export const gapAnalysisRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
+      await assertCaseOwnership(input.caseId, ctx.user.id); // Phase 008
       const db = await getDb();
       if (!db) {
         return {

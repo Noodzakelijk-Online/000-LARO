@@ -1,15 +1,15 @@
 import { z } from "zod";
 import { nanoid } from "nanoid";
-import { router, publicProcedure } from "../_core/trpc";
+import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { supportTickets } from "../schema";
 
-function effectiveUserId(ctx: { user: { id: string } | null }) {
-  return ctx.user?.id ?? "demo-user-123";
+function effectiveUserId(ctx: { user: { id: string } }) {
+  return ctx.user.id;
 }
 
 export const supportRouter = router({
-  submitTicket: publicProcedure
+  submitTicket: protectedProcedure
     .input(
       z.object({
         category: z.string().min(1).max(80),

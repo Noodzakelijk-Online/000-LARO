@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { publicProcedure, router } from "../_core/trpc";
+import { protectedProcedure, router } from "../_core/trpc";
 import {
   searchEvidenceFiles,
   getEvidenceFile,
@@ -16,7 +16,7 @@ import { nanoid } from "nanoid";
 export const evidenceFilesRouter = router({
 
   // Search / list evidence files
-  search: publicProcedure
+  search: protectedProcedure
     .input(z.object({
       caseId: z.string().optional(),
       query:  z.string().optional(),
@@ -24,7 +24,7 @@ export const evidenceFilesRouter = router({
       offset: z.number().optional(),
     }).optional())
     .query(async ({ ctx, input }) => {
-      const userId = ctx.user?.id || "demo-user-123";
+      const userId = ctx.user.id;
       const result = await searchEvidenceFiles({
         userId,
         caseId: input?.caseId,
@@ -41,15 +41,15 @@ export const evidenceFilesRouter = router({
     }),
 
   // Get single file
-  get: publicProcedure
+  get: protectedProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
-      const userId = ctx.user?.id || "demo-user-123";
+      const userId = ctx.user.id;
       return getEvidenceFile(userId, input.id);
     }),
 
   // Create evidence file record
-  create: publicProcedure
+  create: protectedProcedure
     .input(z.object({
       caseId:      z.string(),
       title:       z.string(),
@@ -62,43 +62,43 @@ export const evidenceFilesRouter = router({
       mimeType:    z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const userId = ctx.user?.id || "demo-user-123";
+      const userId = ctx.user.id;
       const id = await createEvidenceFile(userId, input);
       return { id };
     }),
 
   // Delete
-  delete: publicProcedure
+  delete: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const userId = ctx.user?.id || "demo-user-123";
+      const userId = ctx.user.id;
       const success = await deleteEvidenceFile(userId, input.id);
       return { success };
     }),
 
   // By case
-  byCase: publicProcedure
+  byCase: protectedProcedure
     .input(z.object({ caseId: z.string() }))
     .query(async ({ ctx, input }) => {
-      const userId = ctx.user?.id || "demo-user-123";
+      const userId = ctx.user.id;
       return getEvidenceFilesByCase(userId, input.caseId);
     }),
 
   // Stats
-  stats: publicProcedure.query(async ({ ctx }) => {
-      const userId = ctx.user?.id || "demo-user-123";
+  stats: protectedProcedure.query(async ({ ctx }) => {
+      const userId = ctx.user.id;
       return getEvidenceStats(userId);
   }),
 
   // Get download URL (for file preview)
-  getDownloadUrl: publicProcedure
+  getDownloadUrl: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       if (!ctx.user) throw new Error("Not authenticated");
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      const userId = ctx.user?.id || "demo-user-123";
+      const userId = ctx.user.id;
       const file = await getEvidenceFile(userId, input.id);
       if (!file) throw new Error("File not found");
 
@@ -110,7 +110,7 @@ export const evidenceFilesRouter = router({
     }),
 
   // Also search evidence_files table (desktop scanner uploads go here)
-  searchScanned: publicProcedure
+  searchScanned: protectedProcedure
     .input(z.object({
       caseId: z.string().optional(),
       limit:  z.number().optional().default(50),
@@ -119,7 +119,7 @@ export const evidenceFilesRouter = router({
       const db = await getDb();
       if (!db) return [];
 
-      const userId = ctx.user?.id || "demo-user-123";
+      const userId = ctx.user.id;
       const conditions: any[] = [eq(evidenceFiles.userId, userId)];
       if (input?.caseId) conditions.push(eq(evidenceFiles.caseId, input.caseId));
 

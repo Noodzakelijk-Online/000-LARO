@@ -1,6 +1,7 @@
 import { z } from "zod";
-import { publicProcedure, router, protectedProcedure } from "../_core/trpc";
+import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
+import { assertCaseOwnership } from "../_core/authz";
 import { cases as casesTable, outreachStatus, lawyers, evidence } from '../schema';
 import { eq, desc, and, sql } from "drizzle-orm";
 import { sanitizeLegalAreas } from "../legalAreasValidator";
@@ -186,9 +187,10 @@ export const casesRouter = router({
       return { success: true };
     }),
 
-  outreachProgress: publicProcedure
+  outreachProgress: protectedProcedure
     .input(z.object({ caseId: z.string() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await assertCaseOwnership(input.caseId, ctx.user.id); // Phase 008
       const db = await getDb();
       if (!db) return { legalAreas: [], overallStats: {} };
 
@@ -218,12 +220,13 @@ export const casesRouter = router({
       };
     }),
     
-  getOutreachByCaseId: publicProcedure
+  getOutreachByCaseId: protectedProcedure
     .input(z.string())
-    .query(async ({ input: caseId }) => {
+    .query(async ({ input: caseId, ctx }) => {
+      await assertCaseOwnership(caseId, ctx.user.id); // Phase 008
       const db = await getDb();
       if (!db) return [];
-      
+
       const results = await db
         .select({
           id: outreachStatus.id,
@@ -246,9 +249,10 @@ export const casesRouter = router({
   // computed from real data (case status, evidence count, outreach responses)
   // rather than stored — so it stays in sync as the user pulls evidence and
   // runs outreach.
-  progress: publicProcedure
+  progress: protectedProcedure
     .input(z.object({ caseId: z.string() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await assertCaseOwnership(input.caseId, ctx.user.id); // Phase 008
       const empty = {
         caseId: input.caseId,
         caseTitle: "",

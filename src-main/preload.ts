@@ -64,6 +64,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Open scan panel — added to electronAPI
   openScanPanel: () => ipcRenderer.invoke('scan:open-panel'),
+
+  // Phase 007: per-install desktop agent token (replaces the "local-default" constant)
+  getAgentToken: () => ipcRenderer.invoke('agent:token'),
 });
 
 // TypeScript declaration for window.electronAPI
@@ -87,6 +90,7 @@ declare global {
       removeAllListeners: (channel: string) => void;
       checkForUpdates: () => Promise<{ currentVersion: string; updateAvailable: boolean }>;
       openScanPanel: () => Promise<void>;
+      getAgentToken: () => Promise<string | null>;
     };
   }
 }

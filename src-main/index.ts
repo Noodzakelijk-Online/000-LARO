@@ -17,6 +17,53 @@ const PORT = 3000;
 const LARO_URL = `http://localhost:${PORT}`;
 const isDev = process.env.NODE_ENV === 'development';
 
+/**
+ * Phase 006/007 — per-install secret bootstrap.
+ *
+ * Generates strong random secrets on first run and persists them to the user's
+ * private app-data directory (never committed, never shipped). This makes the
+ * desktop app secure-by-default: sessions are signed with a per-install
+ * JWT_SECRET (so tokens cannot be forged with the old shared default), and the
+ * desktop scanner authenticates with a per-install LOCAL_AGENT_TOKEN instead of
+ * the well-known "local-default" string.
+ *
+ * Only fills a value if it is not already provided by the environment (a real
+ * deployment can still inject its own secrets).
+ */
+function bootstrapSecrets(userDataPath: string) {
+  const crypto = require('crypto') as typeof import('crypto');
+  const secretsPath = path.join(userDataPath, 'laro-secrets.json');
+  let store: { jwtSecret?: string; cookieSecret?: string; localAgentToken?: string } = {};
+  try {
+    if (fs.existsSync(secretsPath)) {
+      store = JSON.parse(fs.readFileSync(secretsPath, 'utf8'));
+    }
+  } catch (e) {
+    console.warn('[Electron] Could not read secrets file; regenerating:', e);
+    store = {};
+  }
+
+  const gen = () => crypto.randomBytes(32).toString('hex');
+  let changed = false;
+  if (!store.jwtSecret) { store.jwtSecret = gen(); changed = true; }
+  if (!store.cookieSecret) { store.cookieSecret = gen(); changed = true; }
+  if (!store.localAgentToken) { store.localAgentToken = gen(); changed = true; }
+
+  if (changed) {
+    try {
+      fs.writeFileSync(secretsPath, JSON.stringify(store, null, 2), { mode: 0o600 });
+      console.log('[Electron] Generated per-install secrets at:', secretsPath);
+    } catch (e) {
+      console.warn('[Electron] Could not persist secrets file (using in-memory values):', e);
+    }
+  }
+
+  // Only set if not already provided by a real .env / deployment.
+  if (!process.env.JWT_SECRET) process.env.JWT_SECRET = store.jwtSecret;
+  if (!process.env.COOKIE_SECRET) process.env.COOKIE_SECRET = store.cookieSecret;
+  if (!process.env.LOCAL_AGENT_TOKEN) process.env.LOCAL_AGENT_TOKEN = store.localAgentToken;
+}
+
 // ─── Error Handling ─────────────────────────────────────────────────────────
 
 process.on('uncaughtException', (err) => {
@@ -194,6 +241,17 @@ app.whenReady().then(async () => {
     );
     process.env.NODE_ENV = 'production';
   }
+
+  // Phase 006/007: generate/load per-install secrets and set them in the
+  // environment BEFORE importing the server, so env.ts reads real secrets and
+  // the production security guard passes with strong, non-forgeable values.
+  bootstrapSecrets(userDataPath);
+  // Default the desktop scanner's token to the per-install agent token so it
+  // authenticates without the well-known "local-default" string.
+  if (process.env.LOCAL_AGENT_TOKEN) {
+    agentConfig.token = agentConfig.token ?? process.env.LOCAL_AGENT_TOKEN;
+  }
+
   try {
     const { startServer } = await import('../server/index');
     await startServer(PORT);
@@ -244,6 +302,9 @@ function setupIPC(): void {
     version: app.getVersion(),
   }));
   ipcMain.handle(IPC_CHANNELS.APP_VERSION, () => app.getVersion());
+  // Phase 007: hand the renderer the per-install agent token so the scanner UI
+  // authenticates with it instead of the well-known "local-default" string.
+  ipcMain.handle('agent:token', () => process.env.LOCAL_AGENT_TOKEN || null);
   ipcMain.handle(IPC_CHANNELS.OPEN_EXTERNAL, (_: any, url: string) => shell.openExternal(url));
   ipcMain.handle(IPC_CHANNELS.SCAN_OPEN_PANEL, () => createScanPanel());
   ipcMain.handle(IPC_CHANNELS.FOLDER_SELECT, async () => {

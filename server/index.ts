@@ -33,6 +33,7 @@ import { initCronScheduler } from './cronScheduler';
 import oauth2CallbacksRouter from './oauth2Callbacks';
 import { beginOAuthFlow } from './oauth2';
 import { getDb } from './db';
+import { assertSecurityConfig, ENV } from './_core/env';
 
 // ─── Environment ──────────────────────────────────────────────────────────────
 
@@ -156,6 +157,13 @@ if (!isDev) {
 // ─── Lifecycle ──────────────────────────────────────────────────────────────
 
 export async function startServer(port: number = PORT) {
+  // Phase 006: validate security-critical configuration BEFORE accepting any
+  // request. In production this throws (fail-safe) if secrets are insecure; in
+  // development it returns warnings we log loudly so the mode is unmistakable.
+  const configWarnings = assertSecurityConfig();
+  console.log(`[Server] Environment: ${ENV.NODE_ENV.toUpperCase()}${ENV.isProd ? '' : ' (development — not for production use)'}`);
+  for (const w of configWarnings) console.warn(`[config] ${w}`);
+
   // Pre-warm the DB so migrations run (and any schema issue surfaces) before
   // we start accepting requests. The first signup/login otherwise races with
   // migration and can hit "no such table: users".

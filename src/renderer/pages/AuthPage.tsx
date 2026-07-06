@@ -12,9 +12,22 @@ export default function AuthPage({ onLogin }: Props) {
   const [token, setToken] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Phase 007: resolve the per-install desktop agent token from the Electron
+  // main process. Falls back to the legacy constant only when running outside
+  // Electron (dev browser), where the server accepts it in development only.
+  const resolveLocalToken = async (): Promise<string> => {
+    try {
+      const injected = await (electronAPI as any).getAgentToken?.();
+      if (injected && typeof injected === 'string') return injected;
+    } catch {
+      /* not running in Electron */
+    }
+    return 'local-default';
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const effectiveToken = token.trim() || 'local-default';
+    const effectiveToken = token.trim() || (await resolveLocalToken());
 
     setLoading(true);
     try {
@@ -34,7 +47,7 @@ export default function AuthPage({ onLogin }: Props) {
     } catch {
       // Allow offline login
       await electronAPI.setConfig({ apiUrl });
-      onLogin(token.trim() || 'local-default', 'user-offline', 'user-offline');
+      onLogin(effectiveToken, 'user-offline', 'user-offline');
       toast.warning('Connected in offline mode');
     } finally {
       setLoading(false);
@@ -77,9 +90,9 @@ export default function AuthPage({ onLogin }: Props) {
                 API Token (Optional for Local)
               </label>
               {apiUrl.includes('localhost') && (
-                <button 
-                  type="button" 
-                  onClick={() => setToken('local-dev-token')}
+                <button
+                  type="button"
+                  onClick={async () => setToken(await resolveLocalToken())}
                   className="text-[10px] text-blue-400 hover:text-blue-300 uppercase tracking-wider font-bold"
                 >
                   Skip for Local

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
-import { router, publicProcedure } from "../_core/trpc";
+import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { userPreferences } from "../schema";
 import { nanoid } from "nanoid";
@@ -45,8 +45,8 @@ const DEFAULT_APP_WORKBENCH: AppWorkbenchPrefs = {
   },
 };
 
-function effectiveUserId(ctx: { user: { id: string } | null }) {
-  return ctx.user?.id ?? "demo-user-123";
+function effectiveUserId(ctx: { user: { id: string } }) {
+  return ctx.user.id;
 }
 
 async function getRow(userId: string) {
@@ -81,7 +81,7 @@ function parseAppWorkbench(row: Awaited<ReturnType<typeof getRow>>): AppWorkbenc
 }
 
 export const userPreferencesRouter = router({
-  get: publicProcedure.query(async ({ ctx }) => {
+  get: protectedProcedure.query(async ({ ctx }) => {
     const userId = effectiveUserId(ctx);
     const row = await getRow(userId);
 
@@ -97,7 +97,7 @@ export const userPreferencesRouter = router({
     };
   }),
 
-  updateWidgets: publicProcedure
+  updateWidgets: protectedProcedure
     .input(z.record(z.boolean()))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -123,7 +123,7 @@ export const userPreferencesRouter = router({
       return { ok: true };
     }),
 
-  updateNotifications: publicProcedure
+  updateNotifications: protectedProcedure
     .input(z.any())
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -159,7 +159,7 @@ export const userPreferencesRouter = router({
       return { ok: true };
     }),
 
-  updateAppWorkbench: publicProcedure
+  updateAppWorkbench: protectedProcedure
     .input(
       z.object({
         outreach: z
@@ -209,12 +209,12 @@ export const userPreferencesRouter = router({
       return { ok: true };
     }),
 
-  togglePreferredLawyer: publicProcedure
+  togglePreferredLawyer: protectedProcedure
     .input(z.object({ lawyerId: z.string() }))
     .mutation(async ({ ctx }) => {
       void ctx;
       return { ok: true };
     }),
 
-  updateCaseTemplates: publicProcedure.input(z.any()).mutation(async () => ({ ok: true })),
+  updateCaseTemplates: protectedProcedure.input(z.any()).mutation(async () => ({ ok: true })),
 });

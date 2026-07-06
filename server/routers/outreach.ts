@@ -1,13 +1,15 @@
 import { z } from "zod";
-import { publicProcedure, router } from "../_core/trpc";
+import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
+import { assertCaseOwnership } from "../_core/authz";
 import { outreachStatus, lawyers } from '../schema';
 import { eq } from "drizzle-orm";
 
 export const outreachRouter = router({
-  byCaseId: publicProcedure
+  byCaseId: protectedProcedure
     .input(z.string())
-    .query(async ({ input: caseId }) => {
+    .query(async ({ input: caseId, ctx }) => {
+      await assertCaseOwnership(caseId, ctx.user.id); // Phase 008
       const db = await getDb();
       if (!db) return [];
       const results = await db
