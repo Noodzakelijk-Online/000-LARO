@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { assertCaseOwnership } from "../_core/authz";
+import { enforceRateLimit, RATE_LIMITS } from "../rateLimit";
 import { findMatchingLawyers } from "../matching";
 
 /**
@@ -29,6 +30,7 @@ export const matchingRouter = router({
     }))
     .query(async ({ input, ctx }) => {
       await assertCaseOwnership(input.caseId, ctx.user.id); // Phase 008
+      enforceRateLimit(ctx, "lawyerSearch", RATE_LIMITS.lawyerSearch); // Phase 018
       try {
         return await findMatchingLawyers(input.caseId, {
           maxDistance: input.maxDistance,

@@ -1,25 +1,117 @@
 import cron from 'node-cron';
 import { runAutoCollectionForAllCases } from './autoCollectionService';
-// Import outreach scheduler logic as it is added.
+
+/**
+ * Phase 016 — background jobs, schedulers, and workers.
+ *
+ * Every scheduled job runs through runJob(), which adds:
+ *  - error isolation (a failing job never crashes the scheduler),
+ *  - bounded retry with backoff,
+ *  - observable status (last run, last success, last error, run count) exposed
+ *    via getJobStatus() for the health/observability endpoints.
+ *
+ * Honesty: the hourly outreach job does NOT send anything. Automated outreach
+ * follow-ups require the real send path + human-approval gate (Phase 026), which
+ * are not implemented. The job records a heartbeat and clearly logs that
+ * follow-ups are disabled, rather than pretending to process outreach.
+ */
+
+export interface JobStatus {
+  name: string;
+  lastRunAt: number | null;
+  lastSuccessAt: number | null;
+  lastErrorAt: number | null;
+  lastError: string | null;
+  runs: number;
+  failures: number;
+  enabled: boolean;
+}
+
+const jobStatus = new Map<string, JobStatus>();
+
+function ensureStatus(name: string): JobStatus {
+  let s = jobStatus.get(name);
+  if (!s) {
+    s = {
+      name,
+      lastRunAt: null,
+      lastSuccessAt: null,
+      lastErrorAt: null,
+      lastError: null,
+      runs: 0,
+      failures: 0,
+      enabled: true,
+    };
+    jobStatus.set(name, s);
+  }
+  return s;
+}
+
+export function getJobStatus(): JobStatus[] {
+  return Array.from(jobStatus.values());
+}
+
+/**
+ * Run a job with error isolation and bounded retry+backoff. Never throws.
+ */
+export async function runJob(
+  name: string,
+  fn: () => Promise<void>,
+  opts: { retries?: number; baseDelayMs?: number } = {}
+): Promise<void> {
+  const { retries = 2, baseDelayMs = 1000 } = opts;
+  const s = ensureStatus(name);
+  s.runs += 1;
+  s.lastRunAt = nowMs();
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      await fn();
+      s.lastSuccessAt = nowMs();
+      s.lastError = null;
+      return;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (attempt < retries) {
+        const delay = baseDelayMs * Math.pow(2, attempt);
+        console.warn(`[Cron] Job "${name}" failed (attempt ${attempt + 1}/${retries + 1}); retrying in ${delay}ms:`, msg);
+        await sleep(delay);
+        continue;
+      }
+      s.failures += 1;
+      s.lastErrorAt = nowMs();
+      s.lastError = msg;
+      console.error(`[Cron] Job "${name}" failed after ${retries + 1} attempts:`, msg);
+      return;
+    }
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Date.now via a helper so it is easy to reason about / stub if needed.
+function nowMs(): number {
+  return Date.now();
+}
 
 export function initCronScheduler() {
   console.log('[Cron] Initializing scheduled tasks...');
+  ensureStatus('auto-collection');
+  ensureStatus('outreach-heartbeat');
 
-  // Run auto-collection every day at 2:00 AM
-  cron.schedule('0 2 * * *', async () => {
-    console.log('[Cron] Running daily auto-collection job at 2:00 AM');
-    try {
-      await runAutoCollectionForAllCases();
-    } catch (error) {
-      console.error('[Cron] Error in daily auto-collection job:', error);
-    }
+  // Daily auto-collection at 02:00.
+  cron.schedule('0 2 * * *', () => {
+    void runJob('auto-collection', async () => { await runAutoCollectionForAllCases(); }, { retries: 2 });
   });
 
-  // Example placeholder for outreach processing
-  cron.schedule('0 * * * *', async () => {
-    console.log('[Cron] Checking outreach status (hourly)...');
-    // await processOutreachFollowups();
+  // Hourly outreach heartbeat — intentionally does NOT send anything.
+  cron.schedule('0 * * * *', () => {
+    void runJob('outreach-heartbeat', async () => {
+      console.log('[Cron] Outreach follow-ups are disabled (no send path / approval gate — Phase 026). Heartbeat only.');
+    }, { retries: 0 });
   });
 
-  console.log('[Cron] Scheduled tasks loaded.');
+  console.log('[Cron] Scheduled tasks loaded:', getJobStatus().map((j) => j.name).join(', '));
 }

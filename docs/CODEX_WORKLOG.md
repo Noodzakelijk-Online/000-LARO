@@ -9,6 +9,40 @@ is only partially done, that is stated here and reflected in
 
 ---
 
+## 2026-07-06 — Phases 016–020 (jobs, idempotency, rate limits, audit, dashboard)
+
+**Branch:** `Phase-Imp` (not pushed — owner pushes separately)
+
+### Phase 016 — Background jobs, schedulers & workers ([docs/OPERATOR_RUNBOOK.md](OPERATOR_RUNBOOK.md))
+- Rewrote [server/cronScheduler.ts](../server/cronScheduler.ts) with `runJob()`: error isolation, retry+exponential backoff, and observable status (`getJobStatus()`). The hourly outreach job is now an **honest heartbeat** (logs that follow-ups are disabled until the send path/approval gate exist — Phase 026) instead of a commented-out dead body.
+- Exposed status via `health.readiness` ([server/routers/health.ts](../server/routers/health.ts)) with a real DB check.
+
+### Phase 017 — Idempotency & duplicate-action prevention
+- UNIQUE index `outreach_status(caseId, lawyerId)` in `ensureIndexes` ([server/db.ts](../server/db.ts)).
+- `workflow.initiateOutreach` is idempotent — returns `{ alreadyInitiated: true }` when the case is already in Outreach; no re-write/re-audit.
+
+### Phase 018 — Rate limits, cooldowns & provider quotas
+- Added `enforceRateLimit(ctx, scope, config)` ([server/rateLimit.ts](../server/rateLimit.ts)) and applied the previously-unused named configs to `auth.login`, `cases.create`, `matching.findLawyers`, `workflow.initiateOutreach`.
+
+### Phase 019 — Audit logging & event history
+- `getAuditLogs` now actually filters by userId/entity/action (previously ignored) ([server/audit.ts](../server/audit.ts)).
+- Added a user-scoped read path `audit.list` ([server/routers/audit.ts](../server/routers/audit.ts)), mounted in `appRouter`.
+- Wired `createAuditLog` into reachable actions: case create/update/delete, `outreach.initiated`, `user.login`.
+
+### Phase 020 — User-facing dashboard & next-action design
+- Added `dashboard.nextActions` ([server/routers/dashboard.ts](../server/routers/dashboard.ts)): derives concrete next steps from real case state (no evidence → "Add evidence"; Matching → "Review lawyer matches"; Outreach → "Review outreach"), prioritized by urgency.
+
+### Tests & verification
+- Added `tests/smoke/opsHardening.smoke.test.ts` (rate limiter behaviour, cron runner retry/status, + source guards for 017/019/020).
+- `tsc` server + main → clean. `npx vitest run tests/smoke` → **53 passed, 9 todo, 0 failed**.
+
+### What remains (out of scope for 016–020)
+- Idempotency keys + audit on the **real** outreach send (once 026 wires it).
+- Distributed rate-limit store (Redis) — currently in-memory per process.
+- Surface `nextActions`/audit history in the renderer UI (037/109) and add retention (102).
+
+---
+
 ## 2026-07-06 — Phases 011–015 (core slice, providers, compliance, no-fake, storage)
 
 **Branch:** `Phase-Imp` (not pushed — owner pushes separately)

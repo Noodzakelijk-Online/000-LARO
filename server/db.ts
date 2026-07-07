@@ -65,6 +65,20 @@ function ensureIndexes(sqlite: InstanceType<typeof Database>) {
     );
   }
 
+  // Phase 017 — idempotency / duplicate-action prevention: a case may only have
+  // ONE outreach row per lawyer. This makes "initiate outreach" idempotent at
+  // the DB level (a duplicate insert is rejected). Created defensively.
+  try {
+    sqlite.exec(
+      `CREATE UNIQUE INDEX IF NOT EXISTS outreach_status_case_lawyer_unique ON outreach_status(caseId, lawyerId);`
+    );
+  } catch (e) {
+    console.warn(
+      "[Database] Could not create unique index outreach_status_case_lawyer_unique (pre-existing duplicates?):",
+      e
+    );
+  }
+
   // Hot-path indexes for the highest-traffic lookups (outreach, evidence, email,
   // messaging, lawyer rating). All idempotent.
   const indexStatements = [

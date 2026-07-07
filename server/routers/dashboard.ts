@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { cases as casesTable, outreachStatus, emailActivity } from '../schema';
+import { cases as casesTable, outreachStatus, emailActivity, evidence } from '../schema';
 import { desc, eq, sql, and, inArray } from "drizzle-orm";
 
 export const dashboardRouter = router({
@@ -138,6 +138,73 @@ export const dashboardRouter = router({
     const { getInterestedMatches } = await import("../db");
     const userId = ctx.user.id;
     return await getInterestedMatches(10, userId);
+  }),
+
+  // Phase 020 — user-facing next-action design. Derives concrete "what to do
+  // next" items from the user's REAL case state (no fabrication). Each item
+  // explains what happened and what the user can do next.
+  nextActions: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) return [] as Array<{ caseId: string; caseTitle: string; action: string; reason: string; priority: "high" | "medium" | "low" }>;
+    const userId = ctx.user.id;
+
+    const userCases = await db
+      .select({
+        id: casesTable.id,
+        clientName: casesTable.clientName,
+        status: casesTable.status,
+        urgency: casesTable.urgency,
+      })
+      .from(casesTable)
+      .where(eq(casesTable.userId, userId))
+      .orderBy(desc(casesTable.createdAt))
+      .limit(25);
+
+    const actions: Array<{ caseId: string; caseTitle: string; action: string; reason: string; priority: "high" | "medium" | "low" }> = [];
+
+    for (const c of userCases) {
+      const title = c.clientName || c.id;
+      const highUrgency = (c.urgency || "").toLowerCase() === "high";
+
+      const evCount = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(evidence)
+        .where(and(eq(evidence.userId, userId), eq(evidence.caseId, c.id)));
+      const hasEvidence = Number(evCount[0]?.count || 0) > 0;
+
+      if (!hasEvidence) {
+        actions.push({
+          caseId: c.id,
+          caseTitle: title,
+          action: "Add evidence",
+          reason: "This case has no evidence yet. Add documents so it can be assessed.",
+          priority: highUrgency ? "high" : "medium",
+        });
+        continue;
+      }
+
+      if (c.status === "Matching") {
+        actions.push({
+          caseId: c.id,
+          caseTitle: title,
+          action: "Review lawyer matches",
+          reason: "The case is ready for matching. Review suggested lawyers.",
+          priority: highUrgency ? "high" : "medium",
+        });
+      } else if (c.status === "Outreach") {
+        actions.push({
+          caseId: c.id,
+          caseTitle: title,
+          action: "Review outreach",
+          reason: "Outreach is in progress. Check status and any responses.",
+          priority: highUrgency ? "high" : "low",
+        });
+      }
+    }
+
+    const rank = { high: 0, medium: 1, low: 2 } as const;
+    actions.sort((a, b) => rank[a.priority] - rank[b.priority]);
+    return actions;
   }),
 
 });

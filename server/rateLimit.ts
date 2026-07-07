@@ -112,6 +112,20 @@ export const RATE_LIMITS = {
 };
 
 /**
+ * Phase 018 — convenience wrapper: derive the identifier from the tRPC context
+ * and enforce a named limit, throwing TOO_MANY_REQUESTS when exceeded. The
+ * `scope` keeps different actions in separate buckets for the same user.
+ */
+export function enforceRateLimit(
+  ctx: { user?: { id: string } | null; req: any },
+  scope: string,
+  config: RateLimitConfig
+): void {
+  const identifier = `${scope}:${getRateLimitIdentifier(ctx as any)}`;
+  checkRateLimit(identifier, config);
+}
+
+/**
  * Get rate limit identifier from context
  * Uses user ID if authenticated, otherwise IP address
  */

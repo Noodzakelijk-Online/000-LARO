@@ -65,3 +65,20 @@ re-deriving state.
 **Verified:** server + main `tsc` clean; `npx vitest run tests/smoke` → 43 pass / 9 todo.
 
 **Next safe action:** Phase 025 (classification) so matching has legal areas to work with; then 026 (approval gate) before any real outreach send; then 016–019 (jobs/idempotency/rate-limits/audit) on the outreach path.
+
+---
+
+## Checkpoint 4 — 2026-07-06 — Phases 016–020
+
+**Branch:** `Phase-Imp` (not pushed — owner pushes next)
+
+**Done:**
+- 016: cron `runJob()` retry+status; honest outreach heartbeat; `health.readiness`. **Implemented**.
+- 017: unique outreach index + idempotent initiateOutreach. **Partial** (send-path keys → 026).
+- 018: `enforceRateLimit` on login/case-create/matching/outreach. **Implemented**.
+- 019: audit filtering + `audit.list` read + wired into CRUD/login/outreach. **Implemented**.
+- 020: `dashboard.nextActions` from real case state. **Partial** (UI surface → 037/109).
+
+**Verified:** server + main `tsc` clean; `vitest tests/smoke` → 53 pass / 9 todo.
+
+**Next safe action:** Phase 021–024 (forms/validation/autosave, search/filters, import/export, templates) or jump to the Stage-B remainder (025 classification → 026 approval gate) to unblock the real outreach path that 016–019 are waiting on.

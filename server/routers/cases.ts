@@ -2,6 +2,8 @@ import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { assertCaseOwnership } from "../_core/authz";
+import { enforceRateLimit, RATE_LIMITS } from "../rateLimit";
+import { createAuditLog, AUDIT_ACTIONS } from "../audit";
 import { cases as casesTable, outreachStatus, lawyers, evidence } from '../schema';
 import { eq, desc, and, sql } from "drizzle-orm";
 import { sanitizeLegalAreas } from "../legalAreasValidator";
@@ -68,6 +70,7 @@ export const casesRouter = router({
       urgency: z.enum(["Low", "Medium", "High"]),
     }))
     .mutation(async ({ input, ctx }) => {
+      enforceRateLimit(ctx, "caseCreate", RATE_LIMITS.caseCreate); // Phase 018
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
@@ -88,6 +91,14 @@ export const casesRouter = router({
         createdAt: new Date(),
         updatedAt: new Date(),
       } as any);
+
+      await createAuditLog({ // Phase 019
+        userId,
+        action: AUDIT_ACTIONS.CASE_CREATED,
+        entityType: "case",
+        entityId: caseId,
+        details: { caseType: input.caseType, urgency: input.urgency },
+      });
 
       return { id: caseId, success: true };
     }),
@@ -116,6 +127,14 @@ export const casesRouter = router({
       await db.update(casesTable)
         .set(updateData)
         .where(and(eq(casesTable.id, input.id), eq(casesTable.userId, ctx.user.id)));
+
+      await createAuditLog({ // Phase 019
+        userId: ctx.user.id,
+        action: input.status ? AUDIT_ACTIONS.CASE_STATUS_CHANGED : AUDIT_ACTIONS.CASE_UPDATED,
+        entityType: "case",
+        entityId: input.id,
+        details: { status: input.status, fields: Object.keys(updateData) },
+      });
 
       return { success: true };
     }),
@@ -183,6 +202,14 @@ export const casesRouter = router({
       });
 
       tx(input.id, ctx.user.id);
+
+      await createAuditLog({ // Phase 019
+        userId: ctx.user.id,
+        action: AUDIT_ACTIONS.CASE_DELETED,
+        entityType: "case",
+        entityId: input.id,
+        details: { cascadedTables: tablesWithCaseId },
+      });
 
       return { success: true };
     }),

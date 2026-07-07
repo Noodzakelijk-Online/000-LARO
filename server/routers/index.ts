@@ -29,6 +29,9 @@ import { evidenceAnalyticsRouter } from "./evidenceAnalytics";
 import { autoCollectionRouter } from "./autoCollection";
 import { googleDriveRouter } from "./googleDrive";
 import { notificationsRouter } from "./notifications";
+import { auditRouter } from "./audit";
+import { enforceRateLimit, RATE_LIMITS } from "../rateLimit";
+import { createAuditLog, AUDIT_ACTIONS } from "../audit";
 import {
   gmailEnhancedRouter,
   outlookEnhancedRouter,
@@ -78,6 +81,7 @@ export const appRouter = router({
   autoCollection: autoCollectionRouter,
   googleDrive: googleDriveRouter,
   notifications: notificationsRouter,
+  audit: auditRouter, // Phase 019 — event-history read path
   
   gmailEnhanced: gmailEnhancedRouter,
   outlookEnhanced: outlookEnhancedRouter,
@@ -183,6 +187,8 @@ export const appRouter = router({
         password: z.string()
       }))
       .mutation(async ({ input, ctx }) => {
+        // Phase 018: throttle credential attempts (brute-force protection).
+        enforceRateLimit(ctx, "login", RATE_LIMITS.auth);
         const db = await getDb();
         if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
@@ -212,6 +218,13 @@ export const appRouter = router({
         ctx.res.cookie(COOKIE_NAME, token, {
           ...cookieOptions,
           maxAge: SESSION_MAX_AGE_MS,
+        });
+
+        await createAuditLog({ // Phase 019
+          userId: user.id,
+          action: AUDIT_ACTIONS.USER_LOGIN,
+          entityType: "user",
+          entityId: user.id,
         });
 
         return { success: true, user: {

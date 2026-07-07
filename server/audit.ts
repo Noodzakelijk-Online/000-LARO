@@ -1,4 +1,5 @@
 import { nanoid } from "nanoid";
+import { and, desc, eq } from "drizzle-orm";
 import { auditLogs, InsertAuditLog } from "./schema";
 import { getDb } from "./db";
 
@@ -49,12 +50,21 @@ export async function getAuditLogs(options: {
   }
 
   try {
-    let query = db.select().from(auditLogs);
+    // Phase 019: actually apply the filters (previously ignored). Ownership is
+    // enforced by callers passing the authenticated userId.
+    const conditions = [];
+    if (options.userId) conditions.push(eq(auditLogs.userId, options.userId));
+    if (options.entityType) conditions.push(eq(auditLogs.entityType, options.entityType));
+    if (options.entityId) conditions.push(eq(auditLogs.entityId, options.entityId));
+    if (options.action) conditions.push(eq(auditLogs.action, options.action));
 
-    // Apply filters (simplified - in production use proper query builder)
-    const results = await query.limit(options.limit || 100);
-    
-    return results.map(log => ({
+    const base = db.select().from(auditLogs);
+    const filtered = conditions.length > 0 ? base.where(and(...conditions)) : base;
+    const results = await filtered
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(options.limit || 100);
+
+    return results.map((log) => ({
       ...log,
       details: log.details ? JSON.parse(log.details) : null,
     }));
