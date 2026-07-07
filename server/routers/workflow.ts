@@ -1,11 +1,19 @@
 import { z } from "zod";
+import { nanoid } from "nanoid";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { assertCaseOwnership } from "../_core/authz";
 import { enforceRateLimit, RATE_LIMITS } from "../rateLimit";
 import { createAuditLog, AUDIT_ACTIONS } from "../audit";
-import { cases as casesTable } from '../schema';
-import { eq } from "drizzle-orm";
+import { createNotification } from "../notifications";
+import { cases as casesTable, outreachStatus, lawyers } from '../schema';
+import { eq, and, inArray } from "drizzle-orm";
+import { findMatchingLawyers } from "../matching";
+
+// Phase 026 — outreach review/approval states.
+const OUTREACH_PENDING = "PendingApproval";
+const OUTREACH_APPROVED = "Approved";
+const OUTREACH_REJECTED = "Rejected";
 
 export const workflowRouter = router({
   /**
@@ -56,4 +64,147 @@ export const workflowRouter = router({
 
       return { success: true, alreadyInitiated: false } as const;
     }),
+
+  /**
+   * Phase 026 — prepare outreach DRAFTS for human review.
+   *
+   * Runs the real matching engine and creates one outreach_status row per top
+   * matched lawyer in the `PendingApproval` state. This is idempotent: the
+   * unique (caseId, lawyerId) index means re-running does not duplicate drafts.
+   * NOTHING is sent — drafts must be explicitly approved (below) and, even then,
+   * the actual transmission is a later phase. This enforces the safety boundary:
+   * no lawyer is contacted without human approval.
+   */
+  prepareDrafts: protectedProcedure
+    .input(z.object({ caseId: z.string(), maxResults: z.number().optional().default(5) }))
+    .mutation(async ({ input, ctx }) => {
+      await assertCaseOwnership(input.caseId, ctx.user.id);
+      enforceRateLimit(ctx, "outreach-prepare", RATE_LIMITS.aiAnalysis);
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      let matches: Array<{ id: string; name: string }>;
+      try {
+        matches = (await findMatchingLawyers(input.caseId, { maxResults: input.maxResults, sortBy: "score" })) as any[];
+      } catch (e) {
+        // Case not classified yet / no lawyers — return honestly, create nothing.
+        return { success: true, created: 0, reason: e instanceof Error ? e.message : "No matches" };
+      }
+
+      let created = 0;
+      for (const m of matches) {
+        const res = await db
+          .insert(outreachStatus)
+          .values({
+            id: nanoid(),
+            caseId: input.caseId,
+            lawyerId: m.id,
+            status: OUTREACH_PENDING,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          } as any)
+          .onConflictDoNothing();
+        // better-sqlite3 returns changes; treat any insert as created.
+        if ((res as any)?.changes ?? 1) created += 1;
+      }
+
+      await createAuditLog({
+        userId: ctx.user.id,
+        action: AUDIT_ACTIONS.OUTREACH_INITIATED,
+        entityType: "case",
+        entityId: input.caseId,
+        details: { draftsPrepared: matches.length },
+      });
+
+      return { success: true, created, candidates: matches.length };
+    }),
+
+  /**
+   * Phase 026 — the human review queue: outreach drafts awaiting approval,
+   * scoped to the caller's cases. Optionally filtered to a single case.
+   */
+  reviewQueue: protectedProcedure
+    .input(z.object({ caseId: z.string().optional() }).optional())
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) return [] as any[];
+
+      // The user's case ids (ownership boundary).
+      const ownCases = await db
+        .select({ id: casesTable.id, clientName: casesTable.clientName })
+        .from(casesTable)
+        .where(eq(casesTable.userId, ctx.user.id));
+      const allowed = new Set(ownCases.map((c) => c.id));
+      const caseIds = input?.caseId
+        ? (allowed.has(input.caseId) ? [input.caseId] : [])
+        : [...allowed];
+      if (caseIds.length === 0) return [] as any[];
+
+      const rows = await db
+        .select({
+          id: outreachStatus.id,
+          caseId: outreachStatus.caseId,
+          lawyerId: outreachStatus.lawyerId,
+          status: outreachStatus.status,
+          lawyerName: lawyers.name,
+          lawyerEmail: lawyers.email,
+        })
+        .from(outreachStatus)
+        .leftJoin(lawyers, eq(outreachStatus.lawyerId, lawyers.id))
+        .where(and(inArray(outreachStatus.caseId, caseIds), eq(outreachStatus.status, OUTREACH_PENDING)));
+      return rows;
+    }),
+
+  /** Phase 026 — approve a draft (marks ready; does NOT send). */
+  approveDraft: protectedProcedure
+    .input(z.object({ outreachId: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      return setDraftStatus(ctx.user.id, input.outreachId, OUTREACH_APPROVED);
+    }),
+
+  /** Phase 026 — reject a draft. */
+  rejectDraft: protectedProcedure
+    .input(z.object({ outreachId: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      return setDraftStatus(ctx.user.id, input.outreachId, OUTREACH_REJECTED);
+    }),
 });
+
+async function setDraftStatus(userId: string, outreachId: string, newStatus: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const row = (
+    await db.select().from(outreachStatus).where(eq(outreachStatus.id, outreachId)).limit(1)
+  )[0];
+  if (!row || !row.caseId) throw new Error("Outreach draft not found");
+
+  // Ownership: the draft's case must belong to the user.
+  await assertCaseOwnership(row.caseId, userId);
+
+  await db
+    .update(outreachStatus)
+    .set({ status: newStatus, updatedAt: new Date() })
+    .where(eq(outreachStatus.id, outreachId));
+
+  await createAuditLog({
+    userId,
+    action: AUDIT_ACTIONS.OUTREACH_STATUS_CHANGED,
+    entityType: "outreach",
+    entityId: outreachId,
+    details: { from: row.status, to: newStatus },
+  });
+
+  await createNotification({ // Phase 027
+    userId,
+    title: newStatus === "Approved" ? "Outreach draft approved" : "Outreach draft rejected",
+    body:
+      newStatus === "Approved"
+        ? "The draft is marked ready to send. No message has been sent yet."
+        : "The draft was rejected and will not be sent.",
+  });
+
+  // Approving marks the draft ready-to-send; actual transmission is a later
+  // phase. No lawyer is contacted here.
+  return { success: true, status: newStatus, sent: false as const };
+}

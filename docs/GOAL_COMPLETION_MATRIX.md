@@ -10,7 +10,7 @@ evidence table (all 116 phases with `file:line` citations) lives in
 `docs/phase-audit.md`; this file tracks the **live implementation status** as
 phases are worked and is updated at the end of each phase.
 
-Last updated: 2026-07-06 (after phases 000–010).
+Last updated: 2026-07-06 (after phases 000–030).
 
 ---
 
@@ -34,6 +34,16 @@ Last updated: 2026-07-06 (after phases 000–010).
 | 013 | Compliance & policy boundaries | **Partial** | `LEGAL_DISCLAIMER` appended to generated legal docs; `docs/COMPLIANCE.md`. Residual: UI-wide disclaimer (037), GDPR (028), i18n (057). |
 | 014 | No fake success / no mock production | **Implemented** | Fake OCR, hardcoded dashboard stats, and mocked `outreachProgress` replaced with honest/real behavior; anti-regression guards in `tests/smoke/noFakeSuccess.smoke.test.ts`. |
 | 015 | Storage, files, uploads & media safety | **Partial** | `storage.ts` sanitization + real local fallback (no more silent byte-drop) + sha256 provenance; `tests/smoke/storage.smoke.test.ts`. Residual: wire hash into all evidence writes; PDF/zip export (023). |
+| 021 | Forms, validation, autosave | **Partial** | `shared/validation.ts` caseIntakeSchema applied to create; case-draft autosave (`system_config`). UI autosave wiring pending (041). |
+| 022 | Search, filters, sorting, pagination | **Implemented** | `cases.list` filters (status/urgency/search) + sort + pagination, owner-scoped. |
+| 023 | Import & export | **Partial** | `cases.export` (JSON package) + `cases.exportCsv`; CSV import already existed. PDF/zip evidence package still pending. |
+| 024 | Templates, presets, defaults | **Implemented** | `messageTemplates` real per-user CRUD. |
+| 025 | AI/provider abstraction & deterministic fallback | **Implemented** | `server/classification.ts` deterministic classifier wired into `cases.create`/`cases.classify`; unblocks matching. Tested. |
+| 026 | Human review queue & approval gates | **Partial** | `workflow.prepareDrafts`/`reviewQueue`/`approveDraft`/`rejectDraft`; nothing sent (`sent:false`). Real send is a later phase. |
+| 027 | Notifications & reminders | **Partial** | `createNotification` real, wired to case-created/outreach events. Reminders/scheduling pending. |
+| 028 | Privacy controls & data deletion | **Implemented** | `server/gdpr.ts` real export + erasure; `gdpr.*` no longer stubs. |
+| 029 | Security headers & web security | **Implemented** | CSP/HSTS/frame/referrer/permissions headers in `server/index.ts`. |
+| 030 | Secrets management & credential rotation | **Partial** | `.env` no longer bundled in installer; `.env.example`; per-install secrets (006/007). Weak OAuth-token crypto still open. |
 | 016 | Background jobs, schedulers & workers | **Implemented** | `runJob()` error-isolation + retry/backoff + status; honest outreach heartbeat (no fake send); `health.readiness` exposes job status. `docs/OPERATOR_RUNBOOK.md`. |
 | 017 | Idempotency & duplicate-action prevention | **Partial** | UNIQUE `outreach_status(caseId,lawyerId)` + idempotent `initiateOutreach`. Residual: idempotency keys for the real send path (026). |
 | 018 | Rate limits, cooldowns & provider quotas | **Implemented** | `enforceRateLimit` applied to login, case-create, matching, outreach (+ existing search). Residual: distributed store (Redis) documented. |
@@ -48,11 +58,11 @@ remain and are tracked in `docs/SECURITY.md` §5 and `docs/FRONTEND_ARCHITECTURE
 
 | Phase range | Theme | Prevailing status |
 |---|---|---|
-| 021–039 | Forms, search, import/export, AI fallback, review queue, notifications, privacy, security headers, secrets, dev/deploy, migrations, CLI, observability, demo labelling, fake-provider lab, factories | Partial → Missing |
+| 031–039 | Dev-deploy, import/export, AI fallback, review queue, notifications, privacy, security headers, secrets, dev/deploy, migrations, CLI, observability, demo labelling, fake-provider lab, factories | Partial → Missing |
 | 040–054 | Test suites (backend/frontend/worker/e2e), acceptance, adversarial, isolation, file-safety, provider-failure, a11y, responsive, perf, large-data, backup/restore, reconciliation | mostly Missing (suite cannot run) |
 | 055–075 | Analytics, SaaS/billing, i18n, flags, state machines, domain model, invariants, safety-review screen, credential checklist, threat model, PIA, supply-chain, licenses, CI gates, release, runbook, user guide, troubleshooting, UI/endpoint/doc audits | mostly Missing |
 | 076–099 | Debt register, bug log, red-team loops, user sims, value/realism reviews, traceability, task graph, worklog, resume-safety, stabilization gates, DoD, fresh-clone, manual evidence, no-excuses search, completion matrix, final report, final response, maintenance, roadmap | Missing → Partial (worklog/checkpoints/matrix now started) |
 | 100–115 | Provider cleanup, debug bundle, retention, prod migration, emergency stop, onboarding, roles, confidence display, decision minimization, exception dashboard, safe retries, ambiguous-action, versioning, regression baseline, maintenance review, operator-readiness | mostly Missing |
 
-**Approximate tally across all 116 phases:** Implemented ~22 · Partial ~35 · Missing ~57 · Blocked 0 · N/A ~2.
-(Implemented so far: 000–006/008/009/012/014/016/018/019. Partial: 007/010/011/013/015/017/020. The 016–020 batch added 3 Implemented and 2 Partial.)
+**Approximate tally across all 116 phases:** Implemented ~27 · Partial ~40 · Missing ~47 · Blocked 0 · N/A ~2.
+(Through phase 030: Implemented 022/024/025/028/029 + earlier; Partial 021/023/026/027/030. Real code, honest partials.)

@@ -1,4 +1,6 @@
-import { publicProcedure, router } from "../_core/trpc";
+import { z } from "zod";
+import { nanoid } from "nanoid";
+import { publicProcedure, protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { messageTemplates } from "../schema";
 import { and, desc, eq, isNull, or } from "drizzle-orm";
@@ -6,10 +8,10 @@ import { and, desc, eq, isNull, or } from "drizzle-orm";
 /**
  * Message templates router.
  *
- * Powers the template picker in the Messages tab (CommunicationHub). Returns the
- * current user's saved templates plus any global (userId IS NULL) ones. If none
- * exist the component falls back to its built-in templates, so an empty list is
- * fine — this just surfaces DB-backed templates when present.
+ * Phase 024 — templates, presets, reusable user defaults. `list` returns the
+ * user's own templates plus any global (userId IS NULL) ones. Previously this
+ * router was read-only; it now supports real per-user CRUD (create/update/
+ * delete), all owner-scoped so a user can only mutate their own templates.
  */
 export const messageTemplatesRouter = router({
   list: publicProcedure.query(async ({ ctx }) => {
@@ -27,4 +29,47 @@ export const messageTemplatesRouter = router({
       .where(and(where))
       .orderBy(desc(messageTemplates.createdAt));
   }),
+
+  create: protectedProcedure
+    .input(z.object({ name: z.string().min(1).max(120), body: z.string().min(1).max(20000) }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const id = nanoid();
+      await db.insert(messageTemplates).values({
+        id,
+        userId: ctx.user.id,
+        name: input.name,
+        body: input.body,
+        createdAt: new Date(),
+      } as any);
+      return { id, success: true };
+    }),
+
+  update: protectedProcedure
+    .input(z.object({ id: z.string(), name: z.string().min(1).max(120).optional(), body: z.string().min(1).max(20000).optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const set: any = {};
+      if (input.name !== undefined) set.name = input.name;
+      if (input.body !== undefined) set.body = input.body;
+      // Owner-scoped: only the user's own (non-global) template can be updated.
+      await db
+        .update(messageTemplates)
+        .set(set)
+        .where(and(eq(messageTemplates.id, input.id), eq(messageTemplates.userId, ctx.user.id)));
+      return { success: true };
+    }),
+
+  delete: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      await db
+        .delete(messageTemplates)
+        .where(and(eq(messageTemplates.id, input.id), eq(messageTemplates.userId, ctx.user.id)));
+      return { success: true };
+    }),
 });

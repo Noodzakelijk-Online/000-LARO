@@ -82,3 +82,24 @@ re-deriving state.
 **Verified:** server + main `tsc` clean; `vitest tests/smoke` → 53 pass / 9 todo.
 
 **Next safe action:** Phase 021–024 (forms/validation/autosave, search/filters, import/export, templates) or jump to the Stage-B remainder (025 classification → 026 approval gate) to unblock the real outreach path that 016–019 are waiting on.
+
+---
+
+## Checkpoint 5 — 2026-07-06 — Phases 021–030
+
+**Branch:** `Phase-Imp` (not pushed).
+
+**Done (real code + tests):**
+- 021 validation schemas + case-draft autosave; 022 list filters/sort; 023 case export JSON+CSV;
+  024 message-template CRUD; 025 **deterministic classifier** (unblocks matching); 026 **approval gate**
+  (drafts → approve/reject, no send); 027 real notifications; 028 **real GDPR export+erasure**;
+  029 security headers; 030 removed .env from installer + .env.example.
+
+**Verified:** server + main `tsc` clean; `npx vitest run tests/smoke` → 72 pass / 9 todo.
+
+**Key unblock:** case creation now auto-classifies legal areas, so Phase 011 matching produces
+real results; the approval gate is ready to gate a real send.
+
+**Next safe action:** implement the real outreach **send** through a configured provider behind the
+approval gate (the one remaining critical-path gap), then 031–039 (dev/deploy/observability) and
+040–044 (make the full test suite runnable).

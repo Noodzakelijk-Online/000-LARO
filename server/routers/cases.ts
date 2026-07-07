@@ -4,15 +4,26 @@ import { getDb } from "../db";
 import { assertCaseOwnership } from "../_core/authz";
 import { enforceRateLimit, RATE_LIMITS } from "../rateLimit";
 import { createAuditLog, AUDIT_ACTIONS } from "../audit";
-import { cases as casesTable, outreachStatus, lawyers, evidence } from '../schema';
-import { eq, desc, and, sql } from "drizzle-orm";
+import { cases as casesTable, outreachStatus, lawyers, evidence, systemConfig } from '../schema';
+import { eq, desc, asc, and, sql } from "drizzle-orm";
 import { sanitizeLegalAreas } from "../legalAreasValidator";
+import { classifyLegalAreas } from "../classification";
+import { createNotification } from "../notifications";
+import { caseIntakeSchema } from "../../shared/validation";
 
 export const casesRouter = router({
+  // Phase 022 — search, filters, sorting, pagination. All server-side and
+  // owner-scoped. Filters and sort are validated enums; search matches the
+  // client name and case summary.
   list: protectedProcedure
     .input(z.object({
-      page: z.number().optional().default(1),
-      limit: z.number().optional().default(10),
+      page: z.number().min(1).optional().default(1),
+      limit: z.number().min(1).max(100).optional().default(10),
+      status: z.string().optional(),
+      urgency: z.enum(["Low", "Medium", "High"]).optional(),
+      search: z.string().optional(),
+      sortBy: z.enum(["createdAt", "updatedAt", "urgency", "clientName", "status"]).optional().default("createdAt"),
+      sortDir: z.enum(["asc", "desc"]).optional().default("desc"),
     }).optional())
     .query(async ({ ctx, input }) => {
       const db = await getDb();
@@ -23,15 +34,34 @@ export const casesRouter = router({
       const limit = input?.limit || 10;
       const offset = (page - 1) * limit;
 
+      const conditions: any[] = [eq(casesTable.userId, userId)];
+      if (input?.status) conditions.push(eq(casesTable.status, input.status));
+      if (input?.urgency) conditions.push(eq(casesTable.urgency, input.urgency));
+      if (input?.search?.trim()) {
+        const q = `%${input.search.trim().toLowerCase()}%`;
+        conditions.push(
+          sql`(lower(cases.clientName) LIKE ${q} OR lower(cases.caseSummary) LIKE ${q})`
+        );
+      }
+      const where = and(...conditions);
+
+      const sortCol =
+        input?.sortBy === "urgency" ? casesTable.urgency :
+        input?.sortBy === "clientName" ? casesTable.clientName :
+        input?.sortBy === "status" ? casesTable.status :
+        input?.sortBy === "updatedAt" ? casesTable.updatedAt :
+        casesTable.createdAt;
+      const order = input?.sortDir === "asc" ? asc(sortCol) : desc(sortCol);
+
       const userCases = await db
         .select()
         .from(casesTable)
-        .where(eq(casesTable.userId, userId))
-        .orderBy(desc(casesTable.createdAt))
+        .where(where)
+        .orderBy(order)
         .limit(limit)
         .offset(offset);
 
-      const totalResult = await db.select({ count: sql<number>`count(*)` }).from(casesTable).where(eq(casesTable.userId, userId));
+      const totalResult = await db.select({ count: sql<number>`count(*)` }).from(casesTable).where(where);
       const total = Number(totalResult[0]?.count || 0);
 
       return {
@@ -60,15 +90,7 @@ export const casesRouter = router({
     }),
 
   create: protectedProcedure
-    .input(z.object({
-      clientName: z.string(),
-      clientEmail: z.string().email(),
-      clientPhone: z.string().optional().default(""),
-      clientAddress: z.string().optional().default(""),
-      caseType: z.string(),
-      caseSummary: z.string().default(""),
-      urgency: z.enum(["Low", "Medium", "High"]),
-    }))
+    .input(caseIntakeSchema) // Phase 021: shared validation contract
     .mutation(async ({ input, ctx }) => {
       enforceRateLimit(ctx, "caseCreate", RATE_LIMITS.caseCreate); // Phase 018
       const db = await getDb();
@@ -76,6 +98,11 @@ export const casesRouter = router({
 
       const caseId = `CASE${Date.now().toString().slice(-6)}`;
       const userId = ctx.user.id;
+
+      // Phase 025: deterministically classify the case into legal areas from its
+      // description + type, so lawyer matching (Phase 011) has areas to work with
+      // instead of the case being unclassified.
+      const classification = classifyLegalAreas(input.caseSummary, input.caseType);
 
       await db.insert(casesTable).values({
         id: caseId,
@@ -88,6 +115,7 @@ export const casesRouter = router({
         caseSummary: input.caseSummary,
         urgency: input.urgency,
         status: "Matching",
+        legalAreas: sanitizeLegalAreas(classification.areas),
         createdAt: new Date(),
         updatedAt: new Date(),
       } as any);
@@ -97,10 +125,130 @@ export const casesRouter = router({
         action: AUDIT_ACTIONS.CASE_CREATED,
         entityType: "case",
         entityId: caseId,
-        details: { caseType: input.caseType, urgency: input.urgency },
+        details: { caseType: input.caseType, urgency: input.urgency, legalAreas: classification.areas },
       });
 
-      return { id: caseId, success: true };
+      await createNotification({ // Phase 027
+        userId,
+        title: `Case created for ${input.clientName}`,
+        body: `Classified as: ${classification.areas.join(", ")}. Review matched lawyers next.`,
+      });
+
+      return { id: caseId, success: true, legalAreas: classification.areas, classificationConfidence: classification.confidence };
+    }),
+
+  // Phase 023 — export a single case as a complete JSON package (case details +
+  // evidence + outreach), owner-scoped. This is a real export, not the previous
+  // empty GDPR stub.
+  export: protectedProcedure
+    .input(z.object({ caseId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      await assertCaseOwnership(input.caseId, ctx.user.id);
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const [caseRows, evidenceRows, outreachRows] = await Promise.all([
+        db.select().from(casesTable).where(eq(casesTable.id, input.caseId)).limit(1),
+        db.select().from(evidence).where(eq(evidence.caseId, input.caseId)),
+        db.select().from(outreachStatus).where(eq(outreachStatus.caseId, input.caseId)),
+      ]);
+
+      return {
+        format: "laro-case-export/v1",
+        exportedAt: null as unknown as string, // stamped by the caller/UI (no Date.now in pure layer)
+        case: caseRows[0] ?? null,
+        evidence: evidenceRows,
+        outreach: outreachRows,
+      };
+    }),
+
+  // Phase 023 — export the user's case list as CSV text (client-downloadable).
+  exportCsv: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) return { csv: "" };
+    const rows = await db
+      .select()
+      .from(casesTable)
+      .where(eq(casesTable.userId, ctx.user.id))
+      .orderBy(desc(casesTable.createdAt));
+
+    const esc = (v: unknown) => {
+      const s = v == null ? "" : String(v);
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const header = ["id", "clientName", "caseType", "urgency", "status", "legalAreas"];
+    const lines = [header.join(",")];
+    for (const c of rows) {
+      lines.push([c.id, c.clientName, c.caseType, c.urgency, c.status, c.legalAreas].map(esc).join(","));
+    }
+    return { csv: lines.join("\n"), count: rows.length };
+  }),
+
+  // Phase 021 — case intake autosave. The in-progress form is persisted
+  // per-user (keyed in system_config) so a refresh/crash does not lose input.
+  saveDraft: protectedProcedure
+    .input(z.object({ draft: z.record(z.any()) }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const key = `caseDraft:${ctx.user.id}`;
+      await db
+        .insert(systemConfig)
+        .values({ configKey: key, configValue: JSON.stringify(input.draft), updatedAt: new Date() } as any)
+        .onConflictDoUpdate({
+          target: systemConfig.configKey,
+          set: { configValue: JSON.stringify(input.draft), updatedAt: new Date() },
+        });
+      return { success: true };
+    }),
+
+  getDraft: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) return { draft: null };
+    const key = `caseDraft:${ctx.user.id}`;
+    const row = (await db.select().from(systemConfig).where(eq(systemConfig.configKey, key)).limit(1))[0];
+    if (!row?.configValue) return { draft: null };
+    try {
+      return { draft: JSON.parse(row.configValue) };
+    } catch {
+      return { draft: null };
+    }
+  }),
+
+  clearDraft: protectedProcedure.mutation(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) return { success: true };
+    await db.delete(systemConfig).where(eq(systemConfig.configKey, `caseDraft:${ctx.user.id}`));
+    return { success: true };
+  }),
+
+  // Phase 025: (re)classify an existing case from its current description.
+  classify: protectedProcedure
+    .input(z.object({ caseId: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      await assertCaseOwnership(input.caseId, ctx.user.id);
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const rows = await db.select().from(casesTable).where(eq(casesTable.id, input.caseId)).limit(1);
+      const c = rows[0];
+      if (!c) throw new Error("Case not found");
+
+      const classification = classifyLegalAreas(c.caseSummary || "", c.caseType || undefined);
+      await db
+        .update(casesTable)
+        .set({ legalAreas: sanitizeLegalAreas(classification.areas), updatedAt: new Date() })
+        .where(and(eq(casesTable.id, input.caseId), eq(casesTable.userId, ctx.user.id)));
+
+      await createAuditLog({
+        userId: ctx.user.id,
+        action: AUDIT_ACTIONS.CASE_UPDATED,
+        entityType: "case",
+        entityId: input.caseId,
+        details: { classified: classification.areas, confidence: classification.confidence },
+      });
+
+      return { success: true, ...classification };
     }),
 
 

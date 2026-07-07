@@ -72,17 +72,25 @@ delivered in Phases 006–009, plus the residual risks still open.
 Ordered by severity; these belong to later phases and must be closed before any
 production claim:
 
-1. **`.env` bundled into the packaged app** (electron-builder `extraResources`) —
-   still ships secrets inside the installer. → Phase 030/100. (The per-install
-   secret bootstrap reduces reliance on a bundled `.env`, but the bundling itself
-   remains and must be removed.)
+1. ~~**`.env` bundled into the packaged app**~~ — **FIXED (Phase 030)**: removed
+   from electron-builder `extraResources`; the installer no longer ships secrets.
+   Per-install secrets are generated to `userData/laro-secrets.json`.
 2. **OAuth-token encryption is weak** (`Buffer.alloc(32, JWT_SECRET)` ≈ 1 byte of
-   key entropy, unauthenticated CBC). → Phase 007 follow-up / 030.
-3. **No CSRF protection; permissive credentialed CORS in development; no security
-   headers (helmet/CSP/HSTS).** → Phase 029.
+   key entropy, unauthenticated CBC). → Phase 007 follow-up. **STILL OPEN.**
+3. **Security headers** — **FIXED (Phase 029)**: CSP, X-Frame-Options, X-Content-
+   Type-Options, Referrer-Policy, Permissions-Policy, COOP, and HSTS (prod HTTPS)
+   are now set on every response in `server/index.ts`. CSRF/permissive-dev-CORS
+   hardening is a follow-up.
 4. **Unauthenticated OAuth-connect** binds a mailbox to any `userId` from the
-   query string; Trello callback reflects token into HTML. → Phase 012/029.
-5. **JWT has no server-side revocation** (logout clears the cookie only). → Phase 007 follow-up.
+   query string; Trello callback reflects token into HTML. → Phase 012/029. **STILL OPEN.**
+5. **JWT has no server-side revocation** (logout clears the cookie only). → Phase 007 follow-up. **STILL OPEN.**
+
+### Secret rotation (Phase 030)
+
+Per-install secrets (`JWT_SECRET`, `COOKIE_SECRET`, `LOCAL_AGENT_TOKEN`) live in
+`userData/laro-secrets.json`. To rotate: delete that file and relaunch — new
+random values are generated on next start. Rotating `JWT_SECRET` invalidates all
+existing sessions (users must log in again), which is the intended effect.
 
 ## 6. How to verify
 

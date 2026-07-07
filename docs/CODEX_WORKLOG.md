@@ -9,6 +9,52 @@ is only partially done, that is stated here and reflected in
 
 ---
 
+## 2026-07-06 — Phases 021–030 (forms, search, export, templates, AI classifier, approval gate, notifications, privacy, security headers, secrets)
+
+**Branch:** `Phase-Imp` (not pushed).
+
+### Phase 021 — Forms, validation, autosave
+- `shared/validation.ts`: canonical `caseIntakeSchema` (+ phone/urgency schemas), applied to `cases.create`.
+- `cases.saveDraft/getDraft/clearDraft`: per-user intake autosave persisted in `system_config`.
+
+### Phase 022 — Search, filters, sorting, pagination
+- `cases.list` now supports `status`/`urgency`/`search` filters, `sortBy`/`sortDir`, owner-scoped, still paginated.
+
+### Phase 023 — Import & export
+- `cases.export` (full JSON package: case + evidence + outreach, ownership-checked) and `cases.exportCsv` (user's case list as CSV). Import (CSV) already existed (`bulkImport`).
+
+### Phase 024 — Templates
+- `messageTemplates` gained real per-user CRUD (`create`/`update`/`delete`), owner-scoped; was read-only.
+
+### Phase 025 — AI/provider abstraction & deterministic fallback
+- New `server/classification.ts`: a **deterministic** NL+EN keyword classifier mapping case text → `VALID_LEGAL_AREAS` (no API key needed). Wired into `cases.create` (auto-classify) and a `cases.classify` re-run endpoint. **This unblocks Phase 011 matching**, which needs legal areas. Tested behaviourally in `tests/smoke/classification.smoke.test.ts`.
+
+### Phase 026 — Human review queue & approval gate
+- `workflow.prepareDrafts` runs matching and creates outreach drafts in `PendingApproval` (idempotent via the Phase 017 unique index); `workflow.reviewQueue` lists pending; `approveDraft`/`rejectDraft` set the state. **Nothing is sent** — approval only marks ready (`sent:false`), preserving the safety boundary.
+
+### Phase 027 — Notifications & reminders
+- `server/notifications.ts:createNotification` writes real rows to the `notifications` table (read by the existing router); wired to case-created and outreach approve/reject events.
+
+### Phase 028 — Privacy controls & data deletion
+- `server/gdpr.ts`: real `exportUserData` (right of access — full JSON dump of owner rows via table introspection, password/token redacted) and `deleteUserData` (right of erasure — transactional delete across all user-scoped tables + the user). Replaced the empty `{}` stubs in `gdpr.*` with protected, audited endpoints; deletion clears the session cookie.
+
+### Phase 029 — Security headers & web security
+- `server/index.ts`: security-headers middleware on every response — CSP, `X-Frame-Options: DENY`, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, COOP, and HSTS over real HTTPS in production.
+
+### Phase 030 — Secrets management & credential rotation
+- Removed `.env` from electron-builder `extraResources` — the installer **no longer ships secrets** (closes the top residual from `docs/SECURITY.md` §5). Added `.env.example`. Per-install secret generation was already added in Phases 006/007; rotation = delete `userData/laro-secrets.json` (regenerated on next launch; invalidates existing sessions).
+
+### Verification
+- `tsc -p tsconfig.server.json` and `tsconfig.main.json` → clean.
+- `npx vitest run tests/smoke` → **72 passed, 9 todo, 0 failed** (added `classification.smoke.test.ts` and `phase021_030.smoke.test.ts`).
+
+### What remains
+- Real **send** of approved outreach through a configured provider (still the key gap; approval gate is ready for it).
+- LLM refinement of classification when a key is present (deterministic path is authoritative and always on).
+- UI wiring for filters/drafts/templates/review-queue (renderer; pre-existing tsc debt — Phase 041).
+
+---
+
 ## 2026-07-06 — Phases 016–020 (jobs, idempotency, rate limits, audit, dashboard)
 
 **Branch:** `Phase-Imp` (not pushed — owner pushes separately)

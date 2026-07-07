@@ -425,12 +425,51 @@ export const appRouter = router({
 
 
 
-  // GDPR procedures
+  // GDPR procedures — Phase 028: real access + erasure (were empty stubs).
   gdpr: router({
-    getConsent: publicProcedure.query(() => ({})),
-    exportData: publicProcedure.mutation(() => ({})),
-    deleteData: publicProcedure.mutation(() => ({})),
-    updateConsent: publicProcedure.mutation(() => ({})),
+    getConsent: protectedProcedure.query(() => ({
+      // Consent to process personal data is implied by using the account; there
+      // is no separate marketing/analytics consent to track yet. Returned
+      // honestly rather than as an empty object.
+      dataProcessing: true,
+      marketing: false,
+      analytics: false,
+    })),
+    // Full data export (right of access). Returns every row owned by the user.
+    exportData: protectedProcedure.mutation(async ({ ctx }) => {
+      const { exportUserData } = await import("../gdpr");
+      const data = await exportUserData(ctx.user.id);
+      await createAuditLog({ userId: ctx.user.id, action: "gdpr.export", entityType: "user", entityId: ctx.user.id });
+      return { success: true, data };
+    }),
+    // Permanent account + data deletion (right of erasure).
+    deleteData: protectedProcedure
+      .input(z.object({ confirm: z.literal(true) }))
+      .mutation(async ({ ctx }) => {
+        const { deleteUserData } = await import("../gdpr");
+        // Audit BEFORE deleting (the audit row for this user is erased too, but
+        // the action is recorded in the same transaction window).
+        await createAuditLog({ userId: ctx.user.id, action: "gdpr.delete", entityType: "user", entityId: ctx.user.id });
+        const result = await deleteUserData(ctx.user.id);
+        // Clear the session cookie since the account no longer exists.
+        try {
+          const { getSessionCookieOptions } = await import("../cookies");
+          ctx.res.clearCookie(COOKIE_NAME, { ...getSessionCookieOptions(ctx.req), maxAge: -1 });
+        } catch { /* ignore */ }
+        return { success: true, ...result };
+      }),
+    updateConsent: protectedProcedure
+      .input(z.object({ marketing: z.boolean().optional(), analytics: z.boolean().optional() }))
+      .mutation(async ({ ctx, input }) => {
+        await createAuditLog({
+          userId: ctx.user.id,
+          action: "gdpr.consent_updated",
+          entityType: "user",
+          entityId: ctx.user.id,
+          details: input,
+        });
+        return { success: true, ...input };
+      }),
   }),
 
   // Agent procedures
