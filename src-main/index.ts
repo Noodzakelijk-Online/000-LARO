@@ -225,6 +225,12 @@ app.whenReady().then(async () => {
   process.env.DATABASE_URL = serverDbPath;
   console.log('[Electron] Server DB Path:', serverDbPath);
 
+  // Phase 015: local evidence storage lives under userData when S3 is not
+  // configured, so file uploads are actually persisted (not dropped).
+  if (!process.env.LOCAL_STORAGE_DIR) {
+    process.env.LOCAL_STORAGE_DIR = path.join(userDataPath, 'uploads');
+  }
+
   // Initialize Agent DB (scanning state)
   initAgentDb();
 

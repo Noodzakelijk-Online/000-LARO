@@ -198,25 +198,47 @@ export const casesRouter = router({
       const caseData = await db.select().from(casesTable).where(eq(casesTable.id, input.caseId)).limit(1);
       if (!caseData.length) return { legalAreas: [], overallStats: {} };
 
-      // Mocked for now to satisfy component requirements
+      // Phase 014: compute from real outreach data instead of the previous
+      // hardcoded fixed sample values. Per-legal-area outreach is not tracked,
+      // so per-area counts are 0 (honest) and the real numbers live in
+      // overallStats, aggregated from the outreach_status table.
       let legalAreas: string[] = [];
       try {
         legalAreas = JSON.parse(caseData[0].legalAreas || "[]");
       } catch {}
 
+      const rows = await db
+        .select({
+          status: outreachStatus.status,
+          response: outreachStatus.response,
+          responseTimeHours: outreachStatus.responseTimeHours,
+        })
+        .from(outreachStatus)
+        .where(eq(outreachStatus.caseId, input.caseId));
+
+      const totalContacted = rows.length;
+      const responded = rows.filter(
+        (r) => r.status === "Interested" || r.status === "Declined" || (r.response != null && r.response !== "")
+      );
+      const totalResponses = responded.length;
+      const times = rows
+        .map((r) => parseFloat(r.responseTimeHours || ""))
+        .filter((n) => !Number.isNaN(n));
+      const avgHours = times.length > 0 ? Math.round(times.reduce((a, b) => a + b, 0) / times.length) : null;
+
       return {
-        legalAreas: legalAreas.map(area => ({
+        legalAreas: legalAreas.map((area) => ({
           name: area,
-          status: "In Progress",
-          count: 5,
-          contacted: 2,
-          responded: 1,
+          status: totalContacted > 0 ? "In Progress" : "Not started",
+          count: 0, // per-area outreach is not tracked
+          contacted: 0,
+          responded: 0,
         })),
         overallStats: {
-          totalContacted: 2,
-          totalResponses: 1,
-          avgResponseTime: "48h",
-        }
+          totalContacted,
+          totalResponses,
+          avgResponseTime: avgHours != null ? `${avgHours}h` : "n/a",
+        },
       };
     }),
     

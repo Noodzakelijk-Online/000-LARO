@@ -9,6 +9,40 @@ is only partially done, that is stated here and reflected in
 
 ---
 
+## 2026-07-06 — Phases 011–015 (core slice, providers, compliance, no-fake, storage)
+
+**Branch:** `Phase-Imp` (not pushed — owner pushes separately)
+
+### Phase 011 — Core workflow vertical slice
+- Rewrote [server/routers/matching.ts](../server/routers/matching.ts) to call the **real** `findMatchingLawyers` engine (mandatory filters + LARO scoring + keyword/AI boosts) instead of `Math.random()` distances and hardcoded scores. Both procedures are `protectedProcedure` + `assertCaseOwnership`. Empty (honest) result when the case has no legal areas yet or no lawyers exist.
+
+### Phase 012 — External provider reality review ([docs/PROVIDERS.md](PROVIDERS.md))
+- [server/routers/enhancedConnections.ts](../server/routers/enhancedConnections.ts): `getOAuthUrl` no longer returns a blanket dummy auth URL. It reports real availability via `providerAvailability()` — configured Google/Microsoft providers return a real connect path; Slack + unconfigured providers return `{ available:false, reason }`.
+
+### Phase 013 — Compliance & policy boundaries ([docs/COMPLIANCE.md](COMPLIANCE.md))
+- Added `LEGAL_DISCLAIMER` (NL+EN) in [shared/const.ts](../shared/const.ts); appended to every generated legal document in `gapAnalysis.generateDocument` (+ `disclaimer` field on the response).
+
+### Phase 014 — No fake success / no mock production behavior
+- **OCR** ([server/routers/index.ts](../server/routers/index.ts)): removed the hardcoded Dutch "arbeidsovereenkomst" with `confidence 0.98`; `extractText` now throws `NOT_IMPLEMENTED`; `supportsOcr`→false, status→"unavailable".
+- **Dashboard** ([server/routers/dashboard.ts](../server/routers/dashboard.ts)): `enhancedStats` and `activityFeed` now compute from the user's real cases/outreach (protected). Removed the hardcoded `{15,85,92,78}` and the "Mr. Janssen" sample feed.
+- **Case progress** ([server/routers/cases.ts](../server/routers/cases.ts)): `outreachProgress` computes real aggregates from `outreach_status` instead of the fabricated `count:5/contacted:2/responded:1`.
+
+### Phase 015 — Storage, files, uploads & media safety
+- Rewrote [server/storage.ts](../server/storage.ts): `sanitizeStorageKey`/`sanitizeFilename` (path-traversal defence), a **real local-disk fallback that persists bytes** (fixing the silent data loss), a directory-confinement check, and a `hashBuffer` sha256 provenance helper. `storagePut` now returns a `sha256`.
+- [src-main/index.ts](../src-main/index.ts) sets `LOCAL_STORAGE_DIR` to `userData/uploads`; `.gitignore` ignores `laro-uploads/`.
+
+### Tests & verification
+- Added `tests/smoke/storage.smoke.test.ts` (sanitize + hash) and `tests/smoke/noFakeSuccess.smoke.test.ts` (anti-regression guards for 011–014).
+- `tsc -p tsconfig.server.json` and `tsconfig.main.json` → clean. `npx vitest run tests/smoke` → **43 passed, 9 todo, 0 failed**.
+
+### What remains (out of scope for 011–015)
+- Real classification (Phase 025) — matching returns empty until a case has legal areas.
+- Outreach draft + approval gate + real send (Phases 026/012) — still not wired; no lawyer is contacted.
+- Wire the sha256 hash into every evidence-write path + PDF/zip export (Phases 015/023).
+- UI-wide disclaimer + GDPR + i18n (Phases 037/028/057).
+
+---
+
 ## 2026-07-06 — Phases 005–010 (data model, config, auth, authz, API contract, frontend)
 
 **Branch:** `staging` · **Base commit:** `1b78ed6`

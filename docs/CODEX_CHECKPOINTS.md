@@ -48,3 +48,20 @@ re-deriving state.
 **Process caution:** do NOT run `git stash` mid-task — a stash during a long typecheck once reverted the working tree; recovered via `git stash pop`. Avoid.
 
 **Next safe action:** Phase 029/030/100 security follow-ups (stop bundling `.env`; AES-GCM token crypto; helmet/CSRF), then Stage B features — Phase 011 (wire real matching), 025 (classification), 026 (approval gate).
+
+---
+
+## Checkpoint 3 — 2026-07-06 — Phases 011–015
+
+**Branch:** `Phase-Imp` (not pushed — owner pushes next)
+
+**Done (real code + tests):**
+- 011: real matching engine wired into `matching` router (Partial — needs classification 025).
+- 012: honest provider connectors (`enhancedConnections.ts`) + `docs/PROVIDERS.md`.
+- 013: `LEGAL_DISCLAIMER` on generated legal docs + `docs/COMPLIANCE.md` (Partial).
+- 014: removed fake OCR / dashboard stats / mocked outreachProgress → honest.
+- 015: `storage.ts` sanitize + real local fallback + sha256 (Partial — wire hash everywhere; export 023).
+
+**Verified:** server + main `tsc` clean; `npx vitest run tests/smoke` → 43 pass / 9 todo.
+
+**Next safe action:** Phase 025 (classification) so matching has legal areas to work with; then 026 (approval gate) before any real outreach send; then 016–019 (jobs/idempotency/rate-limits/audit) on the outreach path.

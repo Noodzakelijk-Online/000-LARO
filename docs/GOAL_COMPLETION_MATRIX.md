@@ -29,6 +29,11 @@ Last updated: 2026-07-06 (after phases 000–010).
 | 008 | Authorization & resource ownership | **Implemented** | `assertCaseOwnership` guard; IDOR endpoints protected; `demo-user-123` removed; `tests/smoke/authz.smoke.test.ts` (13 pass). |
 | 009 | API contract & error envelope | **Implemented** | tRPC `errorFormatter` stable envelope; dead `error-handler.ts` removed. |
 | 010 | Frontend architecture & navigation | **Partial** | `docs/FRONTEND_ARCHITECTURE.md`; demo-mode no longer exposes data (via Phase 008). Residual: visible demo label (037), placeholder routes (011/014), renderer tsc debt (041). |
+| 011 | Core workflow vertical slice | **Partial** | Real matching engine wired into `matching` router (no more `Math.random`), protected + ownership. Residual: needs classification (025) to produce areas; outreach send still missing. |
+| 012 | External provider reality review | **Implemented** | `docs/PROVIDERS.md`; dummy auth URLs replaced with real availability reporting in `enhancedConnections.ts`. |
+| 013 | Compliance & policy boundaries | **Partial** | `LEGAL_DISCLAIMER` appended to generated legal docs; `docs/COMPLIANCE.md`. Residual: UI-wide disclaimer (037), GDPR (028), i18n (057). |
+| 014 | No fake success / no mock production | **Implemented** | Fake OCR, hardcoded dashboard stats, and mocked `outreachProgress` replaced with honest/real behavior; anti-regression guards in `tests/smoke/noFakeSuccess.smoke.test.ts`. |
+| 015 | Storage, files, uploads & media safety | **Partial** | `storage.ts` sanitization + real local fallback (no more silent byte-drop) + sha256 provenance; `tests/smoke/storage.smoke.test.ts`. Residual: wire hash into all evidence writes; PDF/zip export (023). |
 
 Note: phases 000–006/008/009 mark their **own deliverable** complete. 007 and 010
 are honestly **Partial** — real improvements landed, but named residual items
@@ -38,12 +43,12 @@ remain and are tracked in `docs/SECURITY.md` §5 and `docs/FRONTEND_ARCHITECTURE
 
 | Phase range | Theme | Prevailing status |
 |---|---|---|
-| 011–019 | Core workflow slice, providers, compliance, no-fake-success, storage, jobs, idempotency, rate limits, audit | mostly Missing (critical-path middle is fake/dead) |
+| 016–019 | Jobs, idempotency, rate limits, audit | mostly Missing/Partial |
 | 020–039 | Dashboard, forms, search, import/export, AI fallback, review queue, notifications, privacy, security headers, secrets, dev/deploy, migrations, CLI, observability, demo labelling, fake-provider lab, factories | Partial → Missing |
 | 040–054 | Test suites (backend/frontend/worker/e2e), acceptance, adversarial, isolation, file-safety, provider-failure, a11y, responsive, perf, large-data, backup/restore, reconciliation | mostly Missing (suite cannot run) |
 | 055–075 | Analytics, SaaS/billing, i18n, flags, state machines, domain model, invariants, safety-review screen, credential checklist, threat model, PIA, supply-chain, licenses, CI gates, release, runbook, user guide, troubleshooting, UI/endpoint/doc audits | mostly Missing |
 | 076–099 | Debt register, bug log, red-team loops, user sims, value/realism reviews, traceability, task graph, worklog, resume-safety, stabilization gates, DoD, fresh-clone, manual evidence, no-excuses search, completion matrix, final report, final response, maintenance, roadmap | Missing → Partial (worklog/checkpoints/matrix now started) |
 | 100–115 | Provider cleanup, debug bundle, retention, prod migration, emergency stop, onboarding, roles, confidence display, decision minimization, exception dashboard, safe retries, ambiguous-action, versioning, regression baseline, maintenance review, operator-readiness | mostly Missing |
 
-**Approximate tally across all 116 phases:** Implemented ~17 · Partial ~30 · Missing ~67 · Blocked 0 · N/A ~2.
-(Phases 000–006/008/009 Implemented; 007/010 Partial. This batch moved 8 phases to Implemented and 2 to Partial.)
+**Approximate tally across all 116 phases:** Implemented ~19 · Partial ~33 · Missing ~62 · Blocked 0 · N/A ~2.
+(Phases 000–006/008/009/012/014 Implemented; 007/010/011/013/015 Partial. The 011–015 batch moved 2 phases to Implemented and 3 to Partial.)

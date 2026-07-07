@@ -50,3 +50,5 @@ tmp/
 temp/
 
 *.sqlite
+# Phase 015: local evidence storage fallback (never commit uploaded files)
+laro-uploads/

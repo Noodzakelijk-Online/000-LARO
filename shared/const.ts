@@ -9,6 +9,19 @@ export const getLoginUrl = () => "/login";
 export const APP_TITLE = "LARO";
 
 /**
+ * Phase 013 — legal-advice disclaimer (safety boundary: the app must not pretend
+ * to provide final legal advice). Append to AI-generated legal content and show
+ * near case analysis / matching results.
+ */
+export const LEGAL_DISCLAIMER_NL =
+  "Let op: LARO biedt juridische ondersteuning en voorbereiding, geen definitief juridisch advies. " +
+  "Laat gegenereerde documenten en analyses altijd controleren door een bevoegd advocaat voordat u ze gebruikt.";
+export const LEGAL_DISCLAIMER_EN =
+  "Note: LARO provides legal assistance and preparation, not definitive legal advice. " +
+  "Always have generated documents and analyses reviewed by a qualified lawyer before relying on them.";
+export const LEGAL_DISCLAIMER = `${LEGAL_DISCLAIMER_NL}\n${LEGAL_DISCLAIMER_EN}`;
+
+/**
  * Same mark as the live Manus deployment (favicon + sidebar).
  * @see https://lawyerdashboard.manus.space/
  */

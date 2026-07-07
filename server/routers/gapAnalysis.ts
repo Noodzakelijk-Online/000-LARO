@@ -586,9 +586,20 @@ export const gapAnalysisRouter = router({
         });
       }
 
+      // Phase 013: append the legal-advice disclaimer to every generated
+      // document so no output can be mistaken for definitive legal advice.
+      if (document) {
+        const { LEGAL_DISCLAIMER } = await import("../../shared/const");
+        document = {
+          ...document,
+          content: `${document.content}\n\n---\n${LEGAL_DISCLAIMER}`,
+        };
+      }
+
       return {
         success: true,
         document,
+        disclaimer: (await import("../../shared/const")).LEGAL_DISCLAIMER,
       };
     }),
 });

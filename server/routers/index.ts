@@ -377,17 +377,26 @@ export const appRouter = router({
       }),
   }),
   
-  // OCR procedures (placeholder for now)
+  // OCR procedures.
+  // Phase 014: OCR is NOT implemented. Previously extractText returned a
+  // hardcoded Dutch employment-contract with confidence 0.98 regardless of
+  // input — a fabricated success. It now reports unavailability honestly and
+  // extractText throws a clear "not implemented" error rather than inventing
+  // document text. Real OCR (tesseract.js) is scheduled for Phase 025/015.
   ocr: router({
-    supportsOcr: protectedProcedure.input(z.any()).query(() => true),
-    getStatus: protectedProcedure.input(z.any()).query(() => ({ status: "ready" })),
-    getSupportedLanguages: protectedProcedure.query(() => ["nl", "en"]),
+    supportsOcr: protectedProcedure.input(z.any()).query(() => false),
+    getStatus: protectedProcedure.input(z.any()).query(() => ({ status: "unavailable" as const })),
+    getSupportedLanguages: protectedProcedure.query(() => [] as string[]),
     extractText: protectedProcedure
       .input(z.object({ image: z.string(), language: z.string().optional().default("nl") }))
-      .mutation(({ input }) => ({ 
-        text: `[OCR Extraction Successful]\n\nDocumento: ${input.image.substring(0, 20)}...\nLanguage: ${input.language}\n\nGEGEVENS OVEREENKOMST\nPartij A: ${input.image.includes('employer') ? 'Werkgever B.V.' : 'Cliënt'}\nDatum: ${new Date().toLocaleDateString('nl-NL')}\n\nDit document bevat bewijs van beëindiging van de arbeidsovereenkomst zonder de vereiste schriftelijke opzegtermijn.`,
-        confidence: 0.98
-      })),
+      .mutation(() => {
+        throw new TRPCError({
+          code: "NOT_IMPLEMENTED",
+          message:
+            "OCR text extraction is not implemented yet. No text was extracted. " +
+            "Upload the document as evidence instead; automatic OCR is planned (Phase 025).",
+        });
+      }),
   }),
 
   // Analytics procedures
