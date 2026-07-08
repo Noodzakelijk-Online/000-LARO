@@ -17,7 +17,10 @@ export default defineConfig({
   test: {
     environment: 'node',
     globals: true,
-    include: ['tests/smoke/**/*.test.ts'],
-    testTimeout: 20_000,
+    // Phase 040: the backend suite runs real DB integration tests against a temp
+    // SQLite file. The legacy tests/*.test.ts suite (broken imports) is repaired
+    // separately (Phase 041).
+    include: ['tests/smoke/**/*.test.ts', 'tests/backend/**/*.test.ts'],
+    testTimeout: 30_000,
   },
 });

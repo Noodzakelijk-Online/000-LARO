@@ -316,11 +316,12 @@ export const casesRouter = router({
         return { success: true };
       }
 
-      const tables = sqliteDb
-        .prepare(
-          "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__%' AND name != 'cases'"
-        )
-        .all() as Array<{ name: string }>;
+      // NB: filter internal tables in JS. A SQL `LIKE '__%'` would treat `_` as
+      // a wildcard and exclude EVERY table (breaking the cascade) — that was a
+      // latent bug; caught by the Phase 040 backend test.
+      const tables = (
+        sqliteDb.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as Array<{ name: string }>
+      ).filter((t) => !t.name.startsWith("sqlite_") && !t.name.startsWith("__") && t.name !== "cases");
 
       const tablesWithCaseId: string[] = [];
       for (const t of tables) {

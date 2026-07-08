@@ -19,7 +19,13 @@
     "lint": "eslint . --ext .ts,.tsx",
     "test": "vitest run",
     "test:watch": "vitest",
+    "setup": "node scripts/setup.mjs",
+    "doctor": "node scripts/doctor.mjs",
     "db:push": "drizzle-kit push",
+    "db:backup": "node scripts/db-backup.mjs",
+    "serve": "cross-env NODE_ENV=production tsx server/index.ts",
+    "docker:build": "docker build -t laro-server .",
+    "docker:run": "docker run --rm -p 3000:3000 --env-file .env laro-server",
     "postinstall": "electron-rebuild -f -w better-sqlite3"
   },
   "dependencies": {

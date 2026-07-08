@@ -19,12 +19,14 @@ function rawClient(db: any): any {
 }
 
 function listUserTables(sqlite: any): string[] {
+  // NB: filter internal tables in JS — a SQL `LIKE '__%'` would treat `_` as a
+  // wildcard and exclude every table name of length >= 2.
   const tables = sqlite
-    .prepare(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__%'"
-    )
+    .prepare("SELECT name FROM sqlite_master WHERE type='table'")
     .all() as Array<{ name: string }>;
-  return tables.map((t) => t.name);
+  return tables
+    .map((t) => t.name)
+    .filter((n) => !n.startsWith("sqlite_") && !n.startsWith("__"));
 }
 
 function tableColumns(sqlite: any, table: string): string[] {

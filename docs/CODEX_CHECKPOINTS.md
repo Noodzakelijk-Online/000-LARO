@@ -103,3 +103,24 @@ real results; the approval gate is ready to gate a real send.
 **Next safe action:** implement the real outreach **send** through a configured provider behind the
 approval gate (the one remaining critical-path gap), then 031–039 (dev/deploy/observability) and
 040–044 (make the full test suite runnable).
+
+---
+
+## Checkpoint 6 — 2026-07-06 — Phases 031–040
+
+**Branch:** `Phase-Imp` (not pushed).
+
+**Done (all Implemented):** 031 setup script; 032 Dockerfile/compose (server backend);
+033 db-backup + restore; 034 doctor CLI; 035 /api/live+/ready+/health; 036 admin diagnostics;
+037 demo-mode labelling (system.appInfo); 038 fake-provider lab (prod-guarded); 039 test factories;
+040 **real DB-backed backend test suite**.
+
+**Key wins:** rebuilt better-sqlite3 for Node so the backend suite runs here; it exercises
+classification → real matching → ownership → GDPR export/erasure end to end, and **caught a real
+bug** (SQL `LIKE '__%'` wildcard excluded every table, breaking GDPR delete + cases.delete cascade) —
+fixed in gdpr.ts, admin.ts, cases.ts.
+
+**Verified:** server+main tsc clean; `npx vitest run` → 9 files, 76 passed, 9 todo; doctor/setup/db-backup run.
+
+**Next safe action:** Phase 041 (repair the legacy tests/*.test.ts and add frontend/component tests),
+then the real outreach **send** behind the approval gate — the last critical-path gap.

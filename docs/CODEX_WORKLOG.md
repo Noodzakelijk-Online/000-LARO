@@ -9,6 +9,53 @@ is only partially done, that is stated here and reflected in
 
 ---
 
+## 2026-07-06 — Phases 031–040 (dev experience, Docker, migrations, doctor, observability, admin, demo labelling, fake-provider lab, factories, backend test suite)
+
+**Branch:** `Phase-Imp` (not pushed).
+
+### Phase 031 — Local dev one-command
+- `scripts/setup.mjs` + `npm run setup`: Node check, creates `.env` from `.env.example`, prints next steps.
+
+### Phase 032 — Docker & deployment readiness
+- `Dockerfile` (runs the **server backend**, rebuilds better-sqlite3 for Node, `/data` volume, healthcheck), `.dockerignore`, `docker-compose.yml`, `npm run docker:build|run`, `serve` script. `docs/DEPLOYMENT.md`.
+
+### Phase 033 — Migrations & rollback safety
+- `scripts/db-backup.mjs` + `npm run db:backup` (+ `--restore`): file-snapshot rollback capturing `-wal`/`-shm`. `docs/MIGRATIONS.md`.
+
+### Phase 034 — CLI doctor
+- `scripts/doctor.mjs` + `npm run doctor`: environment self-diagnostic; **exits non-zero** on production-critical problems (insecure secrets, missing DB driver).
+
+### Phase 035 — Observability, health, readiness
+- `server/index.ts`: `GET /api/live` (liveness), `GET /api/ready` (DB check, 503 if down), and `/api/health` now reports dbReady/version/env/uptime.
+
+### Phase 036 — Admin/operator diagnostics
+- `server/routers/admin.ts` (mounted): `admin.diagnostics` (system/db/jobs/integration booleans, **no secret values**) and `admin.tableCounts`, gated by the now-used `adminProcedure`.
+
+### Phase 037 — Demo mode with explicit labelling
+- `ENV.DEMO_MODE`/`ENV.isDemo` (forced off in production); `system.appInfo` returns `{env, isProduction, demoMode, banner}` for an unmistakable UI banner.
+
+### Phase 038 — Fake provider lab (tests only)
+- `server/testing/fakeProviders.ts`: `FakeEmailProvider`/`FakeStorage`/`fakeLLM`, **hard-guarded** to throw if `NODE_ENV==='production'`.
+
+### Phase 039 — Test-data factories
+- `tests/factories.ts`: `buildUser/buildCase/buildLawyer/buildEvidence` with defaults that pass the matcher's mandatory filters.
+
+### Phase 040 — Backend test suite (REAL DB integration)
+- Rebuilt `better-sqlite3` for Node so real DB tests run here.
+- `tests/backend/criticalPath.backend.test.ts`: boots the real DB against a temp SQLite file (migrations run), seeds via factories, and asserts **classification → real matching engine → ownership → GDPR export/erasure** end to end. `vitest.config.ts` now includes `tests/backend/**`.
+- **This suite caught a real bug**: a `sqlite_master` filter using `LIKE '__%'` (where `_` is a SQL wildcard) excluded *every* table — silently breaking GDPR export/delete AND the `cases.delete` cascade. Fixed in `gdpr.ts`, `admin.ts`, and `cases.ts` (filter internal tables in JS).
+
+### Verification
+- `tsc` server + main → clean.
+- `npx vitest run` → **9 files, 76 passed, 9 todo, 0 failed** (incl. the real backend suite).
+- `npm run doctor`, `npm run setup`, `npm run db:backup` all run.
+
+### What remains
+- Legacy `tests/*.test.ts` (broken imports) still not repaired — that's Phase 041 (and they remain excluded from the vitest include).
+- Full Docker image build not executed in this environment (no Docker daemon); the Dockerfile is written and the compose/healthcheck are defined.
+
+---
+
 ## 2026-07-06 — Phases 021–030 (forms, search, export, templates, AI classifier, approval gate, notifications, privacy, security headers, secrets)
 
 **Branch:** `Phase-Imp` (not pushed).

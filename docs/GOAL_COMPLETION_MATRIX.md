@@ -10,7 +10,7 @@ evidence table (all 116 phases with `file:line` citations) lives in
 `docs/phase-audit.md`; this file tracks the **live implementation status** as
 phases are worked and is updated at the end of each phase.
 
-Last updated: 2026-07-06 (after phases 000–030).
+Last updated: 2026-07-06 (after phases 000–040).
 
 ---
 
@@ -44,6 +44,16 @@ Last updated: 2026-07-06 (after phases 000–030).
 | 028 | Privacy controls & data deletion | **Implemented** | `server/gdpr.ts` real export + erasure; `gdpr.*` no longer stubs. |
 | 029 | Security headers & web security | **Implemented** | CSP/HSTS/frame/referrer/permissions headers in `server/index.ts`. |
 | 030 | Secrets management & credential rotation | **Partial** | `.env` no longer bundled in installer; `.env.example`; per-install secrets (006/007). Weak OAuth-token crypto still open. |
+| 031 | Local dev one-command experience | **Implemented** | `scripts/setup.mjs` + `npm run setup`; `docs/DEPLOYMENT.md`. |
+| 032 | Docker & deployment readiness | **Implemented** | `Dockerfile` (server backend) + `.dockerignore` + `docker-compose.yml` + npm docker scripts. Image not built here (no daemon). |
+| 033 | Database migrations & rollback safety | **Implemented** | `scripts/db-backup.mjs` (+`--restore`) + `npm run db:backup`; `docs/MIGRATIONS.md`. |
+| 034 | CLI / doctor self-diagnostic | **Implemented** | `scripts/doctor.mjs` + `npm run doctor`; exits non-zero on prod-critical issues. |
+| 035 | Observability, health, readiness | **Implemented** | `/api/live`, `/api/ready`, `/api/health` (dbReady/version/env/uptime). |
+| 036 | Admin/operator diagnostics | **Implemented** | `admin.diagnostics` + `admin.tableCounts` (adminProcedure), no secret values. |
+| 037 | Demo mode with explicit labelling | **Implemented** | `ENV.isDemo` (off in prod) + `system.appInfo` banner. UI banner wiring → 041. |
+| 038 | Fake provider lab for tests only | **Implemented** | `server/testing/fakeProviders.ts`, prod-guarded (throws in production). |
+| 039 | Test-data factories & fixtures | **Implemented** | `tests/factories.ts` (user/case/lawyer/evidence). |
+| 040 | Backend test suite | **Implemented** | Real DB integration `tests/backend/…` (classification→matching→ownership→GDPR); caught & fixed the `LIKE '__%'` cascade bug. Legacy suite still → 041. |
 | 016 | Background jobs, schedulers & workers | **Implemented** | `runJob()` error-isolation + retry/backoff + status; honest outreach heartbeat (no fake send); `health.readiness` exposes job status. `docs/OPERATOR_RUNBOOK.md`. |
 | 017 | Idempotency & duplicate-action prevention | **Partial** | UNIQUE `outreach_status(caseId,lawyerId)` + idempotent `initiateOutreach`. Residual: idempotency keys for the real send path (026). |
 | 018 | Rate limits, cooldowns & provider quotas | **Implemented** | `enforceRateLimit` applied to login, case-create, matching, outreach (+ existing search). Residual: distributed store (Redis) documented. |
@@ -58,11 +68,11 @@ remain and are tracked in `docs/SECURITY.md` §5 and `docs/FRONTEND_ARCHITECTURE
 
 | Phase range | Theme | Prevailing status |
 |---|---|---|
-| 031–039 | Dev-deploy, import/export, AI fallback, review queue, notifications, privacy, security headers, secrets, dev/deploy, migrations, CLI, observability, demo labelling, fake-provider lab, factories | Partial → Missing |
+| 041–054 | Test suites (frontend/worker/e2e), acceptance, import/export, AI fallback, review queue, notifications, privacy, security headers, secrets, dev/deploy, migrations, CLI, observability, demo labelling, fake-provider lab, factories | Partial → Missing |
 | 040–054 | Test suites (backend/frontend/worker/e2e), acceptance, adversarial, isolation, file-safety, provider-failure, a11y, responsive, perf, large-data, backup/restore, reconciliation | mostly Missing (suite cannot run) |
 | 055–075 | Analytics, SaaS/billing, i18n, flags, state machines, domain model, invariants, safety-review screen, credential checklist, threat model, PIA, supply-chain, licenses, CI gates, release, runbook, user guide, troubleshooting, UI/endpoint/doc audits | mostly Missing |
 | 076–099 | Debt register, bug log, red-team loops, user sims, value/realism reviews, traceability, task graph, worklog, resume-safety, stabilization gates, DoD, fresh-clone, manual evidence, no-excuses search, completion matrix, final report, final response, maintenance, roadmap | Missing → Partial (worklog/checkpoints/matrix now started) |
 | 100–115 | Provider cleanup, debug bundle, retention, prod migration, emergency stop, onboarding, roles, confidence display, decision minimization, exception dashboard, safe retries, ambiguous-action, versioning, regression baseline, maintenance review, operator-readiness | mostly Missing |
 
-**Approximate tally across all 116 phases:** Implemented ~27 · Partial ~40 · Missing ~47 · Blocked 0 · N/A ~2.
-(Through phase 030: Implemented 022/024/025/028/029 + earlier; Partial 021/023/026/027/030. Real code, honest partials.)
+**Approximate tally across all 116 phases:** Implemented ~37 · Partial ~40 · Missing ~37 · Blocked 0 · N/A ~2.
+(Through phase 040: all of 031–040 Implemented; the real backend test suite now runs and caught a live cascade bug.)

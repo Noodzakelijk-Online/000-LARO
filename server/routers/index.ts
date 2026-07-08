@@ -29,6 +29,7 @@ import { evidenceAnalyticsRouter } from "./evidenceAnalytics";
 import { autoCollectionRouter } from "./autoCollection";
 import { googleDriveRouter } from "./googleDrive";
 import { notificationsRouter } from "./notifications";
+import { adminRouter } from "./admin";
 import { auditRouter } from "./audit";
 import { enforceRateLimit, RATE_LIMITS } from "../rateLimit";
 import { createAuditLog, AUDIT_ACTIONS } from "../audit";
@@ -81,6 +82,7 @@ export const appRouter = router({
   autoCollection: autoCollectionRouter,
   googleDrive: googleDriveRouter,
   notifications: notificationsRouter,
+  admin: adminRouter,
   audit: auditRouter, // Phase 019 — event-history read path
   
   gmailEnhanced: gmailEnhancedRouter,

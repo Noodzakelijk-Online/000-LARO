@@ -106,11 +106,41 @@ app.use(compressionMiddleware);
 
 // ─── Health check ─────────────────────────────────────────────────────────────
 
-app.get('/api/health', (_req, res) => {
-  res.status(200).json({
-    status: 'healthy',
+// Phase 035 — observability: liveness (process up), readiness (DB reachable),
+// and a health summary. Liveness must never touch the DB; readiness does.
+app.get('/api/live', (_req, res) => {
+  res.status(200).json({ status: 'alive', uptime: process.uptime() });
+});
+
+app.get('/api/ready', async (_req, res) => {
+  let dbReady = false;
+  try {
+    const db = await getDb();
+    dbReady = !!db;
+  } catch {
+    dbReady = false;
+  }
+  res.status(dbReady ? 200 : 503).json({
+    status: dbReady ? 'ready' : 'not-ready',
+    dbReady,
     timestamp: new Date().toISOString(),
+  });
+});
+
+app.get('/api/health', async (_req, res) => {
+  let dbReady = false;
+  try {
+    dbReady = !!(await getDb());
+  } catch {
+    dbReady = false;
+  }
+  res.status(dbReady ? 200 : 503).json({
+    status: dbReady ? 'healthy' : 'degraded',
+    dbReady,
+    version: process.env.npm_package_version || '1.0.0',
+    env: ENV.NODE_ENV,
     uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
   });
 });
 

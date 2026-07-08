@@ -56,9 +56,13 @@ export const ENV = {
   forgeApiUrl: process.env.FORGE_API_URL || '',
   forgeApiKey: process.env.FORGE_API_KEY || '',
 
+  // Phase 037 — explicit demo mode. Never on in production.
+  DEMO_MODE: process.env.DEMO_MODE === 'true',
+
   get ownerId() { return this.OWNER_ID; },
   get isDev()   { return this.NODE_ENV === 'development'; },
   get isProd()  { return this.NODE_ENV === 'production'; },
+  get isDemo()  { return this.DEMO_MODE && !this.isProd; },
 };
 
 /**
