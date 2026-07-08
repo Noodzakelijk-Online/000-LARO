@@ -10,7 +10,7 @@ evidence table (all 116 phases with `file:line` citations) lives in
 `docs/phase-audit.md`; this file tracks the **live implementation status** as
 phases are worked and is updated at the end of each phase.
 
-Last updated: 2026-07-06 (after phases 000–040).
+Last updated: 2026-07-06 (after phases 000–050).
 
 ---
 
@@ -54,6 +54,16 @@ Last updated: 2026-07-06 (after phases 000–040).
 | 038 | Fake provider lab for tests only | **Implemented** | `server/testing/fakeProviders.ts`, prod-guarded (throws in production). |
 | 039 | Test-data factories & fixtures | **Implemented** | `tests/factories.ts` (user/case/lawyer/evidence). |
 | 040 | Backend test suite | **Implemented** | Real DB integration `tests/backend/…` (classification→matching→ownership→GDPR); caught & fixed the `LIKE '__%'` cascade bug. Legacy suite still → 041. |
+| 041 | Frontend & component test suite | **Partial** | `tests/frontend/frontendLogic.test.ts` (form/validation/legal-area logic). Component-render tests need jsdom/testing-library — deferred. |
+| 042 | Worker/job test suite | **Implemented** | `tests/backend/worker.test.ts` — runJob isolation, retry+backoff, recover, status. |
+| 043 | End-to-end workflow tests | **Implemented** | `tests/e2e/workflow.e2e.test.ts` — signup→case→classify→match→draft→approve (sent:false) via real API. |
+| 044 | Acceptance test matrix | **Implemented** | `docs/ACCEPTANCE_TESTS.md` + `tests/acceptance/acceptance.test.ts` (AC1–AC6). |
+| 045 | Adversarial break-the-app tests | **Implemented** | `tests/security/adversarial.test.ts` — unauth, malformed/oversized, injection-safe, rate limit. |
+| 046 | Cross-user isolation tests | **Implemented** | `tests/security/isolation.test.ts` — B cannot read/mutate/export A's case. |
+| 047 | File safety & path traversal tests | **Implemented** | `tests/security/fileSafety.test.ts` — traversal/absolute keys confined; sha256 round-trip. |
+| 048 | Provider failure simulation | **Implemented** | `tests/security/providerFailure.test.ts` — graceful degradation + prod-guarded fake lab. |
+| 049 | Accessibility review | **Partial** | `tests/a11y/accessibility.test.ts` (contrast/id) + `docs/ACCESSIBILITY.md`. Per-screen axe audit pending. |
+| 050 | Responsive & browser compatibility | **Partial** | `docs/RESPONSIVE_COMPAT.md` (single-Chromium desktop). Manual reflow QA / visual-regression pending. |
 | 016 | Background jobs, schedulers & workers | **Implemented** | `runJob()` error-isolation + retry/backoff + status; honest outreach heartbeat (no fake send); `health.readiness` exposes job status. `docs/OPERATOR_RUNBOOK.md`. |
 | 017 | Idempotency & duplicate-action prevention | **Partial** | UNIQUE `outreach_status(caseId,lawyerId)` + idempotent `initiateOutreach`. Residual: idempotency keys for the real send path (026). |
 | 018 | Rate limits, cooldowns & provider quotas | **Implemented** | `enforceRateLimit` applied to login, case-create, matching, outreach (+ existing search). Residual: distributed store (Redis) documented. |
@@ -74,5 +84,5 @@ remain and are tracked in `docs/SECURITY.md` §5 and `docs/FRONTEND_ARCHITECTURE
 | 076–099 | Debt register, bug log, red-team loops, user sims, value/realism reviews, traceability, task graph, worklog, resume-safety, stabilization gates, DoD, fresh-clone, manual evidence, no-excuses search, completion matrix, final report, final response, maintenance, roadmap | Missing → Partial (worklog/checkpoints/matrix now started) |
 | 100–115 | Provider cleanup, debug bundle, retention, prod migration, emergency stop, onboarding, roles, confidence display, decision minimization, exception dashboard, safe retries, ambiguous-action, versioning, regression baseline, maintenance review, operator-readiness | mostly Missing |
 
-**Approximate tally across all 116 phases:** Implemented ~37 · Partial ~40 · Missing ~37 · Blocked 0 · N/A ~2.
-(Through phase 040: all of 031–040 Implemented; the real backend test suite now runs and caught a live cascade bug.)
+**Approximate tally across all 116 phases:** Implemented ~44 · Partial ~43 · Missing ~27 · Blocked 0 · N/A ~2.
+(Through phase 050: a real test suite — 18 files, 117 passing — covers e2e, acceptance, isolation, adversarial, file-safety, provider-failure, worker.)

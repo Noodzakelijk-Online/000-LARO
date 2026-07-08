@@ -124,3 +124,21 @@ fixed in gdpr.ts, admin.ts, cases.ts.
 
 **Next safe action:** Phase 041 (repair the legacy tests/*.test.ts and add frontend/component tests),
 then the real outreach **send** behind the approval gate — the last critical-path gap.
+
+---
+
+## Checkpoint 7 — 2026-07-06 — Phases 041–050
+
+**Branch:** `Phase-Imp` (not pushed).
+
+**Done:** real test harness (`tests/helpers/app.ts` — `createCaller` over the actual API).
+- 042 worker tests, 043 e2e workflow, 044 acceptance matrix, 045 adversarial, 046 isolation,
+  047 file-safety, 048 provider-failure — all **Implemented** (real tests).
+- 041 frontend-logic tests + 049 a11y + 050 responsive — **Partial** (jsdom/component render,
+  per-screen axe audit, visual-regression pending; documented).
+
+**Verified:** server+main tsc clean; `npx vitest run` → 18 files, 117 passed, 9 todo, 0 failed.
+
+**Next safe action:** the real outreach **send** behind the approval gate (last critical-path gap),
+then 051–054 (perf/indexing, large-dataset pagination, backup/restore, reconciliation) and jsdom
+component tests (041 follow-up).

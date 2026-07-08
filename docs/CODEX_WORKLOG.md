@@ -9,6 +9,69 @@ is only partially done, that is stated here and reflected in
 
 ---
 
+## 2026-07-06 — Phases 041–050 (test suites, e2e, acceptance, adversarial, isolation, file-safety, provider-failure, a11y, responsive)
+
+**Branch:** `Phase-Imp` (not pushed).
+
+Built a real test harness `tests/helpers/app.ts` (`bootTestApp` + `makeCaller` via
+`appRouter.createCaller`) that drives the **actual API** against a temp DB.
+
+### Phase 041 — Frontend/component test suite
+- `tests/frontend/frontendLogic.test.ts`: validates the form/validation/legal-area
+  LOGIC the UI relies on (`caseIntakeSchema`, `phoneSchema`, `sanitizeLegalAreas`).
+  **Partial**: component-render tests need jsdom + @testing-library/react (not a
+  dependency) — deferred and documented.
+
+### Phase 042 — Worker/job test suite
+- `tests/backend/worker.test.ts`: `runJob` error isolation (never throws), bounded
+  retry+backoff, recover-after-retry, observable status.
+
+### Phase 043 — End-to-end workflow tests
+- `tests/e2e/workflow.e2e.test.ts`: signup → create case (auto-classified) →
+  matching → prepareDrafts → reviewQueue → approve (**sent:false**), all through
+  the real tRPC API.
+
+### Phase 044 — Acceptance test matrix
+- `docs/ACCEPTANCE_TESTS.md` + `tests/acceptance/acceptance.test.ts` (AC1–AC6),
+  plus honest manual items (real send, OAuth collection, packaging).
+
+### Phase 045 — Adversarial break-the-app tests
+- `tests/security/adversarial.test.ts`: unauth → UNAUTHORIZED, malformed/oversized
+  input rejected, SQL-injection-style search is safe, non-existent case forbidden,
+  and the case-create **rate limit** triggers TOO_MANY_REQUESTS.
+
+### Phase 046 — Cross-user isolation tests
+- `tests/security/isolation.test.ts`: user B cannot read/list/delete/match/export
+  user A's case (real ownership guards enforced).
+
+### Phase 047 — File safety & path-traversal tests
+- `tests/security/fileSafety.test.ts`: traversal/absolute keys are sanitized and
+  confined under the storage base; content round-trips with a sha256 hash.
+
+### Phase 048 — Provider failure simulation
+- `tests/security/providerFailure.test.ts`: no lawyers → empty matches; gibberish
+  → "Other"; empty-user GDPR export; and the fake-provider lab throws in production.
+
+### Phase 049 — Accessibility review
+- `tests/a11y/accessibility.test.ts` (contrast + id generation) + `docs/ACCESSIBILITY.md`.
+
+### Phase 050 — Responsive & browser compatibility
+- `docs/RESPONSIVE_COMPAT.md`: single-Chromium desktop target; Tailwind responsive
+  approach; honest "manual QA / visual-regression pending" note.
+
+### Verification
+- `tsc` server + main → clean.
+- `npx vitest run` → **18 test files, 117 passed, 9 todo, 0 failed** (up from 76).
+- Legacy `tests/*.test.ts` remain excluded (broken imports) — replaced by the new
+  real suites rather than repaired in place.
+
+### What remains
+- jsdom/component-render tests (041 follow-up).
+- The real outreach **send** (still the one critical-path gap).
+- Visual-regression / large-dataset perf tooling (051/052).
+
+---
+
 ## 2026-07-06 — Phases 031–040 (dev experience, Docker, migrations, doctor, observability, admin, demo labelling, fake-provider lab, factories, backend test suite)
 
 **Branch:** `Phase-Imp` (not pushed).

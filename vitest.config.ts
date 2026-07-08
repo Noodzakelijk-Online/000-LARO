@@ -20,7 +20,15 @@ export default defineConfig({
     // Phase 040: the backend suite runs real DB integration tests against a temp
     // SQLite file. The legacy tests/*.test.ts suite (broken imports) is repaired
     // separately (Phase 041).
-    include: ['tests/smoke/**/*.test.ts', 'tests/backend/**/*.test.ts'],
+    include: [
+      'tests/smoke/**/*.test.ts',
+      'tests/backend/**/*.test.ts',
+      'tests/e2e/**/*.test.ts',
+      'tests/security/**/*.test.ts',
+      'tests/frontend/**/*.test.ts',
+      'tests/a11y/**/*.test.ts',
+      'tests/acceptance/**/*.test.ts',
+    ],
     testTimeout: 30_000,
   },
 });
