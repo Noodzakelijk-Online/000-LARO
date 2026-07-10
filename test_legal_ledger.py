@@ -1756,6 +1756,81 @@ class TestLegalLedgerApi(unittest.TestCase):
         self.assertEqual(audit.status_code, 200)
         self.assertTrue(any(item["action"] == "google_sources_pulled" for item in audit.get_json()["audit_events"]))
 
+    def test_google_pull_job_reports_real_source_and_word_progress(self):
+        from google_token_store import LocalEncryptedTokenStore
+
+        created = self.client.post("/api/cases", json={
+            "title": "Google import job case",
+            "description": "Track durable local Google import progress.",
+            "legal_domain": "administrative_law",
+        }, headers=self.headers)
+        self.assertEqual(created.status_code, 201)
+        case_id = created.get_json()["case_id"]
+
+        vault = LocalEncryptedTokenStore(os.path.join(self.tmp.name, "google-job-token-vault"))
+        vault.save("ledger@example.com", "google", {"access_token": "test-access-token"})
+        connector = mock.Mock()
+        connector.fetch.return_value = ([
+            {
+                "id": "google-job-message-1",
+                "source_type": "gmail",
+                "source_uri": "https://mail.google.com/mail/u/0/#all/google-job-message-1",
+                "title": "CAK evidence email",
+                "plain_text": "CAK decision dated 2026-07-01 requests proof of payment before 2026-07-15.",
+            },
+            {
+                "id": "google-job-file-1",
+                "source_type": "google_drive",
+                "source_uri": "https://drive.example/google-job-file-1",
+                "title": "Payment evidence",
+                "content": "Bank transfer receipt dated 2026-07-02 confirms the requested payment was made.",
+            },
+        ], None)
+        immediate_executor = mock.Mock()
+        immediate_executor.submit.side_effect = lambda function, *args: function(*args)
+
+        with mock.patch.object(self.app_module, "google_token_store", vault), \
+             mock.patch.object(self.app_module, "GoogleEvidenceConnector", return_value=connector), \
+             mock.patch.object(self.app_module, "google_pull_executor", immediate_executor), \
+             mock.patch.object(self.app_module, "google_oauth_config", return_value={
+                 "configured": True,
+                 "client_id": "client-id",
+                 "client_secret": "client-secret",
+             }):
+            started = self.client.post(
+                f"/api/cases/{case_id}/documents/pull-google/jobs",
+                json={"source": "gmail", "query": "label:LARO-CAK", "max_items": 5},
+                headers=self.headers,
+            )
+
+        self.assertEqual(started.status_code, 202)
+        job_id = started.get_json()["job"]["job_id"]
+        job = self.client.get(
+            f"/api/cases/{case_id}/documents/pull-google/jobs/{job_id}",
+            headers=self.headers,
+        )
+        self.assertEqual(job.status_code, 200)
+        payload = job.get_json()["job"]
+        self.assertEqual(payload["status"], "completed")
+        self.assertEqual(payload["progress_percent"], 100)
+        self.assertEqual(payload["total_items"], 2)
+        self.assertEqual(payload["completed_items"], 2)
+        self.assertGreater(payload["total_words"], 0)
+        self.assertEqual(payload["processed_words"], payload["total_words"])
+        self.assertEqual(payload["result"]["imported_count"], 2)
+        self.assertEqual(payload["result"]["connector"]["mode"], "read_only")
+        listed = self.client.get(
+            f"/api/cases/{case_id}/documents/pull-google/jobs",
+            headers=self.headers,
+        )
+        self.assertEqual(listed.status_code, 200)
+        self.assertEqual(listed.get_json()["jobs"][0]["job_id"], job_id)
+        audit = self.client.get(f"/api/audit?case_id={case_id}", headers=self.headers)
+        actions = [item["action"] for item in audit.get_json()["audit_events"]]
+        self.assertIn("created", actions)
+        self.assertIn("completed", actions)
+        self.assertIn("google_sources_pulled", actions)
+
     def test_upload_document_surfaces_contradictions_and_missing_evidence(self):
         created = self.client.post("/api/cases", json={
             "title": "Conflicting evidence case",

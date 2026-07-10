@@ -436,6 +436,32 @@ class AuditEvent(Base):
     created_at = Column(DateTime, default=utcnow, nullable=False)
 
 
+class EvidenceImportJob(Base):
+    __tablename__ = "evidence_import_jobs"
+
+    id = Column(Integer, primary_key=True)
+    case_id = Column(Integer, ForeignKey("legal_cases.id"), nullable=False, index=True)
+    provider = Column(String(80), default="google", nullable=False)
+    source = Column(String(80), default="gmail", nullable=False)
+    query = Column(Text, default="")
+    status = Column(String(40), default="queued", nullable=False, index=True)
+    stage = Column(String(255), default="Queued")
+    current_item = Column(String(255), default="")
+    total_items = Column(Integer, default=0)
+    completed_items = Column(Integer, default=0)
+    total_words = Column(Integer, default=0)
+    processed_words = Column(Integer, default=0)
+    imported_count = Column(Integer, default=0)
+    skipped_count = Column(Integer, default=0)
+    estimated_total_seconds = Column(Integer, default=0)
+    error = Column(Text, default="")
+    result_json = Column(Text, default="{}")
+    started_at = Column(DateTime)
+    completed_at = Column(DateTime)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
+
+
 class LegalLedger:
     """Service facade around the persistent legal case ledger."""
 
@@ -2273,6 +2299,68 @@ class LegalLedger:
             )
             return True
 
+    def create_evidence_import_job(self, case_id: int, data: Dict[str, Any], actor: str = "system") -> Optional[Dict[str, Any]]:
+        with self.session_scope() as session:
+            if not session.get(LegalCase, case_id):
+                return None
+            job = EvidenceImportJob(
+                case_id=case_id,
+                provider=str(data.get("provider") or "google").strip().lower() or "google",
+                source=str(data.get("source") or "gmail").strip().lower() or "gmail",
+                query=str(data.get("query") or "").strip(),
+                status="queued",
+                stage="Queued for local evidence import",
+            )
+            session.add(job)
+            session.flush()
+            serialized = self._serialize_evidence_import_job(job)
+            self._audit(session, case_id, "EvidenceImportJob", job.id, "created", actor, {}, serialized, "medium", source="local_import_job")
+            return serialized
+
+    def get_evidence_import_job(self, case_id: int, job_id: int) -> Optional[Dict[str, Any]]:
+        with self.session_scope() as session:
+            job = session.get(EvidenceImportJob, job_id)
+            if not job or job.case_id != case_id:
+                return None
+            return self._serialize_evidence_import_job(job)
+
+    def list_evidence_import_jobs(self, case_id: int, status: Optional[str] = None) -> List[Dict[str, Any]]:
+        with self.session_scope() as session:
+            query = session.query(EvidenceImportJob).filter_by(case_id=case_id)
+            if status:
+                query = query.filter_by(status=status)
+            return [
+                self._serialize_evidence_import_job(item)
+                for item in query.order_by(EvidenceImportJob.updated_at.desc(), EvidenceImportJob.id.desc()).limit(20).all()
+            ]
+
+    def update_evidence_import_job(self, case_id: int, job_id: int, data: Dict[str, Any], actor: str = "system") -> Optional[Dict[str, Any]]:
+        with self.session_scope() as session:
+            job = session.get(EvidenceImportJob, job_id)
+            if not job or job.case_id != case_id:
+                return None
+            previous_status = job.status
+            for field_name in (
+                "stage", "current_item", "total_items", "completed_items", "total_words",
+                "processed_words", "imported_count", "skipped_count", "estimated_total_seconds", "error",
+            ):
+                if field_name in data:
+                    setattr(job, field_name, data[field_name])
+            if "result" in data:
+                job.result_json = _json_dump(data["result"] if isinstance(data["result"], dict) else {})
+            if data.get("status"):
+                job.status = str(data["status"]).strip().lower()
+            if job.status == "running" and not job.started_at:
+                job.started_at = utcnow()
+            if job.status in {"completed", "failed"} and not job.completed_at:
+                job.completed_at = utcnow()
+            job.updated_at = utcnow()
+            session.flush()
+            serialized = self._serialize_evidence_import_job(job)
+            if job.status in {"completed", "failed"} and previous_status != job.status:
+                self._audit(session, case_id, "EvidenceImportJob", job.id, job.status, actor, {}, serialized, "medium", source="local_import_job")
+            return serialized
+
     def papertrail_graph(self, case_id: int) -> Optional[Dict[str, Any]]:
         with self.session_scope() as session:
             case = session.get(LegalCase, case_id)
@@ -3608,6 +3696,53 @@ class LegalLedger:
 
     def _serialize_audit(self, item: AuditEvent) -> Dict[str, Any]:
         return {"id": item.id, "case_id": item.case_id, "entity_type": item.entity_type, "entity_id": item.entity_id, "action": item.action, "actor": item.actor, "source": item.source, "before_state": _json_load(item.before_state, {}), "after_state": _json_load(item.after_state, {}), "risk_level": item.risk_level, "approval_id": item.approval_id, "created_at": _iso(item.created_at)}
+
+    @staticmethod
+    def _serialize_evidence_import_job(item: EvidenceImportJob) -> Dict[str, Any]:
+        elapsed_seconds = max(0, int(((item.completed_at or utcnow()) - (item.started_at or item.created_at)).total_seconds()))
+        if item.status == "completed":
+            progress_percent = 100
+            remaining_seconds = 0
+        elif item.status == "failed":
+            progress_percent = max(0, min(99, int(10 + (80 * item.completed_items / item.total_items))) if item.total_items else 8)
+            remaining_seconds = None
+        elif item.total_items:
+            progress_percent = max(10, min(95, int(10 + (85 * item.completed_items / item.total_items))))
+            if item.completed_items and elapsed_seconds:
+                remaining_seconds = max(1, int((elapsed_seconds / item.completed_items) * max(0, item.total_items - item.completed_items)))
+            else:
+                remaining_seconds = max(1, int(item.estimated_total_seconds or item.total_items * 3))
+        elif item.status == "running":
+            progress_percent = 6
+            remaining_seconds = None
+        else:
+            progress_percent = 0
+            remaining_seconds = None
+        return {
+            "job_id": item.id,
+            "case_id": item.case_id,
+            "provider": item.provider,
+            "source": item.source,
+            "status": item.status,
+            "stage": item.stage,
+            "current_item": item.current_item,
+            "total_items": item.total_items,
+            "completed_items": item.completed_items,
+            "total_words": item.total_words,
+            "processed_words": item.processed_words,
+            "imported_count": item.imported_count,
+            "skipped_count": item.skipped_count,
+            "estimated_total_seconds": item.estimated_total_seconds,
+            "estimated_remaining_seconds": remaining_seconds,
+            "elapsed_seconds": elapsed_seconds,
+            "progress_percent": progress_percent,
+            "error": item.error,
+            "result": _json_load(item.result_json, {}),
+            "started_at": _iso(item.started_at),
+            "completed_at": _iso(item.completed_at),
+            "created_at": _iso(item.created_at),
+            "updated_at": _iso(item.updated_at),
+        }
 
     @staticmethod
     def _risk_level_for_draft(draft_type: str) -> str:

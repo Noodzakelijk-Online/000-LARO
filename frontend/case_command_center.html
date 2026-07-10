@@ -3440,6 +3440,8 @@
         let autoRefreshTimer = null;
         let autoRefreshInFlight = false;
         let autoRefreshPromise = null;
+        let googleConnectionWatchTimer = null;
+        let activeGooglePullJobId = null;
         const MODE_SUMMARIES = {
             simple: "One action, one case, no extra controls.",
             guided: "Review the case through documents, chronology, claims, and gaps.",
@@ -3566,6 +3568,112 @@
                     if (status) status.textContent = message || "Analysis failed.";
                 }
             };
+        }
+
+        function renderGooglePullProgress(status, job = {}) {
+            if (!status) return;
+            const percent = Math.max(0, Math.min(100, Number(job.progress_percent || 0)));
+            const totalItems = Math.max(0, Number(job.total_items || 0));
+            const completedItems = Math.max(0, Number(job.completed_items || 0));
+            const totalWords = Math.max(0, Number(job.total_words || 0));
+            const processedWords = Math.max(0, Number(job.processed_words || 0));
+            const sourceLabel = job.source === "google_drive" ? "Google Drive" : "Gmail";
+            const remainingSeconds = Number(job.estimated_remaining_seconds);
+            const hasEstimatedRemaining = job.estimated_remaining_seconds !== null
+                && job.estimated_remaining_seconds !== undefined
+                && Number.isFinite(remainingSeconds)
+                && remainingSeconds > 0;
+            const eta = job.status === "completed"
+                ? "done"
+                : job.status === "failed"
+                    ? "needs attention"
+                    : hasEstimatedRemaining
+                        ? `${Math.max(1, Math.ceil(remainingSeconds))}s left`
+                        : "finding sources";
+            const countDetail = totalItems
+                ? `${completedItems}/${totalItems} source item${totalItems === 1 ? "" : "s"}`
+                : "Waiting for source list";
+            const wordDetail = totalWords
+                ? `${processedWords.toLocaleString()}/${totalWords.toLocaleString()} extracted words`
+                : "Word total appears after Google returns matching sources";
+            status.innerHTML = `
+                <div class="analysis-progress" role="status" aria-live="polite">
+                    <div class="analysis-progress-header">
+                        <strong>${escapeHtml(sourceLabel)} evidence pull</strong>
+                        <span>${escapeHtml(Math.round(percent))}% - ${escapeHtml(eta)}</span>
+                    </div>
+                    <div class="analysis-progress-track" aria-hidden="true"><div class="analysis-progress-fill" style="--analysis-progress: ${escapeHtml(percent)}%;"></div></div>
+                    <p class="analysis-progress-detail">${escapeHtml(job.stage || "Queued for local import")} - ${escapeHtml(countDetail)} - ${escapeHtml(wordDetail)}${job.current_item ? ` - ${escapeHtml(job.current_item)}` : ""}</p>
+                </div>
+            `;
+        }
+
+        function pause(milliseconds) {
+            return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+        }
+
+        async function waitForGooglePullJob(caseId, jobId, status) {
+            while (true) {
+                const payload = await apiFetch(`/api/cases/${caseId}/documents/pull-google/jobs/${jobId}`);
+                const job = payload.job || {};
+                renderGooglePullProgress(status, job);
+                if (job.status === "completed") return job;
+                if (job.status === "failed") throw new Error(job.error || "Google evidence import needs attention");
+                await pause(700);
+            }
+        }
+
+        function resumeVisibleGooglePullJob() {
+            const job = (detailState.googleJobs || []).find((item) => ["queued", "running"].includes(item.status));
+            if (!job || !selectedCaseId || selectedTab !== "documents") return;
+            const status = document.getElementById("googlePullStatus");
+            if (!status) return;
+            renderGooglePullProgress(status, job);
+            if (activeGooglePullJobId) return;
+            activeGooglePullJobId = job.job_id;
+            waitForGooglePullJob(selectedCaseId, job.job_id, status)
+                .then(async (completedJob) => {
+                    const result = completedJob.result || {};
+                    showToast(`${result.imported_count || 0} Google source${result.imported_count === 1 ? "" : "s"} imported into the case ledger.`);
+                    await refreshActiveLedger({ silent: true });
+                })
+                .catch((error) => {
+                    if (status) status.textContent = error.message;
+                    showToast(error.message);
+                })
+                .finally(() => { activeGooglePullJobId = null; });
+        }
+
+        async function refreshGoogleConnectionState({ silent = false } = {}) {
+            googleConnectionState = await apiFetch("/api/google/oauth/status");
+            renderDetail();
+            if (!silent) showToast(googleConnectionState.connected ? "Google connected." : "Google connection status refreshed.");
+            return googleConnectionState;
+        }
+
+        function watchGoogleConnection(popup) {
+            window.clearInterval(googleConnectionWatchTimer);
+            const started = Date.now();
+            const check = async () => {
+                try {
+                    const status = await apiFetch("/api/google/oauth/status");
+                    if (status.connected) {
+                        window.clearInterval(googleConnectionWatchTimer);
+                        googleConnectionWatchTimer = null;
+                        googleConnectionState = status;
+                        renderDetail();
+                        showToast("Google connected. Gmail and Drive pulls are ready.");
+                    } else if ((popup && popup.closed) || Date.now() - started > 300000) {
+                        window.clearInterval(googleConnectionWatchTimer);
+                        googleConnectionWatchTimer = null;
+                    }
+                } catch (error) {
+                    window.clearInterval(googleConnectionWatchTimer);
+                    googleConnectionWatchTimer = null;
+                }
+            };
+            check();
+            googleConnectionWatchTimer = window.setInterval(check, 900);
         }
 
         function updateSyncStatus(message, syncing = false) {
@@ -6217,6 +6325,10 @@
             const google = googleConnectionState || {};
             const googleVaultReady = Boolean(google.credential_vault?.available);
             const googleReady = Boolean(google.connected && googleVaultReady);
+            const activeGoogleJob = (detailState.googleJobs || []).find((item) => ["queued", "running"].includes(item.status));
+            const activeGoogleJobDetail = activeGoogleJob
+                ? `${activeGoogleJob.stage || "Google evidence pull is running"} - ${activeGoogleJob.completed_items || 0}/${activeGoogleJob.total_items || "?"} source items - ${(activeGoogleJob.processed_words || 0).toLocaleString()}/${(activeGoogleJob.total_words || 0).toLocaleString()} extracted words.`
+                : "Use Gmail search syntax or a Drive query in the field above. LARO imports only the matching records and never sends messages.";
             const googleStatus = googleReady
                 ? "Google is connected with locally encrypted credentials. Pulls remain read-only."
                 : google.configured
@@ -6263,7 +6375,7 @@
                                         ${googleReady ? `<button class="btn-ledger" type="button" id="googlePullButton">Pull Google Sources</button>` : google.configured ? `<button class="btn-ledger" type="button" id="googleConnectButton">Connect Google</button>` : ""}
                                         <button class="btn-secondary-ledger" type="button" id="googleRefreshStatus">Refresh connection</button>
                                     </div>
-                                    <p class="muted" id="googlePullStatus">Use Gmail search syntax or a Drive query in the field above. LARO imports only the matching records and never sends messages.</p>
+                                    <p class="muted" id="googlePullStatus">${escapeHtml(activeGoogleJobDetail)}</p>
                                 </div>
                             </div>
                             <details class="source-import-advanced expert-depth">
@@ -6827,6 +6939,8 @@
                 </div>
             `;
             wireDetailActions();
+            resumeVisibleGooglePullJob();
+            window.setTimeout(resumeVisibleGooglePullJob, 0);
         }
 
         function activateDetailTab(tabName, options = {}) {
@@ -7453,9 +7567,7 @@
             });
             document.getElementById("googleRefreshStatus")?.addEventListener("click", async () => {
                 try {
-                    googleConnectionState = await apiFetch("/api/google/oauth/status");
-                    renderDetail();
-                    showToast("Google connection status refreshed.");
+                    await refreshGoogleConnectionState();
                 } catch (error) {
                     showToast(error.message);
                 }
@@ -7463,7 +7575,8 @@
             document.getElementById("googleConnectButton")?.addEventListener("click", () => {
                 const returnTo = `${window.location.pathname}${window.location.search}`;
                 const params = new URLSearchParams({ return_to: returnTo, popup: "1" });
-                window.open(`/api/google/oauth/start?${params.toString()}`, "laro-google-oauth", "width=560,height=760");
+                const popup = window.open(`/api/google/oauth/start?${params.toString()}`, "laro-google-oauth", "width=560,height=760");
+                watchGoogleConnection(popup);
             });
             document.getElementById("googlePullButton")?.addEventListener("click", async () => {
                 const status = document.getElementById("googlePullStatus");
@@ -7473,22 +7586,29 @@
                     return showToast("Choose Gmail or Google Drive before using the Google connector.");
                 }
                 if (!query) return showToast("Enter a Gmail search or Google Drive query first.");
-                const progress = startAnalysisProgress(status, { label: `Pulling ${source === "gmail" ? "Gmail" : "Google Drive"} evidence`, words: 180 });
+                const button = document.getElementById("googlePullButton");
+                if (button) button.disabled = true;
                 try {
-                    const response = await apiFetch(`/api/cases/${selectedCaseId}/documents/pull-google`, {
+                    const started = await apiFetch(`/api/cases/${selectedCaseId}/documents/pull-google/jobs`, {
                         method: "POST",
                         body: JSON.stringify({ source, query, meta_tag: query, confidentiality_level: document.getElementById("sourceImportConfidentiality")?.value || "normal" })
                     });
+                    activeGooglePullJobId = started.job?.job_id;
+                    renderGooglePullProgress(status, started.job);
+                    const job = await waitForGooglePullJob(selectedCaseId, activeGooglePullJobId, status);
+                    const response = job.result || {};
                     const result = analysisResultParts(response);
-                    progress.complete(`${response.imported_count} source${response.imported_count === 1 ? "" : "s"} imported. ${result.parts.join(", ")} queued for review.`);
                     showToast(`${response.imported_count} Google source${response.imported_count === 1 ? "" : "s"} imported into the case ledger.`);
                     await refreshActiveLedger({ silent: true });
                     if (result.reviewCount) activateDetailTab("review");
                     else if (result.timelineCount) activateDetailTab("timeline");
                     else activateDetailTab("documents");
                 } catch (error) {
-                    progress.fail(error.message);
+                    if (status) status.textContent = error.message;
                     showToast(error.message);
+                } finally {
+                    activeGooglePullJobId = null;
+                    if (button) button.disabled = false;
                 }
             });
             document.getElementById("uploadDocumentButton")?.addEventListener("click", async () => {
@@ -7525,7 +7645,7 @@
         }
 
         async function loadCaseDetail(caseId) {
-            const [caseData, docs, timeline, claims, evidence, contradictions, missingEvidence, deadlines, loops, approvals, drafts, reviewQueue, operatingState, papertrail, summary, comprehension, redLine, bundle, audit] = await Promise.all([
+            const [caseData, docs, timeline, claims, evidence, contradictions, missingEvidence, deadlines, loops, approvals, drafts, reviewQueue, operatingState, papertrail, summary, comprehension, redLine, bundle, audit, googleJobs] = await Promise.all([
                 apiFetch(`/api/cases/${caseId}`),
                 apiFetch(`/api/cases/${caseId}/documents`),
                 apiFetch(`/api/cases/${caseId}/timeline`),
@@ -7544,7 +7664,8 @@
                 apiFetch(`/api/cases/${caseId}/comprehension`),
                 apiFetch(`/api/cases/${caseId}/red-line`),
                 apiFetch(`/api/cases/${caseId}/bundle`),
-                apiFetch(`/api/audit?case_id=${caseId}`)
+                apiFetch(`/api/audit?case_id=${caseId}`),
+                apiFetch(`/api/cases/${caseId}/documents/pull-google/jobs`)
             ]);
             detailState = {
                 case: caseData,
@@ -7566,7 +7687,8 @@
                 comprehension,
                 redLine,
                 bundle,
-                audit: audit.audit_events || []
+                audit: audit.audit_events || [],
+                googleJobs: googleJobs.jobs || []
             };
             selectedCaseId = caseId;
             document.getElementById("detailTitle").textContent = caseData.title;
@@ -7686,6 +7808,18 @@
 
         function initializeUi() {
             targetAccountEmail();
+            window.addEventListener("message", (event) => {
+                if (event.origin !== window.location.origin || event.data?.type !== "laro-google-oauth") return;
+                window.clearInterval(googleConnectionWatchTimer);
+                googleConnectionWatchTimer = null;
+                if (event.data.status === "connected") {
+                    refreshGoogleConnectionState({ silent: true })
+                        .then(() => showToast("Google connected. Gmail and Drive pulls are ready."))
+                        .catch((error) => showToast(error.message));
+                } else {
+                    showToast(event.data.message || "Google connection needs attention.");
+                }
+            });
             setDepth(initialDepth());
             document.querySelectorAll("[data-depth]").forEach((button) => button.addEventListener("click", () => setDepth(button.dataset.depth)));
             document.querySelectorAll("[data-tab]").forEach((button) => {

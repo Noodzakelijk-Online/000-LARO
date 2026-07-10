@@ -11,6 +11,7 @@ import datetime
 import hashlib
 import json
 import re
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlencode
 from flask import Flask, request, jsonify, render_template, render_template_string, send_from_directory, send_file, session, redirect
 from flask_sqlalchemy import SQLAlchemy
@@ -92,6 +93,7 @@ init_serverless_functions()
 # Initialize the local-first persistent legal case ledger
 legal_ledger = init_legal_ledger(app)
 google_token_store = LocalEncryptedTokenStore()
+google_pull_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='laro-google-pull')
 
 def _ledger_actor():
     return str(session.get('user_email') or session.get('user_id') or 'anonymous')
@@ -1052,6 +1054,164 @@ def _import_source_records(case_id, data, records, *, source_type, meta_tag, act
     }
 
 
+def _google_record_word_count(record):
+    """Count only text received from Google; the number is progress evidence, not an estimate."""
+    text = " ".join(str(record.get(key) or "") for key in (
+        'content', 'plain_text', 'extracted_text', 'ocr_text', 'body', 'description',
+    ))
+    return len(re.findall(r"\S+", text))
+
+
+def _merge_import_artifacts(target, source):
+    for key in target:
+        target[key] += int((source or {}).get(key) or 0)
+
+
+def _run_google_pull_job(job_id, case_id, job_data, actor):
+    """Run a read-only Google pull with durable, inspectable local progress."""
+    source = str(job_data.get('source') or 'gmail').strip().lower()
+    query = str(job_data.get('query') or '').strip()
+    max_items = int(job_data.get('max_items') or 50)
+    import_data = {
+        'confidentiality_level': job_data.get('confidentiality_level') or 'normal',
+        'source': source,
+        'query': query,
+        'meta_tag': query,
+    }
+    artifacts = {
+        'timeline_suggestions': 0,
+        'deadline_suggestions': 0,
+        'open_loop_suggestions': 0,
+        'claim_suggestions': 0,
+        'contradiction_suggestions': 0,
+        'missing_evidence_suggestions': 0,
+        'evidence_links': 0,
+    }
+    imported_documents = []
+    skipped_documents = []
+    try:
+        legal_ledger.update_evidence_import_job(case_id, job_id, {
+            'status': 'running',
+            'stage': f'Searching {"Gmail" if source == "gmail" else "Google Drive"}',
+        }, actor=actor)
+        token_response = google_token_store.load(actor, 'google')
+        if not token_response:
+            raise GoogleEvidenceError('Google is not connected for this local LARO account')
+        config = google_oauth_config()
+        if not config['configured']:
+            raise GoogleEvidenceError('Google OAuth is not configured on this local LARO installation')
+        connector = GoogleEvidenceConnector(
+            token_response,
+            client_id=config['client_id'],
+            client_secret=config['client_secret'],
+            scopes=GOOGLE_SCOPES,
+        )
+        records, refreshed_token = connector.fetch(source, query, max_items)
+        if refreshed_token:
+            google_token_store.save(actor, 'google', refreshed_token)
+
+        records = list(records or [])
+        total_words = sum(_google_record_word_count(record) for record in records if isinstance(record, dict))
+        estimated_seconds = max(3, min(900, len(records) * 2 + ((total_words + 159) // 160)))
+        legal_ledger.update_evidence_import_job(case_id, job_id, {
+            'stage': f'Found {len(records)} source item{"s" if len(records) != 1 else ""}; reading locally',
+            'total_items': len(records),
+            'total_words': total_words,
+            'estimated_total_seconds': estimated_seconds,
+        }, actor=actor)
+
+        for index, record in enumerate(records):
+            if not isinstance(record, dict):
+                skipped_documents.append({'index': index, 'reason': 'record_must_be_object'})
+                legal_ledger.update_evidence_import_job(case_id, job_id, {
+                    'stage': f'Skipped invalid source item {index + 1} of {len(records)}',
+                    'completed_items': index + 1,
+                    'skipped_count': len(skipped_documents),
+                }, actor=actor)
+                continue
+            title = str(record.get('title') or record.get('original_filename') or f'Source item {index + 1}')
+            legal_ledger.update_evidence_import_job(case_id, job_id, {
+                'stage': f'Reading source item {index + 1} of {len(records)}',
+                'current_item': title[:255],
+            }, actor=actor)
+            partial = _import_source_records(
+                case_id,
+                import_data,
+                [record],
+                source_type='google',
+                meta_tag=query,
+                actor=actor,
+            )
+            imported_documents.extend(partial.get('imported_documents') or [])
+            skipped_documents.extend(partial.get('skipped_documents') or [])
+            _merge_import_artifacts(artifacts, partial.get('artifact_counts') or {})
+            legal_ledger.update_evidence_import_job(case_id, job_id, {
+                'stage': f'Analysed source item {index + 1} of {len(records)}',
+                'completed_items': index + 1,
+                'processed_words': min(total_words, sum(_google_record_word_count(item) for item in records[:index + 1] if isinstance(item, dict))),
+                'imported_count': len(imported_documents),
+                'skipped_count': len(skipped_documents),
+                'current_item': title[:255],
+            }, actor=actor)
+
+        result = {
+            'case_id': case_id,
+            'source_type': 'google',
+            'meta_tag': query,
+            'imported_count': len(imported_documents),
+            'skipped_count': len(skipped_documents),
+            'artifact_counts': artifacts,
+            'connector': {
+                'provider': 'google',
+                'source': source,
+                'mode': 'read_only',
+                'credentials_refreshed': bool(refreshed_token),
+            },
+        }
+        legal_ledger.record_case_activity(
+            case_id,
+            'google_sources_pulled',
+            actor=actor,
+            source='google_readonly_connector',
+            details={
+                'source': source,
+                'query': query,
+                'fetched_count': len(records),
+                'imported_count': result['imported_count'],
+                'skipped_count': result['skipped_count'],
+                'credentials_refreshed': bool(refreshed_token),
+                'job_id': job_id,
+            },
+            risk_level='medium',
+        )
+        legal_ledger.update_evidence_import_job(case_id, job_id, {
+            'status': 'completed',
+            'stage': 'Evidence imported and case ledger refreshed',
+            'completed_items': len(records),
+            'processed_words': total_words,
+            'imported_count': result['imported_count'],
+            'skipped_count': result['skipped_count'],
+            'result': result,
+        }, actor=actor)
+    except (GoogleEvidenceError, TokenStoreError, ValueError) as exc:
+        legal_ledger.update_evidence_import_job(case_id, job_id, {
+            'status': 'failed',
+            'stage': 'Google evidence import needs attention',
+            'error': str(exc),
+            'imported_count': len(imported_documents),
+            'skipped_count': len(skipped_documents),
+        }, actor=actor)
+    except Exception:
+        logger.exception('Google evidence import job failed')
+        legal_ledger.update_evidence_import_job(case_id, job_id, {
+            'status': 'failed',
+            'stage': 'Google evidence import failed unexpectedly',
+            'error': 'Local Google evidence import failed unexpectedly. Review the connection and try again.',
+            'imported_count': len(imported_documents),
+            'skipped_count': len(skipped_documents),
+        }, actor=actor)
+
+
 @app.route('/api/health', methods=['GET'])
 def health():
     """Local readiness check for the Flask app and legal ledger."""
@@ -1319,6 +1479,70 @@ def pull_google_case_documents(case_id):
             'credentials_refreshed': bool(refreshed_token),
         },
     }), 201
+
+
+@app.route('/api/cases/<int:case_id>/documents/pull-google/jobs', methods=['POST'])
+@auth_system._require_auth
+def start_google_case_document_pull_job(case_id):
+    """Start a durable, read-only Google pull that the local UI can poll for real progress."""
+    if not legal_ledger.get_case(case_id):
+        return jsonify({'error': 'Case not found'}), 404
+    data = request.json or {}
+    source = str(data.get('source') or 'gmail').strip().lower()
+    query = str(data.get('query') or data.get('meta_tag') or data.get('tag') or '').strip()
+    if source not in {'gmail', 'google_drive'}:
+        return jsonify({'error': 'source must be gmail or google_drive'}), 400
+    if not query:
+        return jsonify({'error': 'Enter a Gmail search or Google Drive query before pulling sources'}), 400
+    try:
+        max_items = min(100, max(1, int(data.get('max_items') or 50)))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'max_items must be a number between 1 and 100'}), 400
+
+    actor = _ledger_actor()
+    try:
+        token_response = google_token_store.load(actor, 'google')
+    except TokenStoreError as exc:
+        return jsonify({'error': str(exc)}), 503
+    if not token_response:
+        return jsonify({'error': 'Google is not connected for this local LARO account'}), 409
+    if not google_oauth_config()['configured']:
+        return jsonify({'error': 'Google OAuth is not configured on this local LARO installation'}), 503
+
+    job_data = {
+        'provider': 'google',
+        'source': source,
+        'query': query,
+        'max_items': max_items,
+        'confidentiality_level': data.get('confidentiality_level') or 'normal',
+    }
+    job = legal_ledger.create_evidence_import_job(case_id, job_data, actor=actor)
+    if not job:
+        return jsonify({'error': 'Case not found'}), 404
+    google_pull_executor.submit(_run_google_pull_job, job['job_id'], case_id, job_data, actor)
+    return jsonify({
+        'job': job,
+        'status_url': f'/api/cases/{case_id}/documents/pull-google/jobs/{job["job_id"]}',
+        'message': 'Google evidence pull started locally. LARO will show actual source and word progress as records arrive.',
+    }), 202
+
+
+@app.route('/api/cases/<int:case_id>/documents/pull-google/jobs', methods=['GET'])
+@auth_system._require_auth
+def list_google_case_document_pull_jobs(case_id):
+    if not legal_ledger.get_case(case_id):
+        return jsonify({'error': 'Case not found'}), 404
+    status = request.args.get('status')
+    return jsonify({'jobs': legal_ledger.list_evidence_import_jobs(case_id, status=status)}), 200
+
+
+@app.route('/api/cases/<int:case_id>/documents/pull-google/jobs/<int:job_id>', methods=['GET'])
+@auth_system._require_auth
+def get_google_case_document_pull_job(case_id, job_id):
+    job = legal_ledger.get_evidence_import_job(case_id, job_id)
+    if not job:
+        return jsonify({'error': 'Google evidence import job not found'}), 404
+    return jsonify({'job': job}), 200
 
 
 @app.route('/api/cases/<int:case_id>/documents/<int:document_id>', methods=['GET'])
