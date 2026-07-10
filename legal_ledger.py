@@ -2345,6 +2345,94 @@ class LegalLedger:
             self._audit(session, case_id, "Draft", draft.id, "created", actor, {}, serialized, risk_level, draft.approval_id)
             return serialized
 
+    def generate_case_brief(self, case_id: int, draft_type: str, actor: str = "system") -> Optional[Dict[str, Any]]:
+        """Persist a source-linked internal brief without presenting it as legal advice.
+
+        The source-linked red-line remains the factual substrate. This helper only
+        packages it into a durable draft and maps each included document into the
+        papertrail; it does not assert facts, resolve reviews, or send anything.
+        """
+        normalized_type = str(draft_type or "lawyer_summary").strip().lower()
+        allowed_types = {"case_summary", "lawyer_summary", "red_line", "case_bundle_export"}
+        if normalized_type not in allowed_types:
+            raise ValueError("Generated draft type must be case_summary, lawyer_summary, red_line, or case_bundle_export")
+
+        dossier = self.case_comprehension_dossier(case_id)
+        red_line = self.red_line_thread(case_id)
+        if not dossier or not red_line:
+            return None
+        case = dossier["case"]
+        red_line_body = red_line.get("body") or ""
+        safety = "Internal factual preparation only. Verify every source and do not treat this as legal advice or an external communication."
+        titles = {
+            "case_summary": f"Case summary: {case.get('title') or 'legal case'}",
+            "lawyer_summary": f"Lawyer-ready briefing: {case.get('title') or 'legal case'}",
+            "red_line": f"Red-line analysis: {case.get('title') or 'legal case'}",
+            "case_bundle_export": f"Case bundle export draft: {case.get('title') or 'legal case'}",
+        }
+        if normalized_type == "case_summary":
+            body = "\n\n".join([
+                titles[normalized_type],
+                safety,
+                f"Desired outcome: {case.get('desired_outcome') or 'Not recorded'}",
+                f"Readable source documents: {dossier.get('reading_status', {}).get('documents_readable', 0)}",
+                red_line_body,
+            ])
+        elif normalized_type == "lawyer_summary":
+            body = "\n\n".join([
+                titles[normalized_type],
+                safety,
+                "Purpose: provide a concise, source-linked factual briefing for a legal professional. Review unresolved items before relying on this draft.",
+                f"Requested outcome: {case.get('desired_outcome') or 'Not recorded'}",
+                red_line_body,
+            ])
+        elif normalized_type == "red_line":
+            body = "\n\n".join([titles[normalized_type], safety, red_line_body])
+        else:
+            body = "\n\n".join([
+                titles[normalized_type],
+                "This external-use export draft is approval-gated. It has not been shared or sent.",
+                safety,
+                red_line_body,
+            ])
+
+        draft = self.create_draft(case_id, {
+            "draft_type": normalized_type,
+            "title": titles[normalized_type],
+            "body": body,
+        }, actor=actor)
+        if not draft:
+            return None
+
+        source_links = []
+        source_document_ids = []
+        seen_documents = set()
+        for source in dossier.get("source_documents") or []:
+            document_id = source.get("document_id")
+            if not document_id or document_id in seen_documents:
+                continue
+            seen_documents.add(document_id)
+            source_document_ids.append(document_id)
+            source_links.append(self.add_evidence_link(case_id, {
+                "document_id": document_id,
+                "target_type": "draft",
+                "target_id": draft["id"],
+                "snippet": source.get("summary") or source.get("title") or "Source document included in generated brief.",
+                "relationship": "cited_in_generated_draft",
+                "strength": "informational",
+                "user_confirmed": True,
+            }, actor=actor))
+
+        return {
+            **draft,
+            "generation_method": "source_linked_case_dossier_v1",
+            "source_document_ids": source_document_ids,
+            "source_links": [item for item in source_links if item],
+            "source_preserved": True,
+            "requires_human_review": True,
+            "external_action_taken": False,
+        }
+
     def list_drafts(self, case_id: int) -> List[Dict[str, Any]]:
         with self.session_scope() as session:
             return [

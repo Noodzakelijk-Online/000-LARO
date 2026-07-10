@@ -2306,6 +2306,57 @@ class TestLegalLedgerApi(unittest.TestCase):
         }, headers=other_headers).status_code, 404)
         self.assertEqual(self.client.get(f"/api/cases/{case_id}", headers=self.headers).status_code, 200)
 
+    def test_generated_lawyer_brief_persists_source_links_without_external_action(self):
+        created = self.client.post("/api/cases", json={
+            "title": "Generated lawyer briefing",
+            "desired_outcome": "Review the administrative decision.",
+        }, headers=self.headers)
+        case_id = created.get_json()["case_id"]
+        document = self.client.post(f"/api/cases/{case_id}/documents", json={
+            "title": "Decision source",
+            "extracted_text": "The authority issued the decision on 2024-05-01.",
+        }, headers=self.headers).get_json()
+
+        generated = self.client.post(
+            f"/api/cases/{case_id}/drafts/generate",
+            json={"draft_type": "lawyer_summary"},
+            headers=self.headers,
+        )
+        self.assertEqual(generated.status_code, 201)
+        payload = generated.get_json()
+        draft = payload["draft"]
+        self.assertTrue(payload["source_preserved"])
+        self.assertFalse(payload["external_action_taken"])
+        self.assertEqual(draft["draft_type"], "lawyer_summary")
+        self.assertEqual(draft["status"], "draft")
+        self.assertEqual(draft["generation_method"], "source_linked_case_dossier_v1")
+        self.assertEqual(draft["source_document_ids"], [document["document_id"]])
+        self.assertIn(f"doc {document['document_id']}: Decision source", draft["body"])
+        self.assertIn("Internal factual preparation only", draft["body"])
+
+        evidence = self.client.get(f"/api/cases/{case_id}/evidence", headers=self.headers).get_json()["evidence_links"]
+        source_link = next(item for item in evidence if item["target_type"] == "draft" and item["target_id"] == draft["id"])
+        self.assertEqual(source_link["document_id"], document["document_id"])
+        self.assertEqual(source_link["relationship"], "cited_in_generated_draft")
+        self.assertTrue(source_link["user_confirmed"])
+
+        graph = self.client.get(f"/api/cases/{case_id}/papertrail", headers=self.headers).get_json()
+        self.assertTrue(any(
+            edge["from"] == f"document:{document['document_id']}"
+            and edge["to"] == f"draft:{draft['id']}"
+            and edge["type"] == "cited_in_generated_draft"
+            for edge in graph["edges"]
+        ))
+
+        export_draft = self.client.post(
+            f"/api/cases/{case_id}/drafts/generate",
+            json={"draft_type": "case_bundle_export"},
+            headers=self.headers,
+        ).get_json()["draft"]
+        self.assertEqual(export_draft["status"], "waiting_approval")
+        self.assertEqual(export_draft["risk_level"], "high")
+        self.assertIsNotNone(export_draft["approval_id"])
+
     def test_case_wide_review_item_requires_explicit_conversion_and_preserves_citations(self):
         created = self.client.post("/api/cases", json={
             "title": "Cited analysis conversion",

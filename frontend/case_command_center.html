@@ -6874,6 +6874,11 @@
                         <article class="inspector-tile"><strong>${escapeHtml(highRisk)}</strong><span>high risk</span></article>
                         <article class="inspector-tile"><strong>${escapeHtml(approved)}</strong><span>approved</span></article>
                     </div>
+                    <div class="button-row guided-depth" style="margin-top: 0.9rem;">
+                        <button class="btn-ledger generate-case-draft" type="button" data-generate-case-draft="lawyer_summary">Generate lawyer brief</button>
+                        <button class="btn-secondary-ledger generate-case-draft" type="button" data-generate-case-draft="case_summary">Generate case summary</button>
+                        <button class="btn-secondary-ledger generate-case-draft" type="button" data-generate-case-draft="red_line">Store red-line</button>
+                    </div>
                     <div class="form-grid guided-depth" style="margin-top: 0.9rem;">
                         <label class="input-field"><span>Draft title</span><input class="control" id="draftTitle" placeholder="Formal letter to CAK"></label>
                         <label class="input-field"><span>Type</span><select class="control" id="draftType">
@@ -7205,6 +7210,32 @@
             await loadCaseDetail(selectedCaseId);
             await loadCommandCenter();
             activateDetailTab(draft.status === "waiting_approval" ? "review" : "drafts");
+        }
+
+        async function generateCaseDraft(button) {
+            if (!selectedCaseId) return showToast("Select a case first.");
+            const draftType = button.dataset.generateCaseDraft || "lawyer_summary";
+            const originalLabel = button.textContent;
+            button.disabled = true;
+            button.textContent = "Generating...";
+            try {
+                const response = await apiFetch(`/api/cases/${selectedCaseId}/drafts/generate`, {
+                    method: "POST",
+                    body: JSON.stringify({ draft_type: draftType })
+                });
+                const draft = response.draft || {};
+                const sourceCount = draft.source_document_ids?.length || 0;
+                showToast(`Source-linked draft stored with ${sourceCount} document${sourceCount === 1 ? "" : "s"}.`);
+                await loadCaseDetail(selectedCaseId);
+                await loadCommandCenter();
+                activateDetailTab(draft.status === "waiting_approval" ? "review" : "drafts");
+            } finally {
+                const refreshed = document.querySelector(`[data-generate-case-draft="${draftType}"]`);
+                if (refreshed) {
+                    refreshed.disabled = false;
+                    refreshed.textContent = originalLabel;
+                }
+            }
         }
 
         async function requestBundleShareApproval() {
@@ -7771,6 +7802,9 @@
                 row.querySelector(".evidence-link-reopen")?.addEventListener("click", () => updateEvidenceLink(row, "reopen").catch((error) => showToast(error.message)));
             });
             document.getElementById("createCaseDraft")?.addEventListener("click", () => createCaseDraft().catch((error) => showToast(error.message)));
+            document.querySelectorAll(".generate-case-draft").forEach((button) => {
+                button.addEventListener("click", () => generateCaseDraft(button).catch((error) => showToast(error.message)));
+            });
             document.querySelector(".bundle-share-approval")?.addEventListener("click", () => requestBundleShareApproval().catch((error) => showToast(error.message)));
             document.getElementById("saveCaseContext")?.addEventListener("click", () => saveCaseContext().catch((error) => showToast(error.message)));
             document.getElementById("saveCaseIdentifier")?.addEventListener("click", () => saveCaseIdentifier().catch((error) => showToast(error.message)));

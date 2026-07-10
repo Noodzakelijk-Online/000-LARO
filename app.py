@@ -2136,6 +2136,23 @@ def create_ledger_draft(case_id):
     return jsonify(draft), 201
 
 
+@app.route('/api/cases/<int:case_id>/drafts/generate', methods=['POST'])
+@auth_system._require_auth
+def generate_ledger_case_draft(case_id):
+    """Create a local source-linked internal brief from the persisted case dossier."""
+    try:
+        draft = legal_ledger.generate_case_brief(
+            case_id,
+            (request.json or {}).get('draft_type') or 'lawyer_summary',
+            actor=_ledger_actor(),
+        )
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    if not draft:
+        return jsonify({'error': 'Case not found'}), 404
+    return jsonify({'draft': draft, 'source_preserved': True, 'external_action_taken': False}), 201
+
+
 @app.route('/api/cases/<int:case_id>/drafts/<int:draft_id>', methods=['GET'])
 @auth_system._require_auth
 def get_ledger_draft(case_id, draft_id):

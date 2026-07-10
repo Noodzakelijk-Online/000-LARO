@@ -10,6 +10,7 @@ It organizes and prepares legal material. It is not a lawyer, does not provide d
 - Document intelligence: read local text, PDF, DOCX, HTML, email-shaped, and Drive-shaped records; preserve source metadata and content hashes.
 - Evidence timeline and papertrail: connect who said or did what and when back to the underlying document.
 - Review workbench: confirm or reject suggested events, claims, evidence links, contradictions, deadlines, and open loops.
+- Generated briefs: create source-linked case summaries, lawyer briefings, and red-line drafts without copying ledger data into a separate tool.
 - Approval-gated outreach: create lawyer/media/organization matches and drafts, but do not send external messages.
 
 Core case data is stored in a local SQLite ledger under `instance/laro_ledger.sqlite3`. Authenticated case, approval, audit, and matching routes are scoped to the owning local user. Runtime databases, uploads, OAuth tokens, and local secrets are ignored by Git.
