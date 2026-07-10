@@ -2242,6 +2242,10 @@ class TestLegalLedgerApi(unittest.TestCase):
         self.assertEqual(response.status_code, 201)
         run = response.get_json()["run"]
         self.assertEqual(run["provider"], "rule_based")
+        self.assertEqual(run["content"]["source_coverage"]["sources_readable"], 2)
+        self.assertEqual(run["content"]["source_coverage"]["sources_represented"], 2)
+        self.assertEqual(run["content"]["source_coverage"]["sources_fully_read"], 2)
+        self.assertFalse(run["content"]["source_was_truncated"])
         conflict = next(item for item in run["content"]["findings"] if item["category"] == "cross_document_conflict")
         self.assertEqual(
             {source["document_id"] for source in conflict["sources"]},

@@ -192,6 +192,42 @@ class TestLocalSemanticAnalysisProvider(unittest.TestCase):
             for item in result["timeline_suggestions"]
         ))
 
+    def test_case_analysis_balances_later_sources_when_earlier_source_is_large(self):
+        provider = LocalSemanticAnalysisProvider({"provider": "rule_based", "max_chars": 1000})
+        result = provider.analyze_case([
+            {
+                "document_id": 1,
+                "title": "Long correspondence",
+                "extracted_text": "Opening correspondence. " + ("Background detail. " * 80) + "The other party says the amount is EUR 125.",
+            },
+            {
+                "document_id": 2,
+                "title": "Later decision",
+                "extracted_text": "The authority decision dated 2026-08-15 requires payment of EUR 250 before the deadline.",
+            },
+        ])
+
+        coverage = result["source_coverage"]
+        self.assertEqual(coverage["sources_readable"], 2)
+        self.assertEqual(coverage["sources_represented"], 2)
+        self.assertTrue(coverage["sources_partially_read"] >= 1)
+        self.assertEqual({item["document_id"] for item in result["source_documents"]}, {1, 2})
+        self.assertTrue(any(
+            item["event_date"] == "2026-08-15" and item["sources"][0]["document_id"] == "2"
+            for item in result["timeline_suggestions"]
+        ))
+
+    def test_case_analysis_keeps_late_high_signal_passage_from_large_source(self):
+        provider = LocalSemanticAnalysisProvider({"provider": "rule_based", "max_chars": 1000})
+        result = provider.analyze_case([{
+            "document_id": 1,
+            "title": "Long decision",
+            "extracted_text": "Opening note. " + ("Background detail. " * 90) + "The objection deadline is 2026-09-10.",
+        }])
+
+        self.assertTrue(result["source_was_truncated"])
+        self.assertTrue(any(item["event_date"] == "2026-09-10" for item in result["timeline_suggestions"]))
+
 
 if __name__ == "__main__":
     unittest.main()

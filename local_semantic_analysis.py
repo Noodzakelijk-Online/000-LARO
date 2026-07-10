@@ -128,6 +128,7 @@ class LocalSemanticAnalysisProvider:
     def analyze_case(self, documents: List[Dict[str, Any]], case_context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Run an explicit, local cross-document reading with per-document citations."""
         prepared, source_snapshot = self._case_sources(documents)
+        coverage = self._case_coverage(source_snapshot)
         if not prepared:
             return self._case_status("not_readable", "No readable source documents are available for case-wide analysis.", source_snapshot)
         if self.provider in {"", "rule_based", "disabled", "none"}:
@@ -166,6 +167,9 @@ class LocalSemanticAnalysisProvider:
                 "rejected_uncited_questions": rejected_questions,
                 "rejected_uncited_timeline_suggestions": rejected_timeline_suggestions,
                 "source_documents": source_snapshot,
+                "source_characters_analyzed": coverage["characters_analyzed"],
+                "source_was_truncated": coverage["sources_partially_read"] > 0,
+                "source_coverage": coverage,
                 "limitations": [
                     "Case-wide observations are internal preparation only and require review against every cited source passage.",
                     "The synthesis does not resolve contradictions, create claims, change deadlines, or trigger external action.",
@@ -315,7 +319,8 @@ class LocalSemanticAnalysisProvider:
         validated_findings, rejected_findings = self._validated_case_items(findings, source_map, "observation")
         validated_questions, rejected_questions = self._validated_case_items(questions, source_map, "question")
         validated_timeline, rejected_timeline = self._validated_case_timeline(timeline_suggestions, source_map)
-        was_truncated = any(item.get("source_was_truncated") for item in source_snapshot)
+        coverage = self._case_coverage(source_snapshot)
+        was_truncated = coverage["sources_partially_read"] > 0
         limitations = [
             "Deterministic comparison only reports literal source similarities, differences, and missing date signals for review.",
             "It does not determine legal rights, choose between conflicting sources, create claims, change deadlines, or trigger external action.",
@@ -334,8 +339,9 @@ class LocalSemanticAnalysisProvider:
             "rejected_uncited_questions": rejected_questions,
             "rejected_uncited_timeline_suggestions": rejected_timeline,
             "source_documents": source_snapshot,
-            "source_characters_analyzed": sum(len(item["text"]) for item in documents),
+            "source_characters_analyzed": coverage["characters_analyzed"],
             "source_was_truncated": was_truncated,
+            "source_coverage": coverage,
             "limitations": limitations,
         }
 
@@ -398,6 +404,7 @@ class LocalSemanticAnalysisProvider:
         }
 
     def _case_status(self, status: str, message: str, source_snapshot: List[Dict[str, Any]]) -> Dict[str, Any]:
+        coverage = self._case_coverage(source_snapshot)
         return {
             "status": status,
             "provider": "ollama" if self.provider == "ollama" else "rule_based",
@@ -406,6 +413,9 @@ class LocalSemanticAnalysisProvider:
             "review_questions": [],
             "timeline_suggestions": [],
             "source_documents": source_snapshot,
+            "source_characters_analyzed": coverage["characters_analyzed"],
+            "source_was_truncated": coverage["sources_partially_read"] > 0,
+            "source_coverage": coverage,
             "limitations": [message],
         }
 
@@ -428,7 +438,7 @@ class LocalSemanticAnalysisProvider:
                 rejected += 1
                 continue
             quote = self._clean(item.get("source_quote"))
-            if not quote or quote.lower() not in source_text.lower():
+            if not quote or not self._source_contains_quote(source_text, quote):
                 rejected += 1
                 continue
             category = str(item.get("category") or "other").strip().lower().replace(" ", "_")
@@ -451,7 +461,7 @@ class LocalSemanticAnalysisProvider:
                 continue
             quote = self._clean(item.get("source_quote"))
             question = self._clean(item.get("question"))
-            if not quote or not question or quote.lower() not in source_text.lower():
+            if not quote or not question or not self._source_contains_quote(source_text, quote):
                 rejected += 1
                 continue
             valid.append({"question": question[:500], "source_quote": quote[:600], "review_status": "needs_review"})
@@ -460,28 +470,124 @@ class LocalSemanticAnalysisProvider:
         return valid, rejected
 
     def _case_sources(self, documents: List[Dict[str, Any]]) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-        prepared: List[Dict[str, Any]] = []
-        snapshot: List[Dict[str, Any]] = []
-        remaining = self.max_chars
+        """Represent every readable source before spending extra budget on any one.
+
+        A long early document used to consume the complete case-wide reading
+        budget.  That made later evidence invisible while the UI still called
+        the result a case-wide analysis.  The bounded source selection below
+        gives each readable document an equal starting budget and chooses its
+        opening, high-signal, and closing passages.  The persisted snapshot
+        records exactly how much of each original source was represented.
+        """
+        readable = []
         for document in documents:
             document_id = document.get("document_id") or document.get("id")
             text = self._clean(document.get("extracted_text") or document.get("ocr_text") or document.get("text"))
-            if document_id is None or not text or remaining <= 0:
+            if document_id is None or not text:
                 continue
-            selected = text[:remaining]
-            prepared.append({
-                "document_id": str(document_id),
+            readable.append({
+                "document_id": document_id,
                 "title": self._clean(document.get("title") or document.get("original_filename") or f"Document {document_id}")[:255],
+                "content_hash": document.get("content_hash") or "",
+                "text": text,
+            })
+
+        prepared: List[Dict[str, Any]] = []
+        snapshot: List[Dict[str, Any]] = []
+        if not readable:
+            return prepared, snapshot
+
+        base_budget, remainder = divmod(self.max_chars, len(readable))
+        for index, document in enumerate(readable):
+            text = document["text"]
+            budget = base_budget + (1 if index < remainder else 0)
+            selected = self._select_case_source_passages(text, budget)
+            # Selected passages are separated for model readability. Those
+            # separators are not source evidence and must not inflate coverage.
+            analyzed_characters = len(selected.replace("\n", ""))
+            prepared.append({
+                "document_id": str(document["document_id"]),
+                "title": document["title"],
                 "text": selected,
             })
             snapshot.append({
-                "document_id": document_id,
-                "title": prepared[-1]["title"],
-                "content_hash": document.get("content_hash") or "",
+                "document_id": document["document_id"],
+                "title": document["title"],
+                "content_hash": document["content_hash"],
+                "source_characters_total": len(text),
+                "source_characters_analyzed": analyzed_characters,
+                "coverage_percent": round((analyzed_characters / len(text)) * 100, 1) if text else 0.0,
                 "source_was_truncated": len(selected) < len(text),
+                "selection_strategy": "full_source" if len(selected) == len(text) else "balanced_signal_passages",
             })
-            remaining -= len(selected)
         return prepared, snapshot
+
+    def _select_case_source_passages(self, text: str, budget: int) -> str:
+        """Keep literal passages that are useful for a bounded evidence reading."""
+        if budget <= 0:
+            return ""
+        if len(text) <= budget:
+            return text
+
+        passages = [self._clean(value) for value in re.split(r"(?<=[.!?])\s+", text) if self._clean(value)]
+        if not passages:
+            return text[:budget]
+
+        signal_pattern = re.compile(
+            "|".join(re.escape(value) for cues in self.CASE_SIGNAL_CUES.values() for value in cues),
+            re.IGNORECASE,
+        )
+        ranked = []
+        for index, passage in enumerate(passages):
+            score = 0
+            if index == 0:
+                score += 3
+            if index == len(passages) - 1:
+                score += 2
+            if signal_pattern.search(passage):
+                score += 4
+            if self.CASE_MONEY_PATTERN.search(passage) or self.CASE_DATE_PATTERN.search(passage):
+                score += 4
+            if self.CASE_REFERENCE_PATTERN.search(passage):
+                score += 3
+            ranked.append((score, index, passage))
+
+        selected_passages: Dict[int, str] = {}
+        used = 0
+        for _score, index, passage in sorted(ranked, key=lambda item: (-item[0], item[1])):
+            if index in selected_passages or used >= budget:
+                continue
+            separator_size = 2 if selected_passages else 0
+            available = budget - used - separator_size
+            if available <= 0:
+                break
+            candidate = passage[:available].strip()
+            if not candidate:
+                continue
+            selected_passages[index] = candidate
+            used += separator_size + len(candidate)
+
+        if not selected_passages:
+            return text[:budget]
+        return "\n\n".join(selected_passages[index] for index in sorted(selected_passages)).strip()
+
+    @staticmethod
+    def _case_coverage(source_snapshot: List[Dict[str, Any]]) -> Dict[str, Any]:
+        sources_readable = len(source_snapshot)
+        sources_fully_read = sum(1 for item in source_snapshot if not item.get("source_was_truncated"))
+        sources_represented = sum(1 for item in source_snapshot if item.get("source_characters_analyzed", 0) > 0)
+        characters_analyzed = sum(int(item.get("source_characters_analyzed") or 0) for item in source_snapshot)
+        characters_total = sum(int(item.get("source_characters_total") or 0) for item in source_snapshot)
+        return {
+            "sources_readable": sources_readable,
+            "sources_represented": sources_represented,
+            "sources_fully_read": sources_fully_read,
+            "sources_partially_read": max(0, sources_readable - sources_fully_read),
+            "characters_analyzed": characters_analyzed,
+            "characters_total": characters_total,
+            "coverage_percent": round((characters_analyzed / characters_total) * 100, 1) if characters_total else 0.0,
+            "selection_strategy": "balanced_signal_passages_v1",
+        }
 
     def _validated_case_items(
         self,
@@ -502,7 +608,7 @@ class LocalSemanticAnalysisProvider:
                     continue
                 document_id = str(citation.get("document_id") or "")
                 quote = self._clean(citation.get("source_quote"))
-                if document_id in source_map and quote and quote.lower() in source_map[document_id].lower():
+                if document_id in source_map and quote and self._source_contains_quote(source_map[document_id], quote):
                     citations.append({"document_id": document_id, "source_quote": quote[:600]})
             if not body or not citations:
                 rejected += 1
@@ -550,6 +656,13 @@ class LocalSemanticAnalysisProvider:
             if len(valid) >= 20:
                 break
         return valid, rejected
+
+    @staticmethod
+    def _source_contains_quote(source_text: Any, quote: Any) -> bool:
+        """Validate citations while treating separator whitespace as formatting."""
+        normalized_source = LocalSemanticAnalysisProvider._clean(source_text).lower()
+        normalized_quote = LocalSemanticAnalysisProvider._clean(quote).lower()
+        return bool(normalized_quote and normalized_quote in normalized_source)
 
     @staticmethod
     def _prompt(text: str, document_name: str) -> str:

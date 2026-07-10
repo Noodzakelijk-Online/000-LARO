@@ -2267,6 +2267,25 @@
             overflow-wrap: anywhere;
         }
 
+        .analysis-coverage {
+            background: rgba(255, 255, 255, 0.035);
+            border: 1px solid var(--ledger-border);
+            border-radius: 6px;
+            margin: 0.75rem 0;
+            padding: 0.65rem 0.75rem;
+        }
+
+        .analysis-coverage summary {
+            color: var(--ledger-soft);
+            cursor: pointer;
+            font-size: 0.84rem;
+            font-weight: 800;
+        }
+
+        .analysis-coverage p {
+            margin-top: 0.45rem;
+        }
+
         .source-preview-shell {
             background: rgba(2, 6, 13, 0.72);
             inset: 0;
@@ -6111,6 +6130,21 @@
             const findings = content.findings || [];
             const questions = content.review_questions || [];
             const timelineSuggestions = content.timeline_suggestions || [];
+            const coverage = content.source_coverage || {};
+            const sourceDocuments = run?.source_documents || [];
+            const readableSources = Number(coverage.sources_readable || sourceDocuments.length || 0);
+            const representedSources = Number(coverage.sources_represented || sourceDocuments.filter((item) => Number(item.source_characters_analyzed || 0) > 0).length || readableSources);
+            const fullyReadSources = Number(coverage.sources_fully_read || sourceDocuments.filter((item) => !item.source_was_truncated).length || 0);
+            const partiallyReadSources = Math.max(0, Number(coverage.sources_partially_read ?? Math.max(0, readableSources - fullyReadSources)));
+            const charactersAnalyzed = Number(coverage.characters_analyzed || content.source_characters_analyzed || 0);
+            const charactersTotal = Number(coverage.characters_total || sourceDocuments.reduce((total, item) => total + Number(item.source_characters_total || 0), 0));
+            const coveragePercent = coverage.coverage_percent ?? (charactersTotal ? Math.round((charactersAnalyzed / charactersTotal) * 1000) / 10 : null);
+            const coverageSummary = readableSources
+                ? `${representedSources} of ${readableSources} readable source${readableSources === 1 ? "" : "s"} represented; ${fullyReadSources} fully read${partiallyReadSources ? `, ${partiallyReadSources} partial` : ""}.`
+                : "No readable source coverage was recorded for this historical run.";
+            const coverageDetail = charactersTotal
+                ? `${charactersAnalyzed.toLocaleString()} of ${charactersTotal.toLocaleString()} source characters selected (${coveragePercent}% coverage).`
+                : "This run predates source-coverage tracking.";
             const sourceButton = (source) => sourceDocumentButton(source?.document_id, source?.source_quote || "");
             const reviewItems = new Map((run?.review_items || []).map((item) => [item.finding_key, item]));
             const reviewControls = (reviewItem, type, sourceCount) => {
@@ -6144,6 +6178,11 @@
                     <p class="muted" id="caseAnalysisStatus">Analysis remains local and review-only; source documents are not changed.</p>
                     ${run ? `
                         <p class="muted">${escapeHtml(run.provider || "local")} · ${escapeHtml(run.model || (content.analysis_method === "deterministic_source_comparison_v1" ? "deterministic source comparison" : "local analysis"))} · ${escapeHtml(String(run.created_at || "").slice(0, 19) || "just now")}</p>
+                        <details class="analysis-coverage" ${partiallyReadSources ? "open" : ""}>
+                            <summary>${escapeHtml(coverageSummary)}</summary>
+                            <p class="muted">${escapeHtml(coverageDetail)} ${partiallyReadSources ? "Long sources were sampled across opening, high-signal, and closing passages. Review the original document before relying on omitted text." : ""}</p>
+                            ${sourceDocuments.length ? `<div class="source-ref-list">${sourceDocuments.map((source) => `<span class="source-ref-chip">${sourceDocumentButton(source.document_id)}<span>${escapeHtml(source.title || "Source document")}: ${source.source_was_truncated ? "partial" : "full"}</span></span>`).join("")}</div>` : ""}
+                        </details>
                         ${timelineSuggestions.length ? `<div class="record-list" style="margin-bottom: 0.75rem;">${timelineSuggestions.slice(0, 12).map((item, index) => {
                             const reviewItem = reviewItems.get(`timeline_suggestion:${index}`);
                             return `
