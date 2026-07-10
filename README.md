@@ -49,7 +49,7 @@ GOOGLE_CLIENT_SECRET=
 GOOGLE_REDIRECT_URI=http://127.0.0.1:8768/api/google/oauth/callback
 ```
 
-LARO stores connection status and a token fingerprint in the ledger, never raw OAuth tokens. The current OAuth slice confirms consent and preserves connection state; a secure local token provider plus live Gmail/Drive fetching remains a separate connector milestone.
+LARO stores connection status and a token fingerprint in the ledger, never raw OAuth tokens. Raw credentials are encrypted in the ignored local `tokens/` vault. Once connected, use the Documents tab in a case to run an explicit Gmail search or Drive query; LARO imports only those matching records, preserves the original URI, deduplicates them, and records the read in the audit log.
 
 ## Tests
 

@@ -1570,6 +1570,55 @@ class TestLegalLedgerApi(unittest.TestCase):
         self.assertTrue(dossier.get_json()["chronology"])
         self.assertTrue(any(item["source"]["source_uri"] for item in dossier.get_json()["chronology"]))
 
+    def test_google_pull_imports_into_the_ledger_and_records_audit_activity(self):
+        from google_token_store import LocalEncryptedTokenStore
+
+        created = self.client.post("/api/cases", json={
+            "title": "Read-only Google import case",
+            "description": "Import explicitly queried Google source material.",
+            "legal_domain": "administrative_law",
+        }, headers=self.headers)
+        self.assertEqual(created.status_code, 201)
+        case_id = created.get_json()["case_id"]
+
+        vault = LocalEncryptedTokenStore(os.path.join(self.tmp.name, "google-token-vault"))
+        vault.save("ledger@example.com", "google", {"access_token": "test-access-token"})
+        connector = mock.Mock()
+        connector.fetch.return_value = ([{
+            "id": "google-message-1",
+            "source_type": "gmail",
+            "source_uri": "https://mail.google.com/mail/u/0/#all/google-message-1",
+            "title": "CAK decision",
+            "document_type": "email",
+            "sender": "CAK <cak@example.nl>",
+            "recipient": "Robert <robert@example.nl>",
+            "plain_text": "Decision dated 2026-07-01. CAK requested proof of payment before 2026-07-15.",
+        }], None)
+
+        with mock.patch.object(self.app_module, "google_token_store", vault), \
+             mock.patch.object(self.app_module, "GoogleEvidenceConnector", return_value=connector), \
+             mock.patch.object(self.app_module, "google_oauth_config", return_value={
+                 "configured": True,
+                 "client_id": "client-id",
+                 "client_secret": "client-secret",
+             }):
+            pulled = self.client.post(
+                f"/api/cases/{case_id}/documents/pull-google",
+                json={"source": "gmail", "query": "label:LARO-CAK", "max_items": 5},
+                headers=self.headers,
+            )
+
+        self.assertEqual(pulled.status_code, 201)
+        payload = pulled.get_json()
+        self.assertEqual(payload["imported_count"], 1)
+        self.assertEqual(payload["connector"]["mode"], "read_only")
+        self.assertEqual(payload["imported_documents"][0]["document"]["source_type"], "gmail")
+        self.assertTrue(payload["artifact_counts"]["timeline_suggestions"])
+
+        audit = self.client.get(f"/api/audit?case_id={case_id}", headers=self.headers)
+        self.assertEqual(audit.status_code, 200)
+        self.assertTrue(any(item["action"] == "google_sources_pulled" for item in audit.get_json()["audit_events"]))
+
     def test_upload_document_surfaces_contradictions_and_missing_evidence(self):
         created = self.client.post("/api/cases", json={
             "title": "Conflicting evidence case",

@@ -3432,6 +3432,7 @@
         let papertrailTypeFilter = "all";
         let papertrailQuery = "";
         let detailState = {};
+        let googleConnectionState = null;
         let pendingFocusTarget = null;
         let sourcePreviewDocumentId = null;
         let toastTimer = null;
@@ -6213,6 +6214,14 @@
             const sourceLinks = reading.source_links ?? (detailState.evidenceLinks?.length || 0);
             const timelineCount = reading.timeline_events ?? timelineEvents().length;
             const reviewCount = reading.open_review_items ?? reviewQueueItems().length;
+            const google = googleConnectionState || {};
+            const googleVaultReady = Boolean(google.credential_vault?.available);
+            const googleReady = Boolean(google.connected && googleVaultReady);
+            const googleStatus = googleReady
+                ? "Google is connected with locally encrypted credentials. Pulls remain read-only."
+                : google.configured
+                    ? "Connect Google to pull explicitly queried Gmail or Drive evidence into this case."
+                    : "Google OAuth is not configured on this local LARO installation.";
             return `
                 <section class="detail-section">
                     <div class="panel-header">
@@ -6241,6 +6250,21 @@
                             <div class="button-row">
                                 <button class="btn-ledger" type="button" id="sourceImportButton">Pull Into Case Ledger</button>
                                 <button class="btn-secondary-ledger" type="button" data-jump-tab="timeline">Open timeline</button>
+                            </div>
+                            <div class="record-row" style="margin-top: 0.8rem;">
+                                <span class="record-kicker">Google</span>
+                                <div>
+                                    <div class="record-heading">
+                                        <strong>${googleReady ? "Read-only connector ready" : google.connected ? "Connection needs local credentials" : "Google evidence connector"}</strong>
+                                        <span class="tag">${googleReady ? "connected" : google.configured ? "not connected" : "not configured"}</span>
+                                    </div>
+                                    <p>${escapeHtml(googleStatus)}</p>
+                                    <div class="button-row">
+                                        ${googleReady ? `<button class="btn-ledger" type="button" id="googlePullButton">Pull Google Sources</button>` : google.configured ? `<button class="btn-ledger" type="button" id="googleConnectButton">Connect Google</button>` : ""}
+                                        <button class="btn-secondary-ledger" type="button" id="googleRefreshStatus">Refresh connection</button>
+                                    </div>
+                                    <p class="muted" id="googlePullStatus">Use Gmail search syntax or a Drive query in the field above. LARO imports only the matching records and never sends messages.</p>
+                                </div>
                             </div>
                             <details class="source-import-advanced expert-depth">
                                 <summary>Batch and provenance controls</summary>
@@ -7427,6 +7451,46 @@
                     showToast(error.message);
                 }
             });
+            document.getElementById("googleRefreshStatus")?.addEventListener("click", async () => {
+                try {
+                    googleConnectionState = await apiFetch("/api/google/oauth/status");
+                    renderDetail();
+                    showToast("Google connection status refreshed.");
+                } catch (error) {
+                    showToast(error.message);
+                }
+            });
+            document.getElementById("googleConnectButton")?.addEventListener("click", () => {
+                const returnTo = `${window.location.pathname}${window.location.search}`;
+                const params = new URLSearchParams({ return_to: returnTo, popup: "1" });
+                window.open(`/api/google/oauth/start?${params.toString()}`, "laro-google-oauth", "width=560,height=760");
+            });
+            document.getElementById("googlePullButton")?.addEventListener("click", async () => {
+                const status = document.getElementById("googlePullStatus");
+                const source = document.getElementById("sourceImportType")?.value || "gmail";
+                const query = document.getElementById("sourceImportTag")?.value.trim() || "";
+                if (!["gmail", "google_drive"].includes(source)) {
+                    return showToast("Choose Gmail or Google Drive before using the Google connector.");
+                }
+                if (!query) return showToast("Enter a Gmail search or Google Drive query first.");
+                const progress = startAnalysisProgress(status, { label: `Pulling ${source === "gmail" ? "Gmail" : "Google Drive"} evidence`, words: 180 });
+                try {
+                    const response = await apiFetch(`/api/cases/${selectedCaseId}/documents/pull-google`, {
+                        method: "POST",
+                        body: JSON.stringify({ source, query, meta_tag: query, confidentiality_level: document.getElementById("sourceImportConfidentiality")?.value || "normal" })
+                    });
+                    const result = analysisResultParts(response);
+                    progress.complete(`${response.imported_count} source${response.imported_count === 1 ? "" : "s"} imported. ${result.parts.join(", ")} queued for review.`);
+                    showToast(`${response.imported_count} Google source${response.imported_count === 1 ? "" : "s"} imported into the case ledger.`);
+                    await refreshActiveLedger({ silent: true });
+                    if (result.reviewCount) activateDetailTab("review");
+                    else if (result.timelineCount) activateDetailTab("timeline");
+                    else activateDetailTab("documents");
+                } catch (error) {
+                    progress.fail(error.message);
+                    showToast(error.message);
+                }
+            });
             document.getElementById("uploadDocumentButton")?.addEventListener("click", async () => {
                 const fileInput = document.getElementById("documentUploadFile");
                 const status = document.getElementById("documentUploadStatus");
@@ -7517,7 +7581,10 @@
         }
 
         async function loadCommandCenter() {
-            commandState = sanitizeCommandCenterState(await apiFetch("/api/cases/command-center"));
+            const nextCommandState = await apiFetch("/api/cases/command-center");
+            const nextGoogleConnectionState = await apiFetch("/api/google/oauth/status");
+            commandState = sanitizeCommandCenterState(nextCommandState);
+            googleConnectionState = nextGoogleConnectionState;
             renderPriorityWorkbench(commandState);
             renderMetrics(commandState.counts || {});
             renderNextActions(commandState.next_actions || []);

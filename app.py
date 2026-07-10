@@ -38,6 +38,8 @@ from google_oauth import (
     exchange_google_oauth_code,
     google_oauth_config,
 )
+from google_evidence import GoogleEvidenceConnector, GoogleEvidenceError
+from google_token_store import LocalEncryptedTokenStore, TokenStoreError
 from legal_ledger import init_legal_ledger
 
 # Configure logging
@@ -88,6 +90,7 @@ init_serverless_functions()
 
 # Initialize the local-first persistent legal case ledger
 legal_ledger = init_legal_ledger(app)
+google_token_store = LocalEncryptedTokenStore()
 
 def _ledger_actor():
     return str(session.get('user_email') or session.get('user_id') or 'anonymous')
@@ -991,6 +994,63 @@ def _persist_imported_source_document(case_id, record, source_type, meta_tag, ac
     }
 
 
+def _import_source_records(case_id, data, records, *, source_type, meta_tag, actor):
+    """Persist source records once, with stable source-URI deduplication."""
+    existing_source_uris = {
+        item.get('source_uri')
+        for item in legal_ledger.list_documents(case_id)
+        if item.get('source_uri')
+    }
+    imported = []
+    skipped = []
+    artifact_counts = {
+        'timeline_suggestions': 0,
+        'deadline_suggestions': 0,
+        'open_loop_suggestions': 0,
+        'claim_suggestions': 0,
+        'contradiction_suggestions': 0,
+        'missing_evidence_suggestions': 0,
+        'evidence_links': 0,
+    }
+
+    for index, record in enumerate(records):
+        if not isinstance(record, dict):
+            skipped.append({'index': index, 'reason': 'record_must_be_object'})
+            continue
+        source_id = record.get('source_id') or record.get('id') or record.get('message_id') or record.get('file_id')
+        normalized_source_type = record.get('source_type') or record.get('source') or source_type
+        source_uri = _source_record_uri(normalized_source_type, source_id, record)
+        if source_uri and source_uri in existing_source_uris:
+            skipped.append({'index': index, 'source_uri': source_uri, 'reason': 'duplicate_source_uri'})
+            continue
+
+        result = _persist_imported_source_document(case_id, record, normalized_source_type, meta_tag, actor, data)
+        if not result:
+            skipped.append({'index': index, 'source_uri': source_uri, 'reason': 'not_persisted'})
+            continue
+
+        document = result['document']
+        if document.get('source_uri'):
+            existing_source_uris.add(document['source_uri'])
+        imported.append(result)
+        for key in artifact_counts:
+            value = result.get(key)
+            artifact_counts[key] += len(value) if isinstance(value, list) else int(value or 0)
+
+    db_manager.invalidate_cache('documents')
+    return {
+        'case_id': case_id,
+        'source_type': source_type,
+        'meta_tag': meta_tag,
+        'imported_count': len(imported),
+        'skipped_count': len(skipped),
+        'imported_documents': imported,
+        'skipped_documents': skipped,
+        'artifact_counts': artifact_counts,
+        'comprehension': legal_ledger.case_comprehension_dossier(case_id),
+    }
+
+
 @app.route('/api/health', methods=['GET'])
 def health():
     """Local readiness check for the Flask app and legal ledger."""
@@ -1178,59 +1238,85 @@ def import_ledger_source_documents(case_id):
 
     source_type = data.get('source_type') or data.get('source') or 'external_source'
     meta_tag = data.get('meta_tag') or data.get('tag') or data.get('query') or ''
+    return jsonify(_import_source_records(
+        case_id,
+        data,
+        records,
+        source_type=source_type,
+        meta_tag=meta_tag,
+        actor=_ledger_actor(),
+    )), 201
+
+
+@app.route('/api/cases/<int:case_id>/documents/pull-google', methods=['POST'])
+@auth_system._require_auth
+def pull_google_case_documents(case_id):
+    """Read explicitly queried Gmail/Drive items into one local case ledger."""
+    if not legal_ledger.get_case(case_id):
+        return jsonify({'error': 'Case not found'}), 404
+
+    data = request.json or {}
+    source = str(data.get('source') or 'gmail').strip().lower()
+    query = str(data.get('query') or data.get('meta_tag') or data.get('tag') or '').strip()
+    if not query:
+        return jsonify({'error': 'Enter a Gmail search or Google Drive query before pulling sources'}), 400
+
     actor = _ledger_actor()
-    existing_source_uris = {
-        item.get('source_uri')
-        for item in legal_ledger.list_documents(case_id)
-        if item.get('source_uri')
-    }
-    imported = []
-    skipped = []
-    artifact_counts = {
-        'timeline_suggestions': 0,
-        'deadline_suggestions': 0,
-        'open_loop_suggestions': 0,
-        'claim_suggestions': 0,
-        'contradiction_suggestions': 0,
-        'missing_evidence_suggestions': 0,
-        'evidence_links': 0,
-    }
+    try:
+        token_response = google_token_store.load(actor, 'google')
+    except TokenStoreError as exc:
+        return jsonify({'error': str(exc)}), 503
+    if not token_response:
+        return jsonify({'error': 'Google is not connected for this local LARO account'}), 409
 
-    for index, record in enumerate(records):
-        if not isinstance(record, dict):
-            skipped.append({'index': index, 'reason': 'record_must_be_object'})
-            continue
-        source_id = record.get('source_id') or record.get('id') or record.get('message_id') or record.get('file_id')
-        normalized_source_type = record.get('source_type') or record.get('source') or source_type
-        source_uri = _source_record_uri(normalized_source_type, source_id, record)
-        if source_uri and source_uri in existing_source_uris:
-            skipped.append({'index': index, 'source_uri': source_uri, 'reason': 'duplicate_source_uri'})
-            continue
+    config = google_oauth_config()
+    if not config['configured']:
+        return jsonify({'error': 'Google OAuth is not configured on this local LARO installation'}), 503
 
-        result = _persist_imported_source_document(case_id, record, normalized_source_type, meta_tag, actor, data)
-        if not result:
-            skipped.append({'index': index, 'source_uri': source_uri, 'reason': 'not_persisted'})
-            continue
+    try:
+        connector = GoogleEvidenceConnector(
+            token_response,
+            client_id=config['client_id'],
+            client_secret=config['client_secret'],
+            scopes=GOOGLE_SCOPES,
+        )
+        records, refreshed_token = connector.fetch(source, query, data.get('max_items', 50))
+        if refreshed_token:
+            google_token_store.save(actor, 'google', refreshed_token)
+    except (GoogleEvidenceError, TokenStoreError) as exc:
+        return jsonify({'error': str(exc)}), 502
 
-        document = result['document']
-        if document.get('source_uri'):
-            existing_source_uris.add(document['source_uri'])
-        imported.append(result)
-        for key in artifact_counts:
-            value = result.get(key)
-            artifact_counts[key] += len(value) if isinstance(value, list) else int(value or 0)
-
-    db_manager.invalidate_cache('documents')
+    result = _import_source_records(
+        case_id,
+        data,
+        records,
+        source_type='google',
+        meta_tag=query,
+        actor=actor,
+    )
+    legal_ledger.record_case_activity(
+        case_id,
+        'google_sources_pulled',
+        actor=actor,
+        source='google_readonly_connector',
+        details={
+            'source': source,
+            'query': query,
+            'fetched_count': len(records),
+            'imported_count': result['imported_count'],
+            'skipped_count': result['skipped_count'],
+            'credentials_refreshed': bool(refreshed_token),
+        },
+        risk_level='medium',
+    )
     return jsonify({
-        'case_id': case_id,
-        'source_type': source_type,
-        'meta_tag': meta_tag,
-        'imported_count': len(imported),
-        'skipped_count': len(skipped),
-        'imported_documents': imported,
-        'skipped_documents': skipped,
-        'artifact_counts': artifact_counts,
-        'comprehension': legal_ledger.case_comprehension_dossier(case_id),
+        **result,
+        'connector': {
+            'provider': 'google',
+            'source': source,
+            'mode': 'read_only',
+            'credentials_refreshed': bool(refreshed_token),
+        },
     }), 201
 
 
@@ -1823,8 +1909,9 @@ def _dashboard_redirect(return_to, status, message=None, popup=False):
 @app.route('/api/google/oauth/status', methods=['GET'])
 def google_oauth_status():
     """Expose Google OAuth connection state for auto-updating dashboard UI."""
-    user_key = str(session.get('user_id', session.get('user_email', 'anonymous')))
+    user_key = _ledger_actor()
     connection = legal_ledger.get_external_connection(user_key, 'google') or {}
+    credential_vault = google_token_store.status(user_key, 'google')
     connected = bool(connection.get('connected') or connection.get('status') == 'connected')
     config = google_oauth_config()
     return jsonify({
@@ -1834,6 +1921,7 @@ def google_oauth_status():
         'scopes': connection.get('scopes') or GOOGLE_SCOPES,
         'authorize_url': '/api/google/oauth/start',
         'status_source': 'legal_ledger',
+        'credential_vault': credential_vault,
         'message': (
             'Google OAuth is connected.'
             if connected
@@ -1883,7 +1971,13 @@ def google_oauth_callback():
         logger.exception('Google OAuth token exchange failed')
         return _dashboard_redirect(return_to, 'oauth_error', f'Token exchange failed: {exc}', popup=popup)
 
-    user_key = str(session.get('user_id', session.get('user_email', 'anonymous')))
+    user_key = _ledger_actor()
+    try:
+        google_token_store.save(user_key, 'google', token_response)
+    except TokenStoreError as exc:
+        logger.warning('Google OAuth token could not be stored in the local encrypted vault: %s', exc)
+        return _dashboard_redirect(return_to, 'oauth_error', 'Google credentials could not be stored securely on this device.', popup=popup)
+
     legal_ledger.save_external_connection(
         user_key,
         'google',
@@ -1980,6 +2074,13 @@ def aggregate_documents():
     ledger_case = legal_ledger.get_case(case_id)
     if not ledger_case:
         return jsonify({'error': 'Case not found'}), 404
+    legacy_google_sources = {'gmail', 'gdrive', 'google_drive'}
+    if str(data.get('source') or '').strip().lower() in legacy_google_sources:
+        return jsonify({
+            'error': 'Google imports require the case-level read-only connector.',
+            'next_action': 'Connect Google, then use POST /api/cases/<case_id>/documents/pull-google with an explicit query.',
+            'read_only': True,
+        }), 409
     # Create document aggregator
     aggregator = DocumentAggregator(case_id=case_id, user_id=user_id)
     max_items = data.get('max_items', 80)

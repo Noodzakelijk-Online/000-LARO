@@ -2097,6 +2097,34 @@ class LegalLedger:
                 query = query.filter_by(case_id=case_id)
             return [self._serialize_audit(item) for item in query.limit(250).all()]
 
+    def record_case_activity(
+        self,
+        case_id: int,
+        action: str,
+        *,
+        actor: str = "system",
+        source: str = "api",
+        details: Optional[Dict[str, Any]] = None,
+        risk_level: str = "low",
+    ) -> bool:
+        """Audit a security-relevant case operation that does not mutate evidence."""
+        with self.session_scope() as session:
+            if not session.get(LegalCase, case_id):
+                return False
+            self._audit(
+                session,
+                case_id,
+                "LegalCase",
+                case_id,
+                action,
+                actor,
+                {},
+                details or {},
+                risk_level,
+                source=source,
+            )
+            return True
+
     def papertrail_graph(self, case_id: int) -> Optional[Dict[str, Any]]:
         with self.session_scope() as session:
             case = session.get(LegalCase, case_id)
