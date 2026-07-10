@@ -9,6 +9,7 @@ import sys
 import logging
 import datetime
 import hashlib
+import ipaddress
 import json
 import re
 from concurrent.futures import ThreadPoolExecutor
@@ -58,9 +59,10 @@ logger = logging.getLogger('legal_ai_platform')
 app = Flask(__name__, static_folder='frontend', template_folder='frontend')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', os.urandom(24).hex())
 app.config['MAX_CONTENT_LENGTH'] = int(os.environ.get('LARO_MAX_UPLOAD_BYTES', 25 * 1024 * 1024))
+app.config.setdefault('LARO_LOCAL_ACCOUNT_EMAIL', os.environ.get('LARO_LOCAL_ACCOUNT_EMAIL', 'robert.local@laro').strip().lower())
 app.config.setdefault('SQLALCHEMY_DATABASE_URI', os.environ.get('LARO_APP_DB_URL', 'sqlite:///:memory:'))
 app.config.setdefault('SQLALCHEMY_TRACK_MODIFICATIONS', False)
-app.wsgi_app = ProxyFix(app.wsgi_app)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=0, x_proto=0, x_host=0, x_port=0, x_prefix=0)
 db = SQLAlchemy(app)
 
 
@@ -97,6 +99,26 @@ google_pull_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='lar
 
 def _ledger_actor():
     return str(session.get('user_email') or session.get('user_id') or 'anonymous')
+
+
+def _local_session_owner_email():
+    return str(app.config.get('LARO_LOCAL_ACCOUNT_EMAIL') or 'robert.local@laro').strip().lower()
+
+
+def _is_loopback_request():
+    try:
+        original = request.environ.get('werkzeug.proxy_fix.orig', {})
+        remote_address = original.get('REMOTE_ADDR') or request.remote_addr
+        return ipaddress.ip_address(str(remote_address or '')).is_loopback
+    except ValueError:
+        return False
+
+
+def _is_loopback_host(host):
+    try:
+        return str(host or '').strip().lower() == 'localhost' or ipaddress.ip_address(str(host or '')).is_loopback
+    except ValueError:
+        return False
 
 
 def _ledger_case_access_allowed(case_id, external_user_id=None):
@@ -3416,19 +3438,20 @@ def get_event_history():
         'events': events
     }), 200
 
-# Lightweight session helper for local demos. The real password login remains
-# registered by authentication.py at /api/auth/login.
+# Local-first bootstrap for the configured machine owner. The regular password
+# login remains registered by authentication.py at /api/auth/login.
 @app.route('/api/auth/session-login', methods=['POST'])
 def session_login():
-    data = request.json
-    
-    if 'email' not in data:
-        return jsonify({'error': 'Email is required'}), 400
-    
-    email = data['email']
-    
-    # Authenticate user (simplified for demo)
-    user_id = hash(email) % 1000  # Generate a deterministic user ID
+    if not _is_loopback_request():
+        return jsonify({'error': 'Local session bootstrap is available only from this machine'}), 403
+
+    data = request.get_json(silent=True) or {}
+    owner_email = _local_session_owner_email()
+    email = str(data.get('email') or owner_email).strip().lower()
+    if email != owner_email:
+        return jsonify({'error': 'Local session bootstrap is restricted to the configured local account'}), 403
+
+    user_id = int(hashlib.sha256(email.encode('utf-8')).hexdigest()[:8], 16)
     
     # Set user ID in session
     session['user_id'] = user_id
@@ -3519,6 +3542,9 @@ if __name__ == '__main__':
         }
     )
     
+    host = os.environ.get('LARO_HOST', '127.0.0.1').strip()
+    if not _is_loopback_host(host):
+        raise RuntimeError('LARO only binds to localhost. Use a local reverse proxy only after adding explicit access controls.')
     port = int(os.environ.get('PORT', 8768))
     debug = os.environ.get('LARO_DEBUG', '').strip().lower() in {'1', 'true', 'yes'}
-    app.run(host='0.0.0.0', port=port, debug=debug, use_reloader=debug)
+    app.run(host=host, port=port, debug=debug, use_reloader=debug)

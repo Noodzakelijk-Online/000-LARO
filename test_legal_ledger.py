@@ -828,6 +828,7 @@ class TestLegalLedgerApi(unittest.TestCase):
             "source_type": "google_drive",
         }, headers=self.headers)
         self.assertEqual(identifier.status_code, 201)
+
         self.assertEqual(identifier.get_json()["identifier_value"], "202020440")
 
         identifiers = self.client.get(f"/api/cases/{case_id}/identifiers", headers=self.headers)
@@ -1016,6 +1017,45 @@ class TestLegalLedgerApi(unittest.TestCase):
         self.assertTrue(bundle.get_json()["external_sharing_requires_approval"])
         self.assertEqual(bundle.get_json()["share_status"], "internal_only_until_approved")
         self.assertEqual(bundle.get_json()["drafts"][0]["id"], draft_payload["id"])
+
+    def test_local_session_bootstrap_is_limited_to_loopback_owner(self):
+        original_owner = self.app_module.app.config.get("LARO_LOCAL_ACCOUNT_EMAIL")
+        self.app_module.app.config["LARO_LOCAL_ACCOUNT_EMAIL"] = "owner@laro.test"
+        try:
+            owner = self.client.post("/api/auth/session-login", json={"email": "owner@laro.test"})
+            self.assertEqual(owner.status_code, 200)
+            self.assertEqual(owner.get_json()["email"], "owner@laro.test")
+            self.assertIn("token", owner.get_json())
+
+            impersonation = self.client.post("/api/auth/session-login", json={"email": "other@laro.test"})
+            self.assertEqual(impersonation.status_code, 403)
+            self.assertNotIn("token", impersonation.get_json())
+
+            remote = self.client.post(
+                "/api/auth/session-login",
+                json={"email": "owner@laro.test"},
+                environ_overrides={"REMOTE_ADDR": "192.0.2.55"},
+            )
+            self.assertEqual(remote.status_code, 403)
+            self.assertNotIn("token", remote.get_json())
+
+            spoofed = self.client.post(
+                "/api/auth/session-login",
+                json={"email": "owner@laro.test"},
+                environ_overrides={"REMOTE_ADDR": "192.0.2.55"},
+                headers={"X-Forwarded-For": "127.0.0.1"},
+            )
+            self.assertEqual(spoofed.status_code, 403)
+            self.assertNotIn("token", spoofed.get_json())
+        finally:
+            self.app_module.app.config["LARO_LOCAL_ACCOUNT_EMAIL"] = original_owner
+
+    def test_local_runtime_helpers_only_accept_loopback_hosts(self):
+        self.assertTrue(self.app_module._is_loopback_host("127.0.0.1"))
+        self.assertTrue(self.app_module._is_loopback_host("::1"))
+        self.assertTrue(self.app_module._is_loopback_host("localhost"))
+        self.assertFalse(self.app_module._is_loopback_host("0.0.0.0"))
+        self.assertFalse(self.app_module._is_loopback_host("192.0.2.55"))
 
     def test_legacy_case_endpoints_are_ledger_backed(self):
         created = self.client.post("/api/cases", json={

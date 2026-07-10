@@ -15,6 +15,8 @@ It organizes and prepares legal material. It is not a lawyer, does not provide d
 
 Core case data is stored in a local SQLite ledger under `instance/laro_ledger.sqlite3`. Authenticated case, approval, audit, and matching routes are scoped to the owning local user. Runtime databases, uploads, OAuth tokens, and local secrets are ignored by Git.
 
+The dashboard's convenience session bootstrap only accepts requests from loopback and only for `LARO_LOCAL_ACCOUNT_EMAIL` (default: `robert.local@laro`). It is not a remote login mechanism; the existing password route remains available for additional accounts.
+
 ## Windows Quick Start
 
 1. Install Python 3.11+.
@@ -38,7 +40,7 @@ Copy-Item .env.example .env
 
 5. Open [http://127.0.0.1:8768/case_command_center.html](http://127.0.0.1:8768/case_command_center.html).
 
-The launcher uses port `8768` by default so it does not collide with a typical Flask server on `5000`. Set `PORT` before launching to use another free local port.
+The launcher uses port `8768` by default so it does not collide with a typical Flask server on `5000`. It binds to `127.0.0.1` only. Set `PORT` before launching to use another free local port.
 
 ## Google Evidence Sources
 

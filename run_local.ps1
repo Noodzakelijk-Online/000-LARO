@@ -31,6 +31,10 @@ if (-not $env:LARO_UPLOAD_ROOT) {
     $env:LARO_UPLOAD_ROOT = "instance/uploads"
 }
 
+if (-not $env:LARO_HOST) {
+    $env:LARO_HOST = "127.0.0.1"
+}
+
 $env:PORT = if ($PSBoundParameters.ContainsKey("Port")) { "$Port" } elseif ($env:PORT) { $env:PORT } else { "8768" }
 if (-not $env:LARO_DEBUG) {
     $env:LARO_DEBUG = "false"
@@ -38,5 +42,5 @@ if (-not $env:LARO_DEBUG) {
 
 New-Item -ItemType Directory -Force -Path "instance", $env:LARO_UPLOAD_ROOT | Out-Null
 
-Write-Host "Starting LARO at http://127.0.0.1:$($env:PORT)/case_command_center.html"
+Write-Host "Starting LARO at http://$($env:LARO_HOST):$($env:PORT)/case_command_center.html"
 python app.py
