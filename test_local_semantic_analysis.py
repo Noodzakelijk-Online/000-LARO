@@ -144,6 +144,37 @@ class TestLocalSemanticAnalysisProvider(unittest.TestCase):
         self.assertEqual(len(result["review_questions"]), 1)
         self.assertEqual(len(result["source_documents"]), 2)
 
+    def test_default_case_analysis_compares_literal_sources_without_ollama(self):
+        provider = LocalSemanticAnalysisProvider({"provider": "rule_based"})
+
+        result = provider.analyze_case([
+            {
+                "document_id": 1,
+                "title": "Decision",
+                "extracted_text": "Case reference CAK-42. The decision records a payment amount of EUR 125.",
+            },
+            {
+                "document_id": 2,
+                "title": "Notice",
+                "extracted_text": "Case reference CAK-42. The payment notice records a payment amount of EUR 250.",
+            },
+            {
+                "document_id": 3,
+                "title": "Undated notice",
+                "extracted_text": "Submit the objection before the deadline.",
+            },
+        ])
+
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["provider"], "rule_based")
+        self.assertEqual(result["analysis_method"], "deterministic_source_comparison_v1")
+        conflict = next(item for item in result["findings"] if item["category"] == "cross_document_conflict")
+        self.assertEqual([source["document_id"] for source in conflict["sources"]], ["1", "2"])
+        self.assertIn("EUR 125", conflict["sources"][0]["source_quote"])
+        self.assertTrue(any(item["category"] == "corroboration" for item in result["findings"]))
+        self.assertTrue(any(item["category"] == "evidence_gap" for item in result["findings"]))
+        self.assertTrue(any("current" in item["question"] for item in result["review_questions"]))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -32,6 +32,25 @@ class LocalSemanticAnalysisProvider:
         "case_position",
         "other",
     }
+    CASE_MONEY_PATTERN = re.compile(
+        r"(?:\b(?:EUR|EURO)\s*|€\s*)\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?|\b\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?\s*(?:EUR|euro)\b",
+        re.IGNORECASE,
+    )
+    CASE_DATE_PATTERN = re.compile(
+        r"\b(?:\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{2,4})\b",
+        re.IGNORECASE,
+    )
+    CASE_REFERENCE_PATTERN = re.compile(
+        r"\b(?:zaaknummer|dossier(?:nummer)?|kenmerk|referentie|reference|case(?:\s+number)?)\s*[:#-]?\s*([A-Z0-9][A-Z0-9./_-]{2,})",
+        re.IGNORECASE,
+    )
+    CASE_SIGNAL_CUES = {
+        "payment": ("betaling", "betalen", "payment", "pay", "factuur", "invoice", "bedrag", "amount", "eur", "euro", "€"),
+        "deadline": ("deadline", "termijn", "uiterlijk", "binnen", "due", "before"),
+        "decision": ("besluit", "beschikking", "uitspraak", "vonnis", "decision", "judgment", "ruling"),
+        "procedure": ("bezwaar", "beroep", "rechtbank", "zitting", "dagvaarding", "appeal", "court"),
+        "obligation": ("moet", "dient", "verplicht", "must", "shall", "required", "obliged"),
+    }
 
     def __init__(
         self,
@@ -111,7 +130,7 @@ class LocalSemanticAnalysisProvider:
         if not prepared:
             return self._case_status("not_readable", "No readable source documents are available for case-wide analysis.", source_snapshot)
         if self.provider in {"", "rule_based", "disabled", "none"}:
-            return self._case_status("disabled", "No local semantic model is configured; source-linked deterministic analysis remains active.", source_snapshot)
+            return self._deterministic_case_analysis(prepared, source_snapshot)
         if self.provider != "ollama" or not self.model or not self._is_loopback_url(self.base_url):
             return self._case_status("configuration_invalid", "A configured loopback-only Ollama model is required for case-wide analysis.", source_snapshot)
 
@@ -148,6 +167,160 @@ class LocalSemanticAnalysisProvider:
             }
         except (requests.RequestException, ValueError, TypeError, json.JSONDecodeError, AttributeError):
             return self._case_status("unavailable", "The configured local model was unavailable; no case-wide model findings were stored.", source_snapshot)
+
+    def _deterministic_case_analysis(
+        self,
+        documents: List[Dict[str, Any]],
+        source_snapshot: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Compare bounded source passages without inferring legal conclusions.
+
+        This remains intentionally conservative: it only points a reviewer at
+        matching or differing literal values already present in the sources.
+        """
+        source_map = {str(item["document_id"]): item["text"] for item in documents}
+        records = []
+        for document in documents:
+            for sentence in self._case_sentences(document["text"]):
+                lowered = sentence.lower()
+                records.append({
+                    "document_id": str(document["document_id"]),
+                    "source_quote": sentence,
+                    "tags": {
+                        name for name, cues in self.CASE_SIGNAL_CUES.items()
+                        if any(cue in lowered for cue in cues)
+                    },
+                    "money": [self._canonical_money(value) for value in self.CASE_MONEY_PATTERN.findall(sentence)],
+                    "dates": [self._canonical_date(value) for value in self.CASE_DATE_PATTERN.findall(sentence)],
+                    "references": [value.upper() for value in self.CASE_REFERENCE_PATTERN.findall(sentence)],
+                })
+
+        findings: List[Dict[str, Any]] = []
+        questions: List[Dict[str, Any]] = []
+        seen = set()
+
+        def add_finding(category: str, observation: str, sources: List[Dict[str, str]]) -> None:
+            signature = (category, tuple((item["document_id"], item["source_quote"]) for item in sources))
+            if signature in seen or len(findings) >= 20:
+                return
+            seen.add(signature)
+            findings.append({
+                "category": category,
+                "observation": observation,
+                "sources": sources,
+                "review_status": "needs_review",
+            })
+
+        def citations(left: Dict[str, Any], right: Optional[Dict[str, Any]] = None) -> List[Dict[str, str]]:
+            values = [{"document_id": left["document_id"], "source_quote": left["source_quote"]}]
+            if right and right["document_id"] != left["document_id"]:
+                values.append({"document_id": right["document_id"], "source_quote": right["source_quote"]})
+            return values
+
+        def compare_values(value_key: str, required_tag: str, label: str) -> None:
+            relevant = [item for item in records if item[value_key] and required_tag in item["tags"]]
+            for index, left in enumerate(relevant):
+                for right in relevant[index + 1:]:
+                    if left["document_id"] == right["document_id"]:
+                        continue
+                    left_value = left[value_key][0]
+                    right_value = right[value_key][0]
+                    linked_sources = citations(left, right)
+                    if left_value != right_value:
+                        add_finding(
+                            "cross_document_conflict",
+                            f"The cited sources contain different {label} values ({left_value} and {right_value}); review before relying on either value.",
+                            linked_sources,
+                        )
+                        if len(questions) < 12:
+                            questions.append({
+                                "category": "open_question",
+                                "question": f"Which cited {label} should be treated as current after source review?",
+                                "sources": linked_sources,
+                                "review_status": "needs_review",
+                            })
+                    else:
+                        add_finding(
+                            "corroboration",
+                            f"The cited sources contain the same {label} value ({left_value}); verify that they refer to the same case event.",
+                            linked_sources,
+                        )
+
+        compare_values("money", "payment", "payment amount")
+        compare_values("dates", "deadline", "deadline date")
+
+        references: Dict[str, List[Dict[str, Any]]] = {}
+        for record in records:
+            for value in record["references"]:
+                references.setdefault(value, []).append(record)
+        for value, matches in references.items():
+            distinct = []
+            for record in matches:
+                if all(record["document_id"] != item["document_id"] for item in distinct):
+                    distinct.append(record)
+            if len(distinct) >= 2:
+                add_finding(
+                    "corroboration",
+                    f"The cited sources share the reference {value}; verify that they belong to the same matter.",
+                    citations(distinct[0], distinct[1]),
+                )
+
+        for record in records:
+            if "deadline" not in record["tags"] or record["dates"]:
+                continue
+            source = citations(record)
+            add_finding(
+                "evidence_gap",
+                "The cited source uses deadline language without a recognizable date; verify the actual deadline from the source or a related notice.",
+                source,
+            )
+            if len(questions) < 12:
+                questions.append({
+                    "category": "open_question",
+                    "question": "What exact date applies to the deadline described in this cited source?",
+                    "sources": source,
+                    "review_status": "needs_review",
+                })
+
+        validated_findings, rejected_findings = self._validated_case_items(findings, source_map, "observation")
+        validated_questions, rejected_questions = self._validated_case_items(questions, source_map, "question")
+        was_truncated = any(item.get("source_was_truncated") for item in source_snapshot)
+        limitations = [
+            "Deterministic comparison only reports literal source similarities, differences, and missing date signals for review.",
+            "It does not determine legal rights, choose between conflicting sources, create claims, change deadlines, or trigger external action.",
+        ]
+        if was_truncated:
+            limitations.append("At least one source was truncated to the configured local analysis limit; review the original document for omitted material.")
+        return {
+            "status": "completed",
+            "provider": "rule_based",
+            "model": "",
+            "analysis_method": "deterministic_source_comparison_v1",
+            "findings": validated_findings,
+            "review_questions": validated_questions,
+            "rejected_uncited_findings": rejected_findings,
+            "rejected_uncited_questions": rejected_questions,
+            "source_documents": source_snapshot,
+            "source_characters_analyzed": sum(len(item["text"]) for item in documents),
+            "source_was_truncated": was_truncated,
+            "limitations": limitations,
+        }
+
+    @staticmethod
+    def _case_sentences(text: str) -> List[str]:
+        return [
+            LocalSemanticAnalysisProvider._clean(value)[:600]
+            for value in re.split(r"(?<=[.!?])\s+", text or "")
+            if LocalSemanticAnalysisProvider._clean(value)
+        ]
+
+    @staticmethod
+    def _canonical_money(value: str) -> str:
+        return LocalSemanticAnalysisProvider._clean(value).upper().replace("EURO", "EUR").replace("€", "EUR ")
+
+    @staticmethod
+    def _canonical_date(value: str) -> str:
+        return LocalSemanticAnalysisProvider._clean(value).replace("/", "-")
 
     def _status(self, status: str, message: str) -> Dict[str, Any]:
         return {

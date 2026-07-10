@@ -7,6 +7,7 @@ import datetime as dt
 from unittest import mock
 
 from legal_ledger import LegalLedger, LawyerOutreach
+from local_semantic_analysis import LocalSemanticAnalysisProvider
 
 
 class TestLegalLedgerService(unittest.TestCase):
@@ -2181,6 +2182,33 @@ class TestLegalLedgerApi(unittest.TestCase):
         self.assertTrue(response.get_json()["source_preserved"])
         listed = self.client.get(f"/api/cases/{case_id}/case-analysis", headers=self.headers)
         self.assertEqual(listed.get_json()["runs"], [])
+
+    def test_case_wide_analysis_uses_deterministic_local_comparison_without_ollama(self):
+        created = self.client.post("/api/cases", json={"title": "Deterministic case reading"}, headers=self.headers)
+        case_id = created.get_json()["case_id"]
+        first = self.client.post(f"/api/cases/{case_id}/documents", json={
+            "title": "First payment amount",
+            "extracted_text": "The decision records a payment amount of EUR 125.",
+        }, headers=self.headers).get_json()
+        second = self.client.post(f"/api/cases/{case_id}/documents", json={
+            "title": "Second payment amount",
+            "extracted_text": "The notice records a payment amount of EUR 250.",
+        }, headers=self.headers).get_json()
+
+        provider = LocalSemanticAnalysisProvider({"provider": "rule_based"})
+        with mock.patch.object(self.app_module.document_intelligence, "semantic_provider", provider):
+            response = self.client.post(f"/api/cases/{case_id}/case-analysis", headers=self.headers)
+
+        self.assertEqual(response.status_code, 201)
+        run = response.get_json()["run"]
+        self.assertEqual(run["provider"], "rule_based")
+        conflict = next(item for item in run["content"]["findings"] if item["category"] == "cross_document_conflict")
+        self.assertEqual(
+            {source["document_id"] for source in conflict["sources"]},
+            {str(first["document_id"]), str(second["document_id"])},
+        )
+        self.assertEqual(len(run["review_items"]), len(run["content"]["findings"]) + len(run["content"]["review_questions"]))
+        self.assertTrue(all(item["status"] == "needs_review" for item in run["review_items"]))
 
     def test_case_wide_review_item_requires_explicit_conversion_and_preserves_citations(self):
         created = self.client.post("/api/cases", json={

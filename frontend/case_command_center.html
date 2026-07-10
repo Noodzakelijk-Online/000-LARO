@@ -6142,7 +6142,7 @@
                     </div>
                     <p class="muted" id="caseAnalysisStatus">Analysis remains local and review-only; source documents are not changed.</p>
                     ${run ? `
-                        <p class="muted">${escapeHtml(run.provider || "local")} · ${escapeHtml(run.model || "configured local model")} · ${escapeHtml(String(run.created_at || "").slice(0, 19) || "just now")}</p>
+                        <p class="muted">${escapeHtml(run.provider || "local")} · ${escapeHtml(run.model || (content.analysis_method === "deterministic_source_comparison_v1" ? "deterministic source comparison" : "local analysis"))} · ${escapeHtml(String(run.created_at || "").slice(0, 19) || "just now")}</p>
                         ${findings.length ? `<div class="record-list">${findings.slice(0, 8).map((item, index) => {
                             const reviewItem = reviewItems.get(`finding:${index}`);
                             return `
