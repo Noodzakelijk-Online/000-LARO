@@ -1480,6 +1480,39 @@ class LegalLedger:
             self._audit(session, case_id, "CaseDocument", document.id, "extraction_recovered", actor, before, after, "medium")
             return self._serialize_document(document)
 
+    def update_document_analysis(
+        self,
+        case_id: int,
+        document_id: int,
+        data: Dict[str, Any],
+        actor: str = "system",
+    ) -> Optional[Dict[str, Any]]:
+        """Refresh derived analysis only; the source file and extraction history stay unchanged."""
+        analysis = data.get("legal_analysis") or data.get("analysis") or {}
+        if not isinstance(analysis, dict) or not analysis:
+            raise ValueError("A structured document analysis is required")
+        with self.session_scope() as session:
+            document = session.query(CaseDocument).filter_by(case_id=case_id, id=document_id).one_or_none()
+            if not document:
+                return None
+            before = self._document_analysis_audit_state(document)
+            metadata = _json_load(document.metadata_json, {})
+            metadata["legal_analysis"] = analysis
+            metadata["analysis_refresh"] = {
+                "actor": actor,
+                "source_preserved": True,
+                "refreshed_at": _iso(utcnow()),
+                "method": ((analysis.get("processing") or {}).get("analysis_method") or "document_analysis"),
+            }
+            document.metadata_json = _json_dump(metadata)
+            document.summary = data.get("summary") or analysis.get("summary") or document.summary
+            if data.get("relevance_score") is not None:
+                document.relevance_score = float(data.get("relevance_score") or 0.0)
+            document.updated_at = utcnow()
+            after = self._document_analysis_audit_state(document)
+            self._audit(session, case_id, "CaseDocument", document.id, "analysis_refreshed", actor, before, after, "low")
+            return self._serialize_document(document)
+
     def add_event(self, case_id: int, data: Dict[str, Any], actor: str = "system") -> Optional[Dict[str, Any]]:
         with self.session_scope() as session:
             if not session.get(LegalCase, case_id):
@@ -3635,6 +3668,21 @@ class LegalLedger:
         if extraction_method:
             state["extraction_method"] = extraction_method
         return state
+
+    def _document_analysis_audit_state(self, document: CaseDocument) -> Dict[str, Any]:
+        """Keep analysis refresh audits useful without copying source-derived content."""
+        metadata = _json_load(document.metadata_json, {})
+        analysis = metadata.get("legal_analysis") or {}
+        processing = analysis.get("processing") or {}
+        return {
+            "document_id": document.id,
+            "content_hash": document.content_hash,
+            "summary_hash": self._hash(document.summary or ""),
+            "relevance_score": document.relevance_score,
+            "analysis_hash": self._hash(_json_dump(analysis)) if analysis else "",
+            "analysis_method": processing.get("analysis_method") or "",
+            "has_source_passages": bool((analysis.get("findings") or {}).get("source_passages")),
+        }
 
     @staticmethod
     def _serialize_document_version(item: DocumentVersion) -> Dict[str, Any]:

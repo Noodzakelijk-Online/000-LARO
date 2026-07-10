@@ -29,6 +29,21 @@ class TestDocumentIntelligenceEngine(unittest.TestCase):
         self.assertTrue(analysis["facts"]["obligations"])
         self.assertTrue(analysis["risks"])
 
+    def test_analysis_keeps_material_source_passages_and_date_locators(self):
+        analysis = self.engine.analyze_text(self.text, document_name="notice.txt")
+
+        findings = analysis["findings"]
+        first_date = analysis["facts"]["dates"][0]
+        first_event = analysis["evidence"]["chronology_events"][0]
+
+        self.assertTrue(findings["source_passages"])
+        self.assertIn("obligation", findings["category_counts"])
+        self.assertFalse(findings["complete_statement_inventory"])
+        self.assertEqual(analysis["processing"]["analysis_method"], "rule_based_source_passage_v1")
+        self.assertIn("source_locator", first_date)
+        self.assertTrue(first_date["source_locator"]["passage_id"])
+        self.assertEqual(first_event["source_locator"], first_date["source_locator"])
+
     def test_extract_text_from_file_reads_real_upload(self):
         with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8") as handle:
             handle.write(self.text)

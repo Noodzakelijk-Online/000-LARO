@@ -2229,6 +2229,13 @@
             outline: 0;
         }
 
+        .source-passage-highlight {
+            background: rgba(255, 193, 7, 0.22);
+            border-bottom: 2px solid var(--ledger-orange);
+            color: var(--ledger-text);
+            padding: 0 0.08rem;
+        }
+
         .source-ref-list {
             display: flex;
             flex-wrap: wrap;
@@ -3396,6 +3403,7 @@
             <div class="source-preview-body" id="sourcePreviewBody"></div>
             <div class="source-preview-footer">
                 <button class="btn-secondary-ledger" type="button" id="sourcePreviewLocate">Show in documents</button>
+                <button class="btn-secondary-ledger" type="button" id="sourcePreviewReanalyze">Refresh analysis</button>
                 <button class="btn-ledger" type="button" id="sourcePreviewOpenOriginal">Open original</button>
             </div>
         </aside>
@@ -3435,6 +3443,7 @@
         let googleConnectionState = null;
         let pendingFocusTarget = null;
         let sourcePreviewDocumentId = null;
+        let sourcePreviewSnippet = "";
         let toastTimer = null;
         let ledgerSearchTimer = null;
         let autoRefreshTimer = null;
@@ -4343,16 +4352,17 @@
             `;
         }
 
-        function evidenceSourceButton(targetType, targetId, fallbackDocumentId = "") {
+        function evidenceSourceButton(targetType, targetId, fallbackDocumentId = "", fallbackSnippet = "") {
             const link = primaryEvidenceLink(targetType, targetId);
-            return sourceDocumentButton(link?.document_id || fallbackDocumentId);
+            return sourceDocumentButton(link?.document_id || fallbackDocumentId, link?.snippet || fallbackSnippet);
         }
 
-        function sourceDocumentButton(documentId) {
+        function sourceDocumentButton(documentId, snippet = "") {
             if (!documentId) return "";
             const doc = documentById(documentId);
             const label = doc ? `Preview source document: ${documentTitle(doc, documentId)}` : `Preview source document ${documentId}`;
-            return `<button class="source-doc-button" type="button" data-doc-id="${escapeHtml(documentId)}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">?</button>`;
+            const passageLabel = snippet ? `${label}; open the cited passage` : label;
+            return `<button class="source-doc-button" type="button" data-doc-id="${escapeHtml(documentId)}" data-doc-snippet="${escapeHtml(snippet)}" title="${escapeHtml(passageLabel)}" aria-label="${escapeHtml(passageLabel)}">?</button>`;
         }
 
         function eventStatus(event) {
@@ -4481,7 +4491,7 @@
                         <div class="timeline-story-meta">
                             <span class="tag ${status === "needs_review" ? "orange" : ""}">${escapeHtml(status)}</span>
                             <span class="timeline-story-source">${escapeHtml(eventSourceTitle(event))}</span>
-                            ${evidenceSourceButton("event", event.id, event.created_from_document_id)}
+                            ${evidenceSourceButton("event", event.id, event.created_from_document_id, event.evidence_quote)}
                         </div>
                         ${evidenceSnippet("event", event.id)}
                     </div>
@@ -4500,7 +4510,7 @@
                     <div>
                         <div class="record-heading">
                             <strong>${escapeHtml(eventActor(event))} - ${escapeHtml(event.title || "Untitled event")}</strong>
-                            ${evidenceSourceButton("event", event.id, event.created_from_document_id)}
+                            ${evidenceSourceButton("event", event.id, event.created_from_document_id, event.evidence_quote)}
                         </div>
                         <p>${escapeHtml(eventActionText(event))}</p>
                         ${evidenceSnippet("event", event.id)}
@@ -7181,6 +7191,7 @@
             const shell = document.getElementById("sourcePreviewShell");
             if (shell) shell.hidden = true;
             sourcePreviewDocumentId = null;
+            sourcePreviewSnippet = "";
         }
 
         function locateSourceDocument(documentId = sourcePreviewDocumentId) {
@@ -7223,6 +7234,48 @@
             `;
         }
 
+        function normalizedSourceSnippet(value = "") {
+            return String(value || "").replace(/\s+/g, " ").replace(/\.\.\.$/, "").trim();
+        }
+
+        function sourcePassageMarkup(text = "", snippet = "") {
+            const source = String(text || "");
+            const needle = normalizedSourceSnippet(snippet);
+            const index = needle ? source.toLocaleLowerCase().indexOf(needle.toLocaleLowerCase()) : -1;
+            if (index < 0) return escapeHtml(contextPreview(source, 2400));
+            const start = Math.max(0, index - 180);
+            const end = Math.min(source.length, index + needle.length + 260);
+            const before = source.slice(start, index);
+            const matched = source.slice(index, index + needle.length);
+            const after = source.slice(index + needle.length, end);
+            return `${start ? "..." : ""}${escapeHtml(before)}<mark class="source-passage-highlight">${escapeHtml(matched)}</mark>${escapeHtml(after)}${end < source.length ? "..." : ""}`;
+        }
+
+        function sourceAnalysisSummary(document = {}) {
+            const analysis = document.metadata?.legal_analysis || {};
+            const findings = analysis.findings || {};
+            const statements = findings.source_passages || [];
+            if (!statements.length) return "";
+            const categories = Object.entries(findings.category_counts || {})
+                .map(([name, count]) => `${count} ${name.replace(/_/g, " ")}`)
+                .join(" / ");
+            return `
+                <details class="source-import-advanced">
+                    <summary>Source analysis</summary>
+                    <p class="muted">Rule-based source passages for review. They are not legal conclusions.</p>
+                    ${categories ? `<p class="muted">${escapeHtml(categories)}</p>` : ""}
+                    <div class="record-list">
+                        ${statements.slice(0, 8).map((item) => `
+                            <article class="record-row">
+                                <span class="record-kicker">${escapeHtml((item.categories || ["statement"]).join(" / ").replace(/_/g, " "))}</span>
+                                <div><p>${escapeHtml(item.excerpt || "")}</p><p class="muted">${item.requires_review ? "Needs review" : "Source statement"}</p></div>
+                            </article>
+                        `).join("")}
+                    </div>
+                </details>
+            `;
+        }
+
         function renderSourcePreview(detail = {}) {
             const sourceDoc = detail.document || {};
             const title = documentTitle(sourceDoc);
@@ -7238,6 +7291,7 @@
                     sourceDoc.source_uri || sourceDoc.original_filename || "",
                     sourceDoc.confidentiality_level || ""
                 ].filter(Boolean).join(" / ") || "Review the linked document without leaving the case.";
+                if (sourcePreviewSnippet) previewSubtitle.textContent += " / cited passage highlighted";
             }
             if (previewBody) {
                 previewBody.innerHTML = `
@@ -7246,10 +7300,17 @@
                         <span>Summary</span>
                         <p>${escapeHtml(sourceDoc.summary || "No source summary is recorded yet.")}</p>
                     </section>
+                    ${sourcePreviewSnippet ? `
+                        <section class="source-preview-text">
+                            <span>Cited passage</span>
+                            <p>${sourcePassageMarkup(body, sourcePreviewSnippet)}</p>
+                        </section>
+                    ` : ""}
                     <section class="source-preview-text">
                         <span>Extracted text</span>
                         <p>${escapeHtml(contextPreview(body, 2400))}</p>
                     </section>
+                    ${sourceAnalysisSummary(sourceDoc)}
                     ${sourceDoc.source_uri ? `
                         <section class="source-preview-text">
                             <span>Original reference</span>
@@ -7262,6 +7323,8 @@
                 openOriginal.disabled = !detail.can_open_file;
                 openOriginal.textContent = detail.can_open_file ? "Open original" : "No local file";
             }
+            const refreshAnalysis = window.document.getElementById("sourcePreviewReanalyze");
+            if (refreshAnalysis) refreshAnalysis.disabled = !documentHasReadableText(sourceDoc);
         }
 
         async function openOriginalSourceDocument(documentId = sourcePreviewDocumentId) {
@@ -7278,9 +7341,10 @@
             showToast("Source document opened.");
         }
 
-        async function openSourceDocument(documentId) {
+        async function openSourceDocument(documentId, snippet = "") {
             if (!selectedCaseId || !documentId) return showToast("No source document is linked to this item.");
             sourcePreviewDocumentId = documentId;
+            sourcePreviewSnippet = normalizedSourceSnippet(snippet);
             const shell = document.getElementById("sourcePreviewShell");
             const body = document.getElementById("sourcePreviewBody");
             const title = document.getElementById("sourcePreviewTitle");
@@ -7291,6 +7355,28 @@
             if (body) body.innerHTML = `<div class="empty-state">Loading linked source document.</div>`;
             const detail = await apiFetch(`/api/cases/${selectedCaseId}/documents/${documentId}`);
             renderSourcePreview(detail);
+        }
+
+        async function reanalyzeSourceDocument(documentId = sourcePreviewDocumentId) {
+            if (!selectedCaseId || !documentId) return showToast("No source document is linked to this item.");
+            const button = document.getElementById("sourcePreviewReanalyze");
+            if (button) {
+                button.disabled = true;
+                button.textContent = "Refreshing...";
+            }
+            try {
+                const response = await apiFetch(`/api/cases/${selectedCaseId}/documents/${documentId}/reanalyze`, { method: "POST" });
+                showToast("Source analysis refreshed. The original document and extraction version are unchanged.");
+                await refreshActiveLedger({ silent: true });
+                await openSourceDocument(documentId, sourcePreviewSnippet);
+                return response;
+            } catch (error) {
+                showToast(error.message);
+                throw error;
+            } finally {
+                const refreshedButton = document.getElementById("sourcePreviewReanalyze");
+                if (refreshedButton) refreshedButton.textContent = "Refresh analysis";
+            }
         }
 
         async function openCommandTarget(caseId, target, focus = {}) {
@@ -7420,7 +7506,7 @@
             document.querySelectorAll(".source-doc-button").forEach((button) => {
                 button.addEventListener("click", (event) => {
                     event.stopPropagation();
-                    openSourceDocument(button.dataset.docId).catch((error) => showToast(error.message));
+                    openSourceDocument(button.dataset.docId, button.dataset.docSnippet || "").catch((error) => showToast(error.message));
                 });
             });
             const closePreview = document.getElementById("closeSourcePreview");
@@ -7431,6 +7517,8 @@
             };
             const previewLocate = document.getElementById("sourcePreviewLocate");
             if (previewLocate) previewLocate.onclick = () => locateSourceDocument();
+            const previewReanalyze = document.getElementById("sourcePreviewReanalyze");
+            if (previewReanalyze) previewReanalyze.onclick = () => reanalyzeSourceDocument().catch(() => {});
             const previewOpenOriginal = document.getElementById("sourcePreviewOpenOriginal");
             if (previewOpenOriginal) previewOpenOriginal.onclick = () => openOriginalSourceDocument().catch((error) => showToast(error.message));
             document.querySelectorAll("[data-timeline-mode]").forEach((button) => {

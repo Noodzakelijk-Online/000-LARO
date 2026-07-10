@@ -1662,6 +1662,49 @@ def recover_ledger_document_text(case_id, document_id):
     }), 200
 
 
+@app.route('/api/cases/<int:case_id>/documents/<int:document_id>/reanalyze', methods=['POST'])
+@auth_system._require_auth
+def reanalyze_ledger_document(case_id, document_id):
+    """Refresh derived source analysis without changing the document or extraction version."""
+    ledger_case = legal_ledger.get_case(case_id)
+    document = legal_ledger.get_document(case_id, document_id)
+    if not ledger_case or not document:
+        return jsonify({'error': 'Document not found'}), 404
+    text = str(document.get('extracted_text') or document.get('ocr_text') or '').strip()
+    if not text:
+        return jsonify({
+            'error': 'No readable text is available to analyze. Recover text first while preserving the original source.',
+            'source_preserved': True,
+        }), 409
+    analysis = document_intelligence.analyze_text(
+        text,
+        document_name=document.get('title') or document.get('original_filename') or 'Source document',
+        metadata={
+            **(document.get('metadata') or {}),
+            'source_type': document.get('source_type'),
+            'original_filename': document.get('original_filename'),
+            'document_type': document.get('document_type'),
+            'sender': document.get('sender'),
+            'recipient': document.get('recipient'),
+        },
+        case_context=ledger_case,
+    )
+    refreshed = legal_ledger.update_document_analysis(case_id, document_id, {
+        'legal_analysis': analysis,
+        'summary': analysis.get('summary') or document.get('summary') or '',
+        'relevance_score': (analysis.get('evidence') or {}).get('relevance_score', document.get('relevance_score') or 0),
+    }, actor=_ledger_actor())
+    if not refreshed:
+        return jsonify({'error': 'Document not found'}), 404
+    return jsonify({
+        'document': refreshed,
+        'analysis': analysis,
+        'source_preserved': True,
+        'extraction_version_unchanged': True,
+        'created_artifacts': False,
+    }), 200
+
+
 @app.route('/api/cases/<int:case_id>/documents/<int:document_id>/file', methods=['GET'])
 @auth_system._require_auth
 def open_ledger_document_file(case_id, document_id):

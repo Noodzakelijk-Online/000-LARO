@@ -208,6 +208,17 @@ class DocumentIntelligenceEngine:
         "ontruiming",
     ]
 
+    # These labels describe what the source sentence appears to contain. They
+    # are not legal conclusions and every result remains review-gated.
+    STATEMENT_CUES = {
+        "deadline": ["deadline", "termijn", "uiterlijk", "binnen", "due", "before"],
+        "obligation": ["moet", "dient", "verplicht", "shall", "must", "required", "obliged"],
+        "decision": ["besluit", "beschikking", "vonnis", "uitspraak", "decision", "judgment", "ruling"],
+        "allegation": ["stelt", "gesteld", "beweert", "claimt", "alleges", "claims", "according to"],
+        "request": ["verzoek", "verzoeken", "verzoekt", "request", "requested", "please provide"],
+        "procedure": ["bezwaar", "beroep", "rechtbank", "zitting", "dagvaarding", "appeal", "court"],
+    }
+
     def enrich_document(self, document: Dict[str, Any], case_context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Return a copy of document with extracted text and legal analysis."""
         enriched = dict(document)
@@ -326,8 +337,9 @@ class DocumentIntelligenceEngine:
         """Analyze text and return a stable legal evidence object."""
         metadata = metadata or {}
         normalized = self._clean_text(text)
-        sentences = self._split_sentences(normalized)
-        dates = self._extract_dates(sentences)
+        passages = self._build_source_passages(normalized)
+        sentences = [item["text"] for item in passages]
+        dates = self._extract_dates(passages)
         legal_references = self._extract_legal_references(normalized)
         topics = self._detect_topics(normalized)
         document_type = self._classify_document_type(document_name, normalized, metadata)
@@ -357,11 +369,17 @@ class DocumentIntelligenceEngine:
                 "chronology_events": chronology_events,
                 "suggested_evidence_role": self._suggest_evidence_role(document_type, topics, risk_flags),
             },
+            "findings": self._build_source_findings(passages),
             "processing": {
                 "text_length": len(normalized),
                 "word_count": len(normalized.split()),
                 "sentence_count": len(sentences),
                 "confidence": self._confidence(normalized, legal_references, dates),
+                "analysis_method": "rule_based_source_passage_v1",
+                "analysis_limits": [
+                    "Findings identify source passages for review; they do not establish legal facts or legal advice.",
+                    "Only material rule-matched passages are listed. The original document remains the authoritative source.",
+                ],
             },
         }
 
@@ -409,10 +427,32 @@ class DocumentIntelligenceEngine:
             return []
         return [part.strip() for part in re.split(r"(?<=[.!?])\s+", text) if part.strip()]
 
-    def _extract_dates(self, sentences: Iterable[str]) -> List[Dict[str, str]]:
+    def _build_source_passages(self, text: str) -> List[Dict[str, Any]]:
+        """Return stable sentence locators without storing a second full copy of a document."""
+        passages = []
+        for match in re.finditer(r"[^.!?]+(?:[.!?]+|$)", text or ""):
+            raw = match.group(0)
+            leading = len(raw) - len(raw.lstrip())
+            trailing = len(raw) - len(raw.rstrip())
+            start = match.start() + leading
+            end = match.end() - trailing
+            sentence = text[start:end].strip()
+            if not sentence:
+                continue
+            passages.append({
+                "id": f"p{len(passages) + 1}",
+                "text": sentence,
+                "start_char": start,
+                "end_char": end,
+            })
+        return passages
+
+    def _extract_dates(self, sentences: Iterable[Any]) -> List[Dict[str, Any]]:
         dates = []
         seen = set()
-        for sentence in sentences:
+        for source in sentences:
+            passage = source if isinstance(source, dict) else {}
+            sentence = str(passage.get("text") if passage else source or "")
             for pattern in self.DATE_PATTERNS:
                 for match in pattern.finditer(sentence):
                     raw = match.group("date")
@@ -421,14 +461,63 @@ class DocumentIntelligenceEngine:
                     if key in seen:
                         continue
                     seen.add(key)
-                    dates.append(
-                        {
-                            "raw": raw,
-                            "normalized": normalized or raw,
-                            "context": sentence[:220],
+                    item = {
+                        "raw": raw,
+                        "normalized": normalized or raw,
+                        "context": sentence[:220],
+                    }
+                    if passage:
+                        item["source_locator"] = {
+                            "passage_id": passage.get("id"),
+                            "start_char": passage.get("start_char", 0) + match.start(),
+                            "end_char": passage.get("start_char", 0) + match.end(),
                         }
-                    )
+                    dates.append(item)
         return dates
+
+    def _statement_categories(self, text: str) -> List[str]:
+        lowered = text.lower()
+        categories = [
+            category
+            for category, cues in self.STATEMENT_CUES.items()
+            if any(cue in lowered for cue in cues)
+        ]
+        return categories or ["factual_statement"]
+
+    def _build_source_findings(self, passages: List[Dict[str, Any]], limit: int = 24) -> Dict[str, Any]:
+        """Expose reviewable, bounded source passages for downstream legal workflows."""
+        statements = []
+        category_counts = Counter()
+        for passage in passages:
+            text = passage["text"]
+            categories = self._statement_categories(text)
+            has_date = any(pattern.search(text) for pattern in self.DATE_PATTERNS)
+            has_reference = bool(self._extract_legal_references(text))
+            has_money = bool(self._extract_money(text))
+            material = categories != ["factual_statement"] or has_date or has_reference or has_money
+            if not material:
+                continue
+            for category in categories:
+                category_counts[category] += 1
+            statements.append({
+                "passage_id": passage["id"],
+                "categories": categories,
+                "excerpt": text[:320],
+                "source_locator": {
+                    "start_char": passage["start_char"],
+                    "end_char": passage["end_char"],
+                },
+                "requires_review": any(category != "factual_statement" for category in categories),
+                "confidence": "rule_based",
+            })
+            if len(statements) >= limit:
+                break
+        return {
+            "source_passages": statements,
+            "material_statement_count": len(statements),
+            "category_counts": dict(sorted(category_counts.items())),
+            "complete_statement_inventory": False,
+        }
 
     def _normalize_date(self, raw: str) -> Optional[str]:
         cleaned = raw.strip().replace(".", "").replace(",", "")
@@ -578,12 +667,13 @@ class DocumentIntelligenceEngine:
                 break
         return risks
 
-    def _build_chronology_events(self, dates: List[Dict[str, str]]) -> List[Dict[str, str]]:
+    def _build_chronology_events(self, dates: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         return [
             {
                 "date": item["normalized"],
                 "description": item["context"],
                 "source": "document_intelligence",
+                "source_locator": item.get("source_locator") or {},
             }
             for item in dates
             if item.get("normalized")

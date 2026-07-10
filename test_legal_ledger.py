@@ -2003,6 +2003,44 @@ class TestLegalLedgerApi(unittest.TestCase):
         self.assertTrue(recovery_audit["after_state"]["extracted_text_hash"])
         self.assertNotIn("CAK besluit", str(recovery_audit["after_state"]))
 
+    def test_reanalysis_refreshes_derived_passages_without_changing_source_or_versions(self):
+        created = self.client.post("/api/cases", json={
+            "title": "Existing source analysis refresh",
+            "description": "A readable source needs the newer passage analysis.",
+            "legal_domain": "administrative_law",
+        }, headers=self.headers)
+        self.assertEqual(created.status_code, 201)
+        case_id = created.get_json()["case_id"]
+
+        source_text = "CAK decided on 2026-07-01 that Robert must pay EUR 125. File an objection before 2026-07-15."
+        source = self.client.post(f"/api/cases/{case_id}/documents", json={
+            "title": "Existing CAK decision",
+            "source_type": "manual_text",
+            "extracted_text": source_text,
+        }, headers=self.headers)
+        self.assertEqual(source.status_code, 201)
+        document_id = source.get_json()["document_id"]
+
+        versions_before = self.client.get(f"/api/cases/{case_id}/documents/{document_id}/versions", headers=self.headers)
+        self.assertEqual(len(versions_before.get_json()["versions"]), 1)
+
+        refreshed = self.client.post(f"/api/cases/{case_id}/documents/{document_id}/reanalyze", headers=self.headers)
+        self.assertEqual(refreshed.status_code, 200)
+        payload = refreshed.get_json()
+        self.assertTrue(payload["source_preserved"])
+        self.assertTrue(payload["extraction_version_unchanged"])
+        self.assertFalse(payload["created_artifacts"])
+        self.assertEqual(payload["document"]["extracted_text"], source_text)
+        self.assertTrue(payload["analysis"]["findings"]["source_passages"])
+        self.assertEqual(payload["analysis"]["processing"]["analysis_method"], "rule_based_source_passage_v1")
+
+        versions_after = self.client.get(f"/api/cases/{case_id}/documents/{document_id}/versions", headers=self.headers)
+        self.assertEqual(len(versions_after.get_json()["versions"]), 1)
+        audit = self.client.get(f"/api/audit?case_id={case_id}", headers=self.headers)
+        refreshed_audit = next(item for item in audit.get_json()["audit_events"] if item["action"] == "analysis_refreshed")
+        self.assertTrue(refreshed_audit["after_state"]["analysis_hash"])
+        self.assertNotIn(source_text, str(refreshed_audit["after_state"]))
+
     def test_document_file_route_blocks_paths_outside_upload_store(self):
         created = self.client.post("/api/cases", json={
             "title": "Unsafe document path case",
