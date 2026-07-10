@@ -99,6 +99,17 @@ def _ledger_actor():
     return str(session.get('user_email') or session.get('user_id') or 'anonymous')
 
 
+def _ledger_case_access_allowed(case_id, external_user_id=None):
+    """Keep all authenticated case routes scoped to their owning local user."""
+    try:
+        return legal_ledger.user_owns_case(int(case_id), external_user_id or _ledger_actor())
+    except (TypeError, ValueError):
+        return False
+
+
+app.config['LARO_CASE_ACCESS_CHECK'] = _ledger_case_access_allowed
+
+
 def _ledger_user_payload(data=None):
     payload = dict(data or {})
     payload.setdefault('user_id', _ledger_actor())
@@ -2209,13 +2220,17 @@ def request_ledger_bundle_share_approval(case_id):
 def list_ledger_approvals():
     case_id = request.args.get('case_id', type=int)
     status = request.args.get('status')
-    approvals = legal_ledger.list_approvals(case_id=case_id, status=status)
+    if case_id is not None and not _ledger_case_access_allowed(case_id):
+        return jsonify({'error': 'Case not found'}), 404
+    approvals = legal_ledger.list_approvals(case_id=case_id, status=status, external_user_id=_ledger_actor())
     return jsonify({'approvals': approvals, 'count': len(approvals)}), 200
 
 
 @app.route('/api/approvals/<int:approval_id>', methods=['PATCH'])
 @auth_system._require_auth
 def resolve_ledger_approval(approval_id):
+    if not legal_ledger.user_owns_approval(approval_id, _ledger_actor()):
+        return jsonify({'error': 'Approval not found'}), 404
     data = request.json or {}
     try:
         approval = legal_ledger.resolve_approval(
@@ -2235,7 +2250,9 @@ def resolve_ledger_approval(approval_id):
 @auth_system._require_auth
 def list_ledger_audit():
     case_id = request.args.get('case_id', type=int)
-    events = legal_ledger.list_audit_events(case_id=case_id)
+    if case_id is not None and not _ledger_case_access_allowed(case_id):
+        return jsonify({'error': 'Case not found'}), 404
+    events = legal_ledger.list_audit_events(case_id=case_id, external_user_id=_ledger_actor())
     return jsonify({'audit_events': events, 'count': len(events)}), 200
 
 # Static routes
@@ -2810,7 +2827,12 @@ def match_case_lawyers():
     if 'case_id' not in data:
         return jsonify({'error': 'Case ID is required'}), 400
 
-    case_id = int(data['case_id'])
+    try:
+        case_id = int(data['case_id'])
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Case ID must be a number'}), 400
+    if not _ledger_case_access_allowed(case_id):
+        return jsonify({'error': 'Case not found'}), 404
     ledger_case, legacy_case = _case_for_legacy_endpoint(case_id)
     if not legacy_case:
         return jsonify({'error': 'Case not found'}), 404
@@ -2934,7 +2956,12 @@ def match_case_outreach_targets():
     if 'case_id' not in data:
         return jsonify({'error': 'Case ID is required'}), 400
 
-    case_id = int(data['case_id'])
+    try:
+        case_id = int(data['case_id'])
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Case ID must be a number'}), 400
+    if not _ledger_case_access_allowed(case_id):
+        return jsonify({'error': 'Case not found'}), 404
     ledger_case, legacy_case = _case_for_legacy_endpoint(case_id)
     if not legacy_case:
         return jsonify({'error': 'Case not found'}), 404
@@ -3029,7 +3056,12 @@ def start_outreach():
     if 'case_id' not in data or 'legal_field' not in data:
         return jsonify({'error': 'Case ID and legal field are required'}), 400
 
-    case_id = int(data['case_id'])
+    try:
+        case_id = int(data['case_id'])
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Case ID must be a number'}), 400
+    if not _ledger_case_access_allowed(case_id):
+        return jsonify({'error': 'Case not found'}), 404
     legal_field = data['legal_field']
     user_id = session.get('user_id', 0)
     ledger_case, legacy_case = _case_for_legacy_endpoint(case_id)

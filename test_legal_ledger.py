@@ -2266,6 +2266,46 @@ class TestLegalLedgerApi(unittest.TestCase):
         evidence = self.client.get(f"/api/cases/{case_id}/evidence", headers=self.headers).get_json()["evidence_links"]
         self.assertTrue(any(link["target_type"] == "event" and link["target_id"] == event["id"] for link in evidence))
 
+    def test_case_endpoints_do_not_expose_another_authenticated_users_ledger(self):
+        created = self.client.post("/api/cases", json={"title": "Private legal matter"}, headers=self.headers)
+        case_id = created.get_json()["case_id"]
+        self.client.post(f"/api/cases/{case_id}/documents", json={
+            "title": "Private source",
+            "extracted_text": "Private legal evidence.",
+        }, headers=self.headers)
+        outreach = self.client.post(f"/api/cases/{case_id}/outreach", json={
+            "lawyer_name": "Private Lawyer",
+            "lawyer_email": "private@example-law.test",
+            "subject": "Private case inquiry",
+            "draft_body": "Private legal correspondence draft.",
+        }, headers=self.headers)
+        approval_id = outreach.get_json()["approval_id"]
+
+        other_token = self.app_module.auth_system._create_session("other-user@laro.test", "user")
+        other_headers = {"Authorization": f"Bearer {other_token}"}
+
+        listed = self.client.get("/api/cases", headers=other_headers)
+        self.assertEqual(listed.status_code, 200)
+        self.assertEqual(listed.get_json()["cases"], [])
+        self.assertEqual(self.client.get(f"/api/cases/{case_id}", headers=other_headers).status_code, 404)
+        self.assertEqual(self.client.get(f"/api/cases/{case_id}/documents", headers=other_headers).status_code, 404)
+        self.assertEqual(self.client.get(f"/api/cases/{case_id}/timeline", headers=other_headers).status_code, 404)
+        self.assertEqual(self.client.post(f"/api/cases/{case_id}/documents", json={"title": "Intrusion"}, headers=other_headers).status_code, 404)
+        self.assertEqual(self.client.get("/api/approvals", headers=other_headers).get_json()["approvals"], [])
+        self.assertEqual(self.client.get(f"/api/approvals?case_id={case_id}", headers=other_headers).status_code, 404)
+        self.assertEqual(self.client.patch(f"/api/approvals/{approval_id}", json={"status": "approved"}, headers=other_headers).status_code, 404)
+        self.assertEqual(self.client.get("/api/audit", headers=other_headers).get_json()["audit_events"], [])
+        self.assertEqual(self.client.get(f"/api/audit?case_id={case_id}", headers=other_headers).status_code, 404)
+        self.assertEqual(self.client.post("/api/outreach/targets/match", json={
+            "case_id": case_id,
+            "target_type": "media",
+        }, headers=other_headers).status_code, 404)
+        self.assertEqual(self.client.post("/api/outreach/start", json={
+            "case_id": case_id,
+            "legal_field": "ADMINISTRATIVE_LAW",
+        }, headers=other_headers).status_code, 404)
+        self.assertEqual(self.client.get(f"/api/cases/{case_id}", headers=self.headers).status_code, 200)
+
     def test_case_wide_review_item_requires_explicit_conversion_and_preserves_citations(self):
         created = self.client.post("/api/cases", json={
             "title": "Cited analysis conversion",

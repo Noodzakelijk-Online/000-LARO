@@ -12,7 +12,7 @@ It organizes and prepares legal material. It is not a lawyer, does not provide d
 - Review workbench: confirm or reject suggested events, claims, evidence links, contradictions, deadlines, and open loops.
 - Approval-gated outreach: create lawyer/media/organization matches and drafts, but do not send external messages.
 
-Core case data is stored in a local SQLite ledger under `instance/laro_ledger.sqlite3`. Runtime databases, uploads, OAuth tokens, and local secrets are ignored by Git.
+Core case data is stored in a local SQLite ledger under `instance/laro_ledger.sqlite3`. Authenticated case, approval, audit, and matching routes are scoped to the owning local user. Runtime databases, uploads, OAuth tokens, and local secrets are ignored by Git.
 
 ## Windows Quick Start
 

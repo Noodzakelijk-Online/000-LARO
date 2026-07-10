@@ -1367,6 +1367,16 @@ class LegalLedger:
             case = session.get(LegalCase, case_id)
             return self._case_detail(session, case) if case else None
 
+    def user_owns_case(self, case_id: int, external_user_id: Any) -> bool:
+        """Return ownership without serializing a case or exposing its existence."""
+        if case_id is None or external_user_id in (None, ""):
+            return False
+        with self.session_scope() as session:
+            user = session.query(LedgerUser).filter_by(external_user_id=str(external_user_id)).one_or_none()
+            if not user:
+                return False
+            return session.query(LegalCase.id).filter_by(id=int(case_id), user_id=user.id).first() is not None
+
     def update_case(self, case_id: int, data: Dict[str, Any], actor: str = "system") -> Optional[Dict[str, Any]]:
         mutable = {
             "title",
@@ -2560,14 +2570,38 @@ class LegalLedger:
             self._audit(session, None, "OutreachDirectoryTarget", item.id, item.status, actor, before, after, "medium")
             return after
 
-    def list_approvals(self, case_id: Optional[int] = None, status: Optional[str] = None) -> List[Dict[str, Any]]:
+    def list_approvals(
+        self,
+        case_id: Optional[int] = None,
+        status: Optional[str] = None,
+        external_user_id: Optional[Any] = None,
+    ) -> List[Dict[str, Any]]:
         with self.session_scope() as session:
             query = session.query(Approval).order_by(Approval.created_at.desc())
+            if external_user_id is not None:
+                user = session.query(LedgerUser).filter_by(external_user_id=str(external_user_id)).one_or_none()
+                if not user:
+                    return []
+                query = query.join(LegalCase, Approval.case_id == LegalCase.id).filter(LegalCase.user_id == user.id)
             if case_id is not None:
-                query = query.filter_by(case_id=case_id)
+                query = query.filter(Approval.case_id == case_id)
             if status:
-                query = query.filter_by(status=status)
+                query = query.filter(Approval.status == status)
             return [self._serialize_approval(item) for item in query.all()]
+
+    def user_owns_approval(self, approval_id: int, external_user_id: Any) -> bool:
+        """Check a case-linked approval without serializing its sensitive content."""
+        if approval_id is None or external_user_id in (None, ""):
+            return False
+        with self.session_scope() as session:
+            user = session.query(LedgerUser).filter_by(external_user_id=str(external_user_id)).one_or_none()
+            if not user:
+                return False
+            return session.query(Approval.id).join(
+                LegalCase, Approval.case_id == LegalCase.id
+            ).filter(
+                Approval.id == int(approval_id), LegalCase.user_id == user.id
+            ).first() is not None
 
     def request_case_bundle_share_approval(self, case_id: int, actor: str = "system", reason: str = "") -> Optional[Dict[str, Any]]:
         with self.session_scope() as session:
@@ -2626,11 +2660,20 @@ class LegalLedger:
                     self._audit(session, approval.case_id, "Draft", draft.id, f"approval_{status}", actor, draft_before, self._serialize_draft(draft), approval.risk_level, approval.id)
             return self._serialize_approval(approval)
 
-    def list_audit_events(self, case_id: Optional[int] = None) -> List[Dict[str, Any]]:
+    def list_audit_events(
+        self,
+        case_id: Optional[int] = None,
+        external_user_id: Optional[Any] = None,
+    ) -> List[Dict[str, Any]]:
         with self.session_scope() as session:
             query = session.query(AuditEvent).order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc())
+            if external_user_id is not None:
+                user = session.query(LedgerUser).filter_by(external_user_id=str(external_user_id)).one_or_none()
+                if not user:
+                    return []
+                query = query.join(LegalCase, AuditEvent.case_id == LegalCase.id).filter(LegalCase.user_id == user.id)
             if case_id is not None:
-                query = query.filter_by(case_id=case_id)
+                query = query.filter(AuditEvent.case_id == case_id)
             return [self._serialize_audit(item) for item in query.limit(250).all()]
 
     def record_case_activity(
