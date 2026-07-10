@@ -1582,6 +1582,86 @@ def get_ledger_document(case_id, document_id):
     }), 200
 
 
+@app.route('/api/cases/<int:case_id>/documents/<int:document_id>/versions', methods=['GET'])
+@auth_system._require_auth
+def list_ledger_document_versions(case_id, document_id):
+    versions = legal_ledger.list_document_versions(case_id, document_id)
+    if versions is None:
+        return jsonify({'error': 'Document not found'}), 404
+    return jsonify({'case_id': case_id, 'document_id': document_id, 'versions': versions}), 200
+
+
+@app.route('/api/cases/<int:case_id>/documents/<int:document_id>/recover-text', methods=['POST'])
+@auth_system._require_auth
+def recover_ledger_document_text(case_id, document_id):
+    """Analyze recovered text while preserving the original source and extraction history."""
+    ledger_case = legal_ledger.get_case(case_id)
+    document = legal_ledger.get_document(case_id, document_id)
+    if not ledger_case or not document:
+        return jsonify({'error': 'Document not found'}), 404
+    data = request.json or {}
+    recovered_text = str(data.get('extracted_text') or data.get('ocr_text') or data.get('content') or '').strip()
+    extraction_method = str(data.get('extraction_method') or '').strip()
+    if not recovered_text:
+        local_path = document.get('local_path') or ''
+        if local_path and _safe_served_upload_path(local_path):
+            recovered_text = document_intelligence.extract_text_from_file(local_path)
+            extraction_method = extraction_method or 'local_file_reextract'
+    if not recovered_text:
+        return jsonify({
+            'error': 'No readable text is available from this source. Paste recovered text or upload a text-readable copy.',
+            'source_preserved': True,
+        }), 409
+
+    analysis = document_intelligence.analyze_text(
+        recovered_text,
+        document_name=document.get('title') or document.get('original_filename') or 'Recovered evidence text',
+        metadata={
+            **(document.get('metadata') or {}),
+            'source_type': document.get('source_type'),
+            'original_filename': document.get('original_filename'),
+            'document_type': document.get('document_type'),
+            'sender': document.get('sender'),
+            'recipient': document.get('recipient'),
+        },
+        case_context=ledger_case,
+    )
+    was_readable = bool(str(document.get('extracted_text') or document.get('ocr_text') or '').strip())
+    recovered = legal_ledger.update_document_extraction(case_id, document_id, {
+        'extracted_text': recovered_text,
+        'ocr_text': data.get('ocr_text') or '',
+        'summary': analysis.get('summary') or document.get('summary') or '',
+        'relevance_score': (analysis.get('evidence') or {}).get('relevance_score', document.get('relevance_score') or 0),
+        'extraction_method': extraction_method or 'manual_text_recovery',
+        'metadata': {
+            **(document.get('metadata') or {}),
+            'legal_analysis': analysis,
+        },
+    }, actor=_ledger_actor())
+    if not recovered:
+        return jsonify({'error': 'Document not found'}), 404
+    artifacts = _analysis_artifacts_for_document(
+        case_id,
+        recovered,
+        analysis,
+        _ledger_actor(),
+        {
+            **data,
+            'create_timeline_suggestions': not was_readable or _enabled_flag(data, 'force_rebuild_artifacts', False),
+            'create_review_items': not was_readable or _enabled_flag(data, 'force_rebuild_artifacts', False),
+            'create_claim_suggestions': not was_readable or _enabled_flag(data, 'force_rebuild_artifacts', False),
+            'create_gap_suggestions': not was_readable or _enabled_flag(data, 'force_rebuild_artifacts', False),
+        },
+    )
+    return jsonify({
+        'document': recovered,
+        'analysis': analysis,
+        'source_preserved': True,
+        'created_artifacts': not was_readable or _enabled_flag(data, 'force_rebuild_artifacts', False),
+        **artifacts,
+    }), 200
+
+
 @app.route('/api/cases/<int:case_id>/documents/<int:document_id>/file', methods=['GET'])
 @auth_system._require_auth
 def open_ledger_document_file(case_id, document_id):

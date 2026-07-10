@@ -1955,6 +1955,54 @@ class TestLegalLedgerApi(unittest.TestCase):
         self.assertTrue(any(item["entity_type"] == "MissingEvidenceWarning" and item["action"] == "dismissed" for item in audit_events))
         self.assertTrue(any(item["entity_type"] == "MissingEvidenceWarning" and item["action"] == "resolved" for item in audit_events))
 
+    def test_recovered_document_text_is_versioned_and_enters_case_analysis(self):
+        created = self.client.post("/api/cases", json={
+            "title": "Scanned decision recovery",
+            "description": "A scanned decision needs text recovery before it can be reviewed.",
+            "legal_domain": "administrative_law",
+        }, headers=self.headers)
+        self.assertEqual(created.status_code, 201)
+        case_id = created.get_json()["case_id"]
+
+        source = self.client.post(f"/api/cases/{case_id}/documents", json={
+            "source_type": "manual_upload",
+            "source_uri": "local://case/scanned-decision.pdf",
+            "original_filename": "scanned-decision.pdf",
+            "document_type": "pdf",
+            "title": "Scanned CAK decision",
+        }, headers=self.headers)
+        self.assertEqual(source.status_code, 201)
+        document_id = source.get_json()["document_id"]
+
+        missing_before = self.client.get(f"/api/cases/{case_id}/missing-evidence", headers=self.headers)
+        self.assertTrue(any(
+            item["warning_type"] == "document_text_unavailable" and item["document_id"] == document_id
+            for item in missing_before.get_json()["missing_evidence"]
+        ))
+
+        recovered = self.client.post(f"/api/cases/{case_id}/documents/{document_id}/recover-text", json={
+            "ocr_text": "CAK besluit van 2026-07-01. Dien bezwaar in voor 2026-07-15."
+        }, headers=self.headers)
+        self.assertEqual(recovered.status_code, 200)
+        recovered_payload = recovered.get_json()
+        self.assertTrue(recovered_payload["source_preserved"])
+        self.assertTrue(recovered_payload["analysis"]["readable"])
+        self.assertTrue(recovered_payload["created_artifacts"])
+        self.assertIn("CAK besluit", recovered_payload["document"]["extracted_text"])
+
+        versions = self.client.get(f"/api/cases/{case_id}/documents/{document_id}/versions", headers=self.headers)
+        self.assertEqual(versions.status_code, 200)
+        self.assertEqual(len(versions.get_json()["versions"]), 2)
+        self.assertEqual(versions.get_json()["versions"][0]["extraction_method"], "manual_text_recovery")
+
+        missing_after = self.client.get(f"/api/cases/{case_id}/missing-evidence", headers=self.headers)
+        warning = next(item for item in missing_after.get_json()["missing_evidence"] if item["document_id"] == document_id)
+        self.assertEqual(warning["status"], "resolved")
+        audit = self.client.get(f"/api/audit?case_id={case_id}", headers=self.headers)
+        recovery_audit = next(item for item in audit.get_json()["audit_events"] if item["action"] == "extraction_recovered")
+        self.assertTrue(recovery_audit["after_state"]["extracted_text_hash"])
+        self.assertNotIn("CAK besluit", str(recovery_audit["after_state"]))
+
     def test_document_file_route_blocks_paths_outside_upload_store(self):
         created = self.client.post("/api/cases", json={
             "title": "Unsafe document path case",

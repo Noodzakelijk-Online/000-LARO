@@ -1422,6 +1422,64 @@ class LegalLedger:
                 return None
             return self._serialize_document(document)
 
+    def list_document_versions(self, case_id: int, document_id: int) -> Optional[List[Dict[str, Any]]]:
+        with self.session_scope() as session:
+            document = session.query(CaseDocument).filter_by(case_id=case_id, id=document_id).one_or_none()
+            if not document:
+                return None
+            return [
+                self._serialize_document_version(item)
+                for item in session.query(DocumentVersion)
+                .filter_by(document_id=document.id)
+                .order_by(DocumentVersion.id.desc())
+                .all()
+            ]
+
+    def update_document_extraction(
+        self,
+        case_id: int,
+        document_id: int,
+        data: Dict[str, Any],
+        actor: str = "system",
+    ) -> Optional[Dict[str, Any]]:
+        """Append a derived extraction without changing the original source record."""
+        text = str(data.get("extracted_text") or data.get("ocr_text") or data.get("content") or "").strip()
+        if not text:
+            raise ValueError("Recovered document text is required before LARO can analyze this source")
+        extraction_method = str(data.get("extraction_method") or "manual_text_recovery").strip()[:120] or "manual_text_recovery"
+        with self.session_scope() as session:
+            document = session.query(CaseDocument).filter_by(case_id=case_id, id=document_id).one_or_none()
+            if not document:
+                return None
+            before = self._document_extraction_audit_state(document)
+            metadata = _json_load(document.metadata_json, {})
+            metadata.update(data.get("metadata") or {})
+            metadata["extraction_recovery"] = {
+                "method": extraction_method,
+                "actor": actor,
+                "source_preserved": True,
+                "recovered_at": _iso(utcnow()),
+            }
+            document.extracted_text = text
+            if data.get("ocr_text"):
+                document.ocr_text = str(data["ocr_text"])
+            document.summary = data.get("summary") or document.summary
+            if data.get("relevance_score") is not None:
+                document.relevance_score = float(data.get("relevance_score") or 0.0)
+            document.metadata_json = _json_dump(metadata)
+            document.updated_at = utcnow()
+            version_number = session.query(DocumentVersion).filter_by(document_id=document.id).count() + 1
+            self._add_document_version(
+                session,
+                document,
+                text,
+                extraction_method,
+                version_label=f"extraction_{version_number}",
+            )
+            after = self._document_extraction_audit_state(document, version_number=version_number, extraction_method=extraction_method)
+            self._audit(session, case_id, "CaseDocument", document.id, "extraction_recovered", actor, before, after, "medium")
+            return self._serialize_document(document)
+
     def add_event(self, case_id: int, data: Dict[str, Any], actor: str = "system") -> Optional[Dict[str, Any]]:
         with self.session_scope() as session:
             if not session.get(LegalCase, case_id):
@@ -3200,10 +3258,17 @@ class LegalLedger:
         identifier.updated_at = utcnow()
         return identifier
 
-    def _add_document_version(self, session, document: CaseDocument, text: str, extraction_method: str) -> None:
+    def _add_document_version(
+        self,
+        session,
+        document: CaseDocument,
+        text: str,
+        extraction_method: str,
+        version_label: str = "initial",
+    ) -> None:
         session.add(DocumentVersion(
             document_id=document.id,
-            version_label="initial",
+            version_label=version_label,
             extraction_method=extraction_method,
             text_hash=self._hash(text),
             extracted_text=text,
@@ -3241,7 +3306,8 @@ class LegalLedger:
         return link
 
     def _ensure_missing_evidence_reviews(self, session, case_id: int) -> None:
-        documents_count = session.query(CaseDocument).filter_by(case_id=case_id).count()
+        documents = session.query(CaseDocument).filter_by(case_id=case_id).all()
+        documents_count = len(documents)
         case_warning = session.query(MissingEvidenceWarning).filter_by(
             case_id=case_id,
             warning_type="case_without_documents",
@@ -3263,6 +3329,33 @@ class LegalLedger:
             case_warning.status = "resolved"
             case_warning.updated_at = utcnow()
             self._audit(session, case_id, "MissingEvidenceWarning", case_warning.id, "resolved", "system", before, self._serialize_missing_evidence(case_warning), "low")
+
+        for document in documents:
+            readable = bool(str(document.extracted_text or document.ocr_text or "").strip())
+            warning = session.query(MissingEvidenceWarning).filter_by(
+                case_id=case_id,
+                document_id=document.id,
+                warning_type="document_text_unavailable",
+            ).order_by(MissingEvidenceWarning.id.desc()).first()
+            if not readable and not warning:
+                title = document.title or document.original_filename or f"Document {document.id}"
+                item = MissingEvidenceWarning(
+                    case_id=case_id,
+                    document_id=document.id,
+                    warning_type="document_text_unavailable",
+                    title="Document text needs recovery",
+                    description=f"{title} is linked to this case, but LARO could not extract readable text from the source.",
+                    suggested_action="Open the original source, then paste recovered text or upload a text-readable copy. LARO will preserve the original source and store the recovered extraction as a new version.",
+                    severity="high",
+                )
+                session.add(item)
+                session.flush()
+                self._audit(session, case_id, "MissingEvidenceWarning", item.id, "created", "system", {}, self._serialize_missing_evidence(item), "medium")
+            elif readable and warning and warning.status != "resolved":
+                before = self._serialize_missing_evidence(warning)
+                warning.status = "resolved"
+                warning.updated_at = utcnow()
+                self._audit(session, case_id, "MissingEvidenceWarning", warning.id, "resolved", "system", before, self._serialize_missing_evidence(warning), "low")
 
         claims = session.query(LegalClaim).filter_by(case_id=case_id).all()
         for claim in claims:
@@ -3510,6 +3603,7 @@ class LegalLedger:
             "sender": document.sender,
             "recipient": document.recipient,
             "title": document.title,
+            "ocr_text": document.ocr_text,
             "extracted_text": document.extracted_text,
             "summary": document.summary,
             "relevance_score": document.relevance_score,
@@ -3517,6 +3611,42 @@ class LegalLedger:
             "metadata": _json_load(document.metadata_json, {}),
             "created_at": _iso(document.created_at),
             "updated_at": _iso(document.updated_at),
+        }
+
+    def _document_extraction_audit_state(
+        self,
+        document: CaseDocument,
+        *,
+        version_number: Optional[int] = None,
+        extraction_method: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Keep audit provenance useful without copying sensitive recovered text into the audit trail."""
+        text = str(document.extracted_text or document.ocr_text or "")
+        state = {
+            "document_id": document.id,
+            "source_uri": document.source_uri,
+            "content_hash": document.content_hash,
+            "has_extracted_text": bool(text.strip()),
+            "extracted_word_count": len(text.split()),
+            "extracted_text_hash": self._hash(text) if text else "",
+        }
+        if version_number is not None:
+            state["extraction_version"] = version_number
+        if extraction_method:
+            state["extraction_method"] = extraction_method
+        return state
+
+    @staticmethod
+    def _serialize_document_version(item: DocumentVersion) -> Dict[str, Any]:
+        return {
+            "id": item.id,
+            "document_id": item.document_id,
+            "version_label": item.version_label,
+            "extraction_method": item.extraction_method,
+            "text_hash": item.text_hash,
+            "extracted_text": item.extracted_text,
+            "metadata": _json_load(item.metadata_json, {}),
+            "created_at": _iso(item.created_at),
         }
 
     def _serialize_event(self, event: CaseEvent) -> Dict[str, Any]:

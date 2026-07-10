@@ -4318,6 +4318,10 @@
             return doc.title || doc.original_filename || (doc.document_id || doc.id ? `Document ${doc.document_id || doc.id}` : fallback);
         }
 
+        function documentHasReadableText(doc = {}) {
+            return Boolean(String(doc.extracted_text || doc.ocr_text || "").trim());
+        }
+
         function evidenceLinksFor(targetType, targetId) {
             return (detailState.evidenceLinks || []).filter((link) => (
                 link.target_type === targetType && String(link.target_id) === String(targetId)
@@ -6318,6 +6322,7 @@
 
         function renderDocuments() {
             const documents = detailState.documents || [];
+            const unreadableDocuments = documents.filter((doc) => !documentHasReadableText(doc));
             const reading = detailState.comprehension?.reading_status || {};
             const sourceLinks = reading.source_links ?? (detailState.evidenceLinks?.length || 0);
             const timelineCount = reading.timeline_events ?? timelineEvents().length;
@@ -6414,23 +6419,36 @@
                     <div class="document-toolbar">
                         <div>
                             <h3 class="panel-title">Evidence Register</h3>
-                            <p class="muted">${escapeHtml(documents.length)} persisted source${documents.length === 1 ? "" : "s"} in this case.</p>
+                            <p class="muted">${escapeHtml(documents.length)} persisted source${documents.length === 1 ? "" : "s"} in this case${unreadableDocuments.length ? `; ${unreadableDocuments.length} need text recovery` : ""}.</p>
                         </div>
                         <button class="btn-secondary-ledger" type="button" data-jump-tab="papertrail">Open papertrail</button>
                     </div>
-                    ${recordRows(documents, "No documents linked yet.", (doc) => `
+                    ${recordRows(documents, "No documents linked yet.", (doc) => {
+                        const readable = documentHasReadableText(doc);
+                        const recovery = doc.metadata?.extraction_recovery;
+                        return `
                         <article class="record-row document-row" data-document-id="${escapeHtml(doc.document_id || doc.id)}">
                             <span class="record-kicker">${escapeHtml(doc.document_type || doc.source_type || "document")}</span>
                             <div>
                                 <div class="record-heading">
                                     <strong>${escapeHtml(doc.title || doc.original_filename)}</strong>
+                                    ${readable ? "" : '<span class="tag orange">text needed</span>'}
                                     ${sourceDocumentButton(doc.document_id || doc.id)}
                                 </div>
-                                <p>${escapeHtml(doc.summary || "No summary")}</p>
-                                ${doc.extracted_text ? `<p class="muted">${escapeHtml(contextPreview(doc.extracted_text, 220))}</p>` : ""}
+                                <p>${escapeHtml(doc.summary || (readable ? "No summary" : "No readable text was extracted from this source yet."))}</p>
+                                ${readable ? `<p class="muted">${escapeHtml(contextPreview(doc.extracted_text || doc.ocr_text, 220))}</p>` : `
+                                    <details class="source-import-advanced">
+                                        <summary>Recover source text</summary>
+                                        <label class="input-field"><span>Recovered text</span><textarea class="control" data-recovery-text placeholder="Paste text from OCR or the original source. LARO will keep the source file unchanged and create a new extraction version."></textarea></label>
+                                        <div class="button-row"><button class="btn-ledger" type="button" data-recover-document-id="${escapeHtml(doc.document_id || doc.id)}">Analyze recovered text</button></div>
+                                        <p class="muted" data-recovery-status>Recovered text remains derived material until review; the original source stays linked.</p>
+                                    </details>
+                                `}
+                                ${recovery ? `<p class="muted">Recovered locally via ${escapeHtml(recovery.method || "text recovery")}; original source preserved.</p>` : ""}
                             </div>
                         </article>
-                    `)}
+                    `;
+                    })}
                 </section>
             `;
         }
@@ -7492,6 +7510,38 @@
                 if (result) result.textContent = error.message;
                 showToast(error.message);
             }));
+            document.querySelectorAll("[data-recover-document-id]").forEach((button) => {
+                button.addEventListener("click", async () => {
+                    const row = button.closest(".document-row");
+                    const text = row?.querySelector("[data-recovery-text]")?.value.trim() || "";
+                    const status = row?.querySelector("[data-recovery-status]");
+                    const documentId = button.dataset.recoverDocumentId;
+                    if (!selectedCaseId || !documentId || !text) {
+                        showToast("Paste recovered source text before asking LARO to analyze it.");
+                        return;
+                    }
+                    const progress = startAnalysisProgress(status, { label: "Analyzing recovered source text", text });
+                    button.disabled = true;
+                    try {
+                        const response = await apiFetch(`/api/cases/${selectedCaseId}/documents/${documentId}/recover-text`, {
+                            method: "POST",
+                            body: JSON.stringify({ ocr_text: text, extraction_method: "manual_text_recovery" })
+                        });
+                        const result = analysisResultParts(response);
+                        progress.complete(`Text recovery stored as a new extraction version; ${result.parts.join(", ")} queued for review.`);
+                        showToast("Recovered text analyzed. The original source remains unchanged.");
+                        await refreshActiveLedger({ silent: true });
+                        if (result.reviewCount) activateDetailTab("review");
+                        else if (result.timelineCount) activateDetailTab("timeline");
+                        else activateDetailTab("documents");
+                    } catch (error) {
+                        progress.fail(error.message);
+                        showToast(error.message);
+                    } finally {
+                        button.disabled = false;
+                    }
+                });
+            });
             document.getElementById("quickAddDocument")?.addEventListener("click", async () => {
                 const title = document.getElementById("quickDocTitle").value.trim();
                 const text = document.getElementById("quickDocText").value.trim();
