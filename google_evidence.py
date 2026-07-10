@@ -40,7 +40,15 @@ class GoogleEvidenceConnector:
         self._credentials = None
         self._credentials_refreshed = False
 
-    def fetch(self, source: str, query: str, max_items: int = 50) -> Tuple[List[Dict[str, Any]], Optional[Dict[str, Any]]]:
+    def fetch(
+        self,
+        source: str,
+        query: str,
+        max_items: int = 50,
+        *,
+        days_back: Optional[int] = None,
+        sort_order: str = "newest",
+    ) -> Tuple[List[Dict[str, Any]], Optional[Dict[str, Any]]]:
         raw_source = str(source or "").strip().lower()
         normalized_source = {"drive": "google_drive", "gdrive": "google_drive"}.get(raw_source, raw_source)
         if normalized_source not in {"gmail", "google_drive", "all"}:
@@ -48,16 +56,29 @@ class GoogleEvidenceConnector:
         if not str(query or "").strip():
             raise GoogleEvidenceError("A Gmail search or Google Drive query is required")
         limit = max(1, min(int(max_items or 50), 100))
+        normalized_days_back = self._normalize_days_back(days_back)
+        normalized_sort_order = self._normalize_sort_order(sort_order)
         records: List[Dict[str, Any]] = []
         if normalized_source in {"gmail", "all"}:
-            records.extend(self.fetch_gmail(query, limit))
+            records.extend(self.fetch_gmail(query, limit, days_back=normalized_days_back))
         if normalized_source in {"google_drive", "all"}:
-            records.extend(self.fetch_drive(query, limit))
+            records.extend(
+                self.fetch_drive(
+                    query,
+                    limit,
+                    days_back=normalized_days_back,
+                    sort_order=normalized_sort_order,
+                )
+            )
         return records, self.refreshed_token_response()
 
-    def fetch_gmail(self, query: str, max_items: int) -> List[Dict[str, Any]]:
+    def fetch_gmail(self, query: str, max_items: int, *, days_back: Optional[int] = None) -> List[Dict[str, Any]]:
         service = self._gmail()
-        listing = service.users().messages().list(userId="me", q=query, maxResults=max_items).execute() or {}
+        listing = service.users().messages().list(
+            userId="me",
+            q=self._gmail_query(query, days_back),
+            maxResults=max_items,
+        ).execute() or {}
         records = []
         for item in (listing.get("messages") or [])[:max_items]:
             message_id = item.get("id")
@@ -146,14 +167,21 @@ class GoogleEvidenceConnector:
             })
         return records
 
-    def fetch_drive(self, query: str, max_items: int) -> List[Dict[str, Any]]:
+    def fetch_drive(
+        self,
+        query: str,
+        max_items: int,
+        *,
+        days_back: Optional[int] = None,
+        sort_order: str = "newest",
+    ) -> List[Dict[str, Any]]:
         service = self._drive()
-        drive_query = self._drive_query(query)
+        drive_query = self._drive_query(query, days_back=days_back)
         listing = service.files().list(
             q=drive_query,
             pageSize=max_items,
             fields="files(id,name,mimeType,description,createdTime,modifiedTime,webViewLink,owners(displayName,emailAddress),size,md5Checksum)",
-            orderBy="modifiedTime desc",
+            orderBy="modifiedTime asc" if self._normalize_sort_order(sort_order) == "oldest" else "modifiedTime desc",
         ).execute() or {}
         records = []
         for item in (listing.get("files") or [])[:max_items]:
@@ -372,11 +400,42 @@ class GoogleEvidenceConnector:
         return None
 
     @staticmethod
-    def _drive_query(query: str) -> str:
+    def _normalize_days_back(value: Any) -> Optional[int]:
+        if value in {None, ""}:
+            return None
+        try:
+            return max(1, min(3650, int(value)))
+        except (TypeError, ValueError) as exc:
+            raise GoogleEvidenceError("days_back must be a number between 1 and 3650") from exc
+
+    @staticmethod
+    def _normalize_sort_order(value: Any) -> str:
+        normalized = str(value or "newest").strip().lower()
+        if normalized not in {"newest", "oldest"}:
+            raise GoogleEvidenceError("sort_order must be newest or oldest")
+        return normalized
+
+    @classmethod
+    def _gmail_query(cls, query: str, days_back: Optional[int]) -> str:
+        if not days_back:
+            return query
+        normalized = str(query or "").strip()
+        lowered = normalized.lower()
+        if any(operator in lowered for operator in ("after:", "before:", "newer_than:", "older_than:")):
+            return normalized
+        return f"({normalized}) newer_than:{days_back}d"
+
+    @classmethod
+    def _drive_query(cls, query: str, days_back: Optional[int] = None) -> str:
         query = str(query or "").strip()
         if not query:
             raise GoogleEvidenceError("A Google Drive query is required")
         if any(operator in query.lower() for operator in (" contains ", " = ", " in ", " and ", " or ")):
-            return f"({query}) and trashed = false"
-        escaped = query.replace("'", "\\'")
-        return f"fullText contains '{escaped}' and trashed = false"
+            result = f"({query}) and trashed = false"
+        else:
+            escaped = query.replace("'", "\\'")
+            result = f"fullText contains '{escaped}' and trashed = false"
+        if days_back:
+            cutoff = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=days_back)).replace(microsecond=0)
+            result = f"{result} and modifiedTime >= '{cutoff.isoformat().replace('+00:00', 'Z')}'"
+        return result

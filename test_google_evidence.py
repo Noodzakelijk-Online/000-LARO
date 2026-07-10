@@ -20,6 +20,7 @@ class _GmailMessages:
         self.attachments_api = _GmailAttachments(attachments or {})
 
     def list(self, **kwargs):
+        self.last_list_kwargs = kwargs
         return _Request({"messages": [{"id": "message-1"}]})
 
     def get(self, **kwargs):
@@ -53,7 +54,11 @@ class _GmailService:
 
 
 class _DriveFiles:
+    def __init__(self):
+        self.last_list_kwargs = None
+
     def list(self, **kwargs):
+        self.last_list_kwargs = kwargs
         return _Request({
             "files": [{
                 "id": "drive-1",
@@ -174,6 +179,31 @@ class GoogleEvidenceTests(unittest.TestCase):
         self.assertIn("payment proof by 2026-07-15", attachment["content"])
         self.assertIn("attachment=attachment-1", attachment["source_uri"])
         self.assertEqual(attachment["metadata"]["gmail_message_id"], "message-1")
+
+    def test_connector_applies_real_date_window_and_order_to_google_queries(self):
+        gmail = _GmailService({
+            "message-1": {
+                "id": "message-1",
+                "payload": {"mimeType": "text/plain", "headers": [], "body": {"data": ""}},
+            }
+        })
+        drive = _DriveService()
+        connector = GoogleEvidenceConnector(
+            {"access_token": "test-token"},
+            client_id="client-id",
+            client_secret="client-secret",
+            scopes=[],
+            gmail_service=gmail,
+            drive_service=drive,
+        )
+
+        connector.fetch("gmail", "label:LARO-CAK", 5, days_back=14, sort_order="oldest")
+        connector.fetch("google_drive", "CAK", 5, days_back=14, sort_order="oldest")
+
+        self.assertIn("newer_than:14d", gmail.users().messages().last_list_kwargs["q"])
+        self.assertEqual(drive.files().last_list_kwargs["orderBy"], "modifiedTime asc")
+        self.assertIn("fullText contains 'CAK'", drive.files().last_list_kwargs["q"])
+        self.assertIn("modifiedTime >=", drive.files().last_list_kwargs["q"])
 
 
 if __name__ == "__main__":

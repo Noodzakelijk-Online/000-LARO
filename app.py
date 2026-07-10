@@ -1072,6 +1072,8 @@ def _run_google_pull_job(job_id, case_id, job_data, actor):
     source = str(job_data.get('source') or 'gmail').strip().lower()
     query = str(job_data.get('query') or '').strip()
     max_items = int(job_data.get('max_items') or 50)
+    days_back = job_data.get('days_back')
+    sort_order = str(job_data.get('sort_order') or 'newest').strip().lower()
     import_data = {
         'confidentiality_level': job_data.get('confidentiality_level') or 'normal',
         'source': source,
@@ -1106,7 +1108,13 @@ def _run_google_pull_job(job_id, case_id, job_data, actor):
             client_secret=config['client_secret'],
             scopes=GOOGLE_SCOPES,
         )
-        records, refreshed_token = connector.fetch(source, query, max_items)
+        records, refreshed_token = connector.fetch(
+            source,
+            query,
+            max_items,
+            days_back=days_back,
+            sort_order=sort_order,
+        )
         if refreshed_token:
             google_token_store.save(actor, 'google', refreshed_token)
 
@@ -1176,6 +1184,8 @@ def _run_google_pull_job(job_id, case_id, job_data, actor):
             details={
                 'source': source,
                 'query': query,
+                'days_back': days_back,
+                'sort_order': sort_order,
                 'fetched_count': len(records),
                 'imported_count': result['imported_count'],
                 'skipped_count': result['skipped_count'],
@@ -1498,6 +1508,17 @@ def start_google_case_document_pull_job(case_id):
         max_items = min(100, max(1, int(data.get('max_items') or 50)))
     except (TypeError, ValueError):
         return jsonify({'error': 'max_items must be a number between 1 and 100'}), 400
+    raw_days_back = data.get('days_back')
+    if raw_days_back in {None, ''}:
+        days_back = None
+    else:
+        try:
+            days_back = min(3650, max(1, int(raw_days_back)))
+        except (TypeError, ValueError):
+            return jsonify({'error': 'days_back must be a number between 1 and 3650'}), 400
+    sort_order = str(data.get('sort_order') or 'newest').strip().lower()
+    if sort_order not in {'newest', 'oldest'}:
+        return jsonify({'error': 'sort_order must be newest or oldest'}), 400
 
     actor = _ledger_actor()
     try:
@@ -1514,6 +1535,8 @@ def start_google_case_document_pull_job(case_id):
         'source': source,
         'query': query,
         'max_items': max_items,
+        'days_back': days_back,
+        'sort_order': sort_order,
         'confidentiality_level': data.get('confidentiality_level') or 'normal',
     }
     job = legal_ledger.create_evidence_import_job(case_id, job_data, actor=actor)

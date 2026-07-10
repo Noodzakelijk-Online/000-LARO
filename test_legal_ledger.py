@@ -1799,7 +1799,13 @@ class TestLegalLedgerApi(unittest.TestCase):
              }):
             started = self.client.post(
                 f"/api/cases/{case_id}/documents/pull-google/jobs",
-                json={"source": "gmail", "query": "label:LARO-CAK", "max_items": 5},
+                json={
+                    "source": "gmail",
+                    "query": "label:LARO-CAK",
+                    "max_items": 5,
+                    "days_back": 45,
+                    "sort_order": "oldest",
+                },
                 headers=self.headers,
             )
 
@@ -1819,6 +1825,13 @@ class TestLegalLedgerApi(unittest.TestCase):
         self.assertEqual(payload["processed_words"], payload["total_words"])
         self.assertEqual(payload["result"]["imported_count"], 2)
         self.assertEqual(payload["result"]["connector"]["mode"], "read_only")
+        connector.fetch.assert_called_once_with(
+            "gmail",
+            "label:LARO-CAK",
+            5,
+            days_back=45,
+            sort_order="oldest",
+        )
         listed = self.client.get(
             f"/api/cases/{case_id}/documents/pull-google/jobs",
             headers=self.headers,
