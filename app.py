@@ -89,19 +89,6 @@ init_serverless_functions()
 # Initialize the local-first persistent legal case ledger
 legal_ledger = init_legal_ledger(app)
 
-# In-memory storage for demo purposes
-# In a production environment, this would be a database
-cases = {}
-documents = {}
-document_analysis = {}
-evidence_timelines = {}
-outreach_campaigns = {}
-lawyer_matches = {}
-outreach_target_matches = {}
-google_connections = {}
-users = {}
-
-
 def _ledger_actor():
     return str(session.get('user_email') or session.get('user_id') or 'anonymous')
 
@@ -134,11 +121,11 @@ def _legacy_case_from_ledger(case):
 
 
 def _case_for_legacy_endpoint(case_id):
-    """Return legacy-shaped case data without requiring transient demo storage."""
+    """Return legacy-shaped case data from the durable legal ledger."""
     ledger_case = legal_ledger.get_case(int(case_id))
     if ledger_case:
         return ledger_case, _legacy_case_from_ledger(ledger_case)
-    return None, cases.get(int(case_id))
+    return None, None
 
 
 def _case_matching_payload(ledger_case, legacy_case, request_data):
@@ -1837,7 +1824,7 @@ def _dashboard_redirect(return_to, status, message=None, popup=False):
 def google_oauth_status():
     """Expose Google OAuth connection state for auto-updating dashboard UI."""
     user_key = str(session.get('user_id', session.get('user_email', 'anonymous')))
-    connection = legal_ledger.get_external_connection(user_key, 'google') or google_connections.get(user_key, {})
+    connection = legal_ledger.get_external_connection(user_key, 'google') or {}
     connected = bool(connection.get('connected') or connection.get('status') == 'connected')
     config = google_oauth_config()
     return jsonify({
@@ -1846,7 +1833,7 @@ def google_oauth_status():
         'connected_at': connection.get('connected_at'),
         'scopes': connection.get('scopes') or GOOGLE_SCOPES,
         'authorize_url': '/api/google/oauth/start',
-        'status_source': 'legal_ledger' if connection and 'token_response' not in connection else 'runtime',
+        'status_source': 'legal_ledger',
         'message': (
             'Google OAuth is connected.'
             if connected
@@ -1897,13 +1884,6 @@ def google_oauth_callback():
         return _dashboard_redirect(return_to, 'oauth_error', f'Token exchange failed: {exc}', popup=popup)
 
     user_key = str(session.get('user_id', session.get('user_email', 'anonymous')))
-    connected_at = datetime.datetime.now(datetime.timezone.utc).isoformat().replace('+00:00', 'Z')
-    google_connections[user_key] = {
-        'connected': True,
-        'connected_at': connected_at,
-        'scopes': GOOGLE_SCOPES,
-        'token_response': token_response,
-    }
     legal_ledger.save_external_connection(
         user_key,
         'google',
@@ -1996,9 +1976,9 @@ def aggregate_documents():
     case_id = data['case_id']
     user_id = session.get('user_id', 0)
     
-    # Check if case exists in either the legacy mirror or the persistent ledger.
+    # Imported material is always attached to a persisted legal case.
     ledger_case = legal_ledger.get_case(case_id)
-    if case_id not in cases and not ledger_case:
+    if not ledger_case:
         return jsonify({'error': 'Case not found'}), 404
     # Create document aggregator
     aggregator = DocumentAggregator(case_id=case_id, user_id=user_id)
@@ -2195,7 +2175,7 @@ def aggregate_documents():
     timeseries_manager.record_case_event(
         case_id=str(case_id),
         event_type='documents_aggregated',
-        category=(ledger_case or {}).get('legal_domain') or _field_id(((cases.get(case_id) or {}).get('matched_fields') or ['UNKNOWN'])[0]),
+        category=ledger_case.get('legal_domain') or 'UNKNOWN',
         user_id=str(user_id),
         details={
             'document_count': len(case_documents),
@@ -2229,33 +2209,9 @@ def aggregate_documents():
 @app.route('/api/documents/<int:case_id>', methods=['GET'])
 @auth_system._require_auth
 def get_documents(case_id):
+    if not legal_ledger.get_case(case_id):
+        return jsonify({'error': 'Case not found'}), 404
     ledger_documents = legal_ledger.list_documents(case_id)
-    if ledger_documents:
-        user_id = session.get('user_id', 0)
-        timeseries_manager.record_user_activity(
-            user_id=str(user_id),
-            activity_type='view',
-            resource='documents',
-            details={
-                'case_id': case_id,
-                'document_count': len(ledger_documents),
-                'storage': 'legal_ledger',
-            }
-        )
-        return jsonify({
-            'case_id': case_id,
-            'documents': ledger_documents
-        }), 200
-
-    if case_id not in documents:
-        return jsonify({'error': 'No documents found for this case'}), 404
-    
-    # Use cached query for document retrieval
-    @db_manager.cached_query(ttl=60)
-    def get_cached_documents(case_id):
-        return documents[case_id]
-    
-    # Record document view event in time-series database
     user_id = session.get('user_id', 0)
     timeseries_manager.record_user_activity(
         user_id=str(user_id),
@@ -2263,58 +2219,42 @@ def get_documents(case_id):
         resource='documents',
         details={
             'case_id': case_id,
-            'document_count': len(documents[case_id])
+            'document_count': len(ledger_documents),
+            'storage': 'legal_ledger',
         }
     )
-    
     return jsonify({
         'case_id': case_id,
-        'documents': get_cached_documents(case_id)
+        'documents': ledger_documents,
+        'storage': 'legal_ledger',
     }), 200
 
 @app.route('/api/documents/<int:case_id>/analysis', methods=['GET'])
 @auth_system._require_auth
 def get_document_analysis(case_id):
+    if not legal_ledger.get_case(case_id):
+        return jsonify({'error': 'Case not found'}), 404
     analyses = _ledger_document_analysis_snapshot(case_id)
-    if analyses:
-        return jsonify({
-            'case_id': case_id,
-            'document_count': len(analyses),
-            'analysis': analyses
-        }), 200
-
-    if case_id not in document_analysis:
-        return jsonify({'error': 'No document analysis found for this case'}), 404
-
-    analyses = document_analysis[case_id]
     return jsonify({
         'case_id': case_id,
         'document_count': len(analyses),
-        'analysis': analyses
+        'analysis': analyses,
+        'storage': 'legal_ledger',
     }), 200
 
 @app.route('/api/documents/<int:case_id>/timeline', methods=['GET'])
 @auth_system._require_auth
 def get_evidence_timeline(case_id):
+    if not legal_ledger.get_case(case_id):
+        return jsonify({'error': 'Case not found'}), 404
     ledger_timeline = legal_ledger.list_timeline(case_id)
-    if ledger_timeline:
-        comprehension = legal_ledger.case_comprehension_dossier(case_id) or {}
-        return jsonify({
-            'case_id': case_id,
-            'event_count': len(ledger_timeline),
-            'timeline': ledger_timeline,
-            'source_linked_timeline': comprehension.get('chronology', []),
-            'storage': 'legal_ledger',
-        }), 200
-
-    if case_id not in evidence_timelines:
-        return jsonify({'error': 'No evidence timeline found for this case'}), 404
-
-    timeline = evidence_timelines[case_id]
+    comprehension = legal_ledger.case_comprehension_dossier(case_id) or {}
     return jsonify({
         'case_id': case_id,
-        'event_count': len(timeline),
-        'timeline': timeline
+        'event_count': len(ledger_timeline),
+        'timeline': ledger_timeline,
+        'source_linked_timeline': comprehension.get('chronology', []),
+        'storage': 'legal_ledger',
     }), 200
 
 @app.route('/api/lawyers/match', methods=['POST'])
@@ -2359,9 +2299,6 @@ def get_case_lawyer_matches(case_id):
     persisted = legal_ledger.get_match_result(case_id, 'lawyers')
     if persisted:
         return jsonify(persisted.get('payload') or {}), 200
-
-    if case_id in lawyer_matches:
-        return jsonify(lawyer_matches[case_id]), 200
 
     return jsonify({'error': 'No lawyer matches found for this case'}), 404
 
@@ -2413,9 +2350,6 @@ def get_case_outreach_target_matches(case_id, target_type):
     if persisted:
         return jsonify(persisted.get('payload') or {}), 200
 
-    if case_id in outreach_target_matches and normalized_type in outreach_target_matches[case_id]:
-        return jsonify(outreach_target_matches[case_id][normalized_type]), 200
-
     return jsonify({'error': f'No {normalized_type} outreach matches found for this case'}), 404
 
 @app.route('/api/outreach/<int:case_id>/analytics', methods=['GET'])
@@ -2425,7 +2359,7 @@ def get_case_outreach_analytics(case_id):
     if not legacy_case:
         return jsonify({'error': 'Case not found'}), 404
 
-    outreach_snapshot = outreach_campaigns.get(case_id) or _ledger_outreach_snapshot(case_id)
+    outreach_snapshot = _ledger_outreach_snapshot(case_id)
     persisted_matches = {
         item['match_type']: item.get('payload') or {}
         for item in legal_ledger.list_match_results(case_id)
@@ -2435,13 +2369,10 @@ def get_case_outreach_analytics(case_id):
         for key, value in persisted_matches.items()
         if key != 'lawyers'
     }
-    for key, value in outreach_target_matches.get(case_id, {}).items():
-        target_match_results.setdefault(key, value)
-
     analytics = build_outreach_analytics(
         case_id=case_id,
         outreach_campaign=outreach_snapshot,
-        lawyer_match_result=persisted_matches.get('lawyers') or lawyer_matches.get(case_id),
+        lawyer_match_result=persisted_matches.get('lawyers'),
         target_match_results=target_match_results
     )
     return jsonify(analytics), 200
@@ -2571,67 +2502,38 @@ def start_outreach():
 def get_outreach_status(case_id):
     ledger_outreach = legal_ledger.list_outreach(case_id)
     ledger_responses = legal_ledger.list_lawyer_responses(case_id)
-    if case_id not in outreach_campaigns:
-        if not ledger_outreach:
-            return jsonify({'error': 'No outreach campaign found for this case'}), 404
-        statuses = [item.get('status') for item in ledger_outreach]
-        response_types = [item.get('response_type') for item in ledger_responses]
-        stats = {
-            'total_outreach': len(ledger_outreach),
-            'waiting_approval': sum(1 for status in statuses if status == 'waiting_approval'),
-            'approved_to_send': sum(1 for status in statuses if status == 'approved_to_send'),
-            'approval_rejected': sum(1 for status in statuses if status == 'approval_rejected'),
-            'sent': sum(1 for status in statuses if status == 'sent'),
-            'responses_received': len(ledger_responses),
-            'interested_lawyers_count': sum(1 for response_type in response_types if response_type == 'interested'),
-            'more_info_requests': sum(1 for response_type in response_types if response_type == 'more_info'),
-            'unavailable_responses': sum(1 for response_type in response_types if response_type in {'unavailable', 'rejected'}),
-            'external_messages_sent': 0,
-            'approval_required': True
-        }
-        return jsonify({
-            'case_id': case_id,
-            'statistics': stats,
-            'responses': ledger_responses,
-            'accepted_cases': [],
-            'outreach_records': ledger_outreach,
-            'approval_required': True,
-            'external_messages_sent': 0
-        }), 200
-
-    outreach_system = outreach_campaigns[case_id]
-
-    responses = outreach_system.check_for_responses()
-    stats = outreach_system.get_outreach_statistics()
-    stats['approval_required'] = True
-    accepted = outreach_system.get_accepted_cases()
-
-    user_id = session.get('user_id', 0)
-    timeseries_manager.record_user_activity(
-        user_id=str(user_id),
-        activity_type='check_outreach',
-        resource='outreach',
-        details={
-            'case_id': case_id,
-            'response_count': len(responses),
-            'accepted_count': len(accepted)
-        }
-    )
-
+    if not ledger_outreach:
+        return jsonify({'error': 'No outreach campaign found for this case'}), 404
+    statuses = [item.get('status') for item in ledger_outreach]
+    response_types = [item.get('response_type') for item in ledger_responses]
+    stats = {
+        'total_outreach': len(ledger_outreach),
+        'waiting_approval': sum(1 for status in statuses if status == 'waiting_approval'),
+        'approved_to_send': sum(1 for status in statuses if status == 'approved_to_send'),
+        'approval_rejected': sum(1 for status in statuses if status == 'approval_rejected'),
+        'sent': sum(1 for status in statuses if status == 'sent'),
+        'responses_received': len(ledger_responses),
+        'interested_lawyers_count': sum(1 for response_type in response_types if response_type == 'interested'),
+        'more_info_requests': sum(1 for response_type in response_types if response_type == 'more_info'),
+        'unavailable_responses': sum(1 for response_type in response_types if response_type in {'unavailable', 'rejected'}),
+        'external_messages_sent': 0,
+        'approval_required': True,
+    }
     return jsonify({
         'case_id': case_id,
         'statistics': stats,
-        'responses': [*ledger_responses, *outreach_system.responses],
-        'accepted_cases': accepted,
+        'responses': ledger_responses,
+        'accepted_cases': [],
         'outreach_records': ledger_outreach,
-        'approval_required': True
+        'approval_required': True,
+        'external_messages_sent': 0,
     }), 200
 
 @app.route('/api/outreach/<int:case_id>/follow-up', methods=['POST'])
 @auth_system._require_auth
 def send_follow_ups(case_id):
     ledger_outreach = legal_ledger.list_outreach(case_id)
-    if case_id not in outreach_campaigns and not ledger_outreach:
+    if not ledger_outreach:
         return jsonify({'error': 'No outreach campaign found for this case'}), 404
 
     return jsonify({
@@ -2649,24 +2551,6 @@ def send_follow_ups(case_id):
 def get_user_cases():
     user_id = session.get('user_id', 0)
     ledger_cases = legal_ledger.list_cases(_ledger_actor())
-    if ledger_cases:
-        timeseries_manager.record_user_activity(
-            user_id=str(user_id),
-            activity_type='list',
-            resource='cases'
-        )
-        return jsonify({
-            'user_id': user_id,
-            'cases': ledger_cases
-        }), 200
-    
-    # Use cached query for user cases
-    @db_manager.cached_query(ttl=30)
-    def get_cached_user_cases(user_id):
-        # Filter cases by user ID
-        return [case for case_id, case in cases.items() if case['user_id'] == user_id]
-    
-    # Record user activity in time-series database
     timeseries_manager.record_user_activity(
         user_id=str(user_id),
         activity_type='list',
@@ -2675,7 +2559,7 @@ def get_user_cases():
     
     return jsonify({
         'user_id': user_id,
-        'cases': get_cached_user_cases(user_id)
+        'cases': ledger_cases
     }), 200
 
 @app.route('/api/case/<int:case_id>', methods=['GET'])
@@ -2695,28 +2579,9 @@ def get_case(case_id):
         )
         return jsonify(ledger_case), 200
 
-    ledger_case, legacy_case = _case_for_legacy_endpoint(case_id)
-    if not legacy_case:
+    if not ledger_case:
         return jsonify({'error': 'Case not found'}), 404
-    
-    # Use cached query for case retrieval
-    @db_manager.cached_query(ttl=60)
-    def get_cached_case(case_id):
-        return cases[case_id]
-    
-    # Record case view event in time-series database
-    user_id = session.get('user_id', 0)
-    timeseries_manager.record_user_activity(
-        user_id=str(user_id),
-        activity_type='view',
-        resource='case',
-        details={
-            'case_id': case_id,
-            'category': cases[case_id]['matched_fields'][0] if cases[case_id]['matched_fields'] else 'UNKNOWN'
-        }
-    )
-    
-    return jsonify(get_cached_case(case_id)), 200
+    return jsonify(ledger_case), 200
 
 # API routes for resource usage and billing
 @app.route('/api/billing/<int:case_id>', methods=['GET'])
@@ -2737,26 +2602,11 @@ def get_billing(case_id):
     }
     
     # Add document aggregation resource usage
-    ledger_documents = legal_ledger.list_documents(case_id) if ledger_case else []
-    if ledger_documents:
-        resource_usage['storage_bytes_used'] += sum(
-            len((document.get('extracted_text') or '').encode('utf-8'))
-            for document in ledger_documents
-        )
-    elif case_id in documents:
-        doc_aggregator = DocumentAggregator(case_id=case_id, user_id=0)
-        doc_usage = doc_aggregator.calculate_resource_usage()
-        resource_usage['ai_processing_time_ms'] += doc_usage.get('processing_time_ms', 0)
-        resource_usage['storage_bytes_used'] += doc_usage.get('total_size_bytes', 0)
-        resource_usage['total_resource_cost'] += doc_usage.get('estimated_cost', 0)
-    
-    # Add outreach resource usage
-    if case_id in outreach_campaigns:
-        outreach_system = outreach_campaigns[case_id]
-        outreach_usage = outreach_system.calculate_resource_usage()
-        resource_usage['email_count'] += outreach_usage.get('email_count', 0)
-        resource_usage['follow_up_count'] += outreach_usage.get('follow_up_count', 0)
-        resource_usage['total_resource_cost'] += outreach_usage.get('estimated_cost', 0)
+    ledger_documents = legal_ledger.list_documents(case_id)
+    resource_usage['storage_bytes_used'] += sum(
+        len((document.get('extracted_text') or '').encode('utf-8'))
+        for document in ledger_documents
+    )
     
     # Calculate user charge (resource cost x 2)
     resource_usage['user_charge'] = resource_usage['total_resource_cost'] * 2
@@ -2976,5 +2826,6 @@ if __name__ == '__main__':
         }
     )
     
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=True)
+    port = int(os.environ.get('PORT', 8768))
+    debug = os.environ.get('LARO_DEBUG', '').strip().lower() in {'1', 'true', 'yes'}
+    app.run(host='0.0.0.0', port=port, debug=debug, use_reloader=debug)

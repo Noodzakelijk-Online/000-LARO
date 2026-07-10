@@ -1,116 +1,62 @@
-# Legal AI Reach Out Platform - Requirements Analysis
+# LARO: Legal Case Ledger
 
-## Overview
-The Legal AI Reach Out platform is an AI-driven legal outreach service for the Netherlands that simplifies how individuals access legal representation. The platform leverages artificial intelligence and automation to streamline case evaluation, document management, and lawyer outreach.
+LARO is a local-first legal case operating system. It keeps a persistent, source-linked record of a case: documents, extracted text, timeline suggestions, claims, evidence links, contradictions, deadlines, open loops, outreach drafts, approvals, and audit history.
 
-## Key Features
+It organizes and prepares legal material. It is not a lawyer, does not provide definitive legal advice, and never sends legal communication or shares evidence externally without an explicit approval record.
 
-### 1. AI-Powered Case Matching
-- Sophisticated AI to analyze user circumstances
-- Automatic determination of appropriate legal fields
-- Natural language processing for accurate case classification
+## What Runs Locally
 
-### 2. Automated Data Aggregation
-- Integration with email platforms (Outlook, Gmail)
-- Integration with cloud storage (Google Drive, OneDrive)
-- Manual document upload support
-- Structured evidence trail creation
-- Summarized "red line" thread for legal professionals
+- Case Command Center: create and operate cases with progressive Focus, Guided, and Expert views.
+- Document intelligence: read local text, PDF, DOCX, HTML, email-shaped, and Drive-shaped records; preserve source metadata and content hashes.
+- Evidence timeline and papertrail: connect who said or did what and when back to the underlying document.
+- Review workbench: confirm or reject suggested events, claims, evidence links, contradictions, deadlines, and open loops.
+- Approval-gated outreach: create lawyer/media/organization matches and drafts, but do not send external messages.
 
-### 3. Intelligent Outreach & Follow-Ups
-- Automated email outreach to legal professionals
-- Focus on lawyers with relevant expertise
-- Response monitoring
-- Automated follow-up messages
+Core case data is stored in a local SQLite ledger under `instance/laro_ledger.sqlite3`. Runtime databases, uploads, OAuth tokens, and local secrets are ignored by Git.
 
-## Business Metrics for Investor Dashboard
+## Windows Quick Start
 
-### Key Performance Indicators (KPIs)
-1. **Lawyer Response Rates**
-   - Current: 30% respond to initial inquiries
-   - Target: Increase response rates by 50% within one year
+1. Install Python 3.11+.
+2. In PowerShell from this repository, install dependencies:
 
-2. **Case Acceptance Rates**
-   - Current: 0.1% to 1.3% of lawyers agree to take cases
-   - Target: Improve acceptance rates through better case presentation
+```powershell
+python -m pip install -r requirements.txt
+```
 
-3. **Time Efficiency**
-   - Current: Weeks to find a lawyer
-   - Target: Reduce to 2 hours maximum
+3. Create local configuration:
 
-4. **Resource Consumption Metrics**
-   - AI processing time
-   - Cloud storage and data aggregation usage
-   - Email outreach and follow-up volume
+```powershell
+Copy-Item .env.example .env
+```
 
-5. **Revenue Metrics**
-   - Resource cost calculation
-   - Pay-per-use pricing (resource cost × 2)
-   - Profit margins
+4. Start LARO:
 
-6. **Market Penetration**
-   - Target audience reach
-   - Market share among 18,500+ registered lawyers in the Netherlands
+```powershell
+.\run_local.ps1
+```
 
-7. **Impact Metrics**
-   - Access to justice improvements
-   - Stress reduction for clients
-   - Time saved in legal processes
+5. Open [http://127.0.0.1:8768/case_command_center.html](http://127.0.0.1:8768/case_command_center.html).
 
-## Investor Dashboard Requirements
+The launcher uses port `8768` by default so it does not collide with a typical Flask server on `5000`. Set `PORT` before launching to use another free local port.
 
-### Authentication
-- Email-based authentication for investors
-- Secure access to sensitive business metrics
+## Google Evidence Sources
 
-### Dashboard Components
-1. **Business Plan Assumptions**
-   - Market size and potential
-   - Lawyer response rate assumptions
-   - Case acceptance rate projections
-   - Revenue model assumptions
+Optional Gmail and Drive read-only intake requires these values in `.env`:
 
-2. **Real-Time Performance Metrics**
-   - Actual lawyer response rates vs. targets
-   - Case acceptance rates vs. projections
-   - Time efficiency metrics
-   - Resource consumption analytics
-   - Revenue generation data
+```text
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GOOGLE_REDIRECT_URI=http://127.0.0.1:8768/api/google/oauth/callback
+```
 
-3. **Comparative Analysis**
-   - Planned vs. actual performance
-   - Trend analysis over time
-   - Projection adjustments based on real data
+LARO stores connection status and a token fingerprint in the ledger, never raw OAuth tokens. The current OAuth slice confirms consent and preserves connection state; a secure local token provider plus live Gmail/Drive fetching remains a separate connector milestone.
 
-4. **Visual Representation**
-   - Charts and graphs for key metrics
-   - Progress indicators for targets
-   - Real-time data updates
+## Tests
 
-## Technical Requirements
+Run the legal-ledger verification suite:
 
-### Frontend
-- Responsive web interface
-- Investor-specific section with authentication
-- Interactive dashboard with data visualization
-- User-friendly navigation
+```powershell
+python -m unittest test_legal_ledger test_document_intelligence test_google_oauth test_lawyer_matching test_outreach_targets test_outreach_analytics
+```
 
-### Backend
-- Database for storing metrics and authentication data
-- API for real-time data updates
-- Integration with the core Legal AI platform
-- Secure data handling
-
-### Data Processing
-- Real-time data collection from platform usage
-- Metrics calculation and aggregation
-- Historical data storage for trend analysis
-
-## Next Steps
-- Design database schema for legal case metrics
-- Develop frontend interface with investor section
-- Implement email authentication system
-- Create dashboard for business assumptions and metrics
-- Develop real-time data visualization components
-- Integrate and test the complete system
-- Deploy and provide documentation
+The test suite uses temporary SQLite files and does not require a real Google account or contact any external lawyers.

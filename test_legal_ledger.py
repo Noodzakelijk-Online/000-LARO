@@ -688,13 +688,6 @@ class TestLegalLedgerApi(unittest.TestCase):
         app_module.legal_ledger = cls.ledger
         app_module.app.config["legal_ledger"] = cls.ledger
         app_module.app.config["LARO_LEDGER_DATABASE_URL"] = cls.ledger_url
-        app_module.cases.clear()
-        app_module.documents.clear()
-        app_module.document_analysis.clear()
-        app_module.evidence_timelines.clear()
-        app_module.outreach_campaigns.clear()
-        app_module.lawyer_matches.clear()
-        app_module.outreach_target_matches.clear()
         cls.client = app_module.app.test_client()
 
     @classmethod
@@ -712,6 +705,19 @@ class TestLegalLedgerApi(unittest.TestCase):
     def setUp(self):
         token = self.app_module.auth_system._create_session("ledger@example.com", "user")
         self.headers = {"Authorization": f"Bearer {token}"}
+
+    def test_live_api_has_no_demo_state_stores(self):
+        for attribute in (
+            "cases",
+            "documents",
+            "document_analysis",
+            "evidence_timelines",
+            "outreach_campaigns",
+            "lawyer_matches",
+            "outreach_target_matches",
+            "google_connections",
+        ):
+            self.assertFalse(hasattr(self.app_module, attribute), attribute)
 
     def test_case_ledger_api_slice(self):
         local_login = self.client.post("/api/auth/session-login", json={"email": "robert.local@laro"})
@@ -775,9 +781,6 @@ class TestLegalLedgerApi(unittest.TestCase):
             "description": "Decision received.",
         }, headers=self.headers)
         self.assertEqual(event.status_code, 201)
-        self.assertNotIn(case_id, self.app_module.documents)
-        self.assertNotIn(case_id, self.app_module.evidence_timelines)
-
         claim = self.client.post(f"/api/cases/{case_id}/claims", json={
             "statement": "The CAK decision was received after the stated deadline.",
             "status": "needs_review",
@@ -964,7 +967,6 @@ class TestLegalLedgerApi(unittest.TestCase):
         }, headers=self.headers)
         self.assertEqual(event.status_code, 201)
 
-        self.app_module.cases.clear()
         legacy_list = self.client.get("/api/user/cases", headers=self.headers)
         self.assertEqual(legacy_list.status_code, 200)
         legacy_cases = legacy_list.get_json()["cases"]
@@ -972,15 +974,13 @@ class TestLegalLedgerApi(unittest.TestCase):
         self.assertEqual(legacy_case["title"], "Legacy compatible ledger case")
         self.assertEqual(legacy_case["documents_count"], 1)
         self.assertEqual(legacy_case["timeline_count"], 1)
-        self.assertEqual(self.app_module.cases, {})
 
         legacy_detail = self.client.get(f"/api/case/{case_id}", headers=self.headers)
         self.assertEqual(legacy_detail.status_code, 200)
         self.assertEqual(legacy_detail.get_json()["case_id"], case_id)
         self.assertEqual(legacy_detail.get_json()["documents_count"], 1)
-        self.assertEqual(self.app_module.cases, {})
 
-    def test_legacy_document_endpoints_are_ledger_backed_after_cache_clear(self):
+    def test_legacy_document_endpoints_are_ledger_backed(self):
         created = self.client.post("/api/cases", json={
             "title": "Legacy document compatibility case",
             "description": "Documents, analysis, and timeline should survive cache clears.",
@@ -1000,10 +1000,6 @@ class TestLegalLedgerApi(unittest.TestCase):
         }, headers=self.headers)
         self.assertEqual(pasted.status_code, 201)
         document_id = pasted.get_json()["document"]["document_id"]
-
-        self.app_module.documents.clear()
-        self.app_module.document_analysis.clear()
-        self.app_module.evidence_timelines.clear()
 
         documents = self.client.get(f"/api/documents/{case_id}", headers=self.headers)
         self.assertEqual(documents.status_code, 200)
@@ -1038,8 +1034,7 @@ class TestLegalLedgerApi(unittest.TestCase):
             any(item["source"]["document_id"] == document_id for item in timeline.get_json()["source_linked_timeline"])
         )
 
-    def test_case_analysis_creates_ledger_case_without_demo_cache(self):
-        self.app_module.cases.clear()
+    def test_case_analysis_creates_ledger_case(self):
         with mock.patch.object(self.app_module.case_matcher, "match_legal_fields", return_value=["administrative_law"]), \
              mock.patch.object(self.app_module.case_matcher, "analyze_case_complexity", return_value={"complexity_level": "High"}), \
              mock.patch.object(self.app_module.case_matcher, "generate_case_summary", return_value="Decision dispute summary."), \
@@ -1052,7 +1047,6 @@ class TestLegalLedgerApi(unittest.TestCase):
 
         self.assertEqual(response.status_code, 201)
         case_id = response.get_json()["case_id"]
-        self.assertEqual(self.app_module.cases, {})
         publish_event.assert_called_once()
 
         stored = self.client.get(f"/api/cases/{case_id}", headers=self.headers)
@@ -1064,7 +1058,6 @@ class TestLegalLedgerApi(unittest.TestCase):
         self.assertEqual(legacy_list.status_code, 200)
         returned_case_ids = [item["case_id"] for item in legacy_list.get_json()["cases"]]
         self.assertIn(case_id, returned_case_ids)
-        self.assertEqual(self.app_module.cases, {})
 
         share_approval = self.client.post(
             f"/api/cases/{case_id}/bundle/share-approval",
@@ -1140,10 +1133,6 @@ class TestLegalLedgerApi(unittest.TestCase):
         self.assertEqual(payload["status"], "waiting_approval")
         self.assertGreaterEqual(payload["draft_count"], 1)
         self.assertEqual(payload["outreach_count"], payload["draft_count"])
-        self.assertNotIn(case_id, self.app_module.cases)
-        self.assertNotIn(case_id, self.app_module.outreach_campaigns)
-        self.assertNotIn(case_id, self.app_module.lawyer_matches)
-
         outreach_list = self.client.get(f"/api/cases/{case_id}/outreach", headers=self.headers)
         self.assertEqual(outreach_list.status_code, 200)
         outreach_records = outreach_list.get_json()["outreach"]
@@ -1164,7 +1153,6 @@ class TestLegalLedgerApi(unittest.TestCase):
         self.assertEqual(status_payload["external_messages_sent"], 0)
         self.assertEqual(status_payload["statistics"]["waiting_approval"], payload["draft_count"])
 
-        self.app_module.lawyer_matches.clear()
         persisted_lawyer_matches = self.client.get(f"/api/lawyers/{case_id}/matches", headers=self.headers)
         self.assertEqual(persisted_lawyer_matches.status_code, 200)
         self.assertEqual(
@@ -1195,10 +1183,6 @@ class TestLegalLedgerApi(unittest.TestCase):
         }, headers=self.headers)
         self.assertEqual(document.status_code, 201)
 
-        self.app_module.cases.clear()
-        self.app_module.documents.clear()
-        self.app_module.outreach_campaigns.clear()
-
         lawyers = self.client.post("/api/lawyers/match", json={
             "case_id": case_id,
             "max_results": 2,
@@ -1216,20 +1200,9 @@ class TestLegalLedgerApi(unittest.TestCase):
         }, headers=self.headers)
         self.assertEqual(lawyers.status_code, 200)
         self.assertEqual(lawyers.get_json()["matched_lawyers"][0]["name"], "Persisted Case Lawyer")
-        self.assertNotIn(case_id, self.app_module.lawyer_matches)
-
         stored_lawyers = self.client.get(f"/api/lawyers/{case_id}/matches", headers=self.headers)
         self.assertEqual(stored_lawyers.status_code, 200)
         self.assertEqual(stored_lawyers.get_json()["matched_lawyers"][0]["name"], "Persisted Case Lawyer")
-        self.app_module.lawyer_matches[case_id] = {
-            "matched_lawyers": [{"name": "Stale Demo Cache Lawyer"}]
-        }
-        persisted_over_stale_lawyers = self.client.get(f"/api/lawyers/{case_id}/matches", headers=self.headers)
-        self.assertEqual(persisted_over_stale_lawyers.status_code, 200)
-        self.assertEqual(
-            persisted_over_stale_lawyers.get_json()["matched_lawyers"][0]["name"],
-            "Persisted Case Lawyer",
-        )
 
         media = self.client.post("/api/outreach/targets/match", json={
             "case_id": case_id,
@@ -1247,23 +1220,9 @@ class TestLegalLedgerApi(unittest.TestCase):
         }, headers=self.headers)
         self.assertEqual(media.status_code, 200)
         self.assertEqual(media.get_json()["matched_targets"][0]["name"], "Radar")
-        self.assertNotIn(case_id, self.app_module.outreach_target_matches)
-
         stored_media = self.client.get(f"/api/outreach/{case_id}/targets/media", headers=self.headers)
         self.assertEqual(stored_media.status_code, 200)
         self.assertEqual(stored_media.get_json()["matched_targets"][0]["name"], "Radar")
-        self.app_module.outreach_target_matches[case_id] = {
-            "media": {"matched_targets": [{"name": "Stale Demo Cache Media"}]}
-        }
-        persisted_over_stale_media = self.client.get(f"/api/outreach/{case_id}/targets/media", headers=self.headers)
-        self.assertEqual(persisted_over_stale_media.status_code, 200)
-        self.assertEqual(
-            persisted_over_stale_media.get_json()["matched_targets"][0]["name"],
-            "Radar",
-        )
-
-        self.app_module.lawyer_matches.clear()
-        self.app_module.outreach_target_matches.clear()
 
         restarted_lawyers = self.client.get(f"/api/lawyers/{case_id}/matches", headers=self.headers)
         self.assertEqual(restarted_lawyers.status_code, 200)
@@ -1336,7 +1295,6 @@ class TestLegalLedgerApi(unittest.TestCase):
         self.assertEqual(payload["claim_suggestions"][0]["status"], "needs_review")
         self.assertEqual(payload["claim_suggestions"][0]["claim_type"], "document_statement")
         self.assertEqual(payload["claim_suggestions"][0]["asserted_by"], "document_intelligence")
-        self.assertNotIn(case_id, self.app_module.documents)
         self.assertGreaterEqual(payload["evidence_links_created"], 4)
         target_types = {link["target_type"] for link in payload["evidence_links"]}
         self.assertIn("event", target_types)
@@ -1442,9 +1400,6 @@ class TestLegalLedgerApi(unittest.TestCase):
         self.assertTrue(payload["claim_suggestions"])
         self.assertGreaterEqual(payload["evidence_links_created"], 4)
         self.assertEqual(payload["storage"]["content_hash"], payload["document"]["content_hash"])
-        self.assertNotIn(case_id, self.app_module.documents)
-        self.assertNotIn(case_id, self.app_module.document_analysis)
-
         document_id = payload["document"]["document_id"]
         detail = self.client.get(f"/api/cases/{case_id}/documents/{document_id}", headers=self.headers)
         self.assertEqual(detail.status_code, 200)
@@ -1537,10 +1492,6 @@ class TestLegalLedgerApi(unittest.TestCase):
         self.assertEqual(payload["persisted_documents"][0]["metadata"]["legal_analysis"]["document_type"], "decision")
         self.assertEqual(payload["comprehension"]["reading_status"]["documents_readable"], 1)
         self.assertGreaterEqual(payload["comprehension"]["reading_status"]["source_links"], 4)
-        self.assertNotIn(case_id, self.app_module.documents)
-        self.assertNotIn(case_id, self.app_module.document_analysis)
-        self.assertNotIn(case_id, self.app_module.evidence_timelines)
-
         dossier = self.client.get(f"/api/cases/{case_id}/comprehension", headers=self.headers)
         self.assertEqual(dossier.status_code, 200)
         self.assertTrue(dossier.get_json()["chronology"])
@@ -1595,9 +1546,6 @@ class TestLegalLedgerApi(unittest.TestCase):
         self.assertGreaterEqual(payload["artifact_counts"]["timeline_suggestions"], 2)
         self.assertGreaterEqual(payload["artifact_counts"]["evidence_links"], 4)
         self.assertEqual(payload["comprehension"]["reading_status"]["documents_readable"], 2)
-        self.assertNotIn(case_id, self.app_module.documents)
-        self.assertNotIn(case_id, self.app_module.document_analysis)
-
         documents = self.client.get(f"/api/cases/{case_id}/documents", headers=self.headers)
         source_uris = {item["source_uri"] for item in documents.get_json()["documents"]}
         self.assertIn("gmail://message/gmail-msg-1", source_uris)

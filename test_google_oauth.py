@@ -38,7 +38,6 @@ class GoogleOAuthRouteTests(unittest.TestCase):
         import app as app_module
         self.app_module = app_module
         self.client = app_module.app.test_client()
-        app_module.google_connections.clear()
 
     def test_popup_callback_returns_closeable_result_page_and_updates_status(self):
         with self.client.session_transaction() as sess:
@@ -60,7 +59,6 @@ class GoogleOAuthRouteTests(unittest.TestCase):
         self.assertTrue(status["connected"])
         self.assertEqual(status["status_source"], "legal_ledger")
 
-        self.app_module.google_connections.clear()
         restarted_status = self.client.get("/api/google/oauth/status").get_json()
         self.assertTrue(restarted_status["connected"])
         self.assertEqual(restarted_status["status_source"], "legal_ledger")
