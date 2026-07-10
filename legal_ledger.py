@@ -1713,20 +1713,43 @@ class LegalLedger:
                     event_date = _dt.date.fromisoformat(event_date).isoformat()
                 except ValueError:
                     raise ValueError("A timeline proposal needs an unambiguous cited ISO date.")
-                target = CaseEvent(
-                    case_id=case_id,
-                    event_date=event_date,
-                    event_type="case_analysis_suggestion",
-                    title=item.title or "Case-wide timeline proposal",
-                    description=item.description,
-                    source_confidence=0.0,
-                    user_confirmed=False,
-                    created_from_document_id=sources[0]["document_id"],
-                )
-                session.add(target)
-                session.flush()
+                target = None
+                source_document_ids = {int(source["document_id"]) for source in sources}
+                candidates = session.query(CaseEvent).filter(
+                    CaseEvent.case_id == case_id,
+                    CaseEvent.event_date == event_date,
+                    CaseEvent.created_from_document_id.in_(source_document_ids),
+                    CaseEvent.event_type != "rejected_suggestion",
+                ).all()
+                for candidate in candidates:
+                    for source in sources:
+                        existing_link = session.query(EvidenceLink).filter_by(
+                            case_id=case_id,
+                            document_id=int(source["document_id"]),
+                            target_type="event",
+                            target_id=candidate.id,
+                            snippet=source["source_quote"],
+                        ).first()
+                        if existing_link:
+                            target = candidate
+                            break
+                    if target:
+                        break
+                if not target:
+                    target = CaseEvent(
+                        case_id=case_id,
+                        event_date=event_date,
+                        event_type="case_analysis_suggestion",
+                        title=item.title or "Case-wide timeline proposal",
+                        description=item.description,
+                        source_confidence=0.0,
+                        user_confirmed=False,
+                        created_from_document_id=sources[0]["document_id"],
+                    )
+                    session.add(target)
+                    session.flush()
+                    self._audit(session, case_id, "CaseEvent", target.id, "created", actor, {}, self._serialize_event(target), "medium")
                 target_type = "event"
-                self._audit(session, case_id, "CaseEvent", target.id, "created", actor, {}, self._serialize_event(target), "medium")
             elif action == "contradiction":
                 target = Contradiction(
                     case_id=case_id,
@@ -1770,6 +1793,15 @@ class LegalLedger:
                 self._audit(session, case_id, "OpenLoop", target.id, "created", actor, {}, self._serialize_open_loop(target), "medium")
 
             for source in sources:
+                existing_link = session.query(EvidenceLink).filter_by(
+                    case_id=case_id,
+                    document_id=int(source["document_id"]),
+                    target_type=target_type,
+                    target_id=target.id,
+                    snippet=source["source_quote"],
+                ).first()
+                if existing_link:
+                    continue
                 link = self._create_evidence_link(
                     session,
                     case_id=case_id,

@@ -2266,6 +2266,67 @@ class TestLegalLedgerApi(unittest.TestCase):
         evidence = self.client.get(f"/api/cases/{case_id}/evidence", headers=self.headers).get_json()["evidence_links"]
         self.assertTrue(any(link["target_type"] == "event" and link["target_id"] == event["id"] for link in evidence))
 
+    def test_case_wide_timeline_conversion_reuses_exact_source_linked_event(self):
+        created = self.client.post("/api/cases", json={"title": "Timeline deduplication"}, headers=self.headers)
+        case_id = created.get_json()["case_id"]
+        source_quote = "The authority issued its decision on 2024-05-01."
+        document = self.client.post(f"/api/cases/{case_id}/documents", json={
+            "title": "Dated decision",
+            "extracted_text": source_quote,
+        }, headers=self.headers).get_json()
+        existing_event = self.client.post(f"/api/cases/{case_id}/timeline", json={
+            "event_date": "2024-05-01",
+            "title": "Decision mentioned in source",
+            "description": source_quote,
+            "created_from_document_id": document["document_id"],
+            "evidence_quote": source_quote,
+        }, headers=self.headers)
+        self.assertEqual(existing_event.status_code, 201)
+        existing_event_id = existing_event.get_json()["id"]
+
+        def fixture_analysis(documents, case_context):
+            return {
+                "status": "completed",
+                "provider": "rule_based",
+                "findings": [],
+                "review_questions": [],
+                "timeline_suggestions": [{
+                    "event_date": "2024-05-01",
+                    "title": "Decision mentioned in source",
+                    "description": f"Cited source passage for 2024-05-01: {source_quote}",
+                    "sources": [{
+                        "document_id": str(document["document_id"]),
+                        "source_quote": source_quote,
+                    }],
+                }],
+                "source_documents": [],
+                "limitations": [],
+            }
+
+        with mock.patch.object(self.app_module.document_intelligence.semantic_provider, "analyze_case", side_effect=fixture_analysis):
+            analysis = self.client.post(f"/api/cases/{case_id}/case-analysis", headers=self.headers)
+        review_item = next(item for item in analysis.get_json()["run"]["review_items"] if item["item_type"] == "timeline_suggestion")
+
+        converted = self.client.patch(
+            f"/api/cases/{case_id}/case-analysis/review-items/{review_item['id']}",
+            json={"action": "timeline"},
+            headers=self.headers,
+        )
+        self.assertEqual(converted.status_code, 200)
+        self.assertEqual(converted.get_json()["review_item"]["target_id"], existing_event_id)
+
+        timeline = self.client.get(f"/api/cases/{case_id}/timeline", headers=self.headers).get_json()["timeline"]
+        self.assertEqual([event["id"] for event in timeline], [existing_event_id])
+        evidence = self.client.get(f"/api/cases/{case_id}/evidence", headers=self.headers).get_json()["evidence_links"]
+        matching_links = [
+            link for link in evidence
+            if link["target_type"] == "event"
+            and link["target_id"] == existing_event_id
+            and link["document_id"] == document["document_id"]
+            and link["snippet"] == source_quote
+        ]
+        self.assertEqual(len(matching_links), 1)
+
     def test_case_endpoints_do_not_expose_another_authenticated_users_ledger(self):
         created = self.client.post("/api/cases", json={"title": "Private legal matter"}, headers=self.headers)
         case_id = created.get_json()["case_id"]
