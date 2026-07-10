@@ -6688,7 +6688,7 @@
 
         function papertrailNodeClass(node = {}) {
             if (node.type === "case") return "is-case";
-            if (["contradiction", "missing_evidence", "deadline", "approval"].includes(node.type)) return "is-risk";
+            if (["contradiction", "missing_evidence", "deadline", "approval", "case_analysis_review"].includes(node.type)) return "is-risk";
             return "";
         }
 
@@ -6699,6 +6699,8 @@
                 node.role,
                 node.source,
                 node.identifier_type,
+                node.item_type,
+                node.target_type && node.target_id ? `prepared as ${node.target_type}` : "",
                 node.severity,
                 node.risk_level,
                 node.draft_type,
@@ -6727,6 +6729,8 @@
                 node.source,
                 node.identifier_type,
                 node.source_party,
+                node.item_type,
+                node.target_type,
                 node.severity,
                 node.date,
                 node.due_date
@@ -6739,7 +6743,7 @@
                 acc[node.type] = (acc[node.type] || 0) + 1;
                 return acc;
             }, {});
-            const preferred = ["case", "document", "event", "claim", "draft", "approval", "party", "identifier", "deadline", "contradiction", "missing_evidence", "open_loop"];
+            const preferred = ["case", "document", "event", "claim", "draft", "approval", "party", "identifier", "deadline", "contradiction", "case_analysis_review", "missing_evidence", "open_loop"];
             const types = [...preferred, ...Object.keys(counts).filter((type) => !preferred.includes(type)).sort()];
             return [
                 { type: "all", label: "All", count: nodes.length },

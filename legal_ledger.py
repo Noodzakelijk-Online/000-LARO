@@ -1175,6 +1175,7 @@ class LegalLedger:
             if not case:
                 return None
             self._ensure_missing_evidence_reviews(session, case_id)
+            self._ensure_case_analysis_review_items(session, case_id)
 
             def queue_item(
                 queue_type: str,
@@ -2707,6 +2708,7 @@ class LegalLedger:
             if not case:
                 return None
             self._ensure_missing_evidence_reviews(session, case_id)
+            self._ensure_case_analysis_review_items(session, case_id)
 
             nodes: List[Dict[str, Any]] = [{"id": f"case:{case.id}", "type": "case", "label": case.title, "status": case.status}]
             edges: List[Dict[str, Any]] = []
@@ -2743,6 +2745,25 @@ class LegalLedger:
             for link in session.query(EvidenceLink).filter_by(case_id=case_id).all():
                 target = f"{link.target_type}:{link.target_id}"
                 edges.append({"from": f"document:{link.document_id}", "to": target, "type": link.relationship, "strength": link.strength, "user_confirmed": link.user_confirmed})
+
+            for item in session.query(CaseAnalysisReviewItem).filter_by(case_id=case_id).all():
+                node_id = f"case_analysis_review:{item.id}"
+                nodes.append({
+                    "id": node_id,
+                    "type": "case_analysis_review",
+                    "label": item.title,
+                    "status": item.status,
+                    "item_type": item.item_type,
+                    "target_type": item.target_type,
+                    "target_id": item.target_id,
+                })
+                edges.append({"from": f"case:{case.id}", "to": node_id, "type": "analysis_review", "status": item.status})
+                for source in _json_load(item.source_refs, []):
+                    document_id = source.get("document_id") if isinstance(source, dict) else None
+                    if document_id:
+                        edges.append({"from": f"document:{document_id}", "to": node_id, "type": "cites", "status": item.status})
+                if item.target_type and item.target_id:
+                    edges.append({"from": node_id, "to": f"{item.target_type}:{item.target_id}", "type": "prepared_as", "status": item.status})
 
             for contradiction in session.query(Contradiction).filter_by(case_id=case_id).all():
                 nodes.append({"id": f"contradiction:{contradiction.id}", "type": "contradiction", "label": contradiction.title, "severity": contradiction.severity})
@@ -2797,6 +2818,7 @@ class LegalLedger:
             if not case:
                 return None
             self._ensure_missing_evidence_reviews(session, case_id)
+            self._ensure_case_analysis_review_items(session, case_id)
             documents = [self._serialize_document(item) for item in session.query(CaseDocument).filter_by(case_id=case_id).order_by(CaseDocument.date_on_document.asc(), CaseDocument.id.asc()).all()]
             timeline = [
                 self._serialize_event(item)
@@ -2807,7 +2829,25 @@ class LegalLedger:
             ]
             claims = [self._serialize_claim(item) for item in session.query(LegalClaim).filter_by(case_id=case_id).order_by(LegalClaim.id.asc()).all()]
             evidence_links = [self._serialize_evidence_link(item) for item in session.query(EvidenceLink).filter_by(case_id=case_id).all()]
-            supported_claim_ids = {link["target_id"] for link in evidence_links if link["target_type"] == "claim"}
+            active_claim_links = [
+                link for link in evidence_links
+                if link["target_type"] == "claim" and link.get("relationship") != "rejected_suggestion"
+            ]
+            confirmed_claim_ids = {
+                link["target_id"] for link in active_claim_links
+                if link.get("user_confirmed") and link.get("relationship") != "needs_review"
+            }
+            proposed_claim_ids = {
+                link["target_id"] for link in active_claim_links
+                if not link.get("user_confirmed") or link.get("relationship") == "needs_review"
+            }
+            analysis_review_items = [
+                self._serialize_case_analysis_review_item(item)
+                for item in session.query(CaseAnalysisReviewItem)
+                .filter_by(case_id=case_id)
+                .order_by(CaseAnalysisReviewItem.created_at.desc(), CaseAnalysisReviewItem.id.desc())
+                .all()
+            ]
             return {
                 "case": self._case_detail(session, case),
                 "factual_reconstruction": {
@@ -2816,8 +2856,9 @@ class LegalLedger:
                     "source_documents": documents,
                 },
                 "claims": {
-                    "supported": [claim for claim in claims if claim["id"] in supported_claim_ids],
-                    "unsupported": [claim for claim in claims if claim["id"] not in supported_claim_ids],
+                    "supported": [claim for claim in claims if claim["id"] in confirmed_claim_ids],
+                    "proposed_support": [claim for claim in claims if claim["id"] not in confirmed_claim_ids and claim["id"] in proposed_claim_ids],
+                    "unsupported": [claim for claim in claims if claim["id"] not in confirmed_claim_ids and claim["id"] not in proposed_claim_ids],
                     "all": claims,
                 },
                 "risk_review": {
@@ -2825,11 +2866,13 @@ class LegalLedger:
                     "missing_evidence": [self._serialize_missing_evidence(item) for item in session.query(MissingEvidenceWarning).filter_by(case_id=case_id).all()],
                     "deadlines": [self._serialize_deadline(item) for item in session.query(Deadline).filter_by(case_id=case_id).all()],
                     "open_loops": [self._serialize_open_loop(item) for item in session.query(OpenLoop).filter_by(case_id=case_id).all()],
+                    "case_analysis": analysis_review_items,
                 },
                 "legal_safety": {
                     "not_legal_advice": True,
                     "requires_human_review": True,
                     "external_sharing_requires_approval": True,
+                    "claim_support_requires_confirmed_evidence_link": True,
                 },
                 "generated_at": _iso(utcnow()),
             }
@@ -2869,6 +2912,7 @@ class LegalLedger:
             *[self._review_summary_item("missing_evidence", item) for item in review["missing_evidence"] if item.get("status") not in {"resolved", "dismissed"}],
             *[self._review_summary_item("deadline", item) for item in review["deadlines"] if item.get("status") not in {"resolved", "dismissed"}],
             *[self._review_summary_item("open_loop", item) for item in review["open_loops"] if item.get("status") not in {"resolved", "dismissed"}],
+            *[self._review_summary_item("case_analysis", item) for item in review.get("case_analysis", []) if item.get("status") == "needs_review"],
         ]
 
         return {
@@ -2888,7 +2932,8 @@ class LegalLedger:
             "chronology": source_linked_events,
             "positions": {
                 "supported": [item for item in source_linked_claims if item["supporting_sources"]],
-                "unsupported": [item for item in source_linked_claims if not item["supporting_sources"]],
+                "proposed_support": [item for item in source_linked_claims if not item["supporting_sources"] and item["proposed_sources"]],
+                "unsupported": [item for item in source_linked_claims if not item["supporting_sources"] and not item["proposed_sources"]],
                 "all": source_linked_claims,
             },
             "review": {
@@ -2897,12 +2942,14 @@ class LegalLedger:
                 "missing_evidence": review["missing_evidence"],
                 "deadlines": review["deadlines"],
                 "open_loops": review["open_loops"],
+                "case_analysis": review.get("case_analysis", []),
             },
             "next_actions": self._comprehension_next_actions(source_documents, source_linked_events, source_linked_claims, open_review_items),
             "legal_safety": {
                 **summary["legal_safety"],
                 "facts_are_source_summaries": True,
                 "unconfirmed_items_require_review": True,
+                "proposed_evidence_is_not_confirmed_support": True,
                 "no_external_action_taken": True,
             },
             "generated_at": _iso(utcnow()),
@@ -2927,6 +2974,7 @@ class LegalLedger:
             "missing_evidence": summary["risk_review"]["missing_evidence"],
             "deadlines": summary["risk_review"]["deadlines"],
             "open_loops": summary["risk_review"]["open_loops"],
+            "case_analysis": summary["risk_review"].get("case_analysis", []),
         }
         next_actions = dossier.get("next_actions") or []
 
@@ -2949,7 +2997,13 @@ class LegalLedger:
 
         def claim_line(claim: Dict[str, Any]) -> str:
             sources = claim.get("supporting_sources") or []
-            source_bits = "; ".join(source_ref(item) for item in sources[:3]) if sources else "source: not linked"
+            proposed_sources = claim.get("proposed_sources") or []
+            if sources:
+                source_bits = "; ".join(source_ref(item) for item in sources[:3])
+            elif proposed_sources:
+                source_bits = "proposed evidence: " + "; ".join(source_ref(item) for item in proposed_sources[:3])
+            else:
+                source_bits = "source: not linked"
             return f"- {claim.get('asserted_by') or 'unknown'}: {claim.get('statement') or ''} [{source_bits}]"
 
         def review_line(item: Dict[str, Any]) -> str:
@@ -2981,8 +3035,10 @@ class LegalLedger:
 
         lines.extend(["", "Evidence position:"])
         lines.append(f"- Documents linked: {len(source_documents)}")
-        lines.append(f"- Supported claims: {len(positions.get('supported', []))}")
+        lines.append(f"- Confirmed supported claims: {len(positions.get('supported', []))}")
         lines.extend(claim_line(claim) for claim in positions.get("supported", [])[:8])
+        lines.append(f"- Claims with proposed support: {len(positions.get('proposed_support', []))}")
+        lines.extend(claim_line(claim) for claim in positions.get("proposed_support", [])[:8])
         lines.append(f"- Unsupported claims: {len(positions.get('unsupported', []))}")
         lines.extend(claim_line(claim) for claim in positions.get("unsupported", [])[:8])
 
@@ -2993,6 +3049,7 @@ class LegalLedger:
         else:
             lines.append("- No open contradiction, evidence-gap, deadline, or loop item is currently queued.")
         lines.append(f"- Contradictions: {len(review.get('contradictions', []))}")
+        lines.append(f"- Case-wide observations: {len(review.get('case_analysis', []))}")
         lines.append(f"- Missing evidence warnings: {len(review.get('missing_evidence', []))}")
         lines.append(f"- Open deadlines: {len(review.get('deadlines', []))}")
 
@@ -3013,6 +3070,7 @@ class LegalLedger:
                 "chronology": summary["factual_reconstruction"]["known_events"],
                 "source_linked_chronology": chronology,
                 "supported_claims": positions.get("supported", []),
+                "proposed_support_claims": positions.get("proposed_support", []),
                 "unsupported_claims": positions.get("unsupported", []),
                 "positions": positions,
                 "review_items": review,
@@ -3116,6 +3174,12 @@ class LegalLedger:
         document_lookup: Dict[int, Dict[str, Any]],
         links: List[Dict[str, Any]],
     ) -> Dict[str, Any]:
+        active_links = [link for link in links if link.get("relationship") != "rejected_suggestion"]
+        confirmed_links = [
+            link for link in active_links
+            if link.get("user_confirmed") and link.get("relationship") != "needs_review"
+        ]
+        proposed_links = [link for link in active_links if link not in confirmed_links]
         return {
             "id": claim.get("id"),
             "asserted_by": claim.get("asserted_by"),
@@ -3125,7 +3189,11 @@ class LegalLedger:
             "confidence": claim.get("confidence"),
             "supporting_sources": [
                 self._source_summary(document_lookup.get(link.get("document_id")), [link])
-                for link in links
+                for link in confirmed_links
+            ],
+            "proposed_sources": [
+                self._source_summary(document_lookup.get(link.get("document_id")), [link])
+                for link in proposed_links
             ],
         }
 
@@ -3168,10 +3236,14 @@ class LegalLedger:
             actions.append({"target": "documents", "label": "Review unreadable documents", "detail": f"{len(unreadable)} document(s) need text extraction or manual review."})
         if any(event.get("review_status") == "needs_review" for event in events):
             actions.append({"target": "timeline", "label": "Confirm timeline suggestions", "detail": "Review extracted events before relying on the chronology."})
-        if any(not claim.get("supporting_sources") for claim in claims):
+        proposed_support = [claim for claim in claims if not claim.get("supporting_sources") and claim.get("proposed_sources")]
+        unsupported_claims = [claim for claim in claims if not claim.get("supporting_sources") and not claim.get("proposed_sources")]
+        if proposed_support:
+            actions.append({"target": "evidence", "label": "Confirm proposed evidence links", "detail": f"{len(proposed_support)} claim(s) have cited evidence that still needs confirmation."})
+        if unsupported_claims:
             actions.append({"target": "claims", "label": "Add evidence to unsupported claims", "detail": "Claims without source links should not be treated as proven facts."})
         if open_review_items:
-            actions.append({"target": "review", "label": "Resolve review queue", "detail": f"{len(open_review_items)} contradiction, gap, deadline, or open-loop item(s) need attention."})
+            actions.append({"target": "review", "label": "Resolve review queue", "detail": f"{len(open_review_items)} contradiction, gap, deadline, open-loop, or cited analysis item(s) need attention."})
         if not actions:
             actions.append({"target": "bundle", "label": "Prepare internal case bundle", "detail": "The readable evidence is organized; review export material before external sharing."})
         return actions[:6]

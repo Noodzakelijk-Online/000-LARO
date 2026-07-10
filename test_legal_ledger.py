@@ -587,12 +587,16 @@ class TestLegalLedgerService(unittest.TestCase):
             "document_type": "bank_record",
             "extracted_text": "Payment was sent before the deadline.",
         }, actor="robert")
-        self.ledger.add_evidence_link(case["case_id"], {
+        evidence_link = self.ledger.add_evidence_link(case["case_id"], {
             "document_id": document["document_id"],
             "target_type": "claim",
             "target_id": claim["id"],
             "snippet": "Payment was sent before the deadline.",
         }, actor="robert")
+        confirmed_link = self.ledger.update_evidence_link(
+            case["case_id"], evidence_link["id"], {"action": "confirm"}, actor="robert"
+        )
+        self.assertTrue(confirmed_link["user_confirmed"])
 
         refreshed = self.ledger.list_missing_evidence(case["case_id"])
         self.assertTrue(all(item["status"] == "resolved" for item in refreshed))
@@ -603,7 +607,7 @@ class TestLegalLedgerService(unittest.TestCase):
 
         self.assertEqual(len(summary["claims"]["supported"]), 1)
         self.assertEqual(len(summary["claims"]["unsupported"]), 0)
-        self.assertIn("Supported claims: 1", red_line["body"])
+        self.assertIn("Confirmed supported claims: 1", red_line["body"])
         self.assertIn(f"doc {document['document_id']}: Payment confirmation", red_line["body"])
         self.assertIn("source: doc", red_line["body"])
         self.assertIn("source_documents", red_line["sections"])
@@ -633,6 +637,52 @@ class TestLegalLedgerService(unittest.TestCase):
         approved_bundle = self.ledger.case_bundle(case["case_id"])
         self.assertEqual(approved_bundle["share_status"], "external_share_approved")
         self.assertTrue(approved_bundle["external_sharing_allowed"])
+
+    def test_proposed_evidence_is_not_counted_as_confirmed_claim_support(self):
+        case = self.ledger.create_case({
+            "user_id": "robert",
+            "title": "Evidence confirmation boundary",
+            "description": "Proposed evidence must remain review-only.",
+        }, actor="robert")
+        claim = self.ledger.add_claim(case["case_id"], {
+            "statement": "Robert sent the notice before the stated deadline.",
+            "asserted_by": "Robert",
+        }, actor="robert")
+        document = self.ledger.add_document(case["case_id"], {
+            "title": "Notice email",
+            "document_type": "email",
+            "extracted_text": "The notice was sent on 2024-05-13.",
+        }, actor="robert")
+        link = self.ledger.add_evidence_link(case["case_id"], {
+            "document_id": document["document_id"],
+            "target_type": "claim",
+            "target_id": claim["id"],
+            "relationship": "supports",
+            "snippet": "The notice was sent on 2024-05-13.",
+        }, actor="robert")
+
+        summary = self.ledger.case_summary(case["case_id"])
+        dossier = self.ledger.case_comprehension_dossier(case["case_id"])
+        red_line = self.ledger.red_line_thread(case["case_id"])
+
+        self.assertEqual(summary["claims"]["supported"], [])
+        self.assertEqual(len(summary["claims"]["proposed_support"]), 1)
+        self.assertEqual(summary["claims"]["unsupported"], [])
+        self.assertEqual(dossier["positions"]["supported"], [])
+        self.assertEqual(len(dossier["positions"]["proposed_support"]), 1)
+        self.assertEqual(len(dossier["positions"]["proposed_support"][0]["proposed_sources"]), 1)
+        self.assertTrue(any(action["label"] == "Confirm proposed evidence links" for action in dossier["next_actions"]))
+        self.assertIn("Confirmed supported claims: 0", red_line["body"])
+        self.assertIn("Claims with proposed support: 1", red_line["body"])
+        self.assertIn("proposed evidence: source: doc", red_line["body"])
+
+        confirmed = self.ledger.update_evidence_link(
+            case["case_id"], link["id"], {"action": "confirm"}, actor="robert"
+        )
+        self.assertTrue(confirmed["user_confirmed"])
+        confirmed_summary = self.ledger.case_summary(case["case_id"])
+        self.assertEqual(len(confirmed_summary["claims"]["supported"]), 1)
+        self.assertEqual(confirmed_summary["claims"]["proposed_support"], [])
 
     def test_timeline_suggestions_can_be_edited_approved_and_rejected(self):
         case = self.ledger.create_case({"user_id": "robert", "title": "CAK timeline review"}, actor="robert")
@@ -1573,8 +1623,9 @@ class TestLegalLedgerApi(unittest.TestCase):
         self.assertIn(first_event["review_status"], {"needs_review", "confirmed"})
 
         self.assertTrue(payload["positions"]["all"])
-        self.assertTrue(any(item["supporting_sources"] for item in payload["positions"]["all"]))
-        self.assertTrue(any(item["target"] in {"timeline", "claims", "review", "bundle"} for item in payload["next_actions"]))
+        self.assertFalse(any(item["supporting_sources"] for item in payload["positions"]["all"]))
+        self.assertTrue(any(item["proposed_sources"] for item in payload["positions"]["all"]))
+        self.assertTrue(any(item["target"] in {"timeline", "evidence", "claims", "review", "bundle"} for item in payload["next_actions"]))
 
     def test_document_aggregation_persists_comprehension_artifacts(self):
         created = self.client.post("/api/cases", json={
@@ -1613,7 +1664,8 @@ class TestLegalLedgerApi(unittest.TestCase):
         dossier = self.client.get(f"/api/cases/{case_id}/comprehension", headers=self.headers)
         self.assertEqual(dossier.status_code, 200)
         self.assertTrue(dossier.get_json()["chronology"])
-        self.assertTrue(any(item["supporting_sources"] for item in dossier.get_json()["positions"]["all"]))
+        self.assertFalse(any(item["supporting_sources"] for item in dossier.get_json()["positions"]["all"]))
+        self.assertTrue(any(item["proposed_sources"] for item in dossier.get_json()["positions"]["all"]))
 
     def test_source_batch_import_reads_meta_tagged_gmail_and_drive_records(self):
         created = self.client.post("/api/cases", json={
@@ -2173,6 +2225,22 @@ class TestLegalLedgerApi(unittest.TestCase):
         self.assertEqual(review_item["status"], "needs_review")
         self.assertEqual(self.client.get(f"/api/cases/{case_id}/contradictions", headers=self.headers).get_json()["contradictions"], [])
 
+        summary = self.client.get(f"/api/cases/{case_id}/summary", headers=self.headers)
+        self.assertEqual(summary.status_code, 200)
+        self.assertEqual(len(summary.get_json()["risk_review"]["case_analysis"]), 1)
+        self.assertEqual(summary.get_json()["risk_review"]["case_analysis"][0]["status"], "needs_review")
+        dossier = self.client.get(f"/api/cases/{case_id}/comprehension", headers=self.headers)
+        self.assertEqual(dossier.status_code, 200)
+        self.assertTrue(any(item["type"] == "case_analysis" for item in dossier.get_json()["review"]["open_items"]))
+        graph = self.client.get(f"/api/cases/{case_id}/papertrail", headers=self.headers)
+        self.assertEqual(graph.status_code, 200)
+        review_node_id = f"case_analysis_review:{review_item['id']}"
+        self.assertTrue(any(node["id"] == review_node_id for node in graph.get_json()["nodes"]))
+        self.assertEqual(
+            len([edge for edge in graph.get_json()["edges"] if edge["to"] == review_node_id and edge["type"] == "cites"]),
+            2,
+        )
+
         converted = self.client.patch(
             f"/api/cases/{case_id}/case-analysis/review-items/{review_item['id']}",
             json={"action": "contradiction"},
@@ -2182,6 +2250,14 @@ class TestLegalLedgerApi(unittest.TestCase):
         converted_item = converted.get_json()["review_item"]
         self.assertEqual(converted_item["status"], "converted")
         self.assertEqual(converted_item["target_type"], "contradiction")
+
+        converted_graph = self.client.get(f"/api/cases/{case_id}/papertrail", headers=self.headers).get_json()
+        self.assertTrue(any(
+            edge["from"] == review_node_id
+            and edge["to"] == f"contradiction:{converted_item['target_id']}"
+            and edge["type"] == "prepared_as"
+            for edge in converted_graph["edges"]
+        ))
 
         contradictions = self.client.get(f"/api/cases/{case_id}/contradictions", headers=self.headers).get_json()["contradictions"]
         self.assertEqual(len(contradictions), 1)
