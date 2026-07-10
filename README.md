@@ -51,6 +51,18 @@ GOOGLE_REDIRECT_URI=http://127.0.0.1:8768/api/google/oauth/callback
 
 LARO stores connection status and a token fingerprint in the ledger, never raw OAuth tokens. Raw credentials are encrypted in the ignored local `tokens/` vault. Once connected, use the Documents tab in a case to run an explicit Gmail search or Drive query; LARO imports only those matching records, including supported Gmail attachments, preserves the original URI, deduplicates them, and records the read in the audit log.
 
+## Optional Local Deep Reading
+
+The default document reader is deterministic and source-linked. For deeper analysis on your own machine, configure a local Ollama model in `.env`:
+
+```text
+LARO_ANALYSIS_PROVIDER=ollama
+LARO_OLLAMA_BASE_URL=http://127.0.0.1:11434
+LARO_OLLAMA_MODEL=<your-local-model>
+```
+
+LARO refuses non-loopback analysis URLs. Model output is retained only as review-only observations with literal source quotes; uncited output is discarded. It never becomes a confirmed fact, claim, deadline, or external communication automatically.
+
 ## Tests
 
 Run the legal-ledger verification suite:

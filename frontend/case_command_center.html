@@ -7255,7 +7255,9 @@
             const analysis = document.metadata?.legal_analysis || {};
             const findings = analysis.findings || {};
             const statements = findings.source_passages || [];
-            if (!statements.length) return "";
+            const semantic = analysis.semantic_reading || {};
+            const semanticFindings = semantic.findings || [];
+            if (!statements.length && !semanticFindings.length) return "";
             const categories = Object.entries(findings.category_counts || {})
                 .map(([name, count]) => `${count} ${name.replace(/_/g, " ")}`)
                 .join(" / ");
@@ -7264,14 +7266,32 @@
                     <summary>Source analysis</summary>
                     <p class="muted">Rule-based source passages for review. They are not legal conclusions.</p>
                     ${categories ? `<p class="muted">${escapeHtml(categories)}</p>` : ""}
-                    <div class="record-list">
+                    ${statements.length ? `<div class="record-list">
                         ${statements.slice(0, 8).map((item) => `
                             <article class="record-row">
                                 <span class="record-kicker">${escapeHtml((item.categories || ["statement"]).join(" / ").replace(/_/g, " "))}</span>
                                 <div><p>${escapeHtml(item.excerpt || "")}</p><p class="muted">${item.requires_review ? "Needs review" : "Source statement"}</p></div>
                             </article>
                         `).join("")}
-                    </div>
+                    </div>` : ""}
+                    ${semanticFindings.length ? `
+                        <section class="source-preview-text">
+                            <span>Local deep reading</span>
+                            <p>Model-proposed observations. Verify every observation against its cited source text.</p>
+                        </section>
+                        <div class="record-list">
+                            ${semanticFindings.slice(0, 8).map((item) => `
+                                <article class="record-row">
+                                    <span class="record-kicker">${escapeHtml(String(item.category || "observation").replace(/_/g, " "))}</span>
+                                    <div>
+                                        <p>${escapeHtml(item.observation || "No additional observation recorded.")}</p>
+                                        <p class="muted">${escapeHtml(item.source_quote || "No source quote")}</p>
+                                        <p class="muted">Needs review</p>
+                                    </div>
+                                </article>
+                            `).join("")}
+                        </div>
+                    ` : ""}
                 </details>
             `;
         }

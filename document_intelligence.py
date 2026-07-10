@@ -13,9 +13,14 @@ import re
 from collections import Counter
 from typing import Any, Dict, Iterable, List, Optional
 
+from local_semantic_analysis import LocalSemanticAnalysisProvider
+
 
 class DocumentIntelligenceEngine:
     """Extracts legal signals and evidence facts from document contents."""
+
+    def __init__(self, semantic_provider: Optional[LocalSemanticAnalysisProvider] = None) -> None:
+        self.semantic_provider = semantic_provider or LocalSemanticAnalysisProvider()
 
     DATE_PATTERNS = [
         re.compile(r"\b(?P<date>\d{4}[-/]\d{1,2}[-/]\d{1,2})\b"),
@@ -348,6 +353,7 @@ class DocumentIntelligenceEngine:
         risk_flags = self._detect_risks(sentences)
         chronology_events = self._build_chronology_events(dates)
         relevance_score = self._score_relevance(normalized, dates, legal_references, topics, key_sentences)
+        semantic_reading = self.semantic_provider.analyze(normalized, document_name=document_name)
 
         return {
             "readable": bool(normalized),
@@ -370,12 +376,15 @@ class DocumentIntelligenceEngine:
                 "suggested_evidence_role": self._suggest_evidence_role(document_type, topics, risk_flags),
             },
             "findings": self._build_source_findings(passages),
+            "semantic_reading": semantic_reading,
             "processing": {
                 "text_length": len(normalized),
                 "word_count": len(normalized.split()),
                 "sentence_count": len(sentences),
                 "confidence": self._confidence(normalized, legal_references, dates),
                 "analysis_method": "rule_based_source_passage_v1",
+                "semantic_analysis_status": semantic_reading.get("status") or "disabled",
+                "semantic_analysis_provider": semantic_reading.get("provider") or "rule_based",
                 "analysis_limits": [
                     "Findings identify source passages for review; they do not establish legal facts or legal advice.",
                     "Only material rule-matched passages are listed. The original document remains the authoritative source.",
