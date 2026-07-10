@@ -2130,6 +2130,73 @@ class TestLegalLedgerApi(unittest.TestCase):
         listed = self.client.get(f"/api/cases/{case_id}/case-analysis", headers=self.headers)
         self.assertEqual(listed.get_json()["runs"], [])
 
+    def test_case_wide_review_item_requires_explicit_conversion_and_preserves_citations(self):
+        created = self.client.post("/api/cases", json={
+            "title": "Cited analysis conversion",
+            "legal_domain": "administrative_law",
+        }, headers=self.headers)
+        case_id = created.get_json()["case_id"]
+        first = self.client.post(f"/api/cases/{case_id}/documents", json={
+            "title": "First amount",
+            "extracted_text": "Decision A records a payment amount of EUR 125.",
+        }, headers=self.headers).get_json()
+        second = self.client.post(f"/api/cases/{case_id}/documents", json={
+            "title": "Second amount",
+            "extracted_text": "Notice B records a payment amount of EUR 250.",
+        }, headers=self.headers).get_json()
+
+        def fixture_analysis(documents, case_context):
+            return {
+                "status": "completed",
+                "provider": "ollama",
+                "model": "fixture-local-model",
+                "findings": [{
+                    "category": "cross_document_conflict",
+                    "observation": "The source documents state different payment amounts.",
+                    "sources": [
+                        {"document_id": str(first["document_id"]), "source_quote": "Decision A records a payment amount of EUR 125."},
+                        {"document_id": str(second["document_id"]), "source_quote": "Notice B records a payment amount of EUR 250."},
+                    ],
+                    "review_status": "needs_review",
+                }],
+                "review_questions": [],
+                "source_documents": [],
+                "limitations": [],
+            }
+
+        with mock.patch.object(self.app_module.document_intelligence.semantic_provider, "analyze_case", side_effect=fixture_analysis):
+            analysis = self.client.post(f"/api/cases/{case_id}/case-analysis", headers=self.headers)
+        self.assertEqual(analysis.status_code, 201)
+        run = analysis.get_json()["run"]
+        self.assertEqual(len(run["review_items"]), 1)
+        review_item = run["review_items"][0]
+        self.assertEqual(review_item["status"], "needs_review")
+        self.assertEqual(self.client.get(f"/api/cases/{case_id}/contradictions", headers=self.headers).get_json()["contradictions"], [])
+
+        converted = self.client.patch(
+            f"/api/cases/{case_id}/case-analysis/review-items/{review_item['id']}",
+            json={"action": "contradiction"},
+            headers=self.headers,
+        )
+        self.assertEqual(converted.status_code, 200)
+        converted_item = converted.get_json()["review_item"]
+        self.assertEqual(converted_item["status"], "converted")
+        self.assertEqual(converted_item["target_type"], "contradiction")
+
+        contradictions = self.client.get(f"/api/cases/{case_id}/contradictions", headers=self.headers).get_json()["contradictions"]
+        self.assertEqual(len(contradictions), 1)
+        self.assertEqual(contradictions[0]["status"], "needs_review")
+        self.assertEqual(len(contradictions[0]["source_refs"]), 2)
+        evidence = self.client.get(f"/api/cases/{case_id}/evidence", headers=self.headers).get_json()["evidence_links"]
+        self.assertEqual(len(evidence), 2)
+        self.assertTrue(all(link["relationship"] == "needs_review" for link in evidence))
+        self.assertTrue(all(not link["user_confirmed"] for link in evidence))
+
+        audit = self.client.get(f"/api/audit?case_id={case_id}", headers=self.headers).get_json()["audit_events"]
+        conversion_audit = next(item for item in audit if item["entity_type"] == "CaseAnalysisReviewItem" and item["action"] == "converted_to_contradiction")
+        self.assertEqual(conversion_audit["after_state"]["target_type"], "contradiction")
+        self.assertNotIn("EUR 125", str(conversion_audit["after_state"]))
+
     def test_document_file_route_blocks_paths_outside_upload_store(self):
         created = self.client.post("/api/cases", json={
             "title": "Unsafe document path case",

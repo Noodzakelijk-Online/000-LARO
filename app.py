@@ -1756,6 +1756,28 @@ def create_ledger_case_analysis(case_id):
     }), 201
 
 
+@app.route('/api/cases/<int:case_id>/case-analysis/review-items/<int:item_id>', methods=['PATCH'])
+@auth_system._require_auth
+def update_ledger_case_analysis_review_item(case_id, item_id):
+    """Apply a cited case-wide observation only after an explicit ledger choice."""
+    try:
+        item = legal_ledger.update_case_analysis_review_item(
+            case_id,
+            item_id,
+            request.json or {},
+            actor=_ledger_actor(),
+        )
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    if not item:
+        return jsonify({'error': 'Case analysis review item not found'}), 404
+    return jsonify({
+        'review_item': item,
+        'source_preserved': True,
+        'requires_human_review': item.get('status') == 'converted',
+    }), 200
+
+
 @app.route('/api/cases/<int:case_id>/documents/<int:document_id>/file', methods=['GET'])
 @auth_system._require_auth
 def open_ledger_document_file(case_id, document_id):

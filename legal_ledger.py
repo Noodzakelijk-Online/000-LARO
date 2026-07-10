@@ -118,6 +118,7 @@ class LegalCase(Base):
     identifiers = relationship("CaseIdentifier", back_populates="case", cascade="all, delete-orphan")
     match_results = relationship("MatchResult", back_populates="case", cascade="all, delete-orphan")
     analysis_runs = relationship("CaseAnalysisRun", back_populates="case", cascade="all, delete-orphan")
+    analysis_review_items = relationship("CaseAnalysisReviewItem", back_populates="case", cascade="all, delete-orphan")
 
 
 class CaseIdentifier(Base):
@@ -418,6 +419,34 @@ class CaseAnalysisRun(Base):
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
 
     case = relationship("LegalCase", back_populates="analysis_runs")
+    review_items = relationship("CaseAnalysisReviewItem", back_populates="analysis_run", cascade="all, delete-orphan")
+
+
+class CaseAnalysisReviewItem(Base):
+    """A cited case-wide observation held for explicit ledger review.
+
+    The item is an internal work item, not a confirmed fact.  A user must
+    deliberately convert it into a claim, contradiction, or follow-up.
+    """
+
+    __tablename__ = "case_analysis_review_items"
+
+    id = Column(Integer, primary_key=True)
+    case_id = Column(Integer, ForeignKey("legal_cases.id"), nullable=False, index=True)
+    analysis_run_id = Column(Integer, ForeignKey("case_analysis_runs.id"), nullable=False, index=True)
+    finding_key = Column(String(120), nullable=False, index=True)
+    item_type = Column(String(80), default="finding", index=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, default="")
+    source_refs = Column(Text, default="[]")
+    status = Column(String(80), default="needs_review", index=True)
+    target_type = Column(String(80), default="")
+    target_id = Column(Integer)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
+
+    case = relationship("LegalCase", back_populates="analysis_review_items")
+    analysis_run = relationship("CaseAnalysisRun", back_populates="review_items")
 
 
 class Approval(Base):
@@ -971,6 +1000,7 @@ class LegalLedger:
             if not case:
                 return None
             self._ensure_missing_evidence_reviews(session, case_id)
+            self._ensure_case_analysis_review_items(session, case_id)
 
             documents = session.query(CaseDocument).filter_by(case_id=case_id).all()
             timeline = [
@@ -1002,6 +1032,10 @@ class LegalLedger:
             parties = session.query(Party).filter_by(case_id=case_id).all()
             identifiers = session.query(CaseIdentifier).filter_by(case_id=case_id).all()
             audit_count = session.query(AuditEvent).filter_by(case_id=case_id).count()
+            analysis_review_items = [
+                item for item in session.query(CaseAnalysisReviewItem).filter_by(case_id=case_id).all()
+                if item.status == "needs_review"
+            ]
 
             supported_claim_ids = {
                 link.target_id
@@ -1024,6 +1058,7 @@ class LegalLedger:
                 "contradictions": len(contradictions),
                 "missing_evidence": len(missing_evidence),
                 "open_loops": len(open_loops),
+                "case_analysis": len(analysis_review_items),
             }
             review_total = sum(review_counts.values())
 
@@ -1074,6 +1109,9 @@ class LegalLedger:
                 if missing_evidence:
                     item = missing_evidence[0]
                     return {"priority": item.severity or "medium", "label": f"Find evidence: {item.title}", "detail": item.suggested_action or item.description or "A claim or event needs source support.", "target": "review", "depth": "guided", "queue_type": "gap", "item_id": item.id}
+                if analysis_review_items:
+                    item = analysis_review_items[0]
+                    return {"priority": "medium", "label": item.title or "Review case-wide observation", "detail": item.description or "A cited case-wide observation needs an explicit ledger decision.", "target": "overview", "depth": "guided", "queue_type": "case_analysis", "item_id": item.id}
                 if open_loops:
                     item = open_loops[0]
                     return {"priority": item.risk_level or "medium", "label": item.title, "detail": item.next_action or item.description or "An unresolved case loop needs attention.", "target": "review", "depth": "guided", "queue_type": "loop", "item_id": item.id}
@@ -1258,6 +1296,21 @@ class LegalLedger:
                     action_label="Resolve or dismiss",
                 ))
 
+            self._ensure_case_analysis_review_items(session, case_id)
+            for item in session.query(CaseAnalysisReviewItem).filter_by(case_id=case_id, status="needs_review").order_by(CaseAnalysisReviewItem.created_at.asc(), CaseAnalysisReviewItem.id.asc()).all():
+                source = self._serialize_case_analysis_review_item(item)
+                items.append(queue_item(
+                    "case_analysis",
+                    item.id,
+                    item.title or "Case-wide observation needs review",
+                    item.description or "A cited local analysis observation needs an explicit ledger decision.",
+                    source,
+                    status=item.status,
+                    priority="medium",
+                    target="overview",
+                    action_label="Prepare or dismiss",
+                ))
+
             for item in session.query(MissingEvidenceWarning).filter_by(case_id=case_id).order_by(MissingEvidenceWarning.updated_at.desc(), MissingEvidenceWarning.id.desc()).all():
                 if item.status in {"resolved", "dismissed"}:
                     continue
@@ -1289,7 +1342,7 @@ class LegalLedger:
                 ))
 
             priority_rank = {"urgent": 0, "critical": 1, "high": 2, "medium": 3, "normal": 4, "low": 5}
-            target_rank = {"approval": 0, "deadline": 1, "contradiction": 2, "gap": 3, "loop": 4, "timeline": 5, "claim": 6, "evidence": 7}
+            target_rank = {"approval": 0, "deadline": 1, "contradiction": 2, "case_analysis": 3, "gap": 4, "loop": 5, "timeline": 6, "claim": 7, "evidence": 8}
             items.sort(key=lambda item: (
                 priority_rank.get(str(item.get("priority") or "medium"), 3),
                 target_rank.get(str(item.get("queue_type") or ""), 9),
@@ -1555,6 +1608,7 @@ class LegalLedger:
             )
             session.add(item)
             session.flush()
+            self._ensure_case_analysis_review_items(session, case_id, item)
             self._audit(
                 session,
                 case_id,
@@ -1566,18 +1620,147 @@ class LegalLedger:
                 self._case_analysis_audit_state(item),
                 "low",
             )
-            return self._serialize_case_analysis_run(item)
+            return self._serialize_case_analysis_run(item, self._case_analysis_review_items_for_run(session, item.id))
 
     def list_case_analysis_runs(self, case_id: int, limit: int = 12) -> List[Dict[str, Any]]:
         with self.session_scope() as session:
+            if not session.get(LegalCase, case_id):
+                return []
+            self._ensure_case_analysis_review_items(session, case_id)
             return [
-                self._serialize_case_analysis_run(item)
+                self._serialize_case_analysis_run(item, self._case_analysis_review_items_for_run(session, item.id))
                 for item in session.query(CaseAnalysisRun)
                 .filter_by(case_id=case_id)
                 .order_by(CaseAnalysisRun.created_at.desc(), CaseAnalysisRun.id.desc())
                 .limit(max(1, min(int(limit or 12), 50)))
                 .all()
             ]
+
+    def list_case_analysis_review_items(self, case_id: int) -> List[Dict[str, Any]]:
+        with self.session_scope() as session:
+            if not session.get(LegalCase, case_id):
+                return []
+            self._ensure_case_analysis_review_items(session, case_id)
+            return [
+                self._serialize_case_analysis_review_item(item)
+                for item in session.query(CaseAnalysisReviewItem)
+                .filter_by(case_id=case_id)
+                .order_by(CaseAnalysisReviewItem.created_at.desc(), CaseAnalysisReviewItem.id.desc())
+                .all()
+            ]
+
+    def update_case_analysis_review_item(
+        self,
+        case_id: int,
+        item_id: int,
+        data: Dict[str, Any],
+        actor: str = "system",
+    ) -> Optional[Dict[str, Any]]:
+        """Convert a cited observation only after an explicit user decision."""
+        action = str(data.get("action") or "").strip().lower()
+        if action not in {"contradiction", "claim", "follow_up", "dismiss", "reopen"}:
+            raise ValueError("Case analysis action must be contradiction, claim, follow_up, dismiss, or reopen")
+
+        with self.session_scope() as session:
+            item = session.get(CaseAnalysisReviewItem, item_id)
+            if not item or item.case_id != case_id:
+                return None
+            before = self._case_analysis_review_item_audit_state(item)
+            sources = _json_load(item.source_refs, [])
+
+            if action == "dismiss":
+                item.status = "dismissed"
+                item.updated_at = utcnow()
+                self._audit(
+                    session, case_id, "CaseAnalysisReviewItem", item.id, "dismissed", actor,
+                    before, self._case_analysis_review_item_audit_state(item), "low",
+                )
+                return self._serialize_case_analysis_review_item(item)
+
+            if action == "reopen":
+                item.status = "needs_review"
+                item.target_type = ""
+                item.target_id = None
+                item.updated_at = utcnow()
+                self._audit(
+                    session, case_id, "CaseAnalysisReviewItem", item.id, "reopened", actor,
+                    before, self._case_analysis_review_item_audit_state(item), "low",
+                )
+                return self._serialize_case_analysis_review_item(item)
+
+            if item.status == "converted":
+                raise ValueError("This case-wide observation was already converted. Reopen it before creating another ledger item.")
+            if not sources:
+                raise ValueError("This case-wide observation has no validated source citations.")
+            if action == "contradiction" and len(sources) < 2:
+                raise ValueError("A contradiction needs at least two validated source citations.")
+
+            if action == "contradiction":
+                target = Contradiction(
+                    case_id=case_id,
+                    contradiction_type="cross_document_analysis",
+                    title=item.title or "Case-wide source conflict",
+                    description=item.description,
+                    status="needs_review",
+                    severity="medium",
+                    source_refs=_json_dump(sources),
+                )
+                session.add(target)
+                session.flush()
+                target_type = "contradiction"
+                self._audit(session, case_id, "Contradiction", target.id, "created", actor, {}, self._serialize_contradiction(target), "medium")
+            elif action == "claim":
+                target = LegalClaim(
+                    case_id=case_id,
+                    asserted_by="case_analysis",
+                    claim_type="cross_document_observation",
+                    statement=item.description,
+                    status="needs_review",
+                    confidence=0.0,
+                )
+                session.add(target)
+                session.flush()
+                target_type = "claim"
+                self._audit(session, case_id, "LegalClaim", target.id, "created", actor, {}, self._serialize_claim(target), "medium")
+            else:
+                target = OpenLoop(
+                    case_id=case_id,
+                    title=item.title or "Verify case-wide observation",
+                    description=item.description,
+                    owner="robert",
+                    status="open",
+                    next_action="Open each cited source and decide how this observation should affect the case record.",
+                    risk_level="medium",
+                )
+                session.add(target)
+                session.flush()
+                target_type = "open_loop"
+                self._audit(session, case_id, "OpenLoop", target.id, "created", actor, {}, self._serialize_open_loop(target), "medium")
+
+            for source in sources:
+                link = self._create_evidence_link(
+                    session,
+                    case_id=case_id,
+                    document_id=source["document_id"],
+                    target_type=target_type,
+                    target_id=target.id,
+                    snippet=source["source_quote"],
+                    relationship="needs_review",
+                    strength="medium",
+                    source_confidence=0.0,
+                    user_confirmed=False,
+                )
+                self._audit(session, case_id, "EvidenceLink", link.id, "created", actor, {}, self._serialize_evidence_link(link), "medium")
+
+            item.status = "converted"
+            item.target_type = target_type
+            item.target_id = target.id
+            item.updated_at = utcnow()
+            self._audit(
+                session, case_id, "CaseAnalysisReviewItem", item.id, f"converted_to_{target_type}", actor,
+                before, self._case_analysis_review_item_audit_state(item), "medium",
+            )
+            return self._serialize_case_analysis_review_item(item)
 
     def add_event(self, case_id: int, data: Dict[str, Any], actor: str = "system") -> Optional[Dict[str, Any]]:
         with self.session_scope() as session:
@@ -3624,6 +3807,7 @@ class LegalLedger:
         ).count()
         data["open_loops_count"] = session.query(OpenLoop).filter_by(case_id=case.id, status="open").count()
         data["pending_approvals_count"] = session.query(Approval).filter_by(case_id=case.id, status="pending").count()
+        data["case_analysis_review_count"] = session.query(CaseAnalysisReviewItem).filter_by(case_id=case.id, status="needs_review").count()
         return data
 
     def _serialize_user(self, user: LedgerUser) -> Dict[str, Any]:
@@ -3778,8 +3962,111 @@ class LegalLedger:
             "created_at": _iso(item.created_at),
         }
 
-    @staticmethod
-    def _serialize_case_analysis_run(item: CaseAnalysisRun) -> Dict[str, Any]:
+    def _ensure_case_analysis_review_items(
+        self,
+        session,
+        case_id: int,
+        analysis_run: Optional[CaseAnalysisRun] = None,
+    ) -> None:
+        """Materialize cited analysis into review work without creating legal facts."""
+        runs = [analysis_run] if analysis_run else session.query(CaseAnalysisRun).filter_by(case_id=case_id).all()
+        documents = {
+            item.id: item
+            for item in session.query(CaseDocument).filter_by(case_id=case_id).all()
+        }
+        for run in runs:
+            if not run:
+                continue
+            content = _json_load(run.content_json, {})
+            candidates = []
+            candidates.extend(("finding", index, item) for index, item in enumerate(content.get("findings") or []) if isinstance(item, dict))
+            candidates.extend(("review_question", index, item) for index, item in enumerate(content.get("review_questions") or []) if isinstance(item, dict))
+            existing_keys = {
+                item.finding_key
+                for item in session.query(CaseAnalysisReviewItem.finding_key)
+                .filter_by(case_id=case_id, analysis_run_id=run.id)
+                .all()
+            }
+            for item_type, index, candidate in candidates:
+                finding_key = f"{item_type}:{index}"
+                if finding_key in existing_keys:
+                    continue
+                validated_sources = []
+                seen_sources = set()
+                for source in candidate.get("sources") or []:
+                    if not isinstance(source, dict):
+                        continue
+                    try:
+                        document_id = int(source.get("document_id"))
+                    except (TypeError, ValueError):
+                        continue
+                    quote = str(source.get("source_quote") or "").strip()
+                    document = documents.get(document_id)
+                    source_text = str((document.extracted_text or document.ocr_text or "") if document else "")
+                    if not quote or quote not in source_text:
+                        continue
+                    source_key = (document_id, quote)
+                    if source_key in seen_sources:
+                        continue
+                    seen_sources.add(source_key)
+                    validated_sources.append({"document_id": document_id, "source_quote": quote})
+                if not validated_sources:
+                    continue
+                description = str(candidate.get("observation") or candidate.get("question") or "").strip()
+                if not description:
+                    continue
+                category = str(candidate.get("category") or "case-wide observation").replace("_", " ").strip()
+                title = (
+                    f"Verify: {description[:180]}"
+                    if item_type == "review_question"
+                    else f"Review {category}: {description[:160]}"
+                )
+                review_item = CaseAnalysisReviewItem(
+                    case_id=case_id,
+                    analysis_run_id=run.id,
+                    finding_key=finding_key,
+                    item_type=item_type,
+                    title=title[:255],
+                    description=description,
+                    source_refs=_json_dump(validated_sources),
+                    status="needs_review",
+                )
+                session.add(review_item)
+                session.flush()
+                self._audit(
+                    session, case_id, "CaseAnalysisReviewItem", review_item.id, "created", "system",
+                    {}, self._case_analysis_review_item_audit_state(review_item), "low",
+                )
+
+    def _case_analysis_review_items_for_run(self, session, analysis_run_id: int) -> List[Dict[str, Any]]:
+        return [
+            self._serialize_case_analysis_review_item(item)
+            for item in session.query(CaseAnalysisReviewItem)
+            .filter_by(analysis_run_id=analysis_run_id)
+            .order_by(CaseAnalysisReviewItem.id.asc())
+            .all()
+        ]
+
+    def _case_analysis_review_item_audit_state(self, item: CaseAnalysisReviewItem) -> Dict[str, Any]:
+        sources = _json_load(item.source_refs, [])
+        return {
+            "review_item_id": item.id,
+            "analysis_run_id": item.analysis_run_id,
+            "finding_key": item.finding_key,
+            "item_type": item.item_type,
+            "status": item.status,
+            "target_type": item.target_type,
+            "target_id": item.target_id,
+            "source_document_ids": [source.get("document_id") for source in sources if isinstance(source, dict)],
+            "description_hash": self._hash(item.description or ""),
+            "source_refs_hash": self._hash(_json_dump(sources)),
+        }
+
+    def _serialize_case_analysis_run(
+        self,
+        item: CaseAnalysisRun,
+        review_items: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
         return {
             "id": item.id,
             "case_id": item.case_id,
@@ -3789,6 +4076,25 @@ class LegalLedger:
             "model": item.model,
             "content": _json_load(item.content_json, {}),
             "source_documents": _json_load(item.source_snapshot_json, []),
+            "review_items": review_items if review_items is not None else [],
+            "created_at": _iso(item.created_at),
+            "updated_at": _iso(item.updated_at),
+        }
+
+    @staticmethod
+    def _serialize_case_analysis_review_item(item: CaseAnalysisReviewItem) -> Dict[str, Any]:
+        return {
+            "id": item.id,
+            "case_id": item.case_id,
+            "analysis_run_id": item.analysis_run_id,
+            "finding_key": item.finding_key,
+            "item_type": item.item_type,
+            "title": item.title,
+            "description": item.description,
+            "source_refs": _json_load(item.source_refs, []),
+            "status": item.status,
+            "target_type": item.target_type,
+            "target_id": item.target_id,
             "created_at": _iso(item.created_at),
             "updated_at": _iso(item.updated_at),
         }

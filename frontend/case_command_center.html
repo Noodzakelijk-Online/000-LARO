@@ -6111,6 +6111,26 @@
             const findings = content.findings || [];
             const questions = content.review_questions || [];
             const sourceButton = (source) => sourceDocumentButton(source?.document_id, source?.source_quote || "");
+            const reviewItems = new Map((run?.review_items || []).map((item) => [item.finding_key, item]));
+            const reviewControls = (reviewItem, type, sourceCount) => {
+                if (!reviewItem) return `<p class="muted">Needs review</p>`;
+                if (reviewItem.status === "converted") {
+                    return `<p class="muted">Prepared as ${escapeHtml(String(reviewItem.target_type || "ledger item").replace(/_/g, " "))}; it still needs review in the case ledger.</p>`;
+                }
+                if (reviewItem.status === "dismissed") {
+                    return `<div class="button-row"><p class="muted">Dismissed from this review run.</p><button class="btn-secondary-ledger analysis-review-action" type="button" data-analysis-review-id="${escapeHtml(reviewItem.id)}" data-analysis-action="reopen">Reopen</button></div>`;
+                }
+                const primaryAction = type === "review_question" ? "follow_up" : sourceCount > 1 ? "contradiction" : "claim";
+                const primaryLabel = primaryAction === "follow_up" ? "Create follow-up" : primaryAction === "contradiction" ? "Prepare conflict" : "Prepare claim";
+                return `
+                    <div class="button-row case-analysis-actions">
+                        <button class="btn-ledger analysis-review-action" type="button" data-analysis-review-id="${escapeHtml(reviewItem.id)}" data-analysis-action="${primaryAction}">${primaryLabel}</button>
+                        ${type === "finding" && primaryAction !== "claim" ? `<button class="btn-secondary-ledger analysis-review-action" type="button" data-analysis-review-id="${escapeHtml(reviewItem.id)}" data-analysis-action="claim">Prepare claim</button>` : ""}
+                        ${type === "finding" && primaryAction !== "follow_up" ? `<button class="btn-secondary-ledger analysis-review-action" type="button" data-analysis-review-id="${escapeHtml(reviewItem.id)}" data-analysis-action="follow_up">Create follow-up</button>` : ""}
+                        <button class="btn-secondary-ledger analysis-review-action" type="button" data-analysis-review-id="${escapeHtml(reviewItem.id)}" data-analysis-action="dismiss">Dismiss</button>
+                    </div>
+                `;
+            };
             return `
                 <section class="detail-section guided-depth">
                     <div class="panel-header">
@@ -6123,7 +6143,9 @@
                     <p class="muted" id="caseAnalysisStatus">Analysis remains local and review-only; source documents are not changed.</p>
                     ${run ? `
                         <p class="muted">${escapeHtml(run.provider || "local")} · ${escapeHtml(run.model || "configured local model")} · ${escapeHtml(String(run.created_at || "").slice(0, 19) || "just now")}</p>
-                        ${findings.length ? `<div class="record-list">${findings.slice(0, 8).map((item) => `
+                        ${findings.length ? `<div class="record-list">${findings.slice(0, 8).map((item, index) => {
+                            const reviewItem = reviewItems.get(`finding:${index}`);
+                            return `
                             <article class="record-row">
                                 <span class="record-kicker">${escapeHtml(String(item.category || "observation").replace(/_/g, " "))}</span>
                                 <div>
@@ -6131,16 +6153,20 @@
                                     <div class="source-ref-list">${(item.sources || []).map((source) => `
                                         <span class="source-ref-chip">${sourceButton(source)}<span>${escapeHtml(source.source_quote || "Source quote")}</span></span>
                                     `).join("")}</div>
-                                    <p class="muted">Needs review</p>
+                                    ${reviewControls(reviewItem, "finding", (item.sources || []).length)}
                                 </div>
                             </article>
-                        `).join("")}</div>` : `<div class="empty-state">No cited cross-document observations were retained from this run.</div>`}
-                        ${questions.length ? `<div class="record-list" style="margin-top: 0.75rem;">${questions.slice(0, 6).map((item) => `
+                        `;
+                        }).join("")}</div>` : `<div class="empty-state">No cited cross-document observations were retained from this run.</div>`}
+                        ${questions.length ? `<div class="record-list" style="margin-top: 0.75rem;">${questions.slice(0, 6).map((item, index) => {
+                            const reviewItem = reviewItems.get(`review_question:${index}`);
+                            return `
                             <article class="record-row">
                                 <span class="record-kicker">verify</span>
-                                <div><p>${escapeHtml(item.question || "Review cited sources.")}</p><div class="source-ref-list">${(item.sources || []).map((source) => `<span class="source-ref-chip">${sourceButton(source)}<span>${escapeHtml(source.source_quote || "Source quote")}</span></span>`).join("")}</div></div>
+                                <div><p>${escapeHtml(item.question || "Review cited sources.")}</p><div class="source-ref-list">${(item.sources || []).map((source) => `<span class="source-ref-chip">${sourceButton(source)}<span>${escapeHtml(source.source_quote || "Source quote")}</span></span>`).join("")}</div>${reviewControls(reviewItem, "review_question", (item.sources || []).length)}</div>
                             </article>
-                        `).join("")}</div>` : ""}
+                        `;
+                        }).join("")}</div>` : ""}
                     ` : `<div class="empty-state">No case-wide local synthesis has been run yet.</div>`}
                 </section>
             `;
@@ -7445,6 +7471,38 @@
             }
         }
 
+        async function updateCaseAnalysisReviewItem(button) {
+            if (!selectedCaseId) return showToast("Select a case first.");
+            const itemId = Number(button.dataset.analysisReviewId);
+            const action = button.dataset.analysisAction;
+            if (!itemId || !action) return showToast("This case-wide review item is unavailable.");
+            const originalLabel = button.textContent;
+            button.disabled = true;
+            button.textContent = "Preparing...";
+            try {
+                const response = await apiFetch(`/api/cases/${selectedCaseId}/case-analysis/review-items/${itemId}`, {
+                    method: "PATCH",
+                    body: JSON.stringify({ action })
+                });
+                const item = response.review_item || {};
+                const message = action === "dismiss"
+                    ? "Case-wide observation dismissed."
+                    : action === "reopen"
+                        ? "Case-wide observation reopened for review."
+                        : `Prepared as ${String(item.target_type || "ledger item").replace(/_/g, " ")}. Review it before relying on it.`;
+                showToast(message);
+                await loadCaseDetail(selectedCaseId);
+                await loadCommandCenter();
+                if (item.status === "converted") activateDetailTab("review");
+            } catch (error) {
+                showToast(error.message);
+                throw error;
+            } finally {
+                button.disabled = false;
+                button.textContent = originalLabel;
+            }
+        }
+
         async function runCaseWideAnalysis() {
             if (!selectedCaseId) return showToast("Select a case first.");
             const button = document.getElementById("runCaseAnalysis");
@@ -7619,6 +7677,9 @@
             const previewOpenOriginal = document.getElementById("sourcePreviewOpenOriginal");
             if (previewOpenOriginal) previewOpenOriginal.onclick = () => openOriginalSourceDocument().catch((error) => showToast(error.message));
             document.getElementById("runCaseAnalysis")?.addEventListener("click", () => runCaseWideAnalysis().catch(() => {}));
+            document.querySelectorAll(".analysis-review-action").forEach((button) => {
+                button.addEventListener("click", () => updateCaseAnalysisReviewItem(button).catch(() => {}));
+            });
             document.querySelectorAll("[data-timeline-mode]").forEach((button) => {
                 button.addEventListener("click", () => {
                     const allowed = ["story", "horizontal", "vertical"];
