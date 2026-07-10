@@ -41,6 +41,7 @@ from google_oauth import (
 from google_evidence import GoogleEvidenceConnector, GoogleEvidenceError
 from google_token_store import LocalEncryptedTokenStore, TokenStoreError
 from legal_ledger import init_legal_ledger
+from outreach_discovery import OutreachDiscoveryError, OutreachTargetDiscovery
 
 # Configure logging
 logging.basicConfig(
@@ -2433,6 +2434,40 @@ def import_outreach_directory_targets():
         'count': len(targets),
         'status': 'needs_review',
         'message': 'Imported targets need review before matching can use them.',
+    }), 201
+
+
+@app.route('/api/outreach/directory/discover', methods=['POST'])
+@auth_system._require_auth
+def discover_outreach_directory_targets():
+    """Search public web results only after an explicit local user action.
+
+    The submitted query is the only value sent to the external search provider;
+    candidate results are immediately placed behind the directory review gate.
+    """
+    data = request.get_json(silent=True) or {}
+    if not data.get('confirm_external_search'):
+        return jsonify({'error': 'Confirm the external query before searching public sources'}), 400
+    try:
+        discovery = OutreachTargetDiscovery().discover(
+            target_type=data.get('target_type') or data.get('category'),
+            query=data.get('query'),
+            limit=data.get('limit') or data.get('max_results') or 10,
+        )
+        targets = legal_ledger.import_outreach_directory_targets(
+            discovery['candidates'],
+            actor=_ledger_actor(),
+            audit_source='web_search',
+            audit_action='discovered_for_review',
+        ) if discovery['candidates'] else []
+    except (OutreachDiscoveryError, ValueError) as exc:
+        return jsonify({'error': str(exc)}), 400
+    return jsonify({
+        **{key: value for key, value in discovery.items() if key != 'candidates'},
+        'targets': targets,
+        'count': len(targets),
+        'status': 'needs_review',
+        'message': 'Public search candidates were added for review. Only approved records can be matched.',
     }), 201
 
 

@@ -2068,6 +2068,8 @@ class LegalLedger:
         self,
         records: Iterable[Dict[str, Any]],
         actor: str = "system",
+        audit_source: str = "api",
+        audit_action: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Store sourced outreach records for review before case matching can use them."""
         imported: List[Dict[str, Any]] = []
@@ -2115,11 +2117,12 @@ class LegalLedger:
                     None,
                     "OutreachDirectoryTarget",
                     item.id,
-                    "imported" if not before else "reimported_for_review",
+                    audit_action or ("imported" if not before else "reimported_for_review"),
                     actor,
                     before,
                     after,
                     "medium",
+                    source=audit_source,
                 )
                 imported.append(after)
         return imported

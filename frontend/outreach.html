@@ -429,6 +429,27 @@
             resize: vertical;
         }
 
+        .directory-discovery {
+            border-bottom: 1px solid var(--outreach-border);
+            display: grid;
+            gap: 0.9rem;
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+        }
+
+        .directory-discovery-row {
+            align-items: end;
+            display: grid;
+            gap: 0.75rem;
+            grid-template-columns: minmax(0, 1fr) 160px auto;
+        }
+
+        .directory-discovery-note {
+            color: var(--outreach-muted);
+            font-size: 0.82rem;
+            margin: 0;
+        }
+
         .directory-review-list {
             display: grid;
             gap: 0.75rem;
@@ -736,6 +757,7 @@
             .focus-progress-strip,
             .focus-command-grid,
             .expert-controls,
+            .directory-discovery-row,
             .progress-row,
             .history-item,
             .insight-list {
@@ -932,6 +954,28 @@
                         <h3>Reviewed Target Directory</h3>
                         <span class="muted" id="directoryStatus">review before matching</span>
                     </div>
+                    <div class="directory-discovery">
+                        <div class="directory-discovery-row">
+                            <label>
+                                <span class="field-label">External search query</span>
+                                <input class="field-input" id="directoryDiscoveryQuery" placeholder="e.g. Dutch tenant advocacy organisations">
+                            </label>
+                            <label>
+                                <span class="field-label">Candidates</span>
+                                <select class="field-select" id="directoryDiscoveryLimit">
+                                    <option value="5">5 results</option>
+                                    <option value="10" selected>10 results</option>
+                                    <option value="20">20 results</option>
+                                </select>
+                            </label>
+                            <button class="btn btn-primary" type="button" id="discoverDirectory">Discover</button>
+                        </div>
+                        <label class="toggle-field">
+                            <input type="checkbox" id="confirmExternalSearch">
+                            Send this query to public web search
+                        </label>
+                        <p class="directory-discovery-note">Only this query leaves LARO. Results remain unapproved until you review their source and scope.</p>
+                    </div>
                     <div class="directory-import">
                         <label>
                             <span class="field-label">Source records (JSON)</span>
@@ -1058,11 +1102,11 @@
             list.innerHTML = state.directoryTargets.length ? state.directoryTargets.map((target) => `
                 <article class="directory-review-item">
                     <div>
-                        <h4>${target.name}</h4>
-                        <p class="muted">${target.subtype || target.target_type} - ${target.status} - ${target.source_label || target.source_url}</p>
+                        <h4>${escapeHtml(target.name)}</h4>
+                        <p class="muted">${escapeHtml(target.subtype || target.target_type)} - ${escapeHtml(target.status)} - ${escapeHtml(target.source_label || target.source_url)}</p>
                     </div>
                     <div class="case-actions">
-                        <a class="source-link" href="${target.source_url}" target="_blank" rel="noopener">Source</a>
+                        <a class="source-link" href="${escapeHtml(target.source_url)}" target="_blank" rel="noopener">Source</a>
                         ${target.status === "needs_review" ? `<button class="btn btn-secondary" type="button" data-directory-action="approve" data-directory-id="${target.id}">Approve</button>` : ""}
                         ${target.status !== "archived" ? `<button class="btn btn-secondary" type="button" data-directory-action="archive" data-directory-id="${target.id}">Archive</button>` : ""}
                     </div>
@@ -1106,6 +1150,36 @@
             await refreshDirectoryTargets();
         }
 
+        async function discoverDirectoryTargets() {
+            const targetType = directoryTargetType();
+            const query = document.getElementById("directoryDiscoveryQuery").value.trim();
+            const confirmed = document.getElementById("confirmExternalSearch").checked;
+            const limit = Number(document.getElementById("directoryDiscoveryLimit").value || 10);
+            if (!targetType) return;
+            if (!query) {
+                showToast("Enter a search query first");
+                return;
+            }
+            if (!confirmed) {
+                showToast("Confirm the external query before searching");
+                return;
+            }
+            const button = document.getElementById("discoverDirectory");
+            button.disabled = true;
+            button.textContent = "Searching...";
+            try {
+                const payload = await apiFetch("/api/outreach/directory/discover", {
+                    method: "POST",
+                    body: JSON.stringify({ target_type: targetType, query, limit, confirm_external_search: true })
+                });
+                showToast(`${payload.count} candidate${payload.count === 1 ? "" : "s"} added for review`);
+                await refreshDirectoryTargets();
+            } finally {
+                button.disabled = false;
+                button.textContent = "Discover";
+            }
+        }
+
         function labelForTab(tab) {
             if (tab === "overview") return "Outreach";
             return tab === "organizations" ? "Organizations" : tab.charAt(0).toUpperCase() + tab.slice(1);
@@ -1113,6 +1187,16 @@
 
         function initials(name) {
             return String(name || "").split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? "").replace(/[&<>"']/g, (character) => ({
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                "\"": "&quot;",
+                "'": "&#39;"
+            }[character]));
         }
 
         function barWidth(value, max) {
@@ -1430,6 +1514,9 @@
         });
         document.getElementById("refreshDirectory").addEventListener("click", () => {
             refreshDirectoryTargets().catch((error) => showToast(error.message || "Unable to refresh directory"));
+        });
+        document.getElementById("discoverDirectory").addEventListener("click", () => {
+            discoverDirectoryTargets().catch((error) => showToast(error.message || "Unable to search public sources"));
         });
 
         const initialHash = window.location.hash.replace("#", "");

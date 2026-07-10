@@ -1328,6 +1328,55 @@ class TestLegalLedgerApi(unittest.TestCase):
         self.assertEqual(matched.get_json()["source_mode"], "approved_directory")
         self.assertEqual(matched.get_json()["matched_targets"][0]["name"], "Tenant directory fixture")
 
+    def test_api_discovery_requires_confirmation_and_keeps_targets_in_review(self):
+        missing_confirmation = self.client.post("/api/outreach/directory/discover", json={
+            "target_type": "organization",
+            "query": "Dutch tenant support organisations",
+        }, headers=self.headers)
+        self.assertEqual(missing_confirmation.status_code, 400)
+
+        discovered_record = {
+            "target_type": "organization",
+            "name": "Discovered tenant support",
+            "subtype": "organization discovery candidate",
+            "description": "Public search snippet",
+            "topics": [],
+            "legal_fields": [],
+            "channels": ["web"],
+            "source_url": "https://example.test/discovered-tenant-support",
+            "url": "https://example.test/discovered-tenant-support",
+            "source_label": "DuckDuckGo public web search",
+            "source_retrieved_at": "2026-07-10T12:00:00+00:00",
+            "confidence": "discovery_candidate",
+            "metadata": {"discovery_query": "Dutch tenant support organisations"},
+        }
+        discovery_payload = {
+            "provider": "duckduckgo_html",
+            "provider_label": "DuckDuckGo public web search",
+            "query": "Dutch tenant support organisations",
+            "retrieved_at": "2026-07-10T12:00:00+00:00",
+            "candidates": [discovered_record],
+            "result_count": 1,
+            "search_url": "https://html.duckduckgo.com/html/?q=tenant",
+        }
+        with mock.patch.object(self.app_module.OutreachTargetDiscovery, "discover", return_value=discovery_payload):
+            response = self.client.post("/api/outreach/directory/discover", json={
+                "target_type": "organization",
+                "query": "Dutch tenant support organisations",
+                "confirm_external_search": True,
+            }, headers=self.headers)
+
+        self.assertEqual(response.status_code, 201)
+        payload = response.get_json()
+        self.assertEqual(payload["provider"], "duckduckgo_html")
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["targets"][0]["status"], "needs_review")
+        self.assertEqual(self.ledger.list_outreach_directory_targets(status="approved"), [])
+        audit_items = self.ledger.list_audit_events()
+        discovery_audit = [item for item in audit_items if item["action"] == "discovered_for_review"]
+        self.assertEqual(len(discovery_audit), 1)
+        self.assertEqual(discovery_audit[0]["source"], "web_search")
+
     def test_upload_document_persists_extraction_and_timeline_suggestions(self):
         created = self.client.post("/api/cases", json={
             "title": "Upload evidence case",
