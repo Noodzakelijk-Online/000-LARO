@@ -904,6 +904,9 @@
         const fallbackLawyers = [];
         const fallbackMedia = [];
         const fallbackOrganizations = [];
+        const AUTH_KEY = "laroAuthToken";
+        const AUTH_EMAIL_KEY = "laroAuthEmail";
+        const DEFAULT_ACCOUNT_EMAIL = "robert.local@laro";
 
         const EMPTY_OUTREACH_ANALYTICS = {
             case_id: 1,
@@ -930,12 +933,48 @@
             guided: "Show category tabs and matching workflow without advanced tuning.",
             expert: "Expose granular filters and score breakdowns for deep review."
         };
-        const state = { activeTab: "overview", matches: [], analytics: EMPTY_OUTREACH_ANALYTICS, depth: "focus" };
+        const state = { activeTab: "overview", matches: [], analytics: EMPTY_OUTREACH_ANALYTICS, depth: "focus", sourceDetails: {} };
 
         function currentFallback() {
             if (state.activeTab === "media") return fallbackMedia;
             if (state.activeTab === "organizations") return fallbackOrganizations;
             return fallbackLawyers;
+        }
+
+        function targetAccountEmail() {
+            const params = new URLSearchParams(window.location.search);
+            return (params.get("user") || params.get("account") || params.get("email") || "").trim() || DEFAULT_ACCOUNT_EMAIL;
+        }
+
+        async function ensureAuth(force = false) {
+            const email = targetAccountEmail();
+            const existing = localStorage.getItem(AUTH_KEY);
+            if (existing && localStorage.getItem(AUTH_EMAIL_KEY) === email && !force) return existing;
+            const response = await fetch("/api/auth/session-login", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email })
+            });
+            if (!response.ok) throw new Error("Unable to create local LARO session");
+            const data = await response.json();
+            localStorage.setItem(AUTH_KEY, data.token);
+            localStorage.setItem(AUTH_EMAIL_KEY, data.email || email);
+            return data.token;
+        }
+
+        async function apiFetch(url, options = {}, retry = true) {
+            const token = await ensureAuth();
+            const response = await fetch(url, {
+                ...options,
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...(options.headers || {}) }
+            });
+            if (response.status === 401 && retry) {
+                await ensureAuth(true);
+                return apiFetch(url, options, false);
+            }
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || `Request failed: ${response.status}`);
+            return data;
         }
 
         function labelForTab(tab) {
@@ -1022,19 +1061,18 @@
 
             const endpoint = state.activeTab === "lawyers" ? "/api/lawyers/match" : "/api/outreach/targets/match";
             try {
-                const response = await fetch(endpoint, {
+                const body = await apiFetch(endpoint, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(payload)
                 });
-                if (!response.ok) throw new Error("Matching API unavailable");
-                const body = await response.json();
                 state.matches = state.activeTab === "lawyers" ? body.matched_lawyers || [] : body.matched_targets || [];
+                state.sourceDetails = body.source_details || {};
                 renderMatches(body.source_mode || "api");
-                showToast(`${labelForTab(state.activeTab)} matches refreshed`);
+                showToast(state.matches.length ? `${labelForTab(state.activeTab)} matches refreshed` : (state.sourceDetails.reason || "No live matches available"));
                 await refreshAnalytics();
             } catch (error) {
                 state.matches = [];
+                state.sourceDetails = { reason: "The matching source could not be reached. No fallback data is shown." };
                 renderMatches("no live data");
                 await refreshAnalytics();
                 showToast("No live outreach matches available");
@@ -1050,9 +1088,7 @@
             }
 
             try {
-                const response = await fetch(`/api/outreach/${caseId}/analytics`);
-                if (!response.ok) throw new Error("Analytics API unavailable");
-                state.analytics = await response.json();
+                state.analytics = await apiFetch(`/api/outreach/${caseId}/analytics`);
                 renderAnalytics("api");
             } catch (error) {
                 state.analytics = EMPTY_OUTREACH_ANALYTICS;
@@ -1160,6 +1196,10 @@
             list.innerHTML = "";
             count.textContent = `Matched ${labelForTab(state.activeTab)} (${state.matches.length})`;
             source.textContent = sourceMode;
+            const emptyCopy = empty.querySelector("div");
+            emptyCopy.innerHTML = state.sourceDetails.reason
+                ? `<strong>No matching records available.</strong><br>${state.sourceDetails.reason}`
+                : `<strong>No matches found.</strong><br>Broaden the category or reduce strict filters.`;
             empty.classList.toggle("is-visible", state.matches.length === 0);
 
             state.matches.forEach((target) => {

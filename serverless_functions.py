@@ -443,6 +443,7 @@ def match_lawyers(payload, context):
                 'processing_time': processing_time,
                 'source_mode': match_result.get('source_mode'),
                 'nova_search_url': match_result.get('nova_search_url'),
+                'source_details': match_result.get('source_details'),
                 'search_criteria': match_result.get('search_criteria')
             }
         )
@@ -456,6 +457,7 @@ def match_lawyers(payload, context):
                 'search_criteria': match_result.get('search_criteria'),
                 'source_mode': match_result.get('source_mode'),
                 'nova_search_url': match_result.get('nova_search_url'),
+                'source_details': match_result.get('source_details'),
                 'available_count': match_result.get('available_count'),
                 'processing_time': processing_time
             }

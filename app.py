@@ -2391,6 +2391,7 @@ def match_case_lawyers():
         result['body'],
         criteria=case_data,
         actor=_ledger_actor(),
+        source=result['body'].get('source_mode') or 'serverless_matching',
     )
     return jsonify(result['body']), 200
 
@@ -2440,6 +2441,7 @@ def match_case_outreach_targets():
         result['body'],
         criteria=case_data,
         actor=_ledger_actor(),
+        source=result['body'].get('source_mode') or 'serverless_matching',
     )
     return jsonify(result['body']), 200
 
@@ -2544,6 +2546,7 @@ def start_outreach():
                 'max_results': max_lawyers,
             },
             actor=_ledger_actor(),
+            source=lawyer_match_payload.get('source_mode') or 'serverless_matching',
         )
 
     outreach_drafts = []

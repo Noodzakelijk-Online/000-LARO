@@ -1,11 +1,65 @@
 import unittest
+from unittest.mock import patch
 
-from lawyer_matching import LawyerMatchingEngine, NovaDirectoryClient, NovaSearchCriteria, sample_nova_records
+from lawyer_matching import LawyerMatchingEngine, NovaDirectoryClient, NovaSearchCriteria
 from lawyer_outreach import LawyerOutreachSystem
 from serverless_functions import match_lawyers
 
 
+TEST_LAWYERS = [
+    {
+        "lawyer_id": "fixture-admin",
+        "name": "Fixture Administrative Lawyer",
+        "city": "Amsterdam",
+        "distance_km": 6,
+        "legal_fields": ["ADMINISTRATIVE_LAW"],
+        "nova_rechtsgebieden": ["bestuursrecht", "bezwaar", "beroep"],
+        "specialization_associations": ["VAR"],
+        "financed_legal_aid": True,
+    },
+    {
+        "lawyer_id": "fixture-employment",
+        "name": "Fixture Employment Lawyer",
+        "city": "Amsterdam",
+        "distance_km": 8,
+        "legal_fields": ["EMPLOYMENT_LAW"],
+        "nova_rechtsgebieden": ["arbeidsrecht", "ontslag"],
+        "specialization_associations": ["VAAN"],
+        "financed_legal_aid": True,
+    },
+]
+
+
 class TestLawyerMatching(unittest.TestCase):
+    def test_public_directory_results_keep_source_provenance(self):
+        html = '''
+        <div class="result advocaten">
+            <div class="heading flex-container">
+                <a href="/advocaten/amsterdam/mr-fixture/123">mr. Fixture</a>
+                <a href="/kantoren/amsterdam/fixture-legal/456" class="secondary"><strong>Fixture Legal</strong></a>
+                <strong>AMSTERDAM</strong>
+            </div>
+            <div class="jurisdictions"><span class="label dark-gray">Bestuursrecht</span></div>
+            <div class="specialisations"><li>Fixture Association</li></div>
+        </div>
+        '''
+
+        class FakeResponse:
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"count": 1, "html": html}
+
+        with patch("lawyer_matching.requests.get", return_value=FakeResponse()) as get:
+            result = LawyerMatchingEngine().match({"legal_fields": ["ADMINISTRATIVE_LAW"], "max_results": 3})
+
+        self.assertEqual(result["source_mode"], "nova_public_directory")
+        self.assertEqual(result["source_details"]["reported_total"], 1)
+        self.assertEqual(result["matched_lawyers"][0]["profile_url"], "https://zoekeenadvocaat.advocatenorde.nl/advocaten/amsterdam/mr-fixture/123")
+        self.assertIsNone(result["matched_lawyers"][0]["response_rate"])
+        self.assertIn("filters%5Brechtsgebieden%5D=%5B227%5D", get.call_args.args[0])
+
     def test_nova_search_url_uses_official_filter_names(self):
         client = NovaDirectoryClient()
         criteria = NovaSearchCriteria(
@@ -35,7 +89,7 @@ class TestLawyerMatching(unittest.TestCase):
             "radius_km": 50,
             "requires_financed_legal_aid": True,
             "evidence_topics": ["CAK", "bezwaar", "bestuursorgaan"],
-        }, records=sample_nova_records())
+        }, records=TEST_LAWYERS)
 
         self.assertGreaterEqual(result["result_count"], 1)
         first = result["matched_lawyers"][0]
@@ -55,7 +109,7 @@ class TestLawyerMatching(unittest.TestCase):
                 "requires_financed_legal_aid": True,
             },
             "max_results": 5,
-            "candidate_lawyers": sample_nova_records(),
+            "candidate_lawyers": TEST_LAWYERS,
         }, {})
 
         self.assertEqual(result["statusCode"], 200)
@@ -71,7 +125,7 @@ class TestLawyerMatching(unittest.TestCase):
             "legal_fields": ["EMPLOYMENT_LAW"],
             "postcode_or_city": "Amsterdam",
             "radius_km": 50,
-        }, records=sample_nova_records())["matched_lawyers"]
+        }, records=TEST_LAWYERS)["matched_lawyers"]
 
         records = outreach.send_initial_outreach(
             "Employee was dismissed without a proper file.",
@@ -81,7 +135,7 @@ class TestLawyerMatching(unittest.TestCase):
             match_criteria={
                 "postcode_or_city": "Amsterdam",
                 "radius_km": 50,
-                "candidate_lawyers": sample_nova_records(),
+                "candidate_lawyers": TEST_LAWYERS,
             },
         )
 
