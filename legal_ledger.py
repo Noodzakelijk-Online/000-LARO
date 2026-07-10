@@ -1450,10 +1450,24 @@ class LegalLedger:
 
     def list_timeline(self, case_id: int) -> List[Dict[str, Any]]:
         with self.session_scope() as session:
-            return [
-                self._serialize_event(event)
-                for event in session.query(CaseEvent).filter_by(case_id=case_id).order_by(CaseEvent.event_date.asc(), CaseEvent.id.asc()).all()
-            ]
+            documents = {
+                item.id: item
+                for item in session.query(CaseDocument).filter_by(case_id=case_id).all()
+            }
+            timeline = []
+            for event in session.query(CaseEvent).filter_by(case_id=case_id).order_by(CaseEvent.event_date.asc(), CaseEvent.id.asc()).all():
+                payload = self._serialize_event(event)
+                source_document = documents.get(event.created_from_document_id)
+                if source_document:
+                    payload["source"] = {
+                        "document_id": source_document.id,
+                        "title": source_document.title or source_document.original_filename or "Source document",
+                        "source_type": source_document.source_type,
+                        "source_uri": source_document.source_uri,
+                    }
+                    payload["source_uri"] = source_document.source_uri
+                timeline.append(payload)
+            return timeline
 
     def add_claim(self, case_id: int, data: Dict[str, Any], actor: str = "system") -> Optional[Dict[str, Any]]:
         with self.session_scope() as session:

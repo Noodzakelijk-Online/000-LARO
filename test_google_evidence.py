@@ -15,8 +15,9 @@ class _Request:
 
 
 class _GmailMessages:
-    def __init__(self, messages):
+    def __init__(self, messages, attachments=None):
         self.messages = messages
+        self.attachments_api = _GmailAttachments(attachments or {})
 
     def list(self, **kwargs):
         return _Request({"messages": [{"id": "message-1"}]})
@@ -24,18 +25,28 @@ class _GmailMessages:
     def get(self, **kwargs):
         return _Request(self.messages[kwargs["id"]])
 
+    def attachments(self):
+        return self.attachments_api
+
 
 class _GmailUsers:
-    def __init__(self, messages):
-        self.messages_api = _GmailMessages(messages)
+    def __init__(self, messages, attachments=None):
+        self.messages_api = _GmailMessages(messages, attachments)
 
     def messages(self):
         return self.messages_api
 
+class _GmailAttachments:
+    def __init__(self, attachments):
+        self.attachments = attachments
+
+    def get(self, **kwargs):
+        return _Request(self.attachments[(kwargs["messageId"], kwargs["id"])])
+
 
 class _GmailService:
-    def __init__(self, messages):
-        self.users_api = _GmailUsers(messages)
+    def __init__(self, messages, attachments=None):
+        self.users_api = _GmailUsers(messages, attachments)
 
     def users(self):
         return self.users_api
@@ -120,6 +131,49 @@ class GoogleEvidenceTests(unittest.TestCase):
         self.assertEqual(drive_records[0]["source_type"], "google_drive")
         self.assertIn("CAK requested proof", drive_records[0]["content"])
         self.assertIn("drive.google.com", drive_records[0]["source_uri"])
+
+    def test_connector_extracts_gmail_attachments_as_source_linked_evidence(self):
+        encoded = base64.urlsafe_b64encode(b"CAK requests payment proof by 2026-07-15.").decode().rstrip("=")
+        gmail = _GmailService(
+            {
+                "message-1": {
+                    "id": "message-1",
+                    "payload": {
+                        "mimeType": "multipart/mixed",
+                        "headers": [
+                            {"name": "Subject", "value": "CAK decision and attachment"},
+                            {"name": "From", "value": "CAK <cak@example.nl>"},
+                            {"name": "Date", "value": "Wed, 1 Jul 2026 10:00:00 +0000"},
+                        ],
+                        "parts": [
+                            {"mimeType": "text/plain", "body": {"data": encoded}},
+                            {
+                                "mimeType": "text/plain",
+                                "filename": "cak-decision.txt",
+                                "body": {"attachmentId": "attachment-1", "size": 44},
+                            },
+                        ],
+                    },
+                }
+            },
+            {("message-1", "attachment-1"): {"data": encoded}},
+        )
+        connector = GoogleEvidenceConnector(
+            {"access_token": "test-token"},
+            client_id="client-id",
+            client_secret="client-secret",
+            scopes=[],
+            gmail_service=gmail,
+        )
+
+        records = connector.fetch_gmail("label:LARO-CAK", 5)
+        attachment = next(record for record in records if record["source_type"] == "gmail_attachment")
+
+        self.assertEqual(len(records), 2)
+        self.assertEqual(attachment["original_filename"], "cak-decision.txt")
+        self.assertIn("payment proof by 2026-07-15", attachment["content"])
+        self.assertIn("attachment=attachment-1", attachment["source_uri"])
+        self.assertEqual(attachment["metadata"]["gmail_message_id"], "message-1")
 
 
 if __name__ == "__main__":

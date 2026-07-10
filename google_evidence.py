@@ -80,6 +80,70 @@ class GoogleEvidenceConnector:
                 "labels": message.get("labelIds") or [],
                 "metadata": {"thread_id": message.get("threadId"), "gmail_message_id": message_id},
             })
+            records.extend(self._gmail_attachment_records(service, message, headers))
+        return records
+
+    def _gmail_attachment_records(self, service, message: Dict[str, Any], headers: Dict[str, str]) -> List[Dict[str, Any]]:
+        """Map a Gmail message's attachments to independently reviewable evidence."""
+        message_id = str(message.get("id") or "")
+        if not message_id:
+            return []
+        records = []
+        for part in self._gmail_attachment_parts(message.get("payload") or {}):
+            filename = str(part.get("filename") or "attachment")
+            mime_type = str(part.get("mimeType") or "application/octet-stream")
+            body = part.get("body") or {}
+            attachment_id = str(body.get("attachmentId") or "")
+            size = self._as_nonnegative_int(body.get("size"))
+            content = ""
+            extraction_note = "Attachment metadata imported; no attachment content was returned by Gmail"
+
+            if size and size > self.max_download_bytes:
+                extraction_note = f"Skipped attachment content larger than {self.max_download_bytes} bytes"
+            else:
+                try:
+                    encoded = body.get("data")
+                    if not encoded and attachment_id:
+                        payload = service.users().messages().attachments().get(
+                            userId="me", messageId=message_id, id=attachment_id
+                        ).execute() or {}
+                        encoded = payload.get("data")
+                    if encoded:
+                        content = self._extract_attachment_text(
+                            self._decode_base64_bytes(encoded), filename, mime_type
+                        )
+                        extraction_note = (
+                            "Attachment text extracted locally"
+                            if content
+                            else "Attachment imported, but no readable text could be extracted"
+                        )
+                except Exception as exc:
+                    extraction_note = f"Attachment content could not be extracted: {exc.__class__.__name__}"
+
+            stable_id = attachment_id or f"inline-{len(records) + 1}"
+            records.append({
+                "id": f"{message_id}:{stable_id}",
+                "message_id": message_id,
+                "attachment_id": stable_id,
+                "source_type": "gmail_attachment",
+                "source_uri": f"https://mail.google.com/mail/u/0/#all/{message_id}?attachment={stable_id}",
+                "title": f"{headers.get('subject') or 'Gmail attachment'} - {filename}",
+                "original_filename": filename,
+                "document_type": mime_type,
+                "mime_type": mime_type,
+                "date": headers.get("date") or "",
+                "sender": headers.get("from") or "",
+                "recipient": headers.get("to") or "",
+                "content": content,
+                "metadata": {
+                    "gmail_message_id": message_id,
+                    "gmail_attachment_id": stable_id,
+                    "parent_subject": headers.get("subject") or "",
+                    "size_bytes": size,
+                    "mime_type": mime_type,
+                    "extraction_note": extraction_note,
+                },
+            })
         return records
 
     def fetch_drive(self, query: str, max_items: int) -> List[Dict[str, Any]]:
@@ -203,6 +267,31 @@ class GoogleEvidenceConnector:
             return DocumentIntelligenceEngine().extract_text_from_document({"html": GoogleEvidenceConnector._decode_base64(data)})
         return ""
 
+    @staticmethod
+    def _gmail_attachment_parts(payload: Dict[str, Any]) -> Iterable[Dict[str, Any]]:
+        for part in payload.get("parts") or []:
+            if part.get("filename") and (part.get("body") or {}).get("attachmentId"):
+                yield part
+            yield from GoogleEvidenceConnector._gmail_attachment_parts(part)
+
+    def _extract_attachment_text(self, raw: bytes, filename: str, mime_type: str) -> str:
+        suffix = os.path.splitext(filename)[1].lower() or {
+            "application/pdf": ".pdf",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+            "text/html": ".html",
+            "text/plain": ".txt",
+        }.get(mime_type, ".bin")
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as handle:
+            path = handle.name
+            handle.write(raw)
+        try:
+            return self.intelligence.extract_text_from_file(path)
+        finally:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+
     def _drive_text(self, service, item: Dict[str, Any]) -> Tuple[str, str]:
         mime_type = str(item.get("mimeType") or "")
         file_id = item.get("id")
@@ -241,8 +330,20 @@ class GoogleEvidenceConnector:
 
     @staticmethod
     def _decode_base64(value: str) -> str:
-        padding = "=" * (-len(value) % 4)
-        return GoogleEvidenceConnector._decode_bytes(base64.urlsafe_b64decode(value + padding))
+        return GoogleEvidenceConnector._decode_bytes(GoogleEvidenceConnector._decode_base64_bytes(value))
+
+    @staticmethod
+    def _decode_base64_bytes(value: Any) -> bytes:
+        encoded = str(value or "")
+        padding = "=" * (-len(encoded) % 4)
+        return base64.urlsafe_b64decode(encoded + padding)
+
+    @staticmethod
+    def _as_nonnegative_int(value: Any) -> int:
+        try:
+            return max(0, int(value or 0))
+        except (TypeError, ValueError):
+            return 0
 
     @staticmethod
     def _decode_bytes(value: Any) -> str:

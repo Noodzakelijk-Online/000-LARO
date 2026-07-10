@@ -1584,16 +1584,30 @@ class TestLegalLedgerApi(unittest.TestCase):
         vault = LocalEncryptedTokenStore(os.path.join(self.tmp.name, "google-token-vault"))
         vault.save("ledger@example.com", "google", {"access_token": "test-access-token"})
         connector = mock.Mock()
-        connector.fetch.return_value = ([{
-            "id": "google-message-1",
-            "source_type": "gmail",
-            "source_uri": "https://mail.google.com/mail/u/0/#all/google-message-1",
-            "title": "CAK decision",
-            "document_type": "email",
-            "sender": "CAK <cak@example.nl>",
-            "recipient": "Robert <robert@example.nl>",
-            "plain_text": "Decision dated 2026-07-01. CAK requested proof of payment before 2026-07-15.",
-        }], None)
+        connector.fetch.return_value = ([
+            {
+                "id": "google-message-1",
+                "source_type": "gmail",
+                "source_uri": "https://mail.google.com/mail/u/0/#all/google-message-1",
+                "title": "CAK decision",
+                "document_type": "email",
+                "sender": "CAK <cak@example.nl>",
+                "recipient": "Robert <robert@example.nl>",
+                "plain_text": "Decision dated 2026-07-01. CAK requested proof of payment before 2026-07-15.",
+            },
+            {
+                "id": "google-message-1:attachment-1",
+                "source_type": "gmail_attachment",
+                "source_uri": "https://mail.google.com/mail/u/0/#all/google-message-1?attachment=attachment-1",
+                "title": "CAK decision - decision.txt",
+                "original_filename": "decision.txt",
+                "document_type": "text/plain",
+                "sender": "CAK <cak@example.nl>",
+                "recipient": "Robert <robert@example.nl>",
+                "content": "Decision attachment dated 2026-07-02. CAK set a deadline of 2026-07-15 for payment proof.",
+                "metadata": {"gmail_message_id": "google-message-1", "gmail_attachment_id": "attachment-1"},
+            },
+        ], None)
 
         with mock.patch.object(self.app_module, "google_token_store", vault), \
              mock.patch.object(self.app_module, "GoogleEvidenceConnector", return_value=connector), \
@@ -1610,10 +1624,15 @@ class TestLegalLedgerApi(unittest.TestCase):
 
         self.assertEqual(pulled.status_code, 201)
         payload = pulled.get_json()
-        self.assertEqual(payload["imported_count"], 1)
+        self.assertEqual(payload["imported_count"], 2)
         self.assertEqual(payload["connector"]["mode"], "read_only")
         self.assertEqual(payload["imported_documents"][0]["document"]["source_type"], "gmail")
+        self.assertEqual(payload["imported_documents"][1]["document"]["source_type"], "gmail_attachment")
         self.assertTrue(payload["artifact_counts"]["timeline_suggestions"])
+
+        timeline = self.client.get(f"/api/cases/{case_id}/timeline", headers=self.headers)
+        self.assertEqual(timeline.status_code, 200)
+        self.assertTrue(any("attachment=attachment-1" in item.get("source_uri", "") for item in timeline.get_json()["timeline"]))
 
         audit = self.client.get(f"/api/audit?case_id={case_id}", headers=self.headers)
         self.assertEqual(audit.status_code, 200)
