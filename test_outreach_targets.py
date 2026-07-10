@@ -69,6 +69,26 @@ class TestOutreachTargets(unittest.TestCase):
         self.assertGreaterEqual(result["result_count"], 1)
         self.assertEqual(result["matched_targets"][0]["name"], "Fixture Tenant Support")
 
+    def test_topic_reasons_do_not_treat_legal_field_or_region_as_case_evidence(self):
+        result = OutreachTargetEngine().match({
+            "target_type": "organization",
+            "description": "Tenant needs help with rent arrears.",
+            "legal_fields": ["ADMINISTRATIVE_LAW"],
+            "region": "Netherlands",
+        }, records=[{
+            "id": "topic-fixture",
+            "target_type": "organization",
+            "name": "Tenant fixture",
+            "topics": ["rent"],
+            "legal_fields": ["ADMINISTRATIVE_LAW"],
+            "source_url": "https://example.test/topic-fixture",
+        }])
+
+        reasons = result["matched_targets"][0]["match_reasons"]
+        self.assertTrue(any(reason.startswith("Matches case topics: rent") for reason in reasons))
+        self.assertFalse(any("administrative" in reason.lower() and "topics" in reason.lower() for reason in reasons))
+        self.assertFalse(any("netherlands" in reason.lower() for reason in reasons))
+
     def test_serverless_match_outreach_targets_returns_metadata(self):
         result = match_outreach_targets({
             "case_id": 909,

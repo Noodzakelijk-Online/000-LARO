@@ -2404,6 +2404,50 @@ def get_case_lawyer_matches(case_id):
 
     return jsonify({'error': 'No lawyer matches found for this case'}), 404
 
+
+@app.route('/api/outreach/directory/targets', methods=['GET'])
+@auth_system._require_auth
+def list_outreach_directory_targets():
+    target_type = request.args.get('target_type') or request.args.get('category')
+    status = request.args.get('status')
+    try:
+        targets = legal_ledger.list_outreach_directory_targets(target_type=target_type, status=status)
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    return jsonify({'targets': targets, 'count': len(targets)}), 200
+
+
+@app.route('/api/outreach/directory/import', methods=['POST'])
+@auth_system._require_auth
+def import_outreach_directory_targets():
+    data = request.get_json(silent=True)
+    records = data if isinstance(data, list) else (data or {}).get('targets') or (data or {}).get('records') or []
+    if not isinstance(records, list) or not records:
+        return jsonify({'error': 'Provide a non-empty targets list'}), 400
+    try:
+        targets = legal_ledger.import_outreach_directory_targets(records, actor=_ledger_actor())
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    return jsonify({
+        'targets': targets,
+        'count': len(targets),
+        'status': 'needs_review',
+        'message': 'Imported targets need review before matching can use them.',
+    }), 201
+
+
+@app.route('/api/outreach/directory/targets/<int:target_id>', methods=['PATCH'])
+@auth_system._require_auth
+def update_outreach_directory_target(target_id):
+    try:
+        target = legal_ledger.update_outreach_directory_target(target_id, request.json or {}, actor=_ledger_actor())
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    if not target:
+        return jsonify({'error': 'Outreach directory target not found'}), 404
+    return jsonify(target), 200
+
+
 @app.route('/api/outreach/targets/match', methods=['POST'])
 @auth_system._require_auth
 def match_case_outreach_targets():
@@ -2423,12 +2467,30 @@ def match_case_outreach_targets():
         'target_type': target_type,
     }
 
+    candidate_targets = data.get('candidate_targets') or data.get('targets')
+    candidate_source_mode = None
+    candidate_source_details = None
+    if candidate_targets is None:
+        try:
+            approved_targets = legal_ledger.list_outreach_directory_targets(target_type=target_type, status='approved')
+        except ValueError as exc:
+            return jsonify({'error': str(exc)}), 400
+        if approved_targets:
+            candidate_targets = approved_targets
+            candidate_source_mode = 'approved_directory'
+            candidate_source_details = {
+                'source': 'LARO reviewed outreach directory',
+                'approved_target_count': len(approved_targets),
+            }
+
     from serverless_functions import match_outreach_targets
     result = match_outreach_targets({
         'case_id': case_id,
         'case_data': case_data,
         'target_type': target_type,
-        'candidate_targets': data.get('candidate_targets') or data.get('targets'),
+        'candidate_targets': candidate_targets,
+        'candidate_source_mode': candidate_source_mode,
+        'candidate_source_details': candidate_source_details,
         'max_results': data.get('max_results', 30)
     }, {})
 

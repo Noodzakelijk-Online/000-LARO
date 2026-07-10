@@ -419,6 +419,38 @@
             padding: 1.25rem;
         }
 
+        .directory-import {
+            display: grid;
+            gap: 0.9rem;
+        }
+
+        .directory-import textarea {
+            min-height: 180px;
+            resize: vertical;
+        }
+
+        .directory-review-list {
+            display: grid;
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+
+        .directory-review-item {
+            align-items: center;
+            background: var(--outreach-panel-strong);
+            border: 1px solid var(--outreach-border);
+            border-radius: 6px;
+            display: flex;
+            gap: 0.8rem;
+            justify-content: space-between;
+            padding: 0.85rem;
+        }
+
+        .directory-review-item h4,
+        .directory-review-item p {
+            margin: 0;
+        }
+
         .section-title {
             align-items: center;
             display: flex;
@@ -894,6 +926,24 @@
                         <div><strong>No matches found.</strong><br>Broaden the category or reduce strict filters.</div>
                     </div>
                 </section>
+
+                <section class="analytics-section expert-depth" aria-label="Outreach directory review">
+                    <div class="section-title">
+                        <h3>Reviewed Target Directory</h3>
+                        <span class="muted" id="directoryStatus">review before matching</span>
+                    </div>
+                    <div class="directory-import">
+                        <label>
+                            <span class="field-label">Source records (JSON)</span>
+                            <textarea class="field-input" id="directoryImport" placeholder='[{"name":"...","target_type":"media","source_url":"https://..."}]'></textarea>
+                        </label>
+                        <div class="case-actions">
+                            <button class="btn btn-primary" type="button" id="importDirectory">Import for review</button>
+                            <button class="btn btn-secondary" type="button" id="refreshDirectory">Refresh directory</button>
+                        </div>
+                    </div>
+                    <div class="directory-review-list" id="directoryReviewList"></div>
+                </section>
             </section>
         </main>
     </div>
@@ -933,7 +983,7 @@
             guided: "Show category tabs and matching workflow without advanced tuning.",
             expert: "Expose granular filters and score breakdowns for deep review."
         };
-        const state = { activeTab: "overview", matches: [], analytics: EMPTY_OUTREACH_ANALYTICS, depth: "focus", sourceDetails: {} };
+        const state = { activeTab: "overview", matches: [], analytics: EMPTY_OUTREACH_ANALYTICS, depth: "focus", sourceDetails: {}, directoryTargets: [] };
 
         function currentFallback() {
             if (state.activeTab === "media") return fallbackMedia;
@@ -975,6 +1025,85 @@
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.error || `Request failed: ${response.status}`);
             return data;
+        }
+
+        function directoryTargetType() {
+            return state.activeTab === "organizations" ? "organization" : state.activeTab === "media" ? "media" : "";
+        }
+
+        async function refreshDirectoryTargets() {
+            const targetType = directoryTargetType();
+            if (!targetType) return;
+            try {
+                const payload = await apiFetch(`/api/outreach/directory/targets?target_type=${encodeURIComponent(targetType)}`);
+                state.directoryTargets = payload.targets || [];
+                renderDirectoryTargets();
+            } catch (error) {
+                state.directoryTargets = [];
+                renderDirectoryTargets(error.message || "Directory unavailable");
+            }
+        }
+
+        function renderDirectoryTargets(errorMessage = "") {
+            const list = document.getElementById("directoryReviewList");
+            const status = document.getElementById("directoryStatus");
+            const targetType = directoryTargetType();
+            if (!targetType) {
+                list.innerHTML = "";
+                return;
+            }
+            const pending = state.directoryTargets.filter((item) => item.status === "needs_review");
+            const approved = state.directoryTargets.filter((item) => item.status === "approved");
+            status.textContent = errorMessage || `${approved.length} approved, ${pending.length} awaiting review`;
+            list.innerHTML = state.directoryTargets.length ? state.directoryTargets.map((target) => `
+                <article class="directory-review-item">
+                    <div>
+                        <h4>${target.name}</h4>
+                        <p class="muted">${target.subtype || target.target_type} - ${target.status} - ${target.source_label || target.source_url}</p>
+                    </div>
+                    <div class="case-actions">
+                        <a class="source-link" href="${target.source_url}" target="_blank" rel="noopener">Source</a>
+                        ${target.status === "needs_review" ? `<button class="btn btn-secondary" type="button" data-directory-action="approve" data-directory-id="${target.id}">Approve</button>` : ""}
+                        ${target.status !== "archived" ? `<button class="btn btn-secondary" type="button" data-directory-action="archive" data-directory-id="${target.id}">Archive</button>` : ""}
+                    </div>
+                </article>
+            `).join("") : `<div class="empty-state is-visible"><div><strong>No ${targetType} records yet.</strong><br>Import sourced records for review; only approved records can appear in matches.</div></div>`;
+
+            list.querySelectorAll("[data-directory-action]").forEach((button) => {
+                button.addEventListener("click", async () => {
+                    await apiFetch(`/api/outreach/directory/targets/${button.dataset.directoryId}`, {
+                        method: "PATCH",
+                        body: JSON.stringify({ action: button.dataset.directoryAction })
+                    });
+                    await refreshDirectoryTargets();
+                    await refreshMatches();
+                });
+            });
+        }
+
+        async function importDirectoryTargets() {
+            const targetType = directoryTargetType();
+            const input = document.getElementById("directoryImport");
+            if (!targetType) return;
+            let records;
+            try {
+                records = JSON.parse(input.value || "[]");
+            } catch (error) {
+                showToast("Directory JSON is invalid");
+                return;
+            }
+            if (!Array.isArray(records) || !records.length) {
+                showToast("Add at least one sourced record before importing");
+                return;
+            }
+            records = records.map((record) => ({ ...record, target_type: record.target_type || targetType }));
+            const payload = await apiFetch("/api/outreach/directory/import", {
+                method: "POST",
+                body: JSON.stringify({ targets: records })
+            });
+            input.value = "";
+            showToast(`${payload.count} target${payload.count === 1 ? "" : "s"} imported for review`);
+            await refreshDirectoryTargets();
         }
 
         function labelForTab(tab) {
@@ -1032,6 +1161,7 @@
             document.getElementById("primaryInput").value = "";
             document.getElementById("fieldLabel").textContent = tab === "lawyers" ? "Legal field" : "Primary issue";
             refreshMatches();
+            refreshDirectoryTargets();
         }
 
         function payloadFromControls() {
@@ -1295,6 +1425,12 @@
         document.getElementById("radiusKm").addEventListener("change", refreshMatches);
         document.getElementById("legalAidOnly").addEventListener("change", refreshMatches);
         document.getElementById("preferAssociation").addEventListener("change", refreshMatches);
+        document.getElementById("importDirectory").addEventListener("click", () => {
+            importDirectoryTargets().catch((error) => showToast(error.message || "Unable to import directory records"));
+        });
+        document.getElementById("refreshDirectory").addEventListener("click", () => {
+            refreshDirectoryTargets().catch((error) => showToast(error.message || "Unable to refresh directory"));
+        });
 
         const initialHash = window.location.hash.replace("#", "");
         let storedDepth = "focus";

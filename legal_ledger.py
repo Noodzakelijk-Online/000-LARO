@@ -361,6 +361,32 @@ class MatchResult(Base):
     case = relationship("LegalCase", back_populates="match_results")
 
 
+class OutreachDirectoryTarget(Base):
+    __tablename__ = "outreach_directory_targets"
+
+    id = Column(Integer, primary_key=True)
+    target_type = Column(String(40), nullable=False, index=True)
+    name = Column(String(255), nullable=False, index=True)
+    subtype = Column(String(120), default="")
+    parent_org = Column(String(255), default="")
+    description = Column(Text, default="")
+    topics_json = Column(Text, default="[]")
+    legal_fields_json = Column(Text, default="[]")
+    audience_json = Column(Text, default="[]")
+    channels_json = Column(Text, default="[]")
+    region = Column(String(120), default="Netherlands")
+    url = Column(Text, default="")
+    contact_url = Column(Text, default="")
+    source_url = Column(Text, nullable=False)
+    source_label = Column(String(255), default="")
+    source_retrieved_at = Column(DateTime)
+    confidence = Column(String(40), default="unknown")
+    status = Column(String(40), default="needs_review", index=True)
+    metadata_json = Column(Text, default="{}")
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
+
+
 class Draft(Base):
     __tablename__ = "drafts"
 
@@ -2038,6 +2064,111 @@ class LegalLedger:
                 .all()
             ]
 
+    def import_outreach_directory_targets(
+        self,
+        records: Iterable[Dict[str, Any]],
+        actor: str = "system",
+    ) -> List[Dict[str, Any]]:
+        """Store sourced outreach records for review before case matching can use them."""
+        imported: List[Dict[str, Any]] = []
+        with self.session_scope() as session:
+            for raw_record in records or []:
+                data = self._normalize_outreach_directory_record(raw_record)
+                if not data["name"] or not data["source_url"]:
+                    raise ValueError("Outreach directory records require name and source_url")
+
+                item = (
+                    session.query(OutreachDirectoryTarget)
+                    .filter_by(target_type=data["target_type"], source_url=data["source_url"])
+                    .one_or_none()
+                )
+                before = self._serialize_outreach_directory_target(item) if item else {}
+                if not item:
+                    item = OutreachDirectoryTarget(
+                        target_type=data["target_type"],
+                        source_url=data["source_url"],
+                    )
+                    session.add(item)
+
+                item.name = data["name"]
+                item.subtype = data["subtype"]
+                item.parent_org = data["parent_org"]
+                item.description = data["description"]
+                item.topics_json = _json_dump(data["topics"])
+                item.legal_fields_json = _json_dump(data["legal_fields"])
+                item.audience_json = _json_dump(data["audience"])
+                item.channels_json = _json_dump(data["channels"])
+                item.region = data["region"]
+                item.url = data["url"]
+                item.contact_url = data["contact_url"]
+                item.source_label = data["source_label"]
+                item.source_retrieved_at = data["source_retrieved_at"]
+                item.confidence = data["confidence"]
+                item.metadata_json = _json_dump(data["metadata"])
+                # Re-importing a record must never silently renew a prior approval.
+                item.status = "needs_review"
+                item.updated_at = utcnow()
+                session.flush()
+                after = self._serialize_outreach_directory_target(item)
+                self._audit(
+                    session,
+                    None,
+                    "OutreachDirectoryTarget",
+                    item.id,
+                    "imported" if not before else "reimported_for_review",
+                    actor,
+                    before,
+                    after,
+                    "medium",
+                )
+                imported.append(after)
+        return imported
+
+    def list_outreach_directory_targets(
+        self,
+        target_type: Optional[str] = None,
+        status: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        with self.session_scope() as session:
+            query = session.query(OutreachDirectoryTarget).order_by(
+                OutreachDirectoryTarget.updated_at.desc(),
+                OutreachDirectoryTarget.id.desc(),
+            )
+            if target_type and target_type != "all":
+                query = query.filter_by(target_type=self._normalize_outreach_target_type(target_type))
+            if status:
+                query = query.filter_by(status=status)
+            return [self._serialize_outreach_directory_target(item) for item in query.all()]
+
+    def update_outreach_directory_target(
+        self,
+        target_id: int,
+        data: Dict[str, Any],
+        actor: str = "system",
+    ) -> Optional[Dict[str, Any]]:
+        with self.session_scope() as session:
+            item = session.get(OutreachDirectoryTarget, target_id)
+            if not item:
+                return None
+            before = self._serialize_outreach_directory_target(item)
+            action = str(data.get("action") or data.get("status") or "").strip().lower()
+            statuses = {
+                "approve": "approved",
+                "approved": "approved",
+                "archive": "archived",
+                "archived": "archived",
+                "review": "needs_review",
+                "needs_review": "needs_review",
+            }
+            if action not in statuses:
+                raise ValueError("action must be approve, archive, or review")
+            item.status = statuses[action]
+            item.updated_at = utcnow()
+            session.flush()
+            after = self._serialize_outreach_directory_target(item)
+            self._audit(session, None, "OutreachDirectoryTarget", item.id, item.status, actor, before, after, "medium")
+            return after
+
     def list_approvals(self, case_id: Optional[int] = None, status: Optional[str] = None) -> List[Dict[str, Any]]:
         with self.session_scope() as session:
             query = session.query(Approval).order_by(Approval.created_at.desc())
@@ -3385,6 +3516,86 @@ class LegalLedger:
             "source": item.source,
             "criteria": _json_load(item.criteria_json, {}),
             "payload": _json_load(item.payload_json, {}),
+            "created_at": _iso(item.created_at),
+            "updated_at": _iso(item.updated_at),
+        }
+
+    @staticmethod
+    def _normalize_outreach_target_type(value: Any) -> str:
+        raw = str(value or "organization").strip().lower()
+        aliases = {"org": "organization", "organisations": "organization", "organizations": "organization"}
+        normalized = aliases.get(raw, raw)
+        if normalized not in {"media", "organization"}:
+            raise ValueError("target_type must be media or organization")
+        return normalized
+
+    @staticmethod
+    def _normalize_outreach_list(value: Any) -> List[str]:
+        if value is None:
+            return []
+        values = value if isinstance(value, list) else [value]
+        seen = set()
+        result = []
+        for item in values:
+            text = str(item or "").strip()
+            key = text.lower()
+            if text and key not in seen:
+                seen.add(key)
+                result.append(text)
+        return result
+
+    def _normalize_outreach_directory_record(self, raw_record: Any) -> Dict[str, Any]:
+        record = dict(raw_record or {})
+        source_url = str(record.get("source_url") or record.get("url") or "").strip()
+        parsed = urlparse(source_url)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("source_url must be an http(s) URL")
+        retrieved_at = self._parse_datetime(record.get("source_retrieved_at") or record.get("retrieved_at"))
+        return {
+            "target_type": self._normalize_outreach_target_type(record.get("target_type") or record.get("category")),
+            "name": str(record.get("name") or "").strip(),
+            "subtype": str(record.get("subtype") or "").strip(),
+            "parent_org": str(record.get("parent_org") or "").strip(),
+            "description": str(record.get("description") or "").strip(),
+            "topics": self._normalize_outreach_list(record.get("topics")),
+            "legal_fields": self._normalize_outreach_list(record.get("legal_fields")),
+            "audience": self._normalize_outreach_list(record.get("audience")),
+            "channels": self._normalize_outreach_list(record.get("channels")),
+            "region": str(record.get("region") or "Netherlands").strip() or "Netherlands",
+            "url": str(record.get("url") or source_url).strip(),
+            "contact_url": str(record.get("contact_url") or record.get("url") or source_url).strip(),
+            "source_url": source_url,
+            "source_label": str(record.get("source_label") or record.get("source_name") or "").strip(),
+            "source_retrieved_at": retrieved_at,
+            "confidence": str(record.get("confidence") or "unknown").strip().lower() or "unknown",
+            "metadata": record.get("metadata") if isinstance(record.get("metadata"), dict) else {},
+        }
+
+    @staticmethod
+    def _serialize_outreach_directory_target(item: Optional[OutreachDirectoryTarget]) -> Dict[str, Any]:
+        if not item:
+            return {}
+        return {
+            "id": item.id,
+            "target_id": str(item.id),
+            "target_type": item.target_type,
+            "name": item.name,
+            "subtype": item.subtype,
+            "parent_org": item.parent_org,
+            "description": item.description,
+            "topics": _json_load(item.topics_json, []),
+            "legal_fields": _json_load(item.legal_fields_json, []),
+            "audience": _json_load(item.audience_json, []),
+            "channels": _json_load(item.channels_json, []),
+            "region": item.region,
+            "url": item.url,
+            "contact_url": item.contact_url,
+            "source_url": item.source_url,
+            "source_label": item.source_label,
+            "source_retrieved_at": _iso(item.source_retrieved_at),
+            "confidence": item.confidence,
+            "status": item.status,
+            "metadata": _json_load(item.metadata_json, {}),
             "created_at": _iso(item.created_at),
             "updated_at": _iso(item.updated_at),
         }

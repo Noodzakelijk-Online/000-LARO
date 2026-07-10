@@ -102,12 +102,17 @@ class OutreachTargetEngine:
         case_data: Dict[str, Any],
         records: Optional[Sequence[Dict[str, Any]]] = None,
         max_results: Optional[int] = None,
+        source_mode_override: Optional[str] = None,
+        source_details_override: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         criteria = self.build_criteria(case_data or {})
         if max_results:
             criteria.max_results = int(max_results)
 
         candidates, source_mode, source_details = self.directory_client.search(criteria, records=records)
+        if records is not None and source_mode_override:
+            source_mode = source_mode_override
+            source_details = source_details_override or source_details
         ranked = []
         for target in candidates:
             scored = self._score_target(target, criteria)
@@ -140,10 +145,10 @@ class OutreachTargetEngine:
 
         topic_score = min(35.0, len(topic_hits) * 7.0)
         field_score = 20.0 if field_overlap else 8.0 if target.get("target_type") == "media" else 0.0
-        impact_score = min(15.0, float(target.get("influence_score", 0.5)) * 15.0)
-        action_score = min(15.0, float(target.get("actionability_score", 0.5)) * 15.0)
+        impact_score = min(15.0, float(target.get("influence_score", 0)) * 15.0)
+        action_score = min(15.0, float(target.get("actionability_score", 0)) * 15.0)
         urgency_score = urgency_fit_score(target, criteria)
-        confidence_score = {"high": 5.0, "medium": 3.0, "low": 1.0}.get(target.get("confidence", "medium"), 3.0)
+        confidence_score = {"high": 5.0, "medium": 3.0, "low": 1.0}.get(target.get("confidence", "unknown"), 0.0)
 
         if not topic_hits and not field_overlap and target.get("target_type") != "media":
             return None
@@ -207,32 +212,29 @@ def normalize_outreach_target(record: Dict[str, Any]) -> Dict[str, Any]:
         "url": str(record.get("url") or ""),
         "contact_url": str(record.get("contact_url") or record.get("url") or ""),
         "source_url": str(record.get("source_url") or record.get("url") or ""),
-        "influence_score": float(record.get("influence_score", 0.5)),
-        "actionability_score": float(record.get("actionability_score", 0.5)),
-        "confidence": str(record.get("confidence") or "medium"),
+        "influence_score": _optional_score(record.get("influence_score")),
+        "actionability_score": _optional_score(record.get("actionability_score")),
+        "confidence": str(record.get("confidence") or "unknown"),
         "is_active": record.get("is_active", True),
     }
 
 
 def searchable_terms(data: Any) -> List[str]:
     if isinstance(data, OutreachCriteria):
-        values = data.legal_fields + data.evidence_topics + [
+        values = data.evidence_topics + [
             data.case_summary,
             data.case_description,
             data.desired_outcome,
-            data.region,
         ]
     elif isinstance(data, dict):
         values = (
             data.get("topics", [])
-            + data.get("legal_fields", [])
             + data.get("audience", [])
             + data.get("channels", [])
             + [
                 data.get("name", ""),
                 data.get("description", ""),
                 data.get("subtype", ""),
-                data.get("region", ""),
             ]
         )
     else:
@@ -283,3 +285,10 @@ def build_reasons(target: Dict[str, Any], topic_hits: List[str], field_overlap: 
 
 def slugify(value: str) -> str:
     return "-".join(tokenize(value)) or "target"
+
+
+def _optional_score(value: Any) -> float:
+    try:
+        return float(value) if value not in {None, ""} else 0.0
+    except (TypeError, ValueError):
+        return 0.0

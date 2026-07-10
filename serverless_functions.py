@@ -522,7 +522,9 @@ def match_outreach_targets(payload, context):
         match_result = outreach_target_engine.match(
             match_input,
             records=payload.get('candidate_targets'),
-            max_results=payload.get('max_results')
+            max_results=payload.get('max_results'),
+            source_mode_override=payload.get('candidate_source_mode'),
+            source_details_override=payload.get('candidate_source_details'),
         )
         processing_time = time.time() - start_time
 

@@ -394,6 +394,30 @@ class TestLegalLedgerService(unittest.TestCase):
         self.assertEqual(rejected["status"], "rejected")
         self.assertEqual(second_outreach["status"], "approval_rejected")
 
+    def test_outreach_directory_requires_review_before_matching_use(self):
+        imported = self.ledger.import_outreach_directory_targets([{
+            "target_type": "organization",
+            "name": "Tenant support fixture",
+            "subtype": "tenant advocacy",
+            "topics": ["housing", "rent"],
+            "legal_fields": ["PROPERTY_LAW"],
+            "source_url": "https://example.test/tenant-support",
+            "contact_url": "https://example.test/tenant-support/contact",
+            "source_label": "Fixture source",
+        }], actor="robert")
+
+        self.assertEqual(imported[0]["status"], "needs_review")
+        self.assertEqual(self.ledger.list_outreach_directory_targets(status="approved"), [])
+
+        approved = self.ledger.update_outreach_directory_target(imported[0]["id"], {"action": "approve"}, actor="robert")
+        self.assertEqual(approved["status"], "approved")
+        approved_records = self.ledger.list_outreach_directory_targets(target_type="organization", status="approved")
+        self.assertEqual(len(approved_records), 1)
+        self.assertEqual(approved_records[0]["source_url"], "https://example.test/tenant-support")
+        audit_actions = [item["action"] for item in self.ledger.list_audit_events()]
+        self.assertIn("imported", audit_actions)
+        self.assertIn("approved", audit_actions)
+
     def test_generated_formal_drafts_are_approval_gated_and_traceable(self):
         case = self.ledger.create_case({"user_id": "robert", "title": "Formal CAK letter"}, actor="robert")
         draft = self.ledger.create_draft(case["case_id"], {
@@ -1258,6 +1282,51 @@ class TestLegalLedgerApi(unittest.TestCase):
             for item in search_payload["results"]
         ))
         self.assertGreaterEqual(search_payload["facets"]["document"], 1)
+
+    def test_api_matches_only_approved_outreach_directory_records(self):
+        created = self.client.post("/api/cases", json={
+            "title": "Directory matching case",
+            "description": "Tenant needs help with a rent and maintenance dispute.",
+            "legal_domain": "PROPERTY_LAW",
+        }, headers=self.headers)
+        self.assertEqual(created.status_code, 201)
+        case_id = created.get_json()["case_id"]
+
+        imported = self.client.post("/api/outreach/directory/import", json={"targets": [{
+            "target_type": "organization",
+            "name": "Tenant directory fixture",
+            "subtype": "tenant advocacy",
+            "topics": ["housing", "rent", "maintenance"],
+            "legal_fields": ["PROPERTY_LAW"],
+            "source_url": "https://example.test/tenant-directory",
+            "contact_url": "https://example.test/tenant-directory/contact",
+        }]}, headers=self.headers)
+        self.assertEqual(imported.status_code, 201)
+        target_id = imported.get_json()["targets"][0]["id"]
+
+        before_review = self.client.post("/api/outreach/targets/match", json={
+            "case_id": case_id,
+            "target_type": "organization",
+        }, headers=self.headers)
+        self.assertEqual(before_review.status_code, 200)
+        self.assertEqual(before_review.get_json()["source_mode"], "directory_required")
+        self.assertEqual(before_review.get_json()["matched_targets"], [])
+
+        approved = self.client.patch(
+            f"/api/outreach/directory/targets/{target_id}",
+            json={"action": "approve"},
+            headers=self.headers,
+        )
+        self.assertEqual(approved.status_code, 200)
+        self.assertEqual(approved.get_json()["status"], "approved")
+
+        matched = self.client.post("/api/outreach/targets/match", json={
+            "case_id": case_id,
+            "target_type": "organization",
+        }, headers=self.headers)
+        self.assertEqual(matched.status_code, 200)
+        self.assertEqual(matched.get_json()["source_mode"], "approved_directory")
+        self.assertEqual(matched.get_json()["matched_targets"][0]["name"], "Tenant directory fixture")
 
     def test_upload_document_persists_extraction_and_timeline_suggestions(self):
         created = self.client.post("/api/cases", json={
