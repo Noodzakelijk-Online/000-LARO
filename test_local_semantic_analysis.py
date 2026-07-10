@@ -102,6 +102,48 @@ class TestLocalSemanticAnalysisProvider(unittest.TestCase):
         self.assertEqual(analysis["processing"]["semantic_analysis_status"], "completed")
         self.assertEqual(analysis["processing"]["analysis_method"], "rule_based_source_passage_v1")
 
+    def test_case_analysis_requires_document_scoped_literal_citations(self):
+        def fake_post(url, **kwargs):
+            return FakeResponse({"response": json.dumps({
+                "findings": [
+                    {
+                        "category": "cross_document_conflict",
+                        "observation": "The amounts differ between sources.",
+                        "sources": [
+                            {"document_id": "1", "source_quote": "CAK asks for EUR 125."},
+                            {"document_id": "2", "source_quote": "The notice asks for EUR 250."},
+                        ],
+                    },
+                    {
+                        "category": "cross_document_conflict",
+                        "observation": "This must be discarded.",
+                        "sources": [{"document_id": "99", "source_quote": "Invented source."}],
+                    },
+                ],
+                "review_questions": [{
+                    "category": "open_question",
+                    "question": "Which amount is currently claimed?",
+                    "sources": [{"document_id": "2", "source_quote": "The notice asks for EUR 250."}],
+                }],
+            })})
+
+        provider = LocalSemanticAnalysisProvider({
+            "provider": "ollama",
+            "base_url": "http://127.0.0.1:11434",
+            "model": "local-legal-model",
+        }, request_post=fake_post)
+        result = provider.analyze_case([
+            {"document_id": 1, "title": "Decision", "content_hash": "one", "extracted_text": "CAK asks for EUR 125."},
+            {"document_id": 2, "title": "Notice", "content_hash": "two", "extracted_text": "The notice asks for EUR 250."},
+        ], {"title": "CAK review"})
+
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(len(result["findings"]), 1)
+        self.assertEqual(result["findings"][0]["sources"][1]["document_id"], "2")
+        self.assertEqual(result["rejected_uncited_findings"], 1)
+        self.assertEqual(len(result["review_questions"]), 1)
+        self.assertEqual(len(result["source_documents"]), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

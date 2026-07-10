@@ -117,6 +117,7 @@ class LegalCase(Base):
     outreach = relationship("LawyerOutreach", back_populates="case", cascade="all, delete-orphan")
     identifiers = relationship("CaseIdentifier", back_populates="case", cascade="all, delete-orphan")
     match_results = relationship("MatchResult", back_populates="case", cascade="all, delete-orphan")
+    analysis_runs = relationship("CaseAnalysisRun", back_populates="case", cascade="all, delete-orphan")
 
 
 class CaseIdentifier(Base):
@@ -400,6 +401,23 @@ class Draft(Base):
     approval_id = Column(Integer, ForeignKey("approvals.id"))
     created_at = Column(DateTime, default=utcnow, nullable=False)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
+
+
+class CaseAnalysisRun(Base):
+    __tablename__ = "case_analysis_runs"
+
+    id = Column(Integer, primary_key=True)
+    case_id = Column(Integer, ForeignKey("legal_cases.id"), nullable=False, index=True)
+    analysis_type = Column(String(80), default="cross_document", index=True)
+    status = Column(String(80), default="needs_review", index=True)
+    provider = Column(String(80), default="rule_based")
+    model = Column(String(255), default="")
+    content_json = Column(Text, default="{}")
+    source_snapshot_json = Column(Text, default="[]")
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
+
+    case = relationship("LegalCase", back_populates="analysis_runs")
 
 
 class Approval(Base):
@@ -1512,6 +1530,54 @@ class LegalLedger:
             after = self._document_analysis_audit_state(document)
             self._audit(session, case_id, "CaseDocument", document.id, "analysis_refreshed", actor, before, after, "low")
             return self._serialize_document(document)
+
+    def create_case_analysis_run(
+        self,
+        case_id: int,
+        data: Dict[str, Any],
+        actor: str = "system",
+    ) -> Optional[Dict[str, Any]]:
+        """Persist a review-only case synthesis with a hash-only audit record."""
+        content = data.get("content") or data.get("analysis") or {}
+        if not isinstance(content, dict):
+            raise ValueError("Case analysis content must be structured data")
+        with self.session_scope() as session:
+            if not session.get(LegalCase, case_id):
+                return None
+            item = CaseAnalysisRun(
+                case_id=case_id,
+                analysis_type=str(data.get("analysis_type") or "cross_document")[:80],
+                status=str(data.get("status") or content.get("status") or "needs_review")[:80],
+                provider=str(data.get("provider") or content.get("provider") or "rule_based")[:80],
+                model=str(data.get("model") or content.get("model") or "")[:255],
+                content_json=_json_dump(content),
+                source_snapshot_json=_json_dump(data.get("source_documents") or content.get("source_documents") or []),
+            )
+            session.add(item)
+            session.flush()
+            self._audit(
+                session,
+                case_id,
+                "CaseAnalysisRun",
+                item.id,
+                "created",
+                actor,
+                {},
+                self._case_analysis_audit_state(item),
+                "low",
+            )
+            return self._serialize_case_analysis_run(item)
+
+    def list_case_analysis_runs(self, case_id: int, limit: int = 12) -> List[Dict[str, Any]]:
+        with self.session_scope() as session:
+            return [
+                self._serialize_case_analysis_run(item)
+                for item in session.query(CaseAnalysisRun)
+                .filter_by(case_id=case_id)
+                .order_by(CaseAnalysisRun.created_at.desc(), CaseAnalysisRun.id.desc())
+                .limit(max(1, min(int(limit or 12), 50)))
+                .all()
+            ]
 
     def add_event(self, case_id: int, data: Dict[str, Any], actor: str = "system") -> Optional[Dict[str, Any]]:
         with self.session_scope() as session:
@@ -3684,6 +3750,21 @@ class LegalLedger:
             "has_source_passages": bool((analysis.get("findings") or {}).get("source_passages")),
         }
 
+    def _case_analysis_audit_state(self, item: CaseAnalysisRun) -> Dict[str, Any]:
+        content = _json_load(item.content_json, {})
+        sources = _json_load(item.source_snapshot_json, [])
+        return {
+            "analysis_run_id": item.id,
+            "analysis_type": item.analysis_type,
+            "status": item.status,
+            "provider": item.provider,
+            "model": item.model,
+            "source_document_ids": [source.get("document_id") for source in sources if isinstance(source, dict)],
+            "findings_count": len(content.get("findings") or []),
+            "review_questions_count": len(content.get("review_questions") or []),
+            "content_hash": self._hash(_json_dump(content)),
+        }
+
     @staticmethod
     def _serialize_document_version(item: DocumentVersion) -> Dict[str, Any]:
         return {
@@ -3695,6 +3776,21 @@ class LegalLedger:
             "extracted_text": item.extracted_text,
             "metadata": _json_load(item.metadata_json, {}),
             "created_at": _iso(item.created_at),
+        }
+
+    @staticmethod
+    def _serialize_case_analysis_run(item: CaseAnalysisRun) -> Dict[str, Any]:
+        return {
+            "id": item.id,
+            "case_id": item.case_id,
+            "analysis_type": item.analysis_type,
+            "status": item.status,
+            "provider": item.provider,
+            "model": item.model,
+            "content": _json_load(item.content_json, {}),
+            "source_documents": _json_load(item.source_snapshot_json, []),
+            "created_at": _iso(item.created_at),
+            "updated_at": _iso(item.updated_at),
         }
 
     def _serialize_event(self, event: CaseEvent) -> Dict[str, Any]:

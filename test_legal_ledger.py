@@ -2041,6 +2041,95 @@ class TestLegalLedgerApi(unittest.TestCase):
         self.assertTrue(refreshed_audit["after_state"]["analysis_hash"])
         self.assertNotIn(source_text, str(refreshed_audit["after_state"]))
 
+    def test_case_wide_analysis_persists_review_only_cited_synthesis(self):
+        created = self.client.post("/api/cases", json={
+            "title": "Cross-document CAK review",
+            "description": "Compare the decision with the later payment notice.",
+            "legal_domain": "administrative_law",
+        }, headers=self.headers)
+        self.assertEqual(created.status_code, 201)
+        case_id = created.get_json()["case_id"]
+
+        first = self.client.post(f"/api/cases/{case_id}/documents", json={
+            "title": "CAK decision",
+            "extracted_text": "CAK decided that Robert must pay EUR 125 on 2026-07-01.",
+        }, headers=self.headers)
+        second = self.client.post(f"/api/cases/{case_id}/documents", json={
+            "title": "Payment notice",
+            "extracted_text": "The payment notice asks Robert to pay EUR 250 before 2026-07-15.",
+        }, headers=self.headers)
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(second.status_code, 201)
+
+        def fixture_analysis(documents, case_context):
+            first_doc, second_doc = documents
+            return {
+                "status": "completed",
+                "provider": "ollama",
+                "model": "fixture-local-model",
+                "findings": [{
+                    "category": "cross_document_conflict",
+                    "observation": "The sources reference different payment amounts.",
+                    "sources": [
+                        {"document_id": str(first_doc["document_id"]), "source_quote": "CAK decided that Robert must pay EUR 125 on 2026-07-01."},
+                        {"document_id": str(second_doc["document_id"]), "source_quote": "The payment notice asks Robert to pay EUR 250 before 2026-07-15."},
+                    ],
+                    "review_status": "needs_review",
+                }],
+                "review_questions": [],
+                "source_documents": [
+                    {"document_id": first_doc["document_id"], "title": first_doc["title"], "content_hash": first_doc["content_hash"], "source_was_truncated": False},
+                    {"document_id": second_doc["document_id"], "title": second_doc["title"], "content_hash": second_doc["content_hash"], "source_was_truncated": False},
+                ],
+                "limitations": ["Review each cited source."],
+            }
+
+        with mock.patch.object(self.app_module.document_intelligence.semantic_provider, "analyze_case", side_effect=fixture_analysis):
+            response = self.client.post(f"/api/cases/{case_id}/case-analysis", headers=self.headers)
+
+        self.assertEqual(response.status_code, 201)
+        payload = response.get_json()
+        self.assertTrue(payload["source_preserved"])
+        self.assertFalse(payload["created_artifacts"])
+        self.assertTrue(payload["requires_human_review"])
+        run = payload["run"]
+        self.assertEqual(run["status"], "completed")
+        self.assertEqual(run["content"]["findings"][0]["review_status"], "needs_review")
+        self.assertEqual(len(run["source_documents"]), 2)
+
+        listed = self.client.get(f"/api/cases/{case_id}/case-analysis", headers=self.headers)
+        self.assertEqual(listed.status_code, 200)
+        self.assertEqual(listed.get_json()["latest"]["id"], run["id"])
+        audit = self.client.get(f"/api/audit?case_id={case_id}", headers=self.headers)
+        analysis_audit = next(item for item in audit.get_json()["audit_events"] if item["entity_type"] == "CaseAnalysisRun")
+        self.assertEqual(analysis_audit["after_state"]["findings_count"], 1)
+        self.assertNotIn("EUR 125", str(analysis_audit["after_state"]))
+
+    def test_case_wide_analysis_does_not_persist_a_run_when_local_model_is_unavailable(self):
+        created = self.client.post("/api/cases", json={"title": "Unavailable local analysis"}, headers=self.headers)
+        case_id = created.get_json()["case_id"]
+        self.client.post(f"/api/cases/{case_id}/documents", json={
+            "title": "Readable source",
+            "extracted_text": "CAK decision dated 2026-07-01.",
+        }, headers=self.headers)
+
+        unavailable = {
+            "status": "unavailable",
+            "provider": "ollama",
+            "model": "",
+            "findings": [],
+            "review_questions": [],
+            "source_documents": [],
+            "limitations": ["The configured local model was unavailable."],
+        }
+        with mock.patch.object(self.app_module.document_intelligence.semantic_provider, "analyze_case", return_value=unavailable):
+            response = self.client.post(f"/api/cases/{case_id}/case-analysis", headers=self.headers)
+
+        self.assertEqual(response.status_code, 409)
+        self.assertTrue(response.get_json()["source_preserved"])
+        listed = self.client.get(f"/api/cases/{case_id}/case-analysis", headers=self.headers)
+        self.assertEqual(listed.get_json()["runs"], [])
+
     def test_document_file_route_blocks_paths_outside_upload_store(self):
         created = self.client.post("/api/cases", json={
             "title": "Unsafe document path case",

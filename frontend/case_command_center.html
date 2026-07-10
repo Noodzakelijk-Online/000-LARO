@@ -2263,6 +2263,10 @@
             width: 22px;
         }
 
+        .source-ref-chip span:last-child {
+            overflow-wrap: anywhere;
+        }
+
         .source-preview-shell {
             background: rgba(2, 6, 13, 0.72);
             inset: 0;
@@ -6096,6 +6100,48 @@
                             `).join("")}
                         </div>
                     `}
+                    ${compact ? "" : renderCaseWideAnalysis()}
+                </section>
+            `;
+        }
+
+        function renderCaseWideAnalysis() {
+            const run = detailState.caseAnalysis?.latest;
+            const content = run?.content || {};
+            const findings = content.findings || [];
+            const questions = content.review_questions || [];
+            const sourceButton = (source) => sourceDocumentButton(source?.document_id, source?.source_quote || "");
+            return `
+                <section class="detail-section guided-depth">
+                    <div class="panel-header">
+                        <div>
+                            <h3 class="panel-title">Case-Wide Reading</h3>
+                            <p class="muted">Local, review-only synthesis across readable case sources.</p>
+                        </div>
+                        <button class="btn-secondary-ledger" type="button" id="runCaseAnalysis">Analyze case sources</button>
+                    </div>
+                    <p class="muted" id="caseAnalysisStatus">Analysis remains local and review-only; source documents are not changed.</p>
+                    ${run ? `
+                        <p class="muted">${escapeHtml(run.provider || "local")} · ${escapeHtml(run.model || "configured local model")} · ${escapeHtml(String(run.created_at || "").slice(0, 19) || "just now")}</p>
+                        ${findings.length ? `<div class="record-list">${findings.slice(0, 8).map((item) => `
+                            <article class="record-row">
+                                <span class="record-kicker">${escapeHtml(String(item.category || "observation").replace(/_/g, " "))}</span>
+                                <div>
+                                    <p>${escapeHtml(item.observation || "No observation recorded.")}</p>
+                                    <div class="source-ref-list">${(item.sources || []).map((source) => `
+                                        <span class="source-ref-chip">${sourceButton(source)}<span>${escapeHtml(source.source_quote || "Source quote")}</span></span>
+                                    `).join("")}</div>
+                                    <p class="muted">Needs review</p>
+                                </div>
+                            </article>
+                        `).join("")}</div>` : `<div class="empty-state">No cited cross-document observations were retained from this run.</div>`}
+                        ${questions.length ? `<div class="record-list" style="margin-top: 0.75rem;">${questions.slice(0, 6).map((item) => `
+                            <article class="record-row">
+                                <span class="record-kicker">verify</span>
+                                <div><p>${escapeHtml(item.question || "Review cited sources.")}</p><div class="source-ref-list">${(item.sources || []).map((source) => `<span class="source-ref-chip">${sourceButton(source)}<span>${escapeHtml(source.source_quote || "Source quote")}</span></span>`).join("")}</div></div>
+                            </article>
+                        `).join("")}</div>` : ""}
+                    ` : `<div class="empty-state">No case-wide local synthesis has been run yet.</div>`}
                 </section>
             `;
         }
@@ -7399,6 +7445,37 @@
             }
         }
 
+        async function runCaseWideAnalysis() {
+            if (!selectedCaseId) return showToast("Select a case first.");
+            const button = document.getElementById("runCaseAnalysis");
+            const status = document.getElementById("caseAnalysisStatus");
+            const sourceText = (detailState.documents || [])
+                .map((item) => item.extracted_text || item.ocr_text || "")
+                .join("\n");
+            const progress = startAnalysisProgress(status, { label: "Reading case sources", text: sourceText });
+            if (button) {
+                button.disabled = true;
+                button.textContent = "Analyzing...";
+            }
+            try {
+                const response = await apiFetch(`/api/cases/${selectedCaseId}/case-analysis`, { method: "POST" });
+                const findings = response.run?.content?.findings?.length || 0;
+                const questions = response.run?.content?.review_questions?.length || 0;
+                progress.complete(`Case-wide reading stored: ${findings} cited observation${findings === 1 ? "" : "s"}, ${questions} question${questions === 1 ? "" : "s"}.`);
+                showToast(`Case-wide reading stored for review: ${findings} observation${findings === 1 ? "" : "s"}, ${questions} question${questions === 1 ? "" : "s"}.`);
+                await loadCaseDetail(selectedCaseId);
+                await loadCommandCenter();
+                activateDetailTab("overview");
+            } catch (error) {
+                progress.fail(error.message);
+                showToast(error.message);
+                throw error;
+            } finally {
+                const refreshedButton = document.getElementById("runCaseAnalysis");
+                if (refreshedButton) refreshedButton.textContent = "Analyze case sources";
+            }
+        }
+
         async function openCommandTarget(caseId, target, focus = {}) {
             const resolvedCaseId = caseId || selectedCaseId || commandState?.cases?.[0]?.case_id;
             if (target === "case-intake" || !resolvedCaseId) {
@@ -7541,6 +7618,7 @@
             if (previewReanalyze) previewReanalyze.onclick = () => reanalyzeSourceDocument().catch(() => {});
             const previewOpenOriginal = document.getElementById("sourcePreviewOpenOriginal");
             if (previewOpenOriginal) previewOpenOriginal.onclick = () => openOriginalSourceDocument().catch((error) => showToast(error.message));
+            document.getElementById("runCaseAnalysis")?.addEventListener("click", () => runCaseWideAnalysis().catch(() => {}));
             document.querySelectorAll("[data-timeline-mode]").forEach((button) => {
                 button.addEventListener("click", () => {
                     const allowed = ["story", "horizontal", "vertical"];
@@ -7803,7 +7881,7 @@
         }
 
         async function loadCaseDetail(caseId) {
-            const [caseData, docs, timeline, claims, evidence, contradictions, missingEvidence, deadlines, loops, approvals, drafts, reviewQueue, operatingState, papertrail, summary, comprehension, redLine, bundle, audit, googleJobs] = await Promise.all([
+            const [caseData, docs, timeline, claims, evidence, contradictions, missingEvidence, deadlines, loops, approvals, drafts, reviewQueue, operatingState, papertrail, summary, comprehension, redLine, bundle, audit, googleJobs, caseAnalysis] = await Promise.all([
                 apiFetch(`/api/cases/${caseId}`),
                 apiFetch(`/api/cases/${caseId}/documents`),
                 apiFetch(`/api/cases/${caseId}/timeline`),
@@ -7823,7 +7901,8 @@
                 apiFetch(`/api/cases/${caseId}/red-line`),
                 apiFetch(`/api/cases/${caseId}/bundle`),
                 apiFetch(`/api/audit?case_id=${caseId}`),
-                apiFetch(`/api/cases/${caseId}/documents/pull-google/jobs`)
+                apiFetch(`/api/cases/${caseId}/documents/pull-google/jobs`),
+                apiFetch(`/api/cases/${caseId}/case-analysis`)
             ]);
             detailState = {
                 case: caseData,
@@ -7846,7 +7925,8 @@
                 redLine,
                 bundle,
                 audit: audit.audit_events || [],
-                googleJobs: googleJobs.jobs || []
+                googleJobs: googleJobs.jobs || [],
+                caseAnalysis
             };
             selectedCaseId = caseId;
             document.getElementById("detailTitle").textContent = caseData.title;

@@ -1705,6 +1705,57 @@ def reanalyze_ledger_document(case_id, document_id):
     }), 200
 
 
+@app.route('/api/cases/<int:case_id>/case-analysis', methods=['GET'])
+@auth_system._require_auth
+def list_ledger_case_analysis(case_id):
+    if not legal_ledger.get_case(case_id):
+        return jsonify({'error': 'Case not found'}), 404
+    runs = legal_ledger.list_case_analysis_runs(case_id)
+    return jsonify({'case_id': case_id, 'runs': runs, 'latest': runs[0] if runs else None}), 200
+
+
+@app.route('/api/cases/<int:case_id>/case-analysis', methods=['POST'])
+@auth_system._require_auth
+def create_ledger_case_analysis(case_id):
+    """Create a review-only, cross-document local synthesis for this case."""
+    ledger_case = legal_ledger.get_case(case_id)
+    if not ledger_case:
+        return jsonify({'error': 'Case not found'}), 404
+    documents = legal_ledger.list_documents(case_id)
+    readable_documents = [
+        item for item in documents
+        if str(item.get('extracted_text') or item.get('ocr_text') or '').strip()
+    ]
+    if not readable_documents:
+        return jsonify({
+            'error': 'No readable source documents are available. Recover source text before running a case-wide analysis.',
+            'source_preserved': True,
+        }), 409
+    analysis = document_intelligence.semantic_provider.analyze_case(readable_documents, ledger_case)
+    if analysis.get('status') != 'completed':
+        return jsonify({
+            'error': (analysis.get('limitations') or ['Case-wide local analysis is not available.'])[0],
+            'analysis': analysis,
+            'source_preserved': True,
+        }), 409
+    run = legal_ledger.create_case_analysis_run(case_id, {
+        'analysis_type': 'cross_document',
+        'status': analysis.get('status') or 'needs_review',
+        'provider': analysis.get('provider') or 'rule_based',
+        'model': analysis.get('model') or '',
+        'content': analysis,
+        'source_documents': analysis.get('source_documents') or [],
+    }, actor=_ledger_actor())
+    if not run:
+        return jsonify({'error': 'Case not found'}), 404
+    return jsonify({
+        'run': run,
+        'source_preserved': True,
+        'created_artifacts': False,
+        'requires_human_review': True,
+    }), 201
+
+
 @app.route('/api/cases/<int:case_id>/documents/<int:document_id>/file', methods=['GET'])
 @auth_system._require_auth
 def open_ledger_document_file(case_id, document_id):
