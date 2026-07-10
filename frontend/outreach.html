@@ -105,6 +105,28 @@
             gap: 0.75rem;
         }
 
+        .case-picker {
+            display: grid;
+            gap: 0.35rem;
+            min-width: 240px;
+        }
+
+        .case-picker label {
+            color: var(--outreach-muted);
+            font-size: 0.72rem;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+
+        .case-picker select {
+            background: var(--outreach-panel-strong);
+            border: 1px solid var(--outreach-border);
+            border-radius: 6px;
+            color: var(--dark-text-primary);
+            min-height: 40px;
+            padding: 0.5rem 0.65rem;
+        }
+
         .subnav {
             margin: 0.45rem 0 0 2.35rem;
         }
@@ -751,6 +773,11 @@
                 flex-direction: column;
             }
 
+            .case-picker {
+                min-width: min(100%, 360px);
+                width: 100%;
+            }
+
             .filter-panel,
             .target-card,
             .analytics-grid,
@@ -787,7 +814,7 @@
         <aside class="sidebar">
             <ul class="sidebar-menu">
                 <li class="sidebar-item"><a href="dashboard_dark.html" class="sidebar-link"><span class="sidebar-icon">[]</span> Overview</a></li>
-                <li class="sidebar-item"><a href="case_command_center.html" class="sidebar-link"><span class="sidebar-icon">C</span> Command Center</a></li>
+                <li class="sidebar-item"><a href="case_command_center.html" class="sidebar-link" id="commandCenterLink"><span class="sidebar-icon">C</span> Command Center</a></li>
                 <li class="sidebar-item"><a href="dashboard_dark.html#documents" class="sidebar-link"><span class="sidebar-icon">E</span> Evidence</a></li>
                 <li class="sidebar-item"><a href="evidence_timeline.html" class="sidebar-link"><span class="sidebar-icon">T</span> Evidence Timeline</a></li>
                 <li class="sidebar-item"><a href="#" class="sidebar-link"><span class="sidebar-icon">G</span> Gap Analysis</a></li>
@@ -806,12 +833,18 @@
         <main class="outreach-shell">
             <section class="case-bar">
                 <div>
-                    <h1 class="case-title"><span class="case-icon">O</span> AI Classification Pending</h1>
-                    <p class="case-kicker">Noodzakelijk Online - Created 5/22/2026 - Outreach matching</p>
+                    <h1 class="case-title"><span class="case-icon">O</span> <span id="outreachCaseTitle">Loading case ledger</span></h1>
+                    <p class="case-kicker" id="outreachCaseMeta">Loading the persisted case context for outreach.</p>
                 </div>
                 <div class="case-actions">
-                    <span class="badge badge-warning">Matching</span>
-                    <span class="badge">Medium</span>
+                    <div class="case-picker">
+                        <label for="outreachCaseSelect">Active case</label>
+                        <select id="outreachCaseSelect" aria-label="Active outreach case" disabled>
+                            <option>Loading cases...</option>
+                        </select>
+                    </div>
+                    <span class="badge badge-warning" id="outreachCaseStatus">Loading</span>
+                    <span class="badge" id="outreachCasePriority">Local ledger</span>
                 </div>
                 <div class="outreach-depth" aria-label="Outreach detail level">
                     <div class="depth-switcher">
@@ -995,15 +1028,12 @@
     <div class="toast-note" id="toastNote">Matches refreshed</div>
 
     <script>
-        const fallbackLawyers = [];
-        const fallbackMedia = [];
-        const fallbackOrganizations = [];
         const AUTH_KEY = "laroAuthToken";
         const AUTH_EMAIL_KEY = "laroAuthEmail";
         const DEFAULT_ACCOUNT_EMAIL = "robert.local@laro";
 
         const EMPTY_OUTREACH_ANALYTICS = {
-            case_id: 1,
+            case_id: null,
             total_outreaches: 0,
             matched_targets: 0,
             contacted_targets: 0,
@@ -1027,17 +1057,88 @@
             guided: "Show category tabs and matching workflow without advanced tuning.",
             expert: "Expose granular filters and score breakdowns for deep review."
         };
-        const state = { activeTab: "overview", matches: [], analytics: EMPTY_OUTREACH_ANALYTICS, depth: "focus", sourceDetails: {}, directoryTargets: [] };
-
-        function currentFallback() {
-            if (state.activeTab === "media") return fallbackMedia;
-            if (state.activeTab === "organizations") return fallbackOrganizations;
-            return fallbackLawyers;
-        }
+        const state = { activeTab: "overview", caseId: null, cases: [], matches: [], analytics: EMPTY_OUTREACH_ANALYTICS, depth: "focus", sourceDetails: {}, directoryTargets: [] };
 
         function targetAccountEmail() {
             const params = new URLSearchParams(window.location.search);
             return (params.get("user") || params.get("account") || params.get("email") || "").trim() || DEFAULT_ACCOUNT_EMAIL;
+        }
+
+        function currentCaseId() {
+            return state.caseId;
+        }
+
+        function isDevelopmentQaCase(caseItem = {}) {
+            return String(caseItem.title || "").trim().toLowerCase().startsWith("qa ");
+        }
+
+        function activeCase() {
+            return state.cases.find((item) => Number(item.case_id) === Number(state.caseId)) || null;
+        }
+
+        function caseHref(path) {
+            return state.caseId ? `${path}?case_id=${encodeURIComponent(state.caseId)}` : path;
+        }
+
+        function renderActiveCase() {
+            const caseItem = activeCase();
+            const title = document.getElementById("outreachCaseTitle");
+            const meta = document.getElementById("outreachCaseMeta");
+            const status = document.getElementById("outreachCaseStatus");
+            const priority = document.getElementById("outreachCasePriority");
+            const commandCenterLink = document.getElementById("commandCenterLink");
+            if (!caseItem) {
+                title.textContent = "Select a real case";
+                meta.textContent = "Create a case in the command center before matching lawyers, media, or organizations.";
+                status.textContent = "Case required";
+                priority.textContent = "No placeholder data";
+                commandCenterLink.href = "case_command_center.html";
+                return;
+            }
+            title.textContent = caseItem.title || `Case ${caseItem.case_id}`;
+            const context = [caseItem.legal_domain, caseItem.court_or_institution, caseItem.desired_outcome]
+                .filter(Boolean)
+                .join(" - ");
+            meta.textContent = context || "Persisted local case ledger ready for outreach preparation.";
+            status.textContent = String(caseItem.status || "active").replace(/_/g, " ");
+            priority.textContent = String(caseItem.priority || caseItem.risk_level || "normal").replace(/_/g, " ");
+            commandCenterLink.href = caseHref("case_command_center.html");
+        }
+
+        function syncCaseUrl() {
+            const url = new URL(window.location.href);
+            if (state.caseId) url.searchParams.set("case_id", String(state.caseId));
+            else url.searchParams.delete("case_id");
+            history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+        }
+
+        async function loadCases() {
+            const payload = await apiFetch("/api/cases");
+            state.cases = (payload.cases || []).filter((item) => !isDevelopmentQaCase(item));
+            const requested = Number(new URLSearchParams(window.location.search).get("case_id"));
+            const selected = state.cases.find((item) => Number(item.case_id) === requested) || state.cases[0] || null;
+            state.caseId = selected ? Number(selected.case_id) : null;
+            const select = document.getElementById("outreachCaseSelect");
+            select.innerHTML = state.cases.length
+                ? state.cases.map((item) => `<option value="${escapeHtml(item.case_id)}">${escapeHtml(item.title || `Case ${item.case_id}`)}</option>`).join("")
+                : `<option value="">No persisted cases</option>`;
+            select.disabled = !state.cases.length;
+            if (state.caseId) select.value = String(state.caseId);
+            renderActiveCase();
+            syncCaseUrl();
+        }
+
+        async function changeActiveCase(caseId) {
+            state.caseId = Number(caseId) || null;
+            state.matches = [];
+            state.sourceDetails = {};
+            state.directoryTargets = [];
+            renderActiveCase();
+            syncCaseUrl();
+            await refreshAnalytics();
+            if (state.activeTab !== "overview") {
+                await Promise.all([refreshMatches(), refreshDirectoryTargets()]);
+            }
         }
 
         async function ensureAuth(force = false) {
@@ -1251,7 +1352,7 @@
         function payloadFromControls() {
             const targetType = state.activeTab === "organizations" ? "organization" : state.activeTab === "media" ? "media" : "lawyer";
             return {
-                case_id: Number(new URLSearchParams(window.location.search).get("case_id") || 1),
+                case_id: currentCaseId(),
                 target_type: targetType,
                 legal_fields: [document.getElementById("legalField").value],
                 evidence_topics: document.getElementById("primaryInput").value.split(/\s+/).filter(Boolean),
@@ -1265,11 +1366,11 @@
 
         async function refreshMatches() {
             const payload = payloadFromControls();
-            const caseId = new URLSearchParams(window.location.search).get("case_id");
+            const caseId = currentCaseId();
             if (!caseId) {
                 state.matches = [];
-                renderMatches("no live data");
-                showToast("Load a case to run outreach matching");
+                state.sourceDetails = { reason: "Select or create a persisted case before running outreach matching." };
+                renderMatches("case required");
                 return;
             }
 
@@ -1294,10 +1395,10 @@
         }
 
         async function refreshAnalytics() {
-            const caseId = new URLSearchParams(window.location.search).get("case_id");
+            const caseId = currentCaseId();
             if (!caseId) {
                 state.analytics = EMPTY_OUTREACH_ANALYTICS;
-                renderAnalytics("no live data");
+                renderAnalytics("case required");
                 return;
             }
 
@@ -1503,6 +1604,9 @@
             });
         });
         document.getElementById("refreshMatches").addEventListener("click", refreshMatches);
+        document.getElementById("outreachCaseSelect").addEventListener("change", (event) => {
+            changeActiveCase(event.target.value).catch((error) => showToast(error.message || "Unable to switch outreach case"));
+        });
         document.getElementById("maxResults").addEventListener("change", refreshMatches);
         document.getElementById("legalField").addEventListener("change", refreshMatches);
         document.getElementById("primaryInput").addEventListener("change", refreshMatches);
@@ -1519,15 +1623,35 @@
             discoverDirectoryTargets().catch((error) => showToast(error.message || "Unable to search public sources"));
         });
 
-        const initialHash = window.location.hash.replace("#", "");
-        let storedDepth = "focus";
-        try {
-            storedDepth = localStorage.getItem("laroOutreachDepth") || "focus";
-        } catch (error) {
-            storedDepth = "focus";
+        async function initializeOutreach() {
+            const initialHash = window.location.hash.replace("#", "");
+            let storedDepth = "focus";
+            try {
+                storedDepth = localStorage.getItem("laroOutreachDepth") || "focus";
+            } catch (error) {
+                storedDepth = "focus";
+            }
+            setOutreachDepth(["lawyers", "media", "organizations"].includes(initialHash) && storedDepth === "focus" ? "guided" : storedDepth, { keepTab: true });
+            try {
+                await loadCases();
+            } catch (error) {
+                state.cases = [];
+                state.caseId = null;
+                renderActiveCase();
+                showToast(error.message || "Unable to load persisted cases");
+            }
+            setActiveTab(["overview", "lawyers", "media", "organizations"].includes(initialHash) ? initialHash : "overview");
         }
-        setOutreachDepth(["lawyers", "media", "organizations"].includes(initialHash) && storedDepth === "focus" ? "guided" : storedDepth, { keepTab: true });
-        setActiveTab(["overview", "lawyers", "media", "organizations"].includes(initialHash) ? initialHash : "overview");
+
+        function refreshVisibleOutreachData() {
+            if (document.hidden || !currentCaseId()) return;
+            refreshAnalytics().catch(() => {});
+            if (state.activeTab !== "overview") refreshDirectoryTargets().catch(() => {});
+        }
+
+        window.setInterval(refreshVisibleOutreachData, 20000);
+        document.addEventListener("visibilitychange", refreshVisibleOutreachData);
+        initializeOutreach();
     </script>
     <script src="js/click-actions.js"></script>
 </body>

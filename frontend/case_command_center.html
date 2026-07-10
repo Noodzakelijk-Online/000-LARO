@@ -3224,7 +3224,7 @@
                 <a class="nav-link-ledger" href="dashboard_dark.html"><span class="nav-glyph">D</span> Dashboard</a>
                 <a class="nav-link-ledger active" href="case_command_center.html"><span class="nav-glyph">C</span> Command Center</a>
                 <a class="nav-link-ledger" href="evidence_timeline.html"><span class="nav-glyph">T</span> Evidence Timeline</a>
-                <a class="nav-link-ledger" href="outreach.html"><span class="nav-glyph">O</span> Outreach</a>
+                <a class="nav-link-ledger" id="outreachNavLink" href="outreach.html"><span class="nav-glyph">O</span> Outreach</a>
             </nav>
         </aside>
 
@@ -6248,6 +6248,8 @@
         }
 
         function renderCases(cases) {
+            const outreachLink = document.getElementById("outreachNavLink");
+            if (outreachLink) outreachLink.href = selectedCaseId ? `outreach.html?case_id=${encodeURIComponent(selectedCaseId)}` : "outreach.html";
             document.getElementById("caseRows").innerHTML = cases.length ? cases.map((item) => {
                 const needs = [];
                 if ((item.documents_count || 0) === 0) needs.push("evidence");
