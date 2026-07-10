@@ -2188,11 +2188,11 @@ class TestLegalLedgerApi(unittest.TestCase):
         case_id = created.get_json()["case_id"]
         first = self.client.post(f"/api/cases/{case_id}/documents", json={
             "title": "First payment amount",
-            "extracted_text": "The decision records a payment amount of EUR 125.",
+            "extracted_text": "The decision dated 2024-05-01 records a payment amount of EUR 125.",
         }, headers=self.headers).get_json()
         second = self.client.post(f"/api/cases/{case_id}/documents", json={
             "title": "Second payment amount",
-            "extracted_text": "The notice records a payment amount of EUR 250.",
+            "extracted_text": "The notice dated 2024-05-15 records a payment amount of EUR 250.",
         }, headers=self.headers).get_json()
 
         provider = LocalSemanticAnalysisProvider({"provider": "rule_based"})
@@ -2207,8 +2207,64 @@ class TestLegalLedgerApi(unittest.TestCase):
             {source["document_id"] for source in conflict["sources"]},
             {str(first["document_id"]), str(second["document_id"])},
         )
-        self.assertEqual(len(run["review_items"]), len(run["content"]["findings"]) + len(run["content"]["review_questions"]))
+        self.assertEqual([item["event_date"] for item in run["content"]["timeline_suggestions"]], ["2024-05-01", "2024-05-15"])
+        self.assertEqual(
+            len(run["review_items"]),
+            len(run["content"]["findings"]) + len(run["content"]["review_questions"]) + len(run["content"]["timeline_suggestions"]),
+        )
         self.assertTrue(all(item["status"] == "needs_review" for item in run["review_items"]))
+
+    def test_case_wide_timeline_proposal_requires_explicit_conversion_and_keeps_citations(self):
+        created = self.client.post("/api/cases", json={"title": "Timeline proposal conversion"}, headers=self.headers)
+        case_id = created.get_json()["case_id"]
+        document = self.client.post(f"/api/cases/{case_id}/documents", json={
+            "title": "Dated decision",
+            "extracted_text": "The authority issued its decision on 2024-05-01.",
+        }, headers=self.headers).get_json()
+
+        def fixture_analysis(documents, case_context):
+            return {
+                "status": "completed",
+                "provider": "rule_based",
+                "findings": [],
+                "review_questions": [],
+                "timeline_suggestions": [{
+                    "event_date": "2024-05-01",
+                    "title": "Decision mentioned in source",
+                    "description": "Cited source passage for 2024-05-01: The authority issued its decision on 2024-05-01.",
+                    "sources": [{
+                        "document_id": str(document["document_id"]),
+                        "source_quote": "The authority issued its decision on 2024-05-01.",
+                    }],
+                }],
+                "source_documents": [],
+                "limitations": [],
+            }
+
+        with mock.patch.object(self.app_module.document_intelligence.semantic_provider, "analyze_case", side_effect=fixture_analysis):
+            analysis = self.client.post(f"/api/cases/{case_id}/case-analysis", headers=self.headers)
+        self.assertEqual(analysis.status_code, 201)
+        run = analysis.get_json()["run"]
+        review_item = next(item for item in run["review_items"] if item["item_type"] == "timeline_suggestion")
+        self.assertEqual(review_item["source_refs"][0]["event_date"], "2024-05-01")
+
+        converted = self.client.patch(
+            f"/api/cases/{case_id}/case-analysis/review-items/{review_item['id']}",
+            json={"action": "timeline"},
+            headers=self.headers,
+        )
+        self.assertEqual(converted.status_code, 200)
+        converted_item = converted.get_json()["review_item"]
+        self.assertEqual(converted_item["status"], "converted")
+        self.assertEqual(converted_item["target_type"], "event")
+
+        timeline = self.client.get(f"/api/cases/{case_id}/timeline", headers=self.headers).get_json()["timeline"]
+        event = next(item for item in timeline if item["id"] == converted_item["target_id"])
+        self.assertEqual(event["event_date"], "2024-05-01")
+        self.assertTrue(event["is_suggestion"])
+        self.assertEqual(event["source"]["document_id"], document["document_id"])
+        evidence = self.client.get(f"/api/cases/{case_id}/evidence", headers=self.headers).get_json()["evidence_links"]
+        self.assertTrue(any(link["target_type"] == "event" and link["target_id"] == event["id"] for link in evidence))
 
     def test_case_wide_review_item_requires_explicit_conversion_and_preserves_citations(self):
         created = self.client.post("/api/cases", json={

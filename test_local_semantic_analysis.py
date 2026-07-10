@@ -151,12 +151,12 @@ class TestLocalSemanticAnalysisProvider(unittest.TestCase):
             {
                 "document_id": 1,
                 "title": "Decision",
-                "extracted_text": "Case reference CAK-42. The decision records a payment amount of EUR 125.",
+                "extracted_text": "Decision dated 2024-05-01. Case reference CAK-42. The decision records a payment amount of EUR 125.",
             },
             {
                 "document_id": 2,
                 "title": "Notice",
-                "extracted_text": "Case reference CAK-42. The payment notice records a payment amount of EUR 250.",
+                "extracted_text": "Notice dated 15/05/2024. Case reference CAK-42. The payment notice records a payment amount of EUR 250.",
             },
             {
                 "document_id": 3,
@@ -174,6 +174,23 @@ class TestLocalSemanticAnalysisProvider(unittest.TestCase):
         self.assertTrue(any(item["category"] == "corroboration" for item in result["findings"]))
         self.assertTrue(any(item["category"] == "evidence_gap" for item in result["findings"]))
         self.assertTrue(any("current" in item["question"] for item in result["review_questions"]))
+        self.assertEqual([item["event_date"] for item in result["timeline_suggestions"]], ["2024-05-01", "2024-05-15"])
+        self.assertIn("Decision dated 2024-05-01", result["timeline_suggestions"][0]["sources"][0]["source_quote"])
+
+    def test_default_case_analysis_proposes_each_unambiguous_date_in_a_source_passage(self):
+        provider = LocalSemanticAnalysisProvider({"provider": "rule_based"})
+
+        result = provider.analyze_case([{
+            "document_id": 1,
+            "title": "Decision and deadline",
+            "extracted_text": "The decision is dated 2024-05-01 and the objection deadline is 2024-05-15.",
+        }])
+
+        self.assertEqual([item["event_date"] for item in result["timeline_suggestions"]], ["2024-05-01", "2024-05-15"])
+        self.assertTrue(all(
+            item["sources"][0]["source_quote"] == "The decision is dated 2024-05-01 and the objection deadline is 2024-05-15."
+            for item in result["timeline_suggestions"]
+        ))
 
 
 if __name__ == "__main__":

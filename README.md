@@ -53,7 +53,7 @@ LARO stores connection status and a token fingerprint in the ledger, never raw O
 
 ## Optional Local Deep Reading
 
-The default reader also performs a local, deterministic case-wide comparison of readable sources. It can flag literal differences in payment amounts or deadline dates, shared case references, and deadline wording without a recognizable date. Every result is review-only and opens the cited source document.
+The default reader also performs a local, deterministic case-wide comparison of readable sources. It can flag literal differences in payment amounts or deadline dates, shared case references, and deadline wording without a recognizable date. It also proposes a chronological source passage for every unambiguous date it finds; each proposal must be explicitly added to the reviewable timeline. Every result is review-only and opens the cited source document.
 
 For deeper local-language analysis on your own machine, configure a local Ollama model in `.env`:
 

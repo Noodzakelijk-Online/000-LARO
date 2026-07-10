@@ -426,7 +426,8 @@ class CaseAnalysisReviewItem(Base):
     """A cited case-wide observation held for explicit ledger review.
 
     The item is an internal work item, not a confirmed fact.  A user must
-    deliberately convert it into a claim, contradiction, or follow-up.
+    deliberately convert it into a timeline proposal, claim, contradiction, or
+    follow-up.
     """
 
     __tablename__ = "case_analysis_review_items"
@@ -1659,8 +1660,8 @@ class LegalLedger:
     ) -> Optional[Dict[str, Any]]:
         """Convert a cited observation only after an explicit user decision."""
         action = str(data.get("action") or "").strip().lower()
-        if action not in {"contradiction", "claim", "follow_up", "dismiss", "reopen"}:
-            raise ValueError("Case analysis action must be contradiction, claim, follow_up, dismiss, or reopen")
+        if action not in {"timeline", "contradiction", "claim", "follow_up", "dismiss", "reopen"}:
+            raise ValueError("Case analysis action must be timeline, contradiction, claim, follow_up, dismiss, or reopen")
 
         with self.session_scope() as session:
             item = session.get(CaseAnalysisReviewItem, item_id)
@@ -1696,7 +1697,27 @@ class LegalLedger:
             if action == "contradiction" and len(sources) < 2:
                 raise ValueError("A contradiction needs at least two validated source citations.")
 
-            if action == "contradiction":
+            if action == "timeline":
+                event_date = next((str(source.get("event_date") or "").strip() for source in sources if source.get("event_date")), "")
+                try:
+                    event_date = _dt.date.fromisoformat(event_date).isoformat()
+                except ValueError:
+                    raise ValueError("A timeline proposal needs an unambiguous cited ISO date.")
+                target = CaseEvent(
+                    case_id=case_id,
+                    event_date=event_date,
+                    event_type="case_analysis_suggestion",
+                    title=item.title or "Case-wide timeline proposal",
+                    description=item.description,
+                    source_confidence=0.0,
+                    user_confirmed=False,
+                    created_from_document_id=sources[0]["document_id"],
+                )
+                session.add(target)
+                session.flush()
+                target_type = "event"
+                self._audit(session, case_id, "CaseEvent", target.id, "created", actor, {}, self._serialize_event(target), "medium")
+            elif action == "contradiction":
                 target = Contradiction(
                     case_id=case_id,
                     contradiction_type="cross_document_analysis",
@@ -4053,6 +4074,7 @@ class LegalLedger:
             candidates = []
             candidates.extend(("finding", index, item) for index, item in enumerate(content.get("findings") or []) if isinstance(item, dict))
             candidates.extend(("review_question", index, item) for index, item in enumerate(content.get("review_questions") or []) if isinstance(item, dict))
+            candidates.extend(("timeline_suggestion", index, item) for index, item in enumerate(content.get("timeline_suggestions") or []) if isinstance(item, dict))
             existing_keys = {
                 item.finding_key
                 for item in session.query(CaseAnalysisReviewItem.finding_key)
@@ -4063,6 +4085,12 @@ class LegalLedger:
                 finding_key = f"{item_type}:{index}"
                 if finding_key in existing_keys:
                     continue
+                event_date = ""
+                if item_type == "timeline_suggestion":
+                    try:
+                        event_date = _dt.date.fromisoformat(str(candidate.get("event_date") or "")).isoformat()
+                    except ValueError:
+                        continue
                 validated_sources = []
                 seen_sources = set()
                 for source in candidate.get("sources") or []:
@@ -4081,15 +4109,24 @@ class LegalLedger:
                     if source_key in seen_sources:
                         continue
                     seen_sources.add(source_key)
-                    validated_sources.append({"document_id": document_id, "source_quote": quote})
+                    source_payload = {"document_id": document_id, "source_quote": quote}
+                    if event_date:
+                        source_payload["event_date"] = event_date
+                    validated_sources.append(source_payload)
                 if not validated_sources:
                     continue
-                description = str(candidate.get("observation") or candidate.get("question") or "").strip()
+                description = str(
+                    candidate.get("description")
+                    if item_type == "timeline_suggestion"
+                    else candidate.get("observation") or candidate.get("question") or ""
+                ).strip()
                 if not description:
                     continue
                 category = str(candidate.get("category") or "case-wide observation").replace("_", " ").strip()
                 title = (
-                    f"Verify: {description[:180]}"
+                    str(candidate.get("title") or "Case-wide timeline proposal")[:255]
+                    if item_type == "timeline_suggestion"
+                    else f"Verify: {description[:180]}"
                     if item_type == "review_question"
                     else f"Review {category}: {description[:160]}"
                 )

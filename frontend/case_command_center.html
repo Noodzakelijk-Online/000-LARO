@@ -6110,6 +6110,7 @@
             const content = run?.content || {};
             const findings = content.findings || [];
             const questions = content.review_questions || [];
+            const timelineSuggestions = content.timeline_suggestions || [];
             const sourceButton = (source) => sourceDocumentButton(source?.document_id, source?.source_quote || "");
             const reviewItems = new Map((run?.review_items || []).map((item) => [item.finding_key, item]));
             const reviewControls = (reviewItem, type, sourceCount) => {
@@ -6120,8 +6121,8 @@
                 if (reviewItem.status === "dismissed") {
                     return `<div class="button-row"><p class="muted">Dismissed from this review run.</p><button class="btn-secondary-ledger analysis-review-action" type="button" data-analysis-review-id="${escapeHtml(reviewItem.id)}" data-analysis-action="reopen">Reopen</button></div>`;
                 }
-                const primaryAction = type === "review_question" ? "follow_up" : sourceCount > 1 ? "contradiction" : "claim";
-                const primaryLabel = primaryAction === "follow_up" ? "Create follow-up" : primaryAction === "contradiction" ? "Prepare conflict" : "Prepare claim";
+                const primaryAction = type === "timeline_suggestion" ? "timeline" : type === "review_question" ? "follow_up" : sourceCount > 1 ? "contradiction" : "claim";
+                const primaryLabel = primaryAction === "timeline" ? "Add timeline proposal" : primaryAction === "follow_up" ? "Create follow-up" : primaryAction === "contradiction" ? "Prepare conflict" : "Prepare claim";
                 return `
                     <div class="button-row case-analysis-actions">
                         <button class="btn-ledger analysis-review-action" type="button" data-analysis-review-id="${escapeHtml(reviewItem.id)}" data-analysis-action="${primaryAction}">${primaryLabel}</button>
@@ -6143,6 +6144,22 @@
                     <p class="muted" id="caseAnalysisStatus">Analysis remains local and review-only; source documents are not changed.</p>
                     ${run ? `
                         <p class="muted">${escapeHtml(run.provider || "local")} · ${escapeHtml(run.model || (content.analysis_method === "deterministic_source_comparison_v1" ? "deterministic source comparison" : "local analysis"))} · ${escapeHtml(String(run.created_at || "").slice(0, 19) || "just now")}</p>
+                        ${timelineSuggestions.length ? `<div class="record-list" style="margin-bottom: 0.75rem;">${timelineSuggestions.slice(0, 12).map((item, index) => {
+                            const reviewItem = reviewItems.get(`timeline_suggestion:${index}`);
+                            return `
+                            <article class="record-row">
+                                <span class="record-kicker">${escapeHtml(item.event_date || "dated")}</span>
+                                <div>
+                                    <strong>${escapeHtml(item.title || "Timeline proposal")}</strong>
+                                    <p>${escapeHtml(item.description || "Review the cited source passage before adding this to the timeline.")}</p>
+                                    <div class="source-ref-list">${(item.sources || []).map((source) => `
+                                        <span class="source-ref-chip">${sourceButton(source)}<span>${escapeHtml(source.source_quote || "Source quote")}</span></span>
+                                    `).join("")}</div>
+                                    ${reviewControls(reviewItem, "timeline_suggestion", (item.sources || []).length)}
+                                </div>
+                            </article>
+                            `;
+                        }).join("")}</div>` : ""}
                         ${findings.length ? `<div class="record-list">${findings.slice(0, 8).map((item, index) => {
                             const reviewItem = reviewItems.get(`finding:${index}`);
                             return `
@@ -7497,7 +7514,7 @@
                 showToast(message);
                 await loadCaseDetail(selectedCaseId);
                 await loadCommandCenter();
-                if (item.status === "converted") activateDetailTab("review");
+                if (item.status === "converted") activateDetailTab(item.target_type === "event" ? "timeline" : "review");
             } catch (error) {
                 showToast(error.message);
                 throw error;
@@ -7523,8 +7540,9 @@
                 const response = await apiFetch(`/api/cases/${selectedCaseId}/case-analysis`, { method: "POST" });
                 const findings = response.run?.content?.findings?.length || 0;
                 const questions = response.run?.content?.review_questions?.length || 0;
-                progress.complete(`Case-wide reading stored: ${findings} cited observation${findings === 1 ? "" : "s"}, ${questions} question${questions === 1 ? "" : "s"}.`);
-                showToast(`Case-wide reading stored for review: ${findings} observation${findings === 1 ? "" : "s"}, ${questions} question${questions === 1 ? "" : "s"}.`);
+                const timelineSuggestions = response.run?.content?.timeline_suggestions?.length || 0;
+                progress.complete(`Case-wide reading stored: ${timelineSuggestions} timeline proposal${timelineSuggestions === 1 ? "" : "s"}, ${findings} cited observation${findings === 1 ? "" : "s"}, ${questions} question${questions === 1 ? "" : "s"}.`);
+                showToast(`Case-wide reading stored for review: ${timelineSuggestions} timeline proposal${timelineSuggestions === 1 ? "" : "s"}, ${findings} observation${findings === 1 ? "" : "s"}, ${questions} question${questions === 1 ? "" : "s"}.`);
                 await loadCaseDetail(selectedCaseId);
                 await loadCommandCenter();
                 activateDetailTab("overview");
