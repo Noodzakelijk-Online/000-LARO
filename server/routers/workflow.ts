@@ -170,6 +170,59 @@ export const workflowRouter = router({
     .mutation(async ({ input, ctx }) => {
       return setDraftStatus(ctx.user.id, input.outreachId, OUTREACH_REJECTED);
     }),
+
+  /**
+   * Phase 062 — pre-action safety review.
+   *
+   * Returns everything a human must see and confirm BEFORE any outreach is sent:
+   * who will be contacted, the case, the mandatory legal disclaimer, whether the
+   * action is reversible, what remains manual, and whether sending is even
+   * enabled (feature flag, default off). The UI must render this as a review
+   * screen and require explicit confirmation; the backend never sends implicitly.
+   */
+  preSendReview: protectedProcedure
+    .input(z.object({ outreachId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const row = (
+        await db
+          .select({
+            id: outreachStatus.id,
+            caseId: outreachStatus.caseId,
+            status: outreachStatus.status,
+            lawyerName: lawyers.name,
+            lawyerEmail: lawyers.email,
+          })
+          .from(outreachStatus)
+          .leftJoin(lawyers, eq(outreachStatus.lawyerId, lawyers.id))
+          .where(eq(outreachStatus.id, input.outreachId))
+          .limit(1)
+      )[0];
+      if (!row || !row.caseId) throw new Error("Outreach draft not found");
+      await assertCaseOwnership(row.caseId, ctx.user.id);
+
+      const caseRow = (await db.select().from(casesTable).where(eq(casesTable.id, row.caseId)).limit(1))[0];
+      const { LEGAL_DISCLAIMER } = await import("../../shared/const");
+      const sendEnabled = await getFlag("outreach.send.enabled");
+
+      return {
+        outreachId: row.id,
+        recipient: { name: row.lawyerName, email: row.lawyerEmail },
+        case: caseRow ? { id: caseRow.id, clientName: caseRow.clientName, status: caseRow.status } : null,
+        currentStatus: row.status,
+        // Safety facts the review screen must present:
+        externalAction: true,
+        reversible: false, // once sent, an email to a lawyer cannot be recalled
+        requiresExplicitApproval: true,
+        sendEnabled, // if false, sending is disabled by an operator flag
+        whatRemainsManual: sendEnabled
+          ? "You must approve this draft; sending is performed only after approval."
+          : "Sending is currently disabled by the operator (outreach.send.enabled=false). Nothing can be sent.",
+        disclaimer: LEGAL_DISCLAIMER,
+      };
+    }),
 });
 
 async function setDraftStatus(userId: string, outreachId: string, newStatus: string) {

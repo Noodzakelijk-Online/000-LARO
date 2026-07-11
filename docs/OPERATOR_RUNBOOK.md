@@ -71,3 +71,41 @@ later concern — documented, not implemented.
 - No emergency "stop all outreach" switch yet — Phase 104 (there is nothing to
   stop until the send path exists).
 - Metrics/monitoring (Sentry/Datadog) not wired — Phase 035.
+
+---
+
+## Phase 070 — Operational procedures (expanded)
+
+### Health & readiness
+- Liveness: `GET /api/live` · Readiness (DB): `GET /api/ready` · Full: `GET /api/health`.
+- Self-diagnostic: `npm run doctor` (exits non-zero on prod-critical issues).
+- Admin diagnostics (role admin): `admin.diagnostics`, `admin.tableCounts`,
+  `admin.invariants` (Phase 061).
+
+### Data integrity
+- Verify invariants: `admin.invariants` — email uniqueness, ownership, outreach
+  uniqueness, legalAreas validity.
+- Reconcile: `admin.reconcileReport` (read-only) → `admin.repairOrphans` (deletes
+  orphaned rows). See `docs/DATA_RECONCILIATION.md`.
+
+### Backup & restore
+- Backup: `npm run db:backup` or `npx tsx scripts/backup.ts <dest.sqlite>`.
+- Restore: `restoreDatabase(<src>)` then restart the app. See `docs/BACKUP_RESTORE.md`.
+
+### Feature flags / rollout
+- Read: `featureFlags.list`. Toggle (admin): `featureFlags.set`.
+- `outreach.send.enabled` is **off by default** — enabling it is the gate before
+  any real outreach send. See `docs/FEATURE_FLAGS.md`.
+
+### Secret rotation
+- Delete `userData/laro-secrets.json` and relaunch → new per-install
+  `JWT_SECRET`/`COOKIE_SECRET`/`LOCAL_AGENT_TOKEN` (invalidates sessions).
+
+### Provider credentials
+- Check readiness: `system.providerChecklist` (which integrations are configured).
+  See `docs/PROVIDERS.md`.
+
+### Incident response (quick)
+1. Suspected data issue → `admin.invariants` + `admin.reconcileReport`.
+2. Suspected compromise → rotate secrets (above), review `audit_logs`.
+3. Bad release → roll back app + restore DB backup (docs/RELEASE_PROCESS.md).

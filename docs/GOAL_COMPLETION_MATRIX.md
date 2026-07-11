@@ -10,7 +10,7 @@ evidence table (all 116 phases with `file:line` citations) lives in
 `docs/phase-audit.md`; this file tracks the **live implementation status** as
 phases are worked and is updated at the end of each phase.
 
-Last updated: 2026-07-06 (after phases 000–060).
+Last updated: 2026-07-06 (after phases 000–070).
 
 ---
 
@@ -74,6 +74,16 @@ Last updated: 2026-07-06 (after phases 000–060).
 | 058 | Feature flags & rollout controls | **Implemented** | `server/featureFlags.ts` + router; `outreach.send.enabled` default OFF; `docs/FEATURE_FLAGS.md`. |
 | 059 | Formal state machines | **Implemented** | `server/stateMachines.ts` enforced in cases.update + approval gate; `docs/STATE_MACHINES.md`. |
 | 060 | Domain model specification | **Implemented** | `docs/DOMAIN_MODEL.md`. |
+| 061 | Data invariants & constraints | **Implemented** | `server/invariants.ts` + `admin.invariants`; verifies email/ownership/outreach/orphans/legalAreas. Tested. |
+| 062 | Pre-action safety review screen | **Implemented** | `workflow.preSendReview` (recipient/disclaimer/reversible:false/sendEnabled); ownership-checked; never sends. Tested. |
+| 063 | Provider credential verification checklist | **Implemented** | `system.providerChecklist` (configured booleans + env names, no secrets). Tested. |
+| 064 | Threat model & security design review | **Implemented** | `docs/THREAT_MODEL.md` (STRIDE + residuals). |
+| 065 | Privacy impact assessment | **Implemented** | `docs/PRIVACY_IMPACT_ASSESSMENT.md` (DPIA). |
+| 066 | Supply chain & dependency review | **Partial** | `docs/SUPPLY_CHAIN.md` + `npm run audit:deps`. 46 advisories to triage (2 critical). |
+| 067 | License & third-party service review | **Partial** | `docs/LICENSES.md`. Repo still lacks a top-level LICENSE (owner action). |
+| 068 | CI/CD quality gates | **Implemented** | `.github/workflows/ci.yml` — blocking tsc(server+main)+vitest; lint/renderer non-blocking. |
+| 069 | Release process, canary & rollback | **Implemented** | `docs/RELEASE_PROCESS.md` (flags=canary, backup=rollback, gates). |
+| 070 | Operator runbook | **Implemented** | `docs/OPERATOR_RUNBOOK.md` expanded (health/integrity/backup/flags/rotation/incident). |
 | 016 | Background jobs, schedulers & workers | **Implemented** | `runJob()` error-isolation + retry/backoff + status; honest outreach heartbeat (no fake send); `health.readiness` exposes job status. `docs/OPERATOR_RUNBOOK.md`. |
 | 017 | Idempotency & duplicate-action prevention | **Partial** | UNIQUE `outreach_status(caseId,lawyerId)` + idempotent `initiateOutreach`. Residual: idempotency keys for the real send path (026). |
 | 018 | Rate limits, cooldowns & provider quotas | **Implemented** | `enforceRateLimit` applied to login, case-create, matching, outreach (+ existing search). Residual: distributed store (Redis) documented. |
@@ -94,5 +104,5 @@ remain and are tracked in `docs/SECURITY.md` §5 and `docs/FRONTEND_ARCHITECTURE
 | 076–099 | Debt register, bug log, red-team loops, user sims, value/realism reviews, traceability, task graph, worklog, resume-safety, stabilization gates, DoD, fresh-clone, manual evidence, no-excuses search, completion matrix, final report, final response, maintenance, roadmap | Missing → Partial (worklog/checkpoints/matrix now started) |
 | 100–115 | Provider cleanup, debug bundle, retention, prod migration, emergency stop, onboarding, roles, confidence display, decision minimization, exception dashboard, safe retries, ambiguous-action, versioning, regression baseline, maintenance review, operator-readiness | mostly Missing |
 
-**Approximate tally across all 116 phases:** Implemented ~52 · Partial ~44 · Missing ~18 · Blocked 0 · N/A ~2.
-(Through phase 060: state machines, feature flags, local-first analytics, backup/restore, reconciliation, i18n foundation, domain model — all real + tested.)
+**Approximate tally across all 116 phases:** Implemented ~60 · Partial ~46 · Missing ~8 · Blocked 0 · N/A ~2.
+(Through phase 070: invariants, pre-action safety review, provider checklist, threat model, DPIA, supply-chain, licenses, CI gates, release process, operator runbook.)

@@ -21,6 +21,7 @@
     "test:watch": "vitest",
     "setup": "node scripts/setup.mjs",
     "doctor": "node scripts/doctor.mjs",
+    "audit:deps": "npm audit",
     "db:push": "drizzle-kit push",
     "db:backup": "node scripts/db-backup.mjs",
     "serve": "cross-env NODE_ENV=production tsx server/index.ts",

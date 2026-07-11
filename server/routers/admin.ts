@@ -60,4 +60,20 @@ export const adminRouter = router({
     }
     return counts;
   }),
+
+  // Phase 061 — data invariant verification (read-only).
+  invariants: adminProcedure.query(async () => {
+    const { verifyInvariants } = await import("../invariants");
+    return verifyInvariants();
+  }),
+
+  // Phase 054 — data reconciliation report (read-only) + repair (admin only).
+  reconcileReport: adminProcedure.query(async () => {
+    const { reconcileReport } = await import("../reconcile");
+    return reconcileReport();
+  }),
+  repairOrphans: adminProcedure.mutation(async () => {
+    const { repairOrphans } = await import("../reconcile");
+    return repairOrphans();
+  }),
 });

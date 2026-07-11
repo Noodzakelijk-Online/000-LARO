@@ -159,3 +159,21 @@ component tests (041 follow-up).
 **Next safe action:** the real outreach **send** — now state-machine-ready
 (Approved→Sent) and feature-flag-gated (outreach.send.enabled). Then 061+
 (invariants/constraints, pre-action safety screen, provider credential checklist).
+
+---
+
+## Checkpoint 9 — 2026-07-06 — Phases 061–070
+
+**Branch:** `Phase-Imp`.
+
+**Done:** 061 invariants (`admin.invariants`), 062 pre-send safety review
+(`workflow.preSendReview`, never sends), 063 provider checklist, 064 threat model,
+065 DPIA, 066 supply-chain (npm audit: 2 critical/22 high — Partial), 067 licenses
+(Partial — no top-level LICENSE), 068 CI quality gates (tsc+vitest blocking),
+069 release/canary/rollback, 070 expanded operator runbook.
+
+**Verified:** server+main tsc clean; `npx vitest run` → 22 files, 143 passed, 9 todo.
+
+**Next safe action:** the real outreach **send** (scaffolded + gated), then 071–075
+(user guide, troubleshooting, UI/endpoint/doc audits) and triage the npm-audit
+advisories (066) + add a top-level LICENSE (067).

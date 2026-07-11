@@ -9,6 +9,44 @@ is only partially done, that is stated here and reflected in
 
 ---
 
+## 2026-07-06 — Phases 061–070 (invariants, pre-action review, provider checklist, threat model, DPIA, supply chain, licenses, CI gates, release, runbook)
+
+**Branch:** `Phase-Imp`.
+
+- **061 Data invariants**: `server/invariants.ts` (`verifyInvariants` — email
+  uniqueness, ownership, outreach uniqueness, orphans, legalAreas validity),
+  exposed via `admin.invariants` (+ `admin.reconcileReport`/`repairOrphans`). Tested.
+- **062 Pre-action safety review**: `workflow.preSendReview` returns the review
+  payload (recipient, case, disclaimer, `reversible:false`, `requiresExplicitApproval`,
+  `sendEnabled` flag, what-remains-manual) — ownership-checked; never sends. Tested.
+- **063 Provider credential checklist**: `system.providerChecklist` reports which
+  integrations are configured (booleans + required env names, **no secret values**).
+  Tested. `docs/PROVIDERS.md` cross-ref.
+- **064 Threat model**: `docs/THREAT_MODEL.md` (STRIDE over the real surface).
+- **065 Privacy impact assessment**: `docs/PRIVACY_IMPACT_ASSESSMENT.md` (DPIA).
+- **066 Supply chain**: `docs/SUPPLY_CHAIN.md` (npm audit snapshot: 46 advisories —
+  2 critical/22 high, mostly transitive/dev; triage plan) + `npm run audit:deps`.
+- **067 Licenses/third-party**: `docs/LICENSES.md` (permissive deps; services + terms;
+  flags that the repo lacks a top-level LICENSE).
+- **068 CI/CD quality gates**: `.github/workflows/ci.yml` — blocking `tsc`
+  (server+main) + `vitest`, non-blocking lint/renderer-tsc (pre-existing debt).
+- **069 Release/canary/rollback**: `docs/RELEASE_PROCESS.md` (flags as canary,
+  backup/restore as rollback, quality gates).
+- **070 Operator runbook**: expanded `docs/OPERATOR_RUNBOOK.md` (health, integrity,
+  backup/restore, flags, secret rotation, provider checklist, incident response).
+
+### Verification
+- `tsc` server + main → clean.
+- `npx vitest run` → **22 files, 143 passed, 9 todo, 0 failed** (added
+  `tests/backend/phase061_070.test.ts`).
+
+### What remains
+- Runtime security residuals (OAuth-token crypto, CSRF, JWT revocation) — tracked
+  in THREAT_MODEL/SECURITY.
+- The real outreach **send** (fully scaffolded + gated).
+
+---
+
 ## 2026-07-06 — Phases 051–060 (perf/indexing, pagination, backup/restore, reconciliation, analytics, SaaS, i18n, flags, state machines, domain model)
 
 **Branch:** `Phase-Imp` (not pushed).
