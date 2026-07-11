@@ -82,6 +82,10 @@ function ensureIndexes(sqlite: InstanceType<typeof Database>) {
   // Hot-path indexes for the highest-traffic lookups (outreach, evidence, email,
   // messaging, lawyer rating). All idempotent.
   const indexStatements = [
+    // Phase 051: back the cases.list filters/sort (status, urgency, updatedAt).
+    `CREATE INDEX IF NOT EXISTS cases_userId_status_idx ON cases(userId, status);`,
+    `CREATE INDEX IF NOT EXISTS cases_urgency_idx ON cases(urgency);`,
+    `CREATE INDEX IF NOT EXISTS cases_updatedAt_idx ON cases(updatedAt);`,
     `CREATE INDEX IF NOT EXISTS outreach_status_caseId_idx ON outreach_status(caseId);`,
     `CREATE INDEX IF NOT EXISTS outreach_status_lawyerId_idx ON outreach_status(lawyerId);`,
     `CREATE INDEX IF NOT EXISTS outreach_status_status_idx ON outreach_status(status);`,

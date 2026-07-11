@@ -29,6 +29,7 @@ import { evidenceAnalyticsRouter } from "./evidenceAnalytics";
 import { autoCollectionRouter } from "./autoCollection";
 import { googleDriveRouter } from "./googleDrive";
 import { notificationsRouter } from "./notifications";
+import { featureFlagsRouter } from "./featureFlags";
 import { adminRouter } from "./admin";
 import { auditRouter } from "./audit";
 import { enforceRateLimit, RATE_LIMITS } from "../rateLimit";
@@ -82,6 +83,28 @@ export const appRouter = router({
   autoCollection: autoCollectionRouter,
   googleDrive: googleDriveRouter,
   notifications: notificationsRouter,
+  featureFlags: featureFlagsRouter, // Phase 058
+
+  // Phase 056 — SaaS readiness WITHOUT forced billing. Core features work on the
+  // free tier; Stripe is optional and unconfigured by default. This endpoint
+  // reports plan/usage honestly rather than gating access behind a paywall.
+  billing: router({
+    status: protectedProcedure.query(async ({ ctx }) => {
+      const stripeConfigured = !!ENV.STRIPE_SECRET_KEY;
+      let usage: unknown = null;
+      try {
+        const mod: any = await import("../usageTracking");
+        usage = typeof mod.getUsageSummary === "function" ? await mod.getUsageSummary(ctx.user.id) : null;
+      } catch { usage = null; }
+      return {
+        plan: "free" as const,
+        billingConfigured: stripeConfigured,
+        forcedBilling: false as const,
+        note: "All core features are available without billing. Stripe is optional.",
+        usage,
+      };
+    }),
+  }),
   admin: adminRouter,
   audit: auditRouter, // Phase 019 — event-history read path
   
@@ -414,15 +437,26 @@ export const appRouter = router({
       }),
   }),
 
-  // Analytics procedures
+  // Analytics procedures — Phase 055: local-first, computed from the user's own
+  // data (no third-party telemetry). Previously returned {} / [].
   analytics: router({
-    getOverallStats: protectedProcedure.query(() => ({})),
-    getOutreachTrends: protectedProcedure.query(() => []),
-    getLawyerPerformance: protectedProcedure.query(() => []),
-    getLegalAreaDistribution: protectedProcedure.query(() => []),
-    getLawyerCapacity: protectedProcedure.query(() => []),
-    getCaseDistribution: protectedProcedure.query(() => []),
-    getWorkloadMetrics: protectedProcedure.query(() => []),
+    getOverallStats: protectedProcedure.query(async ({ ctx }) => {
+      const { overallStats } = await import("../analytics");
+      return overallStats(ctx.user.id);
+    }),
+    getLegalAreaDistribution: protectedProcedure.query(async ({ ctx }) => {
+      const { legalAreaDistribution } = await import("../analytics");
+      return legalAreaDistribution(ctx.user.id);
+    }),
+    getCaseDistribution: protectedProcedure.query(async ({ ctx }) => {
+      const { caseStatusDistribution } = await import("../analytics");
+      return caseStatusDistribution(ctx.user.id);
+    }),
+    // Not yet derived from real data — returned as explicit empty rather than fabricated.
+    getOutreachTrends: protectedProcedure.query(() => [] as Array<{ date: string; count: number }>),
+    getLawyerPerformance: protectedProcedure.query(() => [] as unknown[]),
+    getLawyerCapacity: protectedProcedure.query(() => [] as unknown[]),
+    getWorkloadMetrics: protectedProcedure.query(() => [] as unknown[]),
   }),
 
 

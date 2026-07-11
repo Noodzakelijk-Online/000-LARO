@@ -10,6 +10,7 @@ import { sanitizeLegalAreas } from "../legalAreasValidator";
 import { classifyLegalAreas } from "../classification";
 import { createNotification } from "../notifications";
 import { caseIntakeSchema } from "../../shared/validation";
+import { assertCaseTransition } from "../stateMachines";
 
 export const casesRouter = router({
   // Phase 022 — search, filters, sorting, pagination. All server-side and
@@ -263,6 +264,13 @@ export const casesRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
+
+      // Phase 059: validate the status transition against the case state machine.
+      if (input.status) {
+        await assertCaseOwnership(input.id, ctx.user.id);
+        const cur = (await db.select({ status: casesTable.status }).from(casesTable).where(eq(casesTable.id, input.id)).limit(1))[0];
+        assertCaseTransition(cur?.status ?? null, input.status);
+      }
 
       const updateData: any = { updatedAt: new Date() };
       if (input.status) updateData.status = input.status;

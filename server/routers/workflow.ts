@@ -6,6 +6,8 @@ import { assertCaseOwnership } from "../_core/authz";
 import { enforceRateLimit, RATE_LIMITS } from "../rateLimit";
 import { createAuditLog, AUDIT_ACTIONS } from "../audit";
 import { createNotification } from "../notifications";
+import { getFlag } from "../featureFlags";
+import { assertOutreachTransition } from "../stateMachines";
 import { cases as casesTable, outreachStatus, lawyers } from '../schema';
 import { eq, and, inArray } from "drizzle-orm";
 import { findMatchingLawyers } from "../matching";
@@ -182,6 +184,9 @@ async function setDraftStatus(userId: string, outreachId: string, newStatus: str
   // Ownership: the draft's case must belong to the user.
   await assertCaseOwnership(row.caseId, userId);
 
+  // Phase 059: enforce the outreach state machine (PendingApproval -> Approved/Rejected).
+  assertOutreachTransition(row.status ?? null, newStatus);
+
   await db
     .update(outreachStatus)
     .set({ status: newStatus, updatedAt: new Date() })
@@ -205,6 +210,8 @@ async function setDraftStatus(userId: string, outreachId: string, newStatus: str
   });
 
   // Approving marks the draft ready-to-send; actual transmission is a later
-  // phase. No lawyer is contacted here.
-  return { success: true, status: newStatus, sent: false as const };
+  // phase and additionally gated by the `outreach.send.enabled` feature flag
+  // (default OFF). No lawyer is contacted here regardless.
+  const sendEnabled = await getFlag("outreach.send.enabled");
+  return { success: true, status: newStatus, sent: false as const, sendEnabled };
 }

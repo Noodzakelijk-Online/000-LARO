@@ -10,7 +10,7 @@ evidence table (all 116 phases with `file:line` citations) lives in
 `docs/phase-audit.md`; this file tracks the **live implementation status** as
 phases are worked and is updated at the end of each phase.
 
-Last updated: 2026-07-06 (after phases 000–050).
+Last updated: 2026-07-06 (after phases 000–060).
 
 ---
 
@@ -64,6 +64,16 @@ Last updated: 2026-07-06 (after phases 000–050).
 | 048 | Provider failure simulation | **Implemented** | `tests/security/providerFailure.test.ts` — graceful degradation + prod-guarded fake lab. |
 | 049 | Accessibility review | **Partial** | `tests/a11y/accessibility.test.ts` (contrast/id) + `docs/ACCESSIBILITY.md`. Per-screen axe audit pending. |
 | 050 | Responsive & browser compatibility | **Partial** | `docs/RESPONSIVE_COMPAT.md` (single-Chromium desktop). Manual reflow QA / visual-regression pending. |
+| 051 | Performance baseline & indexing | **Implemented** | cases(userId,status)/urgency/updatedAt indexes; `docs/PERFORMANCE.md`. |
+| 052 | Large dataset & pagination testing | **Implemented** | `phase051_060.test.ts` — complete non-overlapping pagination over 55 rows + filters. |
+| 053 | Backup & restore procedures | **Implemented** | `server/backup.ts` (online backup/validate/restore) + CLI + `docs/BACKUP_RESTORE.md`; tested. |
+| 054 | Data reconciliation & repair | **Implemented** | `server/reconcile.ts` orphan detect+repair; tested; `docs/DATA_RECONCILIATION.md`. |
+| 055 | Product analytics local-first | **Implemented** | `server/analytics.ts` real metrics wired into `analytics.*`; `docs/ANALYTICS.md`. |
+| 056 | SaaS readiness without forced billing | **Implemented** | `billing.status` free tier, no paywall; `docs/SAAS_READINESS.md`. |
+| 057 | Internationalization (NL/EN) | **Partial** | `shared/i18n.ts` catalog + t(); renderer string migration pending; `docs/I18N.md`. |
+| 058 | Feature flags & rollout controls | **Implemented** | `server/featureFlags.ts` + router; `outreach.send.enabled` default OFF; `docs/FEATURE_FLAGS.md`. |
+| 059 | Formal state machines | **Implemented** | `server/stateMachines.ts` enforced in cases.update + approval gate; `docs/STATE_MACHINES.md`. |
+| 060 | Domain model specification | **Implemented** | `docs/DOMAIN_MODEL.md`. |
 | 016 | Background jobs, schedulers & workers | **Implemented** | `runJob()` error-isolation + retry/backoff + status; honest outreach heartbeat (no fake send); `health.readiness` exposes job status. `docs/OPERATOR_RUNBOOK.md`. |
 | 017 | Idempotency & duplicate-action prevention | **Partial** | UNIQUE `outreach_status(caseId,lawyerId)` + idempotent `initiateOutreach`. Residual: idempotency keys for the real send path (026). |
 | 018 | Rate limits, cooldowns & provider quotas | **Implemented** | `enforceRateLimit` applied to login, case-create, matching, outreach (+ existing search). Residual: distributed store (Redis) documented. |
@@ -84,5 +94,5 @@ remain and are tracked in `docs/SECURITY.md` §5 and `docs/FRONTEND_ARCHITECTURE
 | 076–099 | Debt register, bug log, red-team loops, user sims, value/realism reviews, traceability, task graph, worklog, resume-safety, stabilization gates, DoD, fresh-clone, manual evidence, no-excuses search, completion matrix, final report, final response, maintenance, roadmap | Missing → Partial (worklog/checkpoints/matrix now started) |
 | 100–115 | Provider cleanup, debug bundle, retention, prod migration, emergency stop, onboarding, roles, confidence display, decision minimization, exception dashboard, safe retries, ambiguous-action, versioning, regression baseline, maintenance review, operator-readiness | mostly Missing |
 
-**Approximate tally across all 116 phases:** Implemented ~44 · Partial ~43 · Missing ~27 · Blocked 0 · N/A ~2.
-(Through phase 050: a real test suite — 18 files, 117 passing — covers e2e, acceptance, isolation, adversarial, file-safety, provider-failure, worker.)
+**Approximate tally across all 116 phases:** Implemented ~52 · Partial ~44 · Missing ~18 · Blocked 0 · N/A ~2.
+(Through phase 060: state machines, feature flags, local-first analytics, backup/restore, reconciliation, i18n foundation, domain model — all real + tested.)

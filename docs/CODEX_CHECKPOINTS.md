@@ -142,3 +142,20 @@ then the real outreach **send** behind the approval gate — the last critical-p
 **Next safe action:** the real outreach **send** behind the approval gate (last critical-path gap),
 then 051–054 (perf/indexing, large-dataset pagination, backup/restore, reconciliation) and jsdom
 component tests (041 follow-up).
+
+---
+
+## Checkpoint 8 — 2026-07-06 — Phases 051–060
+
+**Branch:** `Phase-Imp` (not pushed).
+
+**Done (real code + tests):** 051 indexes, 052 pagination test, 053 backup/restore
+(+CLI), 054 reconciliation, 055 local-first analytics, 056 billing status (free tier),
+057 i18n foundation (Partial), 058 feature flags (outreach.send.enabled default OFF),
+059 formal state machines (enforced in cases.update + approval gate), 060 domain model spec.
+
+**Verified:** server+main tsc clean; `npx vitest run` → 21 files, 138 passed, 9 todo.
+
+**Next safe action:** the real outreach **send** — now state-machine-ready
+(Approved→Sent) and feature-flag-gated (outreach.send.enabled). Then 061+
+(invariants/constraints, pre-action safety screen, provider credential checklist).

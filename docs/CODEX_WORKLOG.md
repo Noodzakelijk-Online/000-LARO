@@ -9,6 +9,43 @@ is only partially done, that is stated here and reflected in
 
 ---
 
+## 2026-07-06 — Phases 051–060 (perf/indexing, pagination, backup/restore, reconciliation, analytics, SaaS, i18n, flags, state machines, domain model)
+
+**Branch:** `Phase-Imp` (not pushed).
+
+- **051 Performance/indexing**: added `cases(userId,status)`, `cases(urgency)`,
+  `cases(updatedAt)` indexes in `ensureIndexes`; `docs/PERFORMANCE.md`.
+- **052 Large-dataset pagination**: `tests/backend/phase051_060.test.ts` seeds 55
+  cases and asserts complete, non-overlapping pagination + filter narrowing.
+- **053 Backup/restore**: `server/backup.ts` (online `.backup()`, validate,
+  restore-with-`.bak`) + `scripts/backup.ts` CLI + `docs/BACKUP_RESTORE.md`.
+- **054 Reconciliation**: `server/reconcile.ts` (`reconcileReport`/`repairOrphans`
+  for orphaned caseId/userId rows + duplicate emails) + `docs/DATA_RECONCILIATION.md`.
+- **055 Analytics (local-first)**: `server/analytics.ts` real metrics wired into
+  `analytics.*` (were `{}`/`[]`); no third-party telemetry; `docs/ANALYTICS.md`.
+- **056 SaaS without forced billing**: `billing.status` endpoint (free tier, no
+  paywall); `docs/SAAS_READINESS.md`.
+- **057 i18n**: `shared/i18n.ts` NL+EN catalog + `t()`/fallback/interpolation;
+  `docs/I18N.md`. **Partial** (renderer string migration is a follow-up).
+- **058 Feature flags**: `server/featureFlags.ts` (env → system_config → default),
+  `featureFlags` router, `outreach.send.enabled` default OFF gating the future
+  send; `docs/FEATURE_FLAGS.md`.
+- **059 Formal state machines**: `server/stateMachines.ts` for case + outreach;
+  enforced in `cases.update` and the approval gate; `docs/STATE_MACHINES.md`.
+- **060 Domain model spec**: `docs/DOMAIN_MODEL.md`.
+
+### Verification
+- `tsc` server + main → clean.
+- `npx vitest run` → **21 files, 138 passed, 9 todo, 0 failed** (added
+  `stateMachines.test.ts`, `i18n.test.ts`, `phase051_060.test.ts`).
+
+### What remains
+- Renderer i18n string migration (057) + component tests (041).
+- The real outreach **send** (now flag-gated + state-machine-ready).
+- Large-N (10k+) perf benchmark + EXPLAIN assertions (113).
+
+---
+
 ## 2026-07-06 — Phases 041–050 (test suites, e2e, acceptance, adversarial, isolation, file-safety, provider-failure, a11y, responsive)
 
 **Branch:** `Phase-Imp` (not pushed).
