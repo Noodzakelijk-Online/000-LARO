@@ -96,6 +96,7 @@ init_serverless_functions()
 legal_ledger = init_legal_ledger(app)
 google_token_store = LocalEncryptedTokenStore()
 google_pull_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='laro-google-pull')
+case_analysis_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='laro-case-analysis')
 
 def _ledger_actor():
     return str(session.get('user_email') or session.get('user_id') or 'anonymous')
@@ -1255,6 +1256,143 @@ def _run_google_pull_job(job_id, case_id, job_data, actor):
         }, actor=actor)
 
 
+def _readable_case_analysis_documents(case_id):
+    return [
+        item for item in legal_ledger.list_documents(case_id)
+        if str(item.get('extracted_text') or item.get('ocr_text') or '').strip()
+    ]
+
+
+def _case_analysis_workload(documents):
+    source_texts = [str(item.get('extracted_text') or item.get('ocr_text') or '') for item in documents]
+    total_words = sum(len(re.findall(r'\S+', text)) for text in source_texts)
+    total_characters = sum(len(re.sub(r'\s+', ' ', text).strip()) for text in source_texts)
+    provider = document_intelligence.semantic_provider.provider
+    if provider == 'ollama':
+        estimated_seconds = max(8, min(43200, int(total_words / 90) + (len(documents) * 3)))
+    else:
+        estimated_seconds = max(2, min(900, int(total_words / 10000) + len(documents)))
+    return {
+        'provider': provider,
+        'model': document_intelligence.semantic_provider.model,
+        'total_documents': len(documents),
+        'total_words': total_words,
+        'total_characters': total_characters,
+        'estimated_total_seconds': estimated_seconds,
+    }
+
+
+def _persist_case_analysis_run(case_id, analysis, actor):
+    return legal_ledger.create_case_analysis_run(case_id, {
+        'analysis_type': 'cross_document',
+        'status': analysis.get('status') or 'needs_review',
+        'provider': analysis.get('provider') or 'rule_based',
+        'model': analysis.get('model') or '',
+        'content': analysis,
+        'source_documents': analysis.get('source_documents') or [],
+    }, actor=actor)
+
+
+def _run_case_analysis_job(job_id, case_id, actor):
+    """Run an inspectable full-source analysis without keeping a request open."""
+    try:
+        ledger_case = legal_ledger.get_case(case_id)
+        if not ledger_case:
+            raise ValueError('Case not found')
+        documents = _readable_case_analysis_documents(case_id)
+        if not documents:
+            raise ValueError('No readable source documents are available. Recover source text before running a case-wide analysis.')
+        workload = _case_analysis_workload(documents)
+        legal_ledger.update_case_analysis_job(case_id, job_id, {
+            **workload,
+            'status': 'running',
+            'stage': 'Preparing every readable source for local analysis',
+        }, actor=actor)
+
+        def record_progress(progress):
+            total_chunks = max(0, int(progress.get('total_chunks') or 0))
+            total_words = max(0, int(progress.get('total_words') or workload['total_words']))
+            estimated_seconds = workload['estimated_total_seconds']
+            if workload['provider'] == 'ollama' and total_chunks:
+                estimated_seconds = max(8, min(43200, total_chunks * max(5, int(total_words / max(1, total_chunks * 90)) + 3)))
+            legal_ledger.update_case_analysis_job(case_id, job_id, {
+                'status': 'running',
+                'stage': str(progress.get('stage') or 'Reading local source batches')[:255],
+                'current_item': str(progress.get('current_item') or '')[:255],
+                'total_documents': max(0, int(progress.get('total_documents') or workload['total_documents'])),
+                'completed_documents': max(0, int(progress.get('completed_documents') or 0)),
+                'total_chunks': total_chunks,
+                'completed_chunks': max(0, int(progress.get('completed_chunks') or 0)),
+                'total_words': total_words,
+                'processed_words': max(0, int(progress.get('processed_words') or 0)),
+                'total_characters': max(0, int(progress.get('total_characters') or workload['total_characters'])),
+                'processed_characters': max(0, int(progress.get('processed_characters') or 0)),
+                'estimated_total_seconds': estimated_seconds,
+            }, actor=actor)
+
+        analysis = document_intelligence.semantic_provider.analyze_case(
+            documents,
+            ledger_case,
+            progress_callback=record_progress,
+        )
+        if analysis.get('status') != 'completed':
+            raise ValueError((analysis.get('limitations') or ['Case-wide local analysis is not available.'])[0])
+        run = _persist_case_analysis_run(case_id, analysis, actor)
+        if not run:
+            raise ValueError('Case not found')
+        coverage = analysis.get('source_coverage') or {}
+        result = {
+            'run_id': run['id'],
+            'findings_count': len((analysis.get('findings') or [])),
+            'review_questions_count': len((analysis.get('review_questions') or [])),
+            'timeline_suggestions_count': len((analysis.get('timeline_suggestions') or [])),
+            'source_coverage': coverage,
+            'requires_human_review': True,
+            'source_preserved': True,
+        }
+        legal_ledger.update_case_analysis_job(case_id, job_id, {
+            'status': 'completed',
+            'stage': 'Full-source reading stored for cited review',
+            'current_item': '',
+            'completed_documents': workload['total_documents'],
+            'completed_chunks': int(coverage.get('chunks_total') or analysis.get('analysis_batches') or workload['total_documents']),
+            'total_chunks': int(coverage.get('chunks_total') or analysis.get('analysis_batches') or workload['total_documents']),
+            'processed_words': workload['total_words'],
+            'processed_characters': workload['total_characters'],
+            'run_id': run['id'],
+            'result': result,
+        }, actor=actor)
+        legal_ledger.record_case_activity(
+            case_id,
+            'full_source_case_analysis_completed',
+            actor=actor,
+            source='local_case_analysis_job',
+            details={
+                'job_id': job_id,
+                'run_id': run['id'],
+                'provider': analysis.get('provider') or 'rule_based',
+                'model': analysis.get('model') or '',
+                'source_documents': int(coverage.get('sources_readable') or workload['total_documents']),
+                'coverage_percent': coverage.get('coverage_percent'),
+                'analysis_batches': analysis.get('analysis_batches'),
+            },
+            risk_level='low',
+        )
+    except ValueError as exc:
+        legal_ledger.update_case_analysis_job(case_id, job_id, {
+            'status': 'failed',
+            'stage': 'Full-source analysis needs attention',
+            'error': str(exc),
+        }, actor=actor)
+    except Exception:
+        logger.exception('Full-source case analysis job failed')
+        legal_ledger.update_case_analysis_job(case_id, job_id, {
+            'status': 'failed',
+            'stage': 'Full-source analysis failed unexpectedly',
+            'error': 'Local case analysis failed unexpectedly. The source documents were not changed; review the local model and try again.',
+        }, actor=actor)
+
+
 @app.route('/api/health', methods=['GET'])
 def health():
     """Local readiness check for the Flask app and legal ledger."""
@@ -1747,6 +1885,65 @@ def list_ledger_case_analysis(case_id):
     return jsonify({'case_id': case_id, 'runs': runs, 'latest': runs[0] if runs else None}), 200
 
 
+@app.route('/api/cases/<int:case_id>/case-analysis/jobs', methods=['POST'])
+@auth_system._require_auth
+def start_ledger_case_analysis_job(case_id):
+    """Start or resume one durable full-source local analysis for this case."""
+    if not legal_ledger.get_case(case_id):
+        return jsonify({'error': 'Case not found'}), 404
+    documents = _readable_case_analysis_documents(case_id)
+    if not documents:
+        return jsonify({
+            'error': 'No readable source documents are available. Recover source text before running a case-wide analysis.',
+            'source_preserved': True,
+        }), 409
+    active = next((
+        item for item in legal_ledger.list_case_analysis_jobs(case_id)
+        if item.get('status') in {'queued', 'running'}
+    ), None)
+    if active:
+        return jsonify({
+            'job': active,
+            'status_url': f'/api/cases/{case_id}/case-analysis/jobs/{active["job_id"]}',
+            'reused_active_job': True,
+        }), 200
+    actor = _ledger_actor()
+    job = legal_ledger.create_case_analysis_job(
+        case_id,
+        _case_analysis_workload(documents),
+        actor=actor,
+    )
+    if not job:
+        return jsonify({'error': 'Case not found'}), 404
+    case_analysis_executor.submit(_run_case_analysis_job, job['job_id'], case_id, actor)
+    return jsonify({
+        'job': job,
+        'status_url': f'/api/cases/{case_id}/case-analysis/jobs/{job["job_id"]}',
+        'message': 'Full-source local analysis started. LARO will show actual document, batch, word, and time progress.',
+        'reused_active_job': False,
+    }), 202
+
+
+@app.route('/api/cases/<int:case_id>/case-analysis/jobs', methods=['GET'])
+@auth_system._require_auth
+def list_ledger_case_analysis_jobs(case_id):
+    if not legal_ledger.get_case(case_id):
+        return jsonify({'error': 'Case not found'}), 404
+    return jsonify({
+        'case_id': case_id,
+        'jobs': legal_ledger.list_case_analysis_jobs(case_id, status=request.args.get('status')),
+    }), 200
+
+
+@app.route('/api/cases/<int:case_id>/case-analysis/jobs/<int:job_id>', methods=['GET'])
+@auth_system._require_auth
+def get_ledger_case_analysis_job(case_id, job_id):
+    job = legal_ledger.get_case_analysis_job(case_id, job_id)
+    if not job:
+        return jsonify({'error': 'Case analysis job not found'}), 404
+    return jsonify({'job': job}), 200
+
+
 @app.route('/api/cases/<int:case_id>/case-analysis', methods=['POST'])
 @auth_system._require_auth
 def create_ledger_case_analysis(case_id):
@@ -1754,11 +1951,7 @@ def create_ledger_case_analysis(case_id):
     ledger_case = legal_ledger.get_case(case_id)
     if not ledger_case:
         return jsonify({'error': 'Case not found'}), 404
-    documents = legal_ledger.list_documents(case_id)
-    readable_documents = [
-        item for item in documents
-        if str(item.get('extracted_text') or item.get('ocr_text') or '').strip()
-    ]
+    readable_documents = _readable_case_analysis_documents(case_id)
     if not readable_documents:
         return jsonify({
             'error': 'No readable source documents are available. Recover source text before running a case-wide analysis.',
@@ -1771,14 +1964,7 @@ def create_ledger_case_analysis(case_id):
             'analysis': analysis,
             'source_preserved': True,
         }), 409
-    run = legal_ledger.create_case_analysis_run(case_id, {
-        'analysis_type': 'cross_document',
-        'status': analysis.get('status') or 'needs_review',
-        'provider': analysis.get('provider') or 'rule_based',
-        'model': analysis.get('model') or '',
-        'content': analysis,
-        'source_documents': analysis.get('source_documents') or [],
-    }, actor=_ledger_actor())
+    run = _persist_case_analysis_run(case_id, analysis, _ledger_actor())
     if not run:
         return jsonify({'error': 'Case not found'}), 404
     return jsonify({

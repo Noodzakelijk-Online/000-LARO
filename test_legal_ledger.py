@@ -743,6 +743,59 @@ class TestLegalLedgerService(unittest.TestCase):
         self.assertIn("CAK decision received", titles)
         self.assertNotIn("Wrong objection deadline", titles)
 
+    def test_case_analysis_jobs_persist_real_progress_and_prevent_duplicates(self):
+        case = self.ledger.create_case({"user_id": "robert", "title": "Full-source analysis"}, actor="robert")
+        workload = {
+            "provider": "ollama",
+            "model": "local-fixture",
+            "total_documents": 2,
+            "total_words": 1200,
+            "total_characters": 7200,
+            "estimated_total_seconds": 30,
+        }
+
+        created = self.ledger.create_case_analysis_job(case["case_id"], workload, actor="robert")
+        duplicate = self.ledger.create_case_analysis_job(case["case_id"], workload, actor="robert")
+
+        self.assertEqual(created["job_id"], duplicate["job_id"])
+        self.assertEqual(created["status"], "queued")
+        running = self.ledger.update_case_analysis_job(case["case_id"], created["job_id"], {
+            "status": "running",
+            "stage": "Reading source chunk 2 of 4",
+            "total_chunks": 4,
+            "completed_chunks": 2,
+            "completed_documents": 1,
+            "processed_words": 600,
+            "processed_characters": 3600,
+        }, actor="robert")
+        self.assertGreater(running["progress_percent"], 40)
+        self.assertLess(running["progress_percent"], 100)
+        completed = self.ledger.update_case_analysis_job(case["case_id"], created["job_id"], {
+            "status": "completed",
+            "stage": "Full-source reading stored for cited review",
+            "completed_chunks": 4,
+            "completed_documents": 2,
+            "processed_words": 1200,
+            "processed_characters": 7200,
+            "result": {"findings_count": 3, "source_preserved": True},
+        }, actor="robert")
+
+        self.assertEqual(completed["progress_percent"], 100)
+        self.assertEqual(completed["estimated_remaining_seconds"], 0)
+        self.assertEqual(completed["result"]["findings_count"], 3)
+        self.assertEqual(self.ledger.get_case_analysis_job(case["case_id"], created["job_id"])["status"], "completed")
+        job_audits = [
+            item for item in self.ledger.list_audit_events(case_id=case["case_id"])
+            if item["entity_type"] == "CaseAnalysisJob"
+        ]
+        self.assertEqual({item["action"] for item in job_audits}, {"created", "completed"})
+        retry = self.ledger.create_case_analysis_job(case["case_id"], workload, actor="robert")
+        self.assertNotEqual(retry["job_id"], created["job_id"])
+        self.assertEqual(self.ledger.fail_interrupted_case_analysis_jobs(), 1)
+        interrupted = self.ledger.get_case_analysis_job(case["case_id"], retry["job_id"])
+        self.assertEqual(interrupted["status"], "failed")
+        self.assertIn("restarted", interrupted["error"])
+
 
 class TestLegalLedgerApi(unittest.TestCase):
     @classmethod
@@ -2257,6 +2310,51 @@ class TestLegalLedgerApi(unittest.TestCase):
             len(run["content"]["findings"]) + len(run["content"]["review_questions"]) + len(run["content"]["timeline_suggestions"]),
         )
         self.assertTrue(all(item["status"] == "needs_review" for item in run["review_items"]))
+
+    def test_case_analysis_job_api_tracks_full_source_progress_and_refreshes_run(self):
+        created = self.client.post("/api/cases", json={"title": "Durable full-source reading"}, headers=self.headers)
+        case_id = created.get_json()["case_id"]
+        late_source = "Opening history. " + ("Background detail. " * 120) + "The final decision is dated 2026-12-05."
+        self.client.post(f"/api/cases/{case_id}/documents", json={
+            "title": "Long source",
+            "extracted_text": late_source,
+        }, headers=self.headers)
+        provider = LocalSemanticAnalysisProvider({"provider": "rule_based", "max_chars": 1000})
+
+        with mock.patch.object(self.app_module.document_intelligence, "semantic_provider", provider), \
+             mock.patch.object(self.app_module.case_analysis_executor, "submit") as submit:
+            started = self.client.post(f"/api/cases/{case_id}/case-analysis/jobs", headers=self.headers)
+            self.assertEqual(started.status_code, 202)
+            job = started.get_json()["job"]
+            duplicate = self.client.post(f"/api/cases/{case_id}/case-analysis/jobs", headers=self.headers)
+            self.assertEqual(duplicate.status_code, 200)
+            self.assertTrue(duplicate.get_json()["reused_active_job"])
+            self.assertEqual(duplicate.get_json()["job"]["job_id"], job["job_id"])
+            submit.assert_called_once()
+            submitted = submit.call_args.args
+            self.assertIs(submitted[0], self.app_module._run_case_analysis_job)
+            self.app_module._run_case_analysis_job(*submitted[1:])
+
+        completed = self.client.get(
+            f"/api/cases/{case_id}/case-analysis/jobs/{job['job_id']}", headers=self.headers
+        )
+        self.assertEqual(completed.status_code, 200)
+        completed_job = completed.get_json()["job"]
+        self.assertEqual(completed_job["status"], "completed")
+        self.assertEqual(completed_job["progress_percent"], 100)
+        self.assertEqual(completed_job["processed_words"], completed_job["total_words"])
+        self.assertEqual(completed_job["processed_characters"], completed_job["total_characters"])
+        self.assertTrue(completed_job["result"]["source_preserved"])
+        listed_jobs = self.client.get(f"/api/cases/{case_id}/case-analysis/jobs", headers=self.headers)
+        self.assertEqual(listed_jobs.get_json()["jobs"][0]["job_id"], job["job_id"])
+        runs = self.client.get(f"/api/cases/{case_id}/case-analysis", headers=self.headers).get_json()
+        self.assertEqual(runs["latest"]["id"], completed_job["run_id"])
+        self.assertEqual(runs["latest"]["content"]["source_coverage"]["coverage_percent"], 100.0)
+        self.assertEqual(runs["latest"]["content"]["analysis_method"], "full_source_deterministic_comparison_v2")
+        self.assertTrue(any(
+            item["event_date"] == "2026-12-05"
+            for item in runs["latest"]["content"]["timeline_suggestions"]
+        ))
 
     def test_case_wide_timeline_proposal_requires_explicit_conversion_and_keeps_citations(self):
         created = self.client.post("/api/cases", json={"title": "Timeline proposal conversion"}, headers=self.headers)

@@ -118,6 +118,7 @@ class LegalCase(Base):
     identifiers = relationship("CaseIdentifier", back_populates="case", cascade="all, delete-orphan")
     match_results = relationship("MatchResult", back_populates="case", cascade="all, delete-orphan")
     analysis_runs = relationship("CaseAnalysisRun", back_populates="case", cascade="all, delete-orphan")
+    analysis_jobs = relationship("CaseAnalysisJob", back_populates="case", cascade="all, delete-orphan")
     analysis_review_items = relationship("CaseAnalysisReviewItem", back_populates="case", cascade="all, delete-orphan")
 
 
@@ -420,6 +421,38 @@ class CaseAnalysisRun(Base):
 
     case = relationship("LegalCase", back_populates="analysis_runs")
     review_items = relationship("CaseAnalysisReviewItem", back_populates="analysis_run", cascade="all, delete-orphan")
+
+
+class CaseAnalysisJob(Base):
+    """Durable progress state for a local, full-source case reading."""
+
+    __tablename__ = "case_analysis_jobs"
+
+    id = Column(Integer, primary_key=True)
+    case_id = Column(Integer, ForeignKey("legal_cases.id"), nullable=False, index=True)
+    run_id = Column(Integer, ForeignKey("case_analysis_runs.id"))
+    provider = Column(String(80), default="rule_based", nullable=False)
+    model = Column(String(255), default="")
+    status = Column(String(40), default="queued", nullable=False, index=True)
+    stage = Column(String(255), default="Queued")
+    current_item = Column(String(255), default="")
+    total_documents = Column(Integer, default=0)
+    completed_documents = Column(Integer, default=0)
+    total_chunks = Column(Integer, default=0)
+    completed_chunks = Column(Integer, default=0)
+    total_words = Column(Integer, default=0)
+    processed_words = Column(Integer, default=0)
+    total_characters = Column(Integer, default=0)
+    processed_characters = Column(Integer, default=0)
+    estimated_total_seconds = Column(Integer, default=0)
+    error = Column(Text, default="")
+    result_json = Column(Text, default="{}")
+    started_at = Column(DateTime)
+    completed_at = Column(DateTime)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
+
+    case = relationship("LegalCase", back_populates="analysis_jobs")
 
 
 class CaseAnalysisReviewItem(Base):
@@ -1648,6 +1681,152 @@ class LegalLedger:
                 .limit(max(1, min(int(limit or 12), 50)))
                 .all()
             ]
+
+    def create_case_analysis_job(
+        self,
+        case_id: int,
+        data: Dict[str, Any],
+        actor: str = "system",
+    ) -> Optional[Dict[str, Any]]:
+        with self.session_scope() as session:
+            if not session.get(LegalCase, case_id):
+                return None
+            active = session.query(CaseAnalysisJob).filter(
+                CaseAnalysisJob.case_id == case_id,
+                CaseAnalysisJob.status.in_(("queued", "running")),
+            ).order_by(CaseAnalysisJob.id.desc()).first()
+            if active:
+                return self._serialize_case_analysis_job(active)
+            job = CaseAnalysisJob(
+                case_id=case_id,
+                provider=str(data.get("provider") or "rule_based")[:80],
+                model=str(data.get("model") or "")[:255],
+                status="queued",
+                stage="Queued for full-source local analysis",
+                total_documents=max(0, int(data.get("total_documents") or 0)),
+                total_words=max(0, int(data.get("total_words") or 0)),
+                total_characters=max(0, int(data.get("total_characters") or 0)),
+                estimated_total_seconds=max(0, int(data.get("estimated_total_seconds") or 0)),
+            )
+            session.add(job)
+            session.flush()
+            serialized = self._serialize_case_analysis_job(job)
+            self._audit(
+                session,
+                case_id,
+                "CaseAnalysisJob",
+                job.id,
+                "created",
+                actor,
+                {},
+                self._case_analysis_job_audit_state(job),
+                "low",
+                source="local_case_analysis_job",
+            )
+            return serialized
+
+    def get_case_analysis_job(self, case_id: int, job_id: int) -> Optional[Dict[str, Any]]:
+        with self.session_scope() as session:
+            job = session.get(CaseAnalysisJob, job_id)
+            if not job or job.case_id != case_id:
+                return None
+            return self._serialize_case_analysis_job(job)
+
+    def list_case_analysis_jobs(
+        self,
+        case_id: int,
+        status: Optional[str] = None,
+        limit: int = 20,
+    ) -> List[Dict[str, Any]]:
+        with self.session_scope() as session:
+            if not session.get(LegalCase, case_id):
+                return []
+            query = session.query(CaseAnalysisJob).filter_by(case_id=case_id)
+            if status:
+                query = query.filter_by(status=str(status).strip().lower())
+            return [
+                self._serialize_case_analysis_job(item)
+                for item in query.order_by(CaseAnalysisJob.updated_at.desc(), CaseAnalysisJob.id.desc())
+                .limit(max(1, min(int(limit or 20), 50)))
+                .all()
+            ]
+
+    def update_case_analysis_job(
+        self,
+        case_id: int,
+        job_id: int,
+        data: Dict[str, Any],
+        actor: str = "system",
+    ) -> Optional[Dict[str, Any]]:
+        with self.session_scope() as session:
+            job = session.get(CaseAnalysisJob, job_id)
+            if not job or job.case_id != case_id:
+                return None
+            previous_status = job.status
+            for field_name in (
+                "stage", "current_item", "total_documents", "completed_documents",
+                "total_chunks", "completed_chunks", "total_words", "processed_words",
+                "total_characters", "processed_characters", "estimated_total_seconds", "error",
+            ):
+                if field_name in data:
+                    setattr(job, field_name, data[field_name])
+            if "result" in data:
+                job.result_json = _json_dump(data["result"] if isinstance(data["result"], dict) else {})
+            if data.get("run_id") is not None:
+                job.run_id = int(data["run_id"])
+            if data.get("status"):
+                job.status = str(data["status"]).strip().lower()
+            if job.status == "running" and not job.started_at:
+                job.started_at = utcnow()
+            if job.status in {"completed", "failed"} and not job.completed_at:
+                job.completed_at = utcnow()
+            job.updated_at = utcnow()
+            session.flush()
+            serialized = self._serialize_case_analysis_job(job)
+            if job.status in {"completed", "failed"} and previous_status != job.status:
+                self._audit(
+                    session,
+                    case_id,
+                    "CaseAnalysisJob",
+                    job.id,
+                    job.status,
+                    actor,
+                    {},
+                    self._case_analysis_job_audit_state(job),
+                    "low",
+                    source="local_case_analysis_job",
+                )
+            return serialized
+
+    def fail_interrupted_case_analysis_jobs(self, actor: str = "system") -> int:
+        """Close jobs left active by a previous local process before accepting retries."""
+        with self.session_scope() as session:
+            jobs = session.query(CaseAnalysisJob).filter(
+                CaseAnalysisJob.status.in_(("queued", "running"))
+            ).all()
+            for job in jobs:
+                job.status = "failed"
+                job.stage = "Analysis interrupted by local restart"
+                job.error = (
+                    "LARO restarted before this full-source reading completed. "
+                    "Start the reading again; source documents and prior completed runs were not changed."
+                )
+                job.completed_at = utcnow()
+                job.updated_at = utcnow()
+                session.flush()
+                self._audit(
+                    session,
+                    job.case_id,
+                    "CaseAnalysisJob",
+                    job.id,
+                    "failed",
+                    actor,
+                    {},
+                    self._case_analysis_job_audit_state(job),
+                    "low",
+                    source="local_process_recovery",
+                )
+            return len(jobs)
 
     def list_case_analysis_review_items(self, case_id: int) -> List[Dict[str, Any]]:
         with self.session_scope() as session:
@@ -4224,6 +4403,25 @@ class LegalLedger:
             "content_hash": self._hash(_json_dump(content)),
         }
 
+    def _case_analysis_job_audit_state(self, item: CaseAnalysisJob) -> Dict[str, Any]:
+        return {
+            "job_id": item.id,
+            "run_id": item.run_id,
+            "status": item.status,
+            "provider": item.provider,
+            "model": item.model,
+            "total_documents": item.total_documents,
+            "completed_documents": item.completed_documents,
+            "total_chunks": item.total_chunks,
+            "completed_chunks": item.completed_chunks,
+            "total_words": item.total_words,
+            "processed_words": item.processed_words,
+            "total_characters": item.total_characters,
+            "processed_characters": item.processed_characters,
+            "error_hash": self._hash(item.error or "") if item.error else "",
+            "result_hash": self._hash(item.result_json or "{}"),
+        }
+
     @staticmethod
     def _serialize_document_version(item: DocumentVersion) -> Dict[str, Any]:
         return {
@@ -4496,6 +4694,57 @@ class LegalLedger:
             "content": _json_load(item.content_json, {}),
             "source_documents": _json_load(item.source_snapshot_json, []),
             "review_items": review_items if review_items is not None else [],
+            "created_at": _iso(item.created_at),
+            "updated_at": _iso(item.updated_at),
+        }
+
+    @staticmethod
+    def _serialize_case_analysis_job(item: CaseAnalysisJob) -> Dict[str, Any]:
+        elapsed_seconds = max(0, int(((item.completed_at or utcnow()) - (item.started_at or item.created_at)).total_seconds()))
+        total_units = item.total_characters or item.total_chunks or item.total_documents
+        completed_units = item.processed_characters or item.completed_chunks or item.completed_documents
+        if item.status == "completed":
+            progress_percent = 100
+            remaining_seconds = 0
+        elif item.status == "failed":
+            progress_percent = max(0, min(99, int(5 + (90 * completed_units / total_units))) if total_units else 5)
+            remaining_seconds = None
+        elif item.status == "running":
+            progress_percent = max(5, min(96, int(5 + (90 * completed_units / total_units)))) if total_units else 5
+            if completed_units and elapsed_seconds and total_units > completed_units:
+                remaining_seconds = max(1, int((elapsed_seconds / completed_units) * (total_units - completed_units)))
+            elif item.estimated_total_seconds:
+                remaining_seconds = max(1, item.estimated_total_seconds - elapsed_seconds)
+            else:
+                remaining_seconds = None
+        else:
+            progress_percent = 0
+            remaining_seconds = item.estimated_total_seconds or None
+        return {
+            "job_id": item.id,
+            "case_id": item.case_id,
+            "run_id": item.run_id,
+            "provider": item.provider,
+            "model": item.model,
+            "status": item.status,
+            "stage": item.stage,
+            "current_item": item.current_item,
+            "total_documents": item.total_documents,
+            "completed_documents": item.completed_documents,
+            "total_chunks": item.total_chunks,
+            "completed_chunks": item.completed_chunks,
+            "total_words": item.total_words,
+            "processed_words": item.processed_words,
+            "total_characters": item.total_characters,
+            "processed_characters": item.processed_characters,
+            "estimated_total_seconds": item.estimated_total_seconds,
+            "estimated_remaining_seconds": remaining_seconds,
+            "elapsed_seconds": elapsed_seconds,
+            "progress_percent": progress_percent,
+            "error": item.error,
+            "result": _json_load(item.result_json, {}),
+            "started_at": _iso(item.started_at),
+            "completed_at": _iso(item.completed_at),
             "created_at": _iso(item.created_at),
             "updated_at": _iso(item.updated_at),
         }
@@ -4787,6 +5036,7 @@ def init_legal_ledger(app) -> LegalLedger:
     database_url = app.config.get("LARO_LEDGER_DATABASE_URL") or default_database_url(app.root_path)
     ledger = LegalLedger(database_url)
     ledger.create_all()
+    ledger.fail_interrupted_case_analysis_jobs()
     app.config["legal_ledger"] = ledger
 
     @app.teardown_appcontext

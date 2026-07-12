@@ -3474,6 +3474,7 @@
         let autoRefreshPromise = null;
         let googleConnectionWatchTimer = null;
         let activeGooglePullJobId = null;
+        let activeCaseAnalysisJobId = null;
         const MODE_SUMMARIES = {
             simple: "One action, one case, no extra controls.",
             guided: "Review the case through documents, chronology, claims, and gaps.",
@@ -3674,6 +3675,96 @@
                     showToast(error.message);
                 })
                 .finally(() => { activeGooglePullJobId = null; });
+        }
+
+        function renderCaseAnalysisJobProgress(status, job = {}) {
+            if (!status) return;
+            const percent = Math.max(0, Math.min(100, Number(job.progress_percent || 0)));
+            const totalDocuments = Math.max(0, Number(job.total_documents || 0));
+            const completedDocuments = Math.max(0, Number(job.completed_documents || 0));
+            const totalChunks = Math.max(0, Number(job.total_chunks || 0));
+            const completedChunks = Math.max(0, Number(job.completed_chunks || 0));
+            const totalWords = Math.max(0, Number(job.total_words || 0));
+            const processedWords = Math.max(0, Number(job.processed_words || 0));
+            const totalCharacters = Math.max(0, Number(job.total_characters || 0));
+            const processedCharacters = Math.max(0, Number(job.processed_characters || 0));
+            const remainingSeconds = Number(job.estimated_remaining_seconds);
+            const hasEta = job.estimated_remaining_seconds !== null
+                && job.estimated_remaining_seconds !== undefined
+                && Number.isFinite(remainingSeconds)
+                && remainingSeconds > 0;
+            const eta = job.status === "completed"
+                ? "done"
+                : job.status === "failed"
+                    ? "needs attention"
+                    : hasEta
+                        ? `${Math.max(1, Math.ceil(remainingSeconds))}s left`
+                        : "measuring local progress";
+            const providerLabel = job.provider === "ollama" ? "Local model full-source reading" : "Full-source deterministic reading";
+            const documentDetail = totalDocuments
+                ? `${completedDocuments}/${totalDocuments} document${totalDocuments === 1 ? "" : "s"}`
+                : "Preparing document list";
+            const chunkDetail = totalChunks
+                ? `${completedChunks}/${totalChunks} source chunk${totalChunks === 1 ? "" : "s"}`
+                : "Preparing source batches";
+            const wordDetail = totalWords
+                ? `${processedWords.toLocaleString()}/${totalWords.toLocaleString()} words`
+                : `${processedCharacters.toLocaleString()}/${totalCharacters.toLocaleString()} characters`;
+            status.innerHTML = `
+                <div class="analysis-progress" role="status" aria-live="polite">
+                    <div class="analysis-progress-header">
+                        <strong>${escapeHtml(providerLabel)}</strong>
+                        <span>${escapeHtml(Math.round(percent))}% - ${escapeHtml(eta)}</span>
+                    </div>
+                    <div class="analysis-progress-track" aria-hidden="true"><div class="analysis-progress-fill" style="--analysis-progress: ${escapeHtml(percent)}%;"></div></div>
+                    <p class="analysis-progress-detail">${escapeHtml(job.stage || "Queued for local analysis")} - ${escapeHtml(documentDetail)} - ${escapeHtml(chunkDetail)} - ${escapeHtml(wordDetail)}${job.current_item ? ` - ${escapeHtml(job.current_item)}` : ""}</p>
+                    ${job.error ? `<p class="analysis-progress-detail">${escapeHtml(job.error)}</p>` : ""}
+                </div>
+            `;
+        }
+
+        async function waitForCaseAnalysisJob(caseId, jobId, status) {
+            while (true) {
+                const payload = await apiFetch(`/api/cases/${caseId}/case-analysis/jobs/${jobId}`);
+                const job = payload.job || {};
+                renderCaseAnalysisJobProgress(status, job);
+                if (job.status === "completed") return job;
+                if (job.status === "failed") throw new Error(job.error || "Full-source analysis needs attention");
+                await pause(700);
+            }
+        }
+
+        function resumeVisibleCaseAnalysisJob() {
+            const job = (detailState.caseAnalysisJobs || []).find((item) => ["queued", "running"].includes(item.status));
+            if (!job || !selectedCaseId) return;
+            const status = document.getElementById("caseAnalysisStatus");
+            if (!status) return;
+            renderCaseAnalysisJobProgress(status, job);
+            const button = document.getElementById("runCaseAnalysis");
+            if (button) {
+                button.disabled = true;
+                button.textContent = "Reading all sources...";
+            }
+            if (activeCaseAnalysisJobId) return;
+            activeCaseAnalysisJobId = job.job_id;
+            waitForCaseAnalysisJob(selectedCaseId, job.job_id, status)
+                .then(async (completedJob) => {
+                    const result = completedJob.result || {};
+                    showToast(`Full-source reading stored: ${result.timeline_suggestions_count || 0} timeline proposals and ${result.findings_count || 0} cited observations.`);
+                    await refreshActiveLedger({ silent: true });
+                })
+                .catch((error) => {
+                    if (status) status.textContent = error.message;
+                    showToast(error.message);
+                })
+                .finally(() => {
+                    activeCaseAnalysisJobId = null;
+                    const refreshedButton = document.getElementById("runCaseAnalysis");
+                    if (refreshedButton) {
+                        refreshedButton.disabled = false;
+                        refreshedButton.textContent = "Analyze all case sources";
+                    }
+                });
         }
 
         async function refreshGoogleConnectionState({ silent = false } = {}) {
@@ -6163,6 +6254,7 @@
 
         function renderCaseWideAnalysis() {
             const run = detailState.caseAnalysis?.latest;
+            const activeJob = (detailState.caseAnalysisJobs || []).find((item) => ["queued", "running"].includes(item.status));
             const content = run?.content || {};
             const findings = content.findings || [];
             const questions = content.review_questions || [];
@@ -6180,7 +6272,7 @@
                 ? `${representedSources} of ${readableSources} readable source${readableSources === 1 ? "" : "s"} represented; ${fullyReadSources} fully read${partiallyReadSources ? `, ${partiallyReadSources} partial` : ""}.`
                 : "No readable source coverage was recorded for this historical run.";
             const coverageDetail = charactersTotal
-                ? `${charactersAnalyzed.toLocaleString()} of ${charactersTotal.toLocaleString()} source characters selected (${coveragePercent}% coverage).`
+                ? `${charactersAnalyzed.toLocaleString()} of ${charactersTotal.toLocaleString()} normalized source characters read (${coveragePercent}% coverage).`
                 : "This run predates source-coverage tracking.";
             const sourceButton = (source) => sourceDocumentButton(source?.document_id, source?.source_quote || "");
             const reviewItems = new Map((run?.review_items || []).map((item) => [item.finding_key, item]));
@@ -6217,15 +6309,15 @@
                             <h3 class="panel-title">Case-Wide Reading</h3>
                             <p class="muted">Local, review-only synthesis across readable case sources.</p>
                         </div>
-                        <button class="btn-secondary-ledger" type="button" id="runCaseAnalysis">Analyze case sources</button>
+                        <button class="btn-secondary-ledger" type="button" id="runCaseAnalysis" ${activeJob ? "disabled" : ""}>${activeJob ? "Reading all sources..." : "Analyze all case sources"}</button>
                     </div>
-                    <p class="muted" id="caseAnalysisStatus">Analysis remains local and review-only; source documents are not changed.</p>
+                    <div class="muted" id="caseAnalysisStatus">${activeJob ? "A durable local reading is in progress and will resume here automatically." : "Analysis remains local and review-only; every readable source is processed without changing the source document."}</div>
                     ${run ? `
-                        <p class="muted">${escapeHtml(run.provider || "local")} · ${escapeHtml(run.model || (content.analysis_method === "deterministic_source_comparison_v1" ? "deterministic source comparison" : "local analysis"))} · ${escapeHtml(String(run.created_at || "").slice(0, 19) || "just now")}</p>
+                        <p class="muted">${escapeHtml(run.provider || "local")} · ${escapeHtml(run.model || (content.analysis_method === "full_source_deterministic_comparison_v2" ? "full-source deterministic comparison" : content.analysis_method === "deterministic_source_comparison_v1" ? "legacy deterministic comparison" : "local analysis"))} · ${escapeHtml(String(run.created_at || "").slice(0, 19) || "just now")}${content.analysis_batches ? ` · ${escapeHtml(content.analysis_batches)} batch${Number(content.analysis_batches) === 1 ? "" : "es"}` : ""}</p>
                         <details class="analysis-coverage" ${partiallyReadSources ? "open" : ""}>
                             <summary>${escapeHtml(coverageSummary)}</summary>
-                            <p class="muted">${escapeHtml(coverageDetail)} ${partiallyReadSources ? "Long sources were sampled across opening, high-signal, and closing passages. Review the original document before relying on omitted text." : ""}</p>
-                            ${sourceDocuments.length ? `<div class="source-ref-list">${sourceDocuments.map((source) => `<span class="source-ref-chip">${sourceDocumentButton(source.document_id)}<span>${escapeHtml(source.title || "Source document")}: ${source.source_was_truncated ? "partial" : "full"}</span></span>`).join("")}</div>` : ""}
+                            <p class="muted">${escapeHtml(coverageDetail)} ${partiallyReadSources ? "This historical, interrupted, or limited run did not process all source text. Review the original source and run the full-source reading again." : "Every readable source in this run was processed locally."}</p>
+                            ${sourceDocuments.length ? `<div class="source-ref-list">${sourceDocuments.map((source) => `<span class="source-ref-chip">${sourceDocumentButton(source.document_id)}<span>${escapeHtml(source.title || "Source document")}: ${source.source_was_truncated ? "partial" : "full"}${source.source_chunks_total ? ` · ${escapeHtml(source.source_chunks_analyzed || 0)}/${escapeHtml(source.source_chunks_total)} batches` : ""}</span></span>`).join("")}</div>` : ""}
                         </details>
                         ${timelineSuggestions.length ? `<div class="record-list" style="margin-bottom: 0.75rem;">${timelineSuggestions.slice(0, 12).map((item, index) => {
                             const reviewItem = reviewItems.get(`timeline_suggestion:${index}`);
@@ -7152,7 +7244,9 @@
             `;
             wireDetailActions();
             resumeVisibleGooglePullJob();
+            resumeVisibleCaseAnalysisJob();
             window.setTimeout(resumeVisibleGooglePullJob, 0);
+            window.setTimeout(resumeVisibleCaseAnalysisJob, 0);
         }
 
         function activateDetailTab(tabName, options = {}) {
@@ -7645,33 +7739,38 @@
 
         async function runCaseWideAnalysis() {
             if (!selectedCaseId) return showToast("Select a case first.");
+            if (activeCaseAnalysisJobId) return showToast("The full-source reading is already running.");
             const button = document.getElementById("runCaseAnalysis");
             const status = document.getElementById("caseAnalysisStatus");
-            const sourceText = (detailState.documents || [])
-                .map((item) => item.extracted_text || item.ocr_text || "")
-                .join("\n");
-            const progress = startAnalysisProgress(status, { label: "Reading case sources", text: sourceText });
             if (button) {
                 button.disabled = true;
-                button.textContent = "Analyzing...";
+                button.textContent = "Reading all sources...";
             }
             try {
-                const response = await apiFetch(`/api/cases/${selectedCaseId}/case-analysis`, { method: "POST" });
-                const findings = response.run?.content?.findings?.length || 0;
-                const questions = response.run?.content?.review_questions?.length || 0;
-                const timelineSuggestions = response.run?.content?.timeline_suggestions?.length || 0;
-                progress.complete(`Case-wide reading stored: ${timelineSuggestions} timeline proposal${timelineSuggestions === 1 ? "" : "s"}, ${findings} cited observation${findings === 1 ? "" : "s"}, ${questions} question${questions === 1 ? "" : "s"}.`);
+                const started = await apiFetch(`/api/cases/${selectedCaseId}/case-analysis/jobs`, { method: "POST" });
+                const job = started.job || {};
+                if (!job.job_id) throw new Error("The local analysis job could not be started.");
+                activeCaseAnalysisJobId = job.job_id;
+                renderCaseAnalysisJobProgress(status, job);
+                const completedJob = await waitForCaseAnalysisJob(selectedCaseId, job.job_id, status);
+                const result = completedJob.result || {};
+                const findings = result.findings_count || 0;
+                const questions = result.review_questions_count || 0;
+                const timelineSuggestions = result.timeline_suggestions_count || 0;
                 showToast(`Case-wide reading stored for review: ${timelineSuggestions} timeline proposal${timelineSuggestions === 1 ? "" : "s"}, ${findings} observation${findings === 1 ? "" : "s"}, ${questions} question${questions === 1 ? "" : "s"}.`);
                 await loadCaseDetail(selectedCaseId);
                 await loadCommandCenter();
                 activateDetailTab("overview");
             } catch (error) {
-                progress.fail(error.message);
+                if (status) status.textContent = error.message;
                 showToast(error.message);
-                throw error;
             } finally {
+                activeCaseAnalysisJobId = null;
                 const refreshedButton = document.getElementById("runCaseAnalysis");
-                if (refreshedButton) refreshedButton.textContent = "Analyze case sources";
+                if (refreshedButton) {
+                    refreshedButton.disabled = false;
+                    refreshedButton.textContent = "Analyze all case sources";
+                }
             }
         }
 
@@ -8086,7 +8185,7 @@
         }
 
         async function loadCaseDetail(caseId) {
-            const [caseData, docs, timeline, claims, evidence, contradictions, missingEvidence, deadlines, loops, approvals, drafts, reviewQueue, operatingState, papertrail, summary, comprehension, redLine, bundle, audit, googleJobs, caseAnalysis] = await Promise.all([
+            const [caseData, docs, timeline, claims, evidence, contradictions, missingEvidence, deadlines, loops, approvals, drafts, reviewQueue, operatingState, papertrail, summary, comprehension, redLine, bundle, audit, googleJobs, caseAnalysis, caseAnalysisJobs] = await Promise.all([
                 apiFetch(`/api/cases/${caseId}`),
                 apiFetch(`/api/cases/${caseId}/documents`),
                 apiFetch(`/api/cases/${caseId}/timeline`),
@@ -8107,7 +8206,8 @@
                 apiFetch(`/api/cases/${caseId}/bundle`),
                 apiFetch(`/api/audit?case_id=${caseId}`),
                 apiFetch(`/api/cases/${caseId}/documents/pull-google/jobs`),
-                apiFetch(`/api/cases/${caseId}/case-analysis`)
+                apiFetch(`/api/cases/${caseId}/case-analysis`),
+                apiFetch(`/api/cases/${caseId}/case-analysis/jobs`)
             ]);
             detailState = {
                 case: caseData,
@@ -8131,7 +8231,8 @@
                 bundle,
                 audit: audit.audit_events || [],
                 googleJobs: googleJobs.jobs || [],
-                caseAnalysis
+                caseAnalysis,
+                caseAnalysisJobs: caseAnalysisJobs.jobs || []
             };
             selectedCaseId = caseId;
             document.getElementById("detailTitle").textContent = caseData.title;

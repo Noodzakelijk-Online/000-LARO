@@ -138,10 +138,16 @@ class TestLocalSemanticAnalysisProvider(unittest.TestCase):
         ], {"title": "CAK review"})
 
         self.assertEqual(result["status"], "completed")
-        self.assertEqual(len(result["findings"]), 1)
-        self.assertEqual(result["findings"][0]["sources"][1]["document_id"], "2")
-        self.assertEqual(result["rejected_uncited_findings"], 1)
-        self.assertEqual(len(result["review_questions"]), 1)
+        self.assertTrue(any(
+            item["observation"] == "The amounts differ between sources."
+            and item["sources"][1]["document_id"] == "2"
+            for item in result["findings"]
+        ))
+        self.assertGreaterEqual(result["rejected_uncited_findings"], 1)
+        self.assertTrue(any(
+            item["question"] == "Which amount is currently claimed?"
+            for item in result["review_questions"]
+        ))
         self.assertEqual(len(result["source_documents"]), 2)
 
     def test_default_case_analysis_compares_literal_sources_without_ollama(self):
@@ -167,7 +173,7 @@ class TestLocalSemanticAnalysisProvider(unittest.TestCase):
 
         self.assertEqual(result["status"], "completed")
         self.assertEqual(result["provider"], "rule_based")
-        self.assertEqual(result["analysis_method"], "deterministic_source_comparison_v1")
+        self.assertEqual(result["analysis_method"], "full_source_deterministic_comparison_v2")
         conflict = next(item for item in result["findings"] if item["category"] == "cross_document_conflict")
         self.assertEqual([source["document_id"] for source in conflict["sources"]], ["1", "2"])
         self.assertIn("EUR 125", conflict["sources"][0]["source_quote"])
@@ -192,7 +198,7 @@ class TestLocalSemanticAnalysisProvider(unittest.TestCase):
             for item in result["timeline_suggestions"]
         ))
 
-    def test_case_analysis_balances_later_sources_when_earlier_source_is_large(self):
+    def test_case_analysis_reads_every_source_when_earlier_source_is_large(self):
         provider = LocalSemanticAnalysisProvider({"provider": "rule_based", "max_chars": 1000})
         result = provider.analyze_case([
             {
@@ -210,14 +216,16 @@ class TestLocalSemanticAnalysisProvider(unittest.TestCase):
         coverage = result["source_coverage"]
         self.assertEqual(coverage["sources_readable"], 2)
         self.assertEqual(coverage["sources_represented"], 2)
-        self.assertTrue(coverage["sources_partially_read"] >= 1)
+        self.assertEqual(coverage["sources_partially_read"], 0)
+        self.assertEqual(coverage["coverage_percent"], 100.0)
+        self.assertEqual(coverage["characters_analyzed"], coverage["characters_total"])
         self.assertEqual({item["document_id"] for item in result["source_documents"]}, {1, 2})
         self.assertTrue(any(
             item["event_date"] == "2026-08-15" and item["sources"][0]["document_id"] == "2"
             for item in result["timeline_suggestions"]
         ))
 
-    def test_case_analysis_keeps_late_high_signal_passage_from_large_source(self):
+    def test_case_analysis_reads_late_high_signal_passage_from_large_source(self):
         provider = LocalSemanticAnalysisProvider({"provider": "rule_based", "max_chars": 1000})
         result = provider.analyze_case([{
             "document_id": 1,
@@ -225,8 +233,119 @@ class TestLocalSemanticAnalysisProvider(unittest.TestCase):
             "extracted_text": "Opening note. " + ("Background detail. " * 90) + "The objection deadline is 2026-09-10.",
         }])
 
-        self.assertTrue(result["source_was_truncated"])
+        self.assertFalse(result["source_was_truncated"])
+        self.assertEqual(result["source_coverage"]["coverage_percent"], 100.0)
         self.assertTrue(any(item["event_date"] == "2026-09-10" for item in result["timeline_suggestions"]))
+
+    def test_document_ollama_analysis_reads_every_chunk_and_keeps_late_citation(self):
+        calls = []
+        late_quote = "The final notice sets the objection deadline at 2026-11-30."
+
+        def fake_post(url, **kwargs):
+            prompt = kwargs["json"]["prompt"]
+            calls.append(prompt)
+            findings = [{
+                "category": "deadline",
+                "source_quote": late_quote,
+                "observation": "The final passage records an objection deadline.",
+            }] if late_quote in prompt else []
+            return FakeResponse({"response": json.dumps({"findings": findings, "review_questions": []})})
+
+        provider = LocalSemanticAnalysisProvider({
+            "provider": "ollama",
+            "base_url": "http://127.0.0.1:11434",
+            "model": "local-legal-model",
+            "max_chars": 1000,
+        }, request_post=fake_post)
+        source = "Opening correspondence. " + ("Background paragraph without a legal signal. " * 80) + late_quote
+
+        result = provider.analyze(source, document_name="Long notice")
+
+        self.assertEqual(result["status"], "completed")
+        self.assertGreater(len(calls), 1)
+        self.assertEqual(result["analysis_batches"], len(calls))
+        self.assertFalse(result["source_was_truncated"])
+        self.assertEqual(result["source_characters_analyzed"], len(provider._clean(source)))
+        self.assertTrue(any(item["source_quote"] == late_quote for item in result["findings"]))
+
+    def test_chunked_case_analysis_reports_full_coverage_and_real_progress(self):
+        calls = []
+        progress = []
+        late_quote = "Late decision dated 2026-12-05 requires payment of EUR 275."
+
+        def fake_post(url, **kwargs):
+            prompt = kwargs["json"]["prompt"]
+            calls.append(prompt)
+            findings = [{
+                "category": "case_position",
+                "observation": "A late source passage records a decision and payment amount.",
+                "sources": [{"document_id": "1", "source_quote": late_quote}],
+            }] if late_quote in prompt else []
+            return FakeResponse({"response": json.dumps({
+                "findings": findings,
+                "review_questions": [],
+                "timeline_suggestions": [],
+            })})
+
+        provider = LocalSemanticAnalysisProvider({
+            "provider": "ollama",
+            "base_url": "http://127.0.0.1:11434",
+            "model": "local-legal-model",
+            "max_chars": 1000,
+        }, request_post=fake_post)
+        first_source = "Opening evidence. " + ("Long factual background. " * 100) + late_quote
+        second_source = "Second source confirms case reference TEST-2026 and requests review before 2026-12-20."
+
+        result = provider.analyze_case([
+            {"document_id": 1, "title": "Long decision", "extracted_text": first_source},
+            {"document_id": 2, "title": "Follow-up", "extracted_text": second_source},
+        ], progress_callback=progress.append)
+
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["analysis_method"], "chunked_local_semantic_case_analysis_v1")
+        self.assertGreater(len(calls), 1)
+        self.assertEqual(result["analysis_batches"], len(calls))
+        self.assertEqual(result["source_coverage"]["coverage_percent"], 100.0)
+        self.assertEqual(result["source_coverage"]["sources_fully_read"], 2)
+        self.assertFalse(result["source_was_truncated"])
+        self.assertEqual(progress[-1]["processed_words"], progress[-1]["total_words"])
+        self.assertEqual(progress[-1]["processed_characters"], progress[-1]["total_characters"])
+        self.assertTrue(any(item["sources"][0]["source_quote"] == late_quote for item in result["findings"]))
+
+    def test_chunked_case_analysis_discards_partial_findings_when_a_batch_fails(self):
+        calls = []
+
+        def fake_post(url, **kwargs):
+            calls.append(kwargs["json"]["prompt"])
+            if len(calls) > 1:
+                raise ValueError("local model stopped")
+            return FakeResponse({"response": json.dumps({
+                "findings": [{
+                    "category": "case_position",
+                    "observation": "This partial result must not be retained.",
+                    "sources": [{"document_id": "1", "source_quote": "Opening source passage."}],
+                }],
+                "review_questions": [],
+                "timeline_suggestions": [],
+            })})
+
+        provider = LocalSemanticAnalysisProvider({
+            "provider": "ollama",
+            "base_url": "http://127.0.0.1:11434",
+            "model": "local-legal-model",
+            "max_chars": 1000,
+        }, request_post=fake_post)
+        result = provider.analyze_case([{
+            "document_id": 1,
+            "title": "Interrupted source",
+            "extracted_text": "Opening source passage. " + ("Long factual background. " * 120),
+        }])
+
+        self.assertEqual(result["status"], "unavailable")
+        self.assertEqual(result["findings"], [])
+        self.assertTrue(result["source_was_truncated"])
+        self.assertLess(result["source_coverage"]["coverage_percent"], 100.0)
+        self.assertIn("no partial case-wide findings were stored", result["limitations"][0])
 
 
 if __name__ == "__main__":

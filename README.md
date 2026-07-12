@@ -56,7 +56,7 @@ LARO stores connection status and a token fingerprint in the ledger, never raw O
 
 ## Optional Local Deep Reading
 
-The default reader also performs a local, deterministic case-wide comparison of readable sources. It can flag literal differences in payment amounts or deadline dates, shared case references, and deadline wording without a recognizable date. It also proposes a chronological source passage for every unambiguous date it finds; each proposal must be explicitly added to the reviewable timeline. Every result is review-only and opens the cited source document.
+The default reader performs a full-source deterministic comparison of every readable case document. It can flag literal differences in payment amounts or deadline dates, shared case references, and deadline wording without a recognizable date. It also proposes a chronological source passage for every unambiguous date it finds; each proposal must be explicitly added to the reviewable timeline. Every result is review-only and opens the cited source document.
 
 For deeper local-language analysis on your own machine, configure a local Ollama model in `.env`:
 
@@ -66,14 +66,16 @@ LARO_OLLAMA_BASE_URL=http://127.0.0.1:11434
 LARO_OLLAMA_MODEL=<your-local-model>
 ```
 
-LARO refuses non-loopback analysis URLs. Model output is retained only as review-only observations with literal source quotes; uncited output is discarded. It never becomes a confirmed fact, claim, deadline, or external communication automatically.
+LARO refuses non-loopback analysis URLs. Long sources are divided at sentence boundaries and every bounded batch is sent only to the configured loopback model. Model output is retained only as review-only observations with literal source quotes; uncited output is discarded. If a batch fails, no partial case-wide findings are stored. It never becomes a confirmed fact, claim, deadline, or external communication automatically.
+
+Case-wide readings run as durable local jobs through `/api/cases/<id>/case-analysis/jobs`. The Case Command Center polls persisted document, source-chunk, word, character, elapsed-time, and ETA progress and refreshes automatically when the cited review run is ready. `LARO_LOCAL_ANALYSIS_MAX_CHARS` controls the maximum source characters in one local-model batch, not the total amount of case evidence that can be read.
 
 ## Tests
 
 Run the legal-ledger verification suite:
 
 ```powershell
-python -m unittest test_legal_ledger test_document_intelligence test_google_oauth test_lawyer_matching test_outreach_targets test_outreach_analytics
+python -m unittest test_legal_ledger test_document_intelligence test_local_semantic_analysis test_google_oauth test_google_evidence test_lawyer_matching test_outreach_discovery test_outreach_targets test_outreach_analytics
 ```
 
 The test suite uses temporary SQLite files and does not require a real Google account or contact any external lawyers.
