@@ -569,6 +569,7 @@ def _claim_suggestions_from_analysis(case_id, document, analysis, actor):
         seen.add(key)
         claim = legal_ledger.add_claim(case_id, {
             'asserted_by': 'document_intelligence',
+            'position_role': 'source',
             'claim_type': 'document_statement',
             'statement': f"From {document_label}: {context}",
             'status': 'needs_review',
@@ -2252,10 +2253,22 @@ def list_ledger_claims(case_id):
 @app.route('/api/cases/<int:case_id>/claims', methods=['POST'])
 @auth_system._require_auth
 def create_ledger_claim(case_id):
-    claim = legal_ledger.add_claim(case_id, request.json or {}, actor=_ledger_actor())
+    try:
+        claim = legal_ledger.add_claim(case_id, request.json or {}, actor=_ledger_actor())
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
     if not claim:
         return jsonify({'error': 'Case not found'}), 404
     return jsonify(claim), 201
+
+
+@app.route('/api/cases/<int:case_id>/positions', methods=['GET'])
+@auth_system._require_auth
+def get_case_position_matrix(case_id):
+    matrix = legal_ledger.case_position_matrix(case_id)
+    if not matrix:
+        return jsonify({'error': 'Case not found'}), 404
+    return jsonify(matrix), 200
 
 
 @app.route('/api/cases/<int:case_id>/claims/<int:claim_id>', methods=['PATCH'])

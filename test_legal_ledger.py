@@ -118,7 +118,7 @@ class TestLegalLedgerService(unittest.TestCase):
         self.assertIn("resolved", audit_actions)
         self.assertGreaterEqual(len(audit_actions), 9)
 
-    def test_create_all_adds_timeline_fact_columns_to_an_existing_database(self):
+    def test_create_all_adds_timeline_and_claim_columns_to_an_existing_database(self):
         legacy_path = os.path.join(self.tmp.name, "legacy-ledger.sqlite3")
         connection = sqlite3.connect(legacy_path)
         connection.execute(
@@ -128,6 +128,12 @@ class TestLegalLedgerService(unittest.TestCase):
             "source_confidence FLOAT, user_confirmed BOOLEAN, created_from_document_id INTEGER, "
             "created_at DATETIME, updated_at DATETIME)"
         )
+        connection.execute(
+            "CREATE TABLE legal_claims ("
+            "id INTEGER PRIMARY KEY, case_id INTEGER NOT NULL, asserted_by VARCHAR(255), "
+            "claim_type VARCHAR(80), statement TEXT NOT NULL, status VARCHAR(80), confidence FLOAT, "
+            "created_at DATETIME, updated_at DATETIME)"
+        )
         connection.commit()
         connection.close()
 
@@ -135,12 +141,14 @@ class TestLegalLedgerService(unittest.TestCase):
         try:
             legacy.create_all()
             connection = sqlite3.connect(legacy_path)
-            columns = {row[1] for row in connection.execute("PRAGMA table_info(case_events)")}
+            event_columns = {row[1] for row in connection.execute("PRAGMA table_info(case_events)")}
+            claim_columns = {row[1] for row in connection.execute("PRAGMA table_info(legal_claims)")}
             connection.close()
         finally:
             legacy.close()
 
-        self.assertTrue({"actor", "action", "affected_party", "event_kind"}.issubset(columns))
+        self.assertTrue({"actor", "action", "affected_party", "event_kind"}.issubset(event_columns))
+        self.assertTrue({"position_role", "subject_party", "materiality"}.issubset(claim_columns))
 
     def test_source_linked_obligations_are_reviewed_audited_and_exported(self):
         case = self.ledger.create_case({
@@ -257,13 +265,21 @@ class TestLegalLedgerService(unittest.TestCase):
             "statement": "CAK sent the notice on 2024-04-01.",
             "status": "needs_review",
         }, actor="system")
-        self.ledger.add_evidence_link(case["case_id"], {
+        evidence_link = self.ledger.add_evidence_link(case["case_id"], {
             "document_id": document["document_id"],
             "target_type": "claim",
             "target_id": claim["id"],
             "snippet": "Notice dated 2024-04-01.",
         }, actor="system")
 
+        pending_state = self.ledger.case_operating_state(case["case_id"])
+        self.assertEqual(pending_state["primary_action"]["target"], "review")
+        self.assertEqual(pending_state["primary_action"]["queue_type"], "gap")
+
+        self.ledger.update_evidence_link(case["case_id"], evidence_link["id"], {
+            "action": "confirm",
+            "relationship": "supports",
+        }, actor="robert")
         state = self.ledger.case_operating_state(case["case_id"])
         self.assertEqual(state["primary_action"]["target"], "timeline")
         self.assertEqual(state["primary_action"]["item_id"], event["id"])
@@ -793,10 +809,10 @@ class TestLegalLedgerService(unittest.TestCase):
         self.assertEqual(dossier["positions"]["supported"], [])
         self.assertEqual(len(dossier["positions"]["proposed_support"]), 1)
         self.assertEqual(len(dossier["positions"]["proposed_support"][0]["proposed_sources"]), 1)
-        self.assertTrue(any(action["label"] == "Confirm proposed evidence links" for action in dossier["next_actions"]))
+        self.assertTrue(any(action["label"] == "Classify proposed evidence links" for action in dossier["next_actions"]))
         self.assertIn("Confirmed supported claims: 0", red_line["body"])
-        self.assertIn("Claims with proposed support: 1", red_line["body"])
-        self.assertIn("proposed evidence: source: doc", red_line["body"])
+        self.assertIn("Claims with evidence awaiting classification: 1", red_line["body"])
+        self.assertIn("pending classification: source: doc", red_line["body"])
 
         confirmed = self.ledger.update_evidence_link(
             case["case_id"], link["id"], {"action": "confirm"}, actor="robert"
@@ -805,6 +821,90 @@ class TestLegalLedgerService(unittest.TestCase):
         confirmed_summary = self.ledger.case_summary(case["case_id"])
         self.assertEqual(len(confirmed_summary["claims"]["supported"]), 1)
         self.assertEqual(confirmed_summary["claims"]["proposed_support"], [])
+
+    def test_position_matrix_keeps_support_dispute_context_and_pending_sources_distinct(self):
+        case = self.ledger.create_case({"user_id": "robert", "title": "Competing payment positions"}, actor="robert")
+        claim = self.ledger.add_claim(case["case_id"], {
+            "statement": "The payment was received before the deadline.",
+            "asserted_by": "CAK",
+            "position_role": "institution",
+            "subject_party": "Robert",
+            "claim_type": "factual",
+            "materiality": "high",
+        }, actor="robert")
+        support_doc = self.ledger.add_document(case["case_id"], {
+            "title": "CAK receipt",
+            "extracted_text": "Payment received on 2024-05-13.",
+        }, actor="robert")
+        dispute_doc = self.ledger.add_document(case["case_id"], {
+            "title": "Bank return notice",
+            "extracted_text": "The payment was returned on 2024-05-13.",
+        }, actor="robert")
+        pending_doc = self.ledger.add_document(case["case_id"], {
+            "title": "Account correspondence",
+            "extracted_text": "The account remained under review.",
+        }, actor="robert")
+        context_doc = self.ledger.add_document(case["case_id"], {
+            "title": "Account terms",
+            "extracted_text": "Payments are normally processed within two working days.",
+        }, actor="robert")
+        support = self.ledger.add_evidence_link(case["case_id"], {
+            "document_id": support_doc["document_id"],
+            "target_type": "claim",
+            "target_id": claim["id"],
+            "relationship": "supports",
+            "snippet": "Payment received on 2024-05-13.",
+        }, actor="robert")
+        dispute = self.ledger.add_evidence_link(case["case_id"], {
+            "document_id": dispute_doc["document_id"],
+            "target_type": "claim",
+            "target_id": claim["id"],
+            "relationship": "disputes",
+            "snippet": "The payment was returned on 2024-05-13.",
+        }, actor="robert")
+        pending = self.ledger.add_evidence_link(case["case_id"], {
+            "document_id": pending_doc["document_id"],
+            "target_type": "claim",
+            "target_id": claim["id"],
+            "relationship": "suggests_claim",
+            "snippet": "The account remained under review.",
+        }, actor="document_intelligence")
+        context = self.ledger.add_evidence_link(case["case_id"], {
+            "document_id": context_doc["document_id"],
+            "target_type": "claim",
+            "target_id": claim["id"],
+            "relationship": "context",
+            "snippet": "Payments are normally processed within two working days.",
+        }, actor="robert")
+
+        warnings = self.ledger.list_missing_evidence(case["case_id"])
+        self.assertTrue(any(item["claim_id"] == claim["id"] and item["status"] == "needs_review" for item in warnings))
+        with self.assertRaisesRegex(ValueError, "supports, disputes, or contextualizes"):
+            self.ledger.update_evidence_link(case["case_id"], pending["id"], {"action": "confirm"}, actor="robert")
+
+        self.ledger.update_evidence_link(case["case_id"], support["id"], {"action": "confirm"}, actor="robert")
+        self.ledger.update_evidence_link(case["case_id"], dispute["id"], {"action": "confirm"}, actor="robert")
+        self.ledger.update_evidence_link(case["case_id"], context["id"], {"action": "confirm"}, actor="robert")
+        summary = self.ledger.case_summary(case["case_id"])
+        dossier = self.ledger.case_comprehension_dossier(case["case_id"])
+        matrix = self.ledger.case_position_matrix(case["case_id"])
+
+        self.assertEqual(summary["claims"]["supported"], [])
+        self.assertEqual(len(summary["claims"]["mixed"]), 1)
+        self.assertEqual(dossier["positions"]["all"][0]["evidence_state"], "mixed")
+        self.assertEqual(len(dossier["positions"]["all"][0]["supporting_sources"]), 1)
+        self.assertEqual(len(dossier["positions"]["all"][0]["disputing_sources"]), 1)
+        self.assertEqual(len(dossier["positions"]["all"][0]["context_sources"]), 1)
+        self.assertEqual(len(dossier["positions"]["all"][0]["proposed_sources"]), 1)
+        self.assertEqual(matrix["counts"]["mixed"], 1)
+        self.assertEqual(matrix["counts"]["pending_source_classification"], 1)
+        self.assertEqual(matrix["groups"][0]["asserted_by"], "CAK")
+        self.assertEqual(matrix["groups"][0]["position_role"], "institution")
+        self.assertTrue(matrix["legal_safety"]["mixed_evidence_is_not_presented_as_supported"])
+        self.assertTrue(any(action["label"] == "Classify proposed evidence links" for action in dossier["next_actions"]))
+        red_line_body = self.ledger.red_line_thread(case["case_id"])["body"]
+        self.assertIn("Mixed support and dispute: 1", red_line_body)
+        self.assertIn("Claims with evidence awaiting classification: 1", red_line_body)
 
     def test_timeline_suggestions_can_be_edited_approved_and_rejected(self):
         case = self.ledger.create_case({"user_id": "robert", "title": "CAK timeline review"}, actor="robert")
@@ -1191,6 +1291,57 @@ class TestLegalLedgerApi(unittest.TestCase):
         self.assertTrue(bundle.get_json()["external_sharing_requires_approval"])
         self.assertEqual(bundle.get_json()["share_status"], "internal_only_until_approved")
         self.assertEqual(bundle.get_json()["drafts"][0]["id"], draft_payload["id"])
+
+    def test_position_matrix_api_requires_explicit_claim_evidence_classification(self):
+        created = self.client.post("/api/cases", json={"title": "Position matrix API case"}, headers=self.headers)
+        self.assertEqual(created.status_code, 201)
+        case_id = created.get_json()["case_id"]
+        document = self.client.post(f"/api/cases/{case_id}/documents", json={
+            "title": "Counterparty letter",
+            "extracted_text": "CAK states that no payment was received.",
+        }, headers=self.headers)
+        self.assertEqual(document.status_code, 201)
+        claim = self.client.post(f"/api/cases/{case_id}/claims", json={
+            "statement": "No payment was received.",
+            "asserted_by": "CAK",
+            "position_role": "counterparty",
+            "subject_party": "Robert",
+            "claim_type": "allegation",
+            "materiality": "critical",
+        }, headers=self.headers)
+        self.assertEqual(claim.status_code, 201)
+        self.assertEqual(claim.get_json()["position_role"], "counterparty")
+        link = self.client.post(f"/api/cases/{case_id}/evidence", json={
+            "document_id": document.get_json()["document_id"],
+            "target_type": "claim",
+            "target_id": claim.get_json()["id"],
+            "relationship": "suggests_claim",
+            "snippet": "CAK states that no payment was received.",
+        }, headers=self.headers)
+        self.assertEqual(link.status_code, 201)
+
+        unsafe_confirmation = self.client.patch(
+            f"/api/cases/{case_id}/evidence/{link.get_json()['id']}",
+            json={"action": "confirm"},
+            headers=self.headers,
+        )
+        self.assertEqual(unsafe_confirmation.status_code, 400)
+        self.assertIn("supports, disputes, or contextualizes", unsafe_confirmation.get_json()["error"])
+        classified = self.client.patch(
+            f"/api/cases/{case_id}/evidence/{link.get_json()['id']}",
+            json={"action": "confirm", "relationship": "disputes"},
+            headers=self.headers,
+        )
+        self.assertEqual(classified.status_code, 200)
+        self.assertEqual(classified.get_json()["relationship"], "disputes")
+
+        matrix = self.client.get(f"/api/cases/{case_id}/positions", headers=self.headers)
+        self.assertEqual(matrix.status_code, 200)
+        payload = matrix.get_json()
+        self.assertEqual(payload["counts"]["disputed"], 1)
+        self.assertEqual(payload["groups"][0]["asserted_by"], "CAK")
+        self.assertEqual(payload["groups"][0]["claims"][0]["materiality"], "critical")
+        self.assertTrue(payload["legal_safety"]["claim_review_does_not_establish_truth"])
 
     def test_obligation_api_links_source_and_requires_explicit_review(self):
         created = self.client.post("/api/cases", json={

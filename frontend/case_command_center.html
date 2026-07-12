@@ -2743,6 +2743,142 @@
             color: var(--ledger-orange);
         }
 
+        .position-matrix {
+            display: grid;
+            gap: 0.85rem;
+        }
+
+        .position-matrix-header,
+        .position-group-header,
+        .claim-position-heading {
+            align-items: center;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.65rem;
+            justify-content: space-between;
+        }
+
+        .position-summary-grid {
+            display: grid;
+            gap: 0.45rem;
+            grid-template-columns: repeat(auto-fit, minmax(108px, 1fr));
+        }
+
+        .position-summary-button {
+            background: #07101f;
+            border: 1px solid var(--ledger-border);
+            border-radius: 8px;
+            color: var(--ledger-muted);
+            cursor: pointer;
+            display: grid;
+            gap: 0.18rem;
+            min-height: 62px;
+            padding: 0.55rem 0.65rem;
+            text-align: left;
+        }
+
+        .position-summary-button strong {
+            color: var(--ledger-text);
+            font-size: 1.05rem;
+            line-height: 1;
+        }
+
+        .position-summary-button span {
+            font-size: 0.72rem;
+            font-weight: 850;
+            text-transform: uppercase;
+        }
+
+        .position-summary-button.is-active,
+        .position-summary-button:hover {
+            border-color: rgba(255, 107, 0, 0.58);
+        }
+
+        .position-summary-button.is-active span {
+            color: var(--ledger-orange);
+        }
+
+        .position-group {
+            border-top: 1px solid var(--ledger-border);
+            display: grid;
+            gap: 0.55rem;
+            padding-top: 0.75rem;
+        }
+
+        .position-group-header h3,
+        .position-group-header p {
+            margin: 0;
+        }
+
+        .claim-position-row {
+            background: transparent;
+            border: 0;
+            border-bottom: 1px solid var(--ledger-border);
+            border-left: 4px solid var(--ledger-soft);
+            border-radius: 0;
+            display: grid;
+            gap: 0.7rem;
+            padding: 0.78rem;
+        }
+
+        .claim-position-row[data-evidence-state="supported"] { border-left-color: var(--ledger-green); }
+        .claim-position-row[data-evidence-state="mixed"] { border-left-color: var(--ledger-orange); }
+        .claim-position-row[data-evidence-state="disputed"] { border-left-color: var(--ledger-red); }
+        .claim-position-row[data-evidence-state="context"] { border-left-color: var(--ledger-blue); }
+
+        .claim-state-label {
+            color: var(--ledger-muted);
+            font-size: 0.74rem;
+            font-weight: 900;
+            text-transform: uppercase;
+        }
+
+        .claim-state-label[data-evidence-state="supported"] { color: var(--ledger-green); }
+        .claim-state-label[data-evidence-state="mixed"] { color: var(--ledger-orange); }
+        .claim-state-label[data-evidence-state="disputed"] { color: var(--ledger-red); }
+        .claim-state-label[data-evidence-state="context"] { color: var(--ledger-blue); }
+
+        .claim-source-lanes {
+            border-top: 1px solid var(--ledger-border);
+            display: grid;
+            gap: 0.55rem;
+            padding-top: 0.65rem;
+        }
+
+        .claim-source-lane {
+            display: grid;
+            gap: 0.35rem;
+        }
+
+        .claim-source-lane > strong {
+            color: var(--ledger-muted);
+            font-size: 0.72rem;
+            text-transform: uppercase;
+        }
+
+        .claim-source-row {
+            align-items: start;
+            display: grid;
+            gap: 0.55rem;
+            grid-template-columns: minmax(0, 1fr) auto;
+        }
+
+        .claim-source-row p {
+            overflow-wrap: anywhere;
+        }
+
+        .claim-source-actions {
+            align-items: center;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.45rem;
+            grid-column: 1 / -1;
+        }
+
+        .evidence-relation-select {
+            min-width: 190px;
+        }
+
         .timeline-vertical {
             display: grid;
             gap: 0.65rem;
@@ -3189,9 +3325,21 @@
             }
 
             .timeline-brief-header,
-            .timeline-source-card {
+            .timeline-source-card,
+            .position-matrix-header,
+            .position-group-header,
+            .claim-position-heading {
                 align-items: stretch;
                 flex-direction: column;
+            }
+
+            .claim-source-row {
+                grid-template-columns: minmax(0, 1fr) auto;
+            }
+
+            .evidence-relation-select {
+                min-width: 0;
+                width: 100%;
             }
 
             .timeline-vertical::before {
@@ -3471,6 +3619,8 @@
         let timelineStatusFilter = "all";
         let timelineActorFilter = "all";
         let timelineKindFilter = "all";
+        let claimEvidenceFilter = "all";
+        let claimRoleFilter = "all";
         let reviewTypeFilter = "all";
         let papertrailTypeFilter = "all";
         let papertrailQuery = "";
@@ -4952,6 +5102,22 @@
             return "needs review";
         }
 
+        function claimRelationshipSelect(link = {}) {
+            if (link.target_type !== "claim") return "";
+            const selected = ["supports", "disputes", "context"].includes(link.relationship) ? link.relationship : "";
+            return `
+                <label class="input-field evidence-relation-select">
+                    <span>How this source relates</span>
+                    <select class="control evidence-link-relationship">
+                        <option value="" ${selected ? "" : "selected"}>Choose before confirming</option>
+                        <option value="supports" ${selected === "supports" ? "selected" : ""}>Supports the claim</option>
+                        <option value="disputes" ${selected === "disputes" ? "selected" : ""}>Disputes the claim</option>
+                        <option value="context" ${selected === "context" ? "selected" : ""}>Context only</option>
+                    </select>
+                </label>
+            `;
+        }
+
         function normalizeBackendReviewQueueItem(item = {}) {
             const source = item.source && typeof item.source === "object" ? item.source : {};
             const queueType = item.queue_type || item.queueType || source.queue_type || "";
@@ -6162,16 +6328,17 @@
                 const doc = documentById(item.document_id);
                 const sourceLabel = doc ? (doc.title || doc.original_filename || `Document ${item.document_id}`) : `Document ${item.document_id}`;
                 return `
-                    <article class="record-row evidence-link-row" data-evidence-link-id="${escapeHtml(item.id)}">
+                    <article class="record-row evidence-link-row" data-evidence-link-id="${escapeHtml(item.id)}" data-target-type="${escapeHtml(item.target_type)}">
                         <span class="record-kicker">source link</span>
                         <div>
                             <div class="record-heading">
                                 <strong>${escapeHtml(sourceLabel)} -> ${escapeHtml(item.target_type)} ${escapeHtml(item.target_id)}</strong>
-                                ${sourceDocumentButton(item.document_id)}
+                                ${sourceDocumentButton(item.document_id, item.snippet || item.body)}
                             </div>
                             <p>${escapeHtml(item.body)}</p>
-                            <p class="muted">${escapeHtml(item.relationship || "supports")} - ${escapeHtml(item.strength || "medium")} strength - review before treating as support</p>
+                            <p class="muted">${escapeHtml(item.relationship || "needs_review")} - ${escapeHtml(item.strength || "medium")} strength - classify the source relationship before relying on it</p>
                             <div class="button-row">
+                                ${claimRelationshipSelect(item)}
                                 <button class="btn-ledger evidence-link-confirm" type="button">Confirm link</button>
                                 <button class="btn-secondary-ledger evidence-link-reject" type="button">Reject</button>
                                 <button class="btn-secondary-ledger" type="button" data-jump-tab="evidence">Inspect</button>
@@ -6545,6 +6712,7 @@
             const c = detailState.case;
             if (!c) return `<div class="empty-state">Select a case first.</div>`;
             const timeline = timelineDisplayEvents().slice(0, 8);
+            const positionCounts = detailState.positionMatrix?.counts || {};
             if ((document.body.dataset.depth || "simple") === "simple") {
                 return `
                     <section class="detail-section">
@@ -6650,7 +6818,8 @@
                 </section>
                 <section class="detail-section guided-depth">
                     <h3 class="panel-title">Evidence Position</h3>
-                    <p>${escapeHtml((detailState.summary?.claims?.supported || []).length)} supported claims / ${escapeHtml((detailState.summary?.claims?.unsupported || []).length)} unsupported claims.</p>
+                    <p>${escapeHtml(positionCounts.supported || 0)} supported / ${escapeHtml(positionCounts.mixed || 0)} mixed / ${escapeHtml(positionCounts.disputed || 0)} disputed / ${escapeHtml(positionCounts.unsupported || 0)} unsupported claims.</p>
+                    <p>${escapeHtml(positionCounts.pending_source_classification || 0)} source passage${positionCounts.pending_source_classification === 1 ? "" : "s"} awaiting classification.</p>
                     <p>${escapeHtml((detailState.summary?.risk_review?.missing_evidence || []).filter((item) => item.status !== "resolved").length)} missing-evidence review items are open.</p>
                 </section>
                 <section class="detail-section guided-depth">
@@ -6923,35 +7092,149 @@
             `;
         }
 
-        function renderClaims() {
+        function claimEvidenceStateLabel(state) {
+            return ({
+                supported: "supported",
+                mixed: "mixed evidence",
+                disputed: "disputed",
+                context: "context only",
+                needs_review: "classify sources",
+                unsupported: "unsupported"
+            })[state] || "unsupported";
+        }
+
+        function renderClaimSourceLane(label, sources = [], pending = false) {
+            if (!sources.length) return "";
             return `
-                ${recordRows(detailState.claims, "No claims recorded yet.", (claim) => `
-                    <article class="record-row claim-row" data-claim-id="${escapeHtml(claim.id)}">
-                        <span class="record-kicker">${escapeHtml(claim.status || "unreviewed")}</span>
-                        <div>
-                            <div class="record-heading">
-                                <strong>${escapeHtml(claim.asserted_by || "user")}</strong>
-                                ${evidenceSourceButton("claim", claim.id)}
-                            </div>
-                            <p>${escapeHtml(claim.statement)}</p>
-                            ${evidenceSnippet("claim", claim.id)}
-                            <p class="muted">${escapeHtml(claim.claim_type || "factual")} claim${claim.confidence ? ` - ${escapeHtml(Math.round(Number(claim.confidence) * 100))}% confidence` : ""}</p>
-                            <div class="button-row guided-depth">
-                                ${["needs_review", "unreviewed"].includes(claim.status || "unreviewed") ? `
-                                    <button class="btn-ledger claim-confirm" type="button">Confirm</button>
-                                    <button class="btn-secondary-ledger claim-dismiss" type="button">Dismiss</button>
-                                ` : `<button class="btn-secondary-ledger claim-reopen" type="button">Reopen review</button>`}
-                            </div>
+                <div class="claim-source-lane">
+                    <strong>${escapeHtml(label)} (${escapeHtml(sources.length)})</strong>
+                    ${sources.map((source) => `
+                        <div class="claim-source-row ${pending ? "evidence-link-row" : ""}"
+                            ${pending ? `data-evidence-link-id="${escapeHtml(source.evidence_link_id)}" data-target-type="claim"` : ""}>
+                            <p>${escapeHtml(source.snippet || source.title || "Source passage")}</p>
+                            ${sourceDocumentButton(source.document_id, source.snippet)}
+                            ${pending ? `
+                                <div class="claim-source-actions guided-depth">
+                                    ${claimRelationshipSelect({ ...source, target_type: "claim" })}
+                                    <button class="btn-ledger evidence-link-confirm" type="button">Confirm classification</button>
+                                    <button class="btn-secondary-ledger evidence-link-reject" type="button">Reject link</button>
+                                </div>
+                            ` : ""}
                         </div>
-                    </article>
-                `)}
-                <section class="detail-section guided-depth">
-                    <h3 class="panel-title">Add Claim</h3>
-                    <div class="form-grid">
-                        <label class="input-field"><span>Claim statement</span><textarea class="control" id="claimStatement" placeholder="Fact, allegation, or counterparty claim"></textarea></label>
-                        <button class="btn-ledger" type="button" id="quickAddClaim">Add Claim</button>
+                    `).join("")}
+                </div>
+            `;
+        }
+
+        function renderClaimPositionRow(claim) {
+            const evidenceState = claim.evidence_state || "unsupported";
+            const subject = claim.subject_party ? ` - about ${claim.subject_party}` : "";
+            return `
+                <article class="claim-position-row claim-row" data-claim-id="${escapeHtml(claim.id)}" data-evidence-state="${escapeHtml(evidenceState)}">
+                    <div class="claim-position-heading">
+                        <span class="claim-state-label" data-evidence-state="${escapeHtml(evidenceState)}">${escapeHtml(claimEvidenceStateLabel(evidenceState))}</span>
+                        <span class="muted">${escapeHtml(claim.materiality || "medium")} materiality</span>
                     </div>
+                    <div>
+                        <strong>${escapeHtml(claim.statement || "Claim statement unavailable")}</strong>
+                        <p class="muted">${escapeHtml(claim.claim_type || "factual")} - asserted by ${escapeHtml(claim.asserted_by || "unknown")}${escapeHtml(subject)} - ${escapeHtml(claim.status || "unreviewed")}</p>
+                    </div>
+                    ${(claim.supporting_sources?.length || claim.disputing_sources?.length || claim.context_sources?.length || claim.proposed_sources?.length) ? `
+                        <div class="claim-source-lanes">
+                            ${renderClaimSourceLane("Supports", claim.supporting_sources)}
+                            ${renderClaimSourceLane("Disputes", claim.disputing_sources)}
+                            ${renderClaimSourceLane("Context", claim.context_sources)}
+                            ${renderClaimSourceLane("Awaiting classification", claim.proposed_sources, true)}
+                        </div>
+                    ` : `<p class="muted">No source passage is linked. This claim remains unproven.</p>`}
+                    <div class="button-row guided-depth">
+                        ${["needs_review", "unreviewed"].includes(claim.status || "unreviewed") ? `
+                            <button class="btn-ledger claim-confirm" type="button">Mark reviewed</button>
+                            <button class="btn-secondary-ledger claim-dismiss" type="button">Dismiss</button>
+                        ` : `<button class="btn-secondary-ledger claim-reopen" type="button">Reopen review</button>`}
+                    </div>
+                    <details class="source-import-advanced expert-depth">
+                        <summary>Edit claim classification</summary>
+                        <div class="form-grid">
+                            <label class="input-field"><span>Asserted by</span><input class="control claim-asserted-by" value="${escapeHtml(claim.asserted_by || "")}"></label>
+                            <label class="input-field"><span>Position role</span><select class="control claim-position-role">
+                                ${["client", "counterparty", "institution", "court", "third_party", "source", "unknown"].map((role) => `<option value="${role}" ${(claim.position_role || "unknown") === role ? "selected" : ""}>${escapeHtml(role.replace("_", " "))}</option>`).join("")}
+                            </select></label>
+                            <label class="input-field"><span>Subject party</span><input class="control claim-subject-party" value="${escapeHtml(claim.subject_party || "")}" placeholder="Who or what this concerns"></label>
+                            <label class="input-field"><span>Claim type</span><select class="control claim-type">
+                                ${["factual", "allegation", "assumption", "legal_position", "document_statement", "cross_document_observation"].map((type) => `<option value="${type}" ${(claim.claim_type || "factual") === type ? "selected" : ""}>${escapeHtml(type.replaceAll("_", " "))}</option>`).join("")}
+                            </select></label>
+                            <label class="input-field"><span>Materiality</span><select class="control claim-materiality">
+                                ${["low", "medium", "high", "critical"].map((level) => `<option value="${level}" ${(claim.materiality || "medium") === level ? "selected" : ""}>${escapeHtml(level)}</option>`).join("")}
+                            </select></label>
+                            <button class="btn-secondary-ledger claim-save" type="button">Save classification</button>
+                        </div>
+                    </details>
+                </article>
+            `;
+        }
+
+        function renderClaims() {
+            const matrix = detailState.positionMatrix || { counts: {}, groups: [] };
+            const counts = matrix.counts || {};
+            const roleOptions = [...new Set((matrix.groups || []).map((group) => group.position_role || "unknown"))];
+            const filters = [
+                { key: "all", label: "All", count: counts.all || 0 },
+                { key: "supported", label: "Supported", count: counts.supported || 0 },
+                { key: "disputed", label: "Disputed / mixed", count: (counts.disputed || 0) + (counts.mixed || 0) },
+                { key: "needs_review", label: "Classify", count: counts.pending_source_classification || 0 },
+                { key: "unsupported", label: "Unsupported", count: counts.unsupported || 0 },
+                { key: "context", label: "Context", count: counts.context || 0 }
+            ];
+            const matchesEvidence = (claim) => claimEvidenceFilter === "all"
+                || (claimEvidenceFilter === "needs_review" && (claim.proposed_sources || []).length > 0)
+                || claim.evidence_state === claimEvidenceFilter
+                || (claimEvidenceFilter === "disputed" && claim.evidence_state === "mixed");
+            const visibleGroups = (matrix.groups || [])
+                .filter((group) => claimRoleFilter === "all" || group.position_role === claimRoleFilter)
+                .map((group) => ({ ...group, claims: (group.claims || []).filter(matchesEvidence) }))
+                .filter((group) => group.claims.length);
+            return `
+                <section class="detail-section position-matrix">
+                    <div class="position-matrix-header">
+                        <div>
+                            <h3 class="panel-title">Position Matrix</h3>
+                            <p class="muted">Who asserts what, and whether confirmed source passages support, dispute, contextualize, or have not yet proven it.</p>
+                        </div>
+                        <label class="input-field guided-depth"><span>Party role</span><select class="control" id="claimRoleFilter">
+                            <option value="all">All roles</option>
+                            ${roleOptions.map((role) => `<option value="${escapeHtml(role)}" ${claimRoleFilter === role ? "selected" : ""}>${escapeHtml(role.replace("_", " "))}</option>`).join("")}
+                        </select></label>
+                    </div>
+                    <div class="position-summary-grid">
+                        ${filters.map((filter) => `
+                            <button class="position-summary-button ${claimEvidenceFilter === filter.key ? "is-active" : ""}" type="button" data-claim-evidence-filter="${filter.key}">
+                                <strong>${escapeHtml(filter.count)}</strong><span>${escapeHtml(filter.label)}</span>
+                            </button>
+                        `).join("")}
+                    </div>
+                    ${visibleGroups.length ? visibleGroups.map((group) => `
+                        <section class="position-group" data-position-role="${escapeHtml(group.position_role)}">
+                            <div class="position-group-header">
+                                <div><h3>${escapeHtml(group.asserted_by)}</h3><p class="muted">${escapeHtml((group.position_role || "unknown").replace("_", " "))}</p></div>
+                                <span class="tag">${escapeHtml(group.claims.length)} position${group.claims.length === 1 ? "" : "s"}</span>
+                            </div>
+                            ${group.claims.map(renderClaimPositionRow).join("")}
+                        </section>
+                    `).join("") : `<div class="empty-state">No positions match this filter.</div>`}
                 </section>
+                <details class="detail-section source-import-advanced guided-depth">
+                    <summary>Add a claim or allegation</summary>
+                    <div class="form-grid">
+                        <label class="input-field"><span>Claim statement</span><textarea class="control" id="claimStatement" placeholder="Record the exact position without treating it as a proven fact"></textarea></label>
+                        <label class="input-field"><span>Asserted by</span><input class="control" id="claimAssertedBy" placeholder="Person, organization, institution, or court"></label>
+                        <label class="input-field"><span>Position role</span><select class="control" id="claimPositionRole"><option value="client">Client</option><option value="counterparty">Counterparty</option><option value="institution">Institution</option><option value="court">Court</option><option value="third_party">Third party</option><option value="source">Source</option><option value="unknown">Unknown</option></select></label>
+                        <label class="input-field"><span>Claim type</span><select class="control" id="claimType"><option value="factual">Factual claim</option><option value="allegation">Allegation</option><option value="assumption">Assumption</option><option value="legal_position">Legal position</option></select></label>
+                        <label class="input-field"><span>Subject party</span><input class="control" id="claimSubjectParty" placeholder="Who or what this position concerns"></label>
+                        <label class="input-field"><span>Materiality</span><select class="control" id="claimMateriality"><option value="medium">Medium</option><option value="low">Low</option><option value="high">High</option><option value="critical">Critical</option></select></label>
+                        <button class="btn-ledger" type="button" id="quickAddClaim">Store for review</button>
+                    </div>
+                </details>
             `;
         }
 
@@ -6970,17 +7253,18 @@
                         const sourceLabel = doc ? (doc.title || doc.original_filename || `Document ${link.document_id}`) : `Document ${link.document_id}`;
                         const status = evidenceLinkStatus(link);
                         return `
-                            <article class="record-row evidence-link-row" data-evidence-link-id="${escapeHtml(link.id)}">
+                            <article class="record-row evidence-link-row" data-evidence-link-id="${escapeHtml(link.id)}" data-target-type="${escapeHtml(link.target_type)}">
                                 <span class="record-kicker">${escapeHtml(status)}</span>
                                 <div>
                                     <div class="record-heading">
                                         <strong>${escapeHtml(sourceLabel)} -> ${escapeHtml(link.target_type)} ${escapeHtml(link.target_id)}</strong>
-                                        ${sourceDocumentButton(link.document_id)}
+                                        ${sourceDocumentButton(link.document_id, link.snippet)}
                                     </div>
                                     <p>${escapeHtml(link.snippet || "No snippet recorded.")}</p>
                                     <p class="muted">${escapeHtml(link.relationship || "supports")} - ${escapeHtml(link.strength || "medium")} strength${link.source_confidence ? ` - ${escapeHtml(Math.round(Number(link.source_confidence) * 100))}% source confidence` : ""}</p>
                                     <div class="button-row guided-depth">
                                         ${evidenceLinkNeedsReview(link) ? `
+                                            ${claimRelationshipSelect(link)}
                                             <button class="btn-ledger evidence-link-confirm" type="button">Confirm link</button>
                                             <button class="btn-secondary-ledger evidence-link-reject" type="button">Reject</button>
                                         ` : `<button class="btn-secondary-ledger evidence-link-reopen" type="button">Reopen review</button>`}
@@ -7587,11 +7871,19 @@
         async function updateClaim(row, action) {
             if (!selectedCaseId) return showToast("Select a case first.");
             const claimId = Number(row.dataset.claimId);
+            const payload = { action };
+            if (action === "update") {
+                payload.asserted_by = row.querySelector(".claim-asserted-by")?.value.trim() || "unknown";
+                payload.position_role = row.querySelector(".claim-position-role")?.value || "unknown";
+                payload.subject_party = row.querySelector(".claim-subject-party")?.value.trim() || "";
+                payload.claim_type = row.querySelector(".claim-type")?.value || "factual";
+                payload.materiality = row.querySelector(".claim-materiality")?.value || "medium";
+            }
             await apiFetch(`/api/cases/${selectedCaseId}/claims/${claimId}`, {
                 method: "PATCH",
-                body: JSON.stringify({ action })
+                body: JSON.stringify(payload)
             });
-            showToast(action === "confirm" ? "Claim confirmed as reviewed." : action === "dismiss" ? "Claim dismissed." : "Claim reopened for review.");
+            showToast(action === "confirm" ? "Claim marked reviewed. Its evidence state remains separate." : action === "dismiss" ? "Claim dismissed." : action === "update" ? "Claim classification saved." : "Claim reopened for review.");
             await loadCaseDetail(selectedCaseId);
             await loadCommandCenter();
         }
@@ -7599,11 +7891,17 @@
         async function updateEvidenceLink(row, action) {
             if (!selectedCaseId) return showToast("Select a case first.");
             const linkId = Number(row.dataset.evidenceLinkId);
+            const payload = { action };
+            if (action === "confirm" && row.dataset.targetType === "claim") {
+                const relationship = row.querySelector(".evidence-link-relationship")?.value || "";
+                if (!relationship) return showToast("Choose whether the source supports, disputes, or contextualizes the claim.");
+                payload.relationship = relationship;
+            }
             await apiFetch(`/api/cases/${selectedCaseId}/evidence/${linkId}`, {
                 method: "PATCH",
-                body: JSON.stringify({ action })
+                body: JSON.stringify(payload)
             });
-            showToast(action === "confirm" ? "Evidence link confirmed." : action === "reject" ? "Evidence link rejected." : "Evidence link reopened for review.");
+            showToast(action === "confirm" ? "Evidence relationship confirmed." : action === "reject" ? "Evidence link rejected." : "Evidence link reopened for review.");
             await loadCaseDetail(selectedCaseId);
             await loadCommandCenter();
         }
@@ -8181,6 +8479,16 @@
                 timelineKindFilter = event.target.value || "all";
                 renderDetail();
             });
+            document.querySelectorAll("[data-claim-evidence-filter]").forEach((button) => {
+                button.addEventListener("click", () => {
+                    claimEvidenceFilter = button.dataset.claimEvidenceFilter || "all";
+                    renderDetail();
+                });
+            });
+            document.getElementById("claimRoleFilter")?.addEventListener("change", (event) => {
+                claimRoleFilter = event.target.value || "all";
+                renderDetail();
+            });
             document.querySelectorAll("[data-papertrail-filter]").forEach((button) => {
                 button.addEventListener("click", () => {
                     papertrailTypeFilter = button.dataset.papertrailFilter || "all";
@@ -8237,6 +8545,7 @@
                 row.querySelector(".claim-confirm")?.addEventListener("click", () => updateClaim(row, "confirm").catch((error) => showToast(error.message)));
                 row.querySelector(".claim-dismiss")?.addEventListener("click", () => updateClaim(row, "dismiss").catch((error) => showToast(error.message)));
                 row.querySelector(".claim-reopen")?.addEventListener("click", () => updateClaim(row, "reopen").catch((error) => showToast(error.message)));
+                row.querySelector(".claim-save")?.addEventListener("click", () => updateClaim(row, "update").catch((error) => showToast(error.message)));
             });
             document.querySelectorAll(".evidence-link-row").forEach((row) => {
                 row.querySelector(".evidence-link-confirm")?.addEventListener("click", () => updateEvidenceLink(row, "confirm").catch((error) => showToast(error.message)));
@@ -8318,10 +8627,17 @@
                 if (!selectedCaseId || !statement) return showToast("Add a claim statement first.");
                 await apiFetch(`/api/cases/${selectedCaseId}/claims`, {
                     method: "POST",
-                    body: JSON.stringify({ statement, asserted_by: "Robert" })
+                    body: JSON.stringify({
+                        statement,
+                        asserted_by: document.getElementById("claimAssertedBy")?.value.trim() || "user",
+                        position_role: document.getElementById("claimPositionRole")?.value || "unknown",
+                        subject_party: document.getElementById("claimSubjectParty")?.value.trim() || "",
+                        claim_type: document.getElementById("claimType")?.value || "factual",
+                        materiality: document.getElementById("claimMateriality")?.value || "medium"
+                    })
                 });
                 showToast("Claim added for review.");
-                await loadCaseDetail(selectedCaseId);
+                await refreshActiveLedger({ silent: true });
             });
             document.getElementById("sourceImportButton")?.addEventListener("click", async () => {
                 const status = document.getElementById("sourceImportStatus");
@@ -8440,11 +8756,12 @@
         }
 
         async function loadCaseDetail(caseId) {
-            const [caseData, docs, timeline, claims, evidence, contradictions, missingEvidence, deadlines, obligations, loops, approvals, drafts, reviewQueue, operatingState, papertrail, summary, comprehension, redLine, bundle, audit, googleJobs, caseAnalysis, caseAnalysisJobs] = await Promise.all([
+            const [caseData, docs, timeline, claims, positions, evidence, contradictions, missingEvidence, deadlines, obligations, loops, approvals, drafts, reviewQueue, operatingState, papertrail, summary, comprehension, redLine, bundle, audit, googleJobs, caseAnalysis, caseAnalysisJobs] = await Promise.all([
                 apiFetch(`/api/cases/${caseId}`),
                 apiFetch(`/api/cases/${caseId}/documents`),
                 apiFetch(`/api/cases/${caseId}/timeline`),
                 apiFetch(`/api/cases/${caseId}/claims`),
+                apiFetch(`/api/cases/${caseId}/positions`),
                 apiFetch(`/api/cases/${caseId}/evidence`),
                 apiFetch(`/api/cases/${caseId}/contradictions`),
                 apiFetch(`/api/cases/${caseId}/missing-evidence`),
@@ -8471,6 +8788,7 @@
                 documents: docs.documents || [],
                 timeline: timeline.timeline || [],
                 claims: claims.claims || [],
+                positionMatrix: positions,
                 evidenceLinks: evidence.evidence_links || [],
                 contradictions: contradictions.contradictions || [],
                 missingEvidence: missingEvidence.missing_evidence || [],

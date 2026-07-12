@@ -36,6 +36,11 @@ from sqlalchemy.orm import declarative_base, relationship, scoped_session, sessi
 Base = declarative_base()
 
 
+CLAIM_EVIDENCE_RELATIONSHIPS = {"supports", "disputes", "context"}
+CLAIM_POSITION_ROLES = {"client", "counterparty", "institution", "court", "third_party", "source", "unknown"}
+CLAIM_MATERIALITY_LEVELS = {"low", "medium", "high", "critical"}
+
+
 def utcnow() -> _dt.datetime:
     return _dt.datetime.now(_dt.timezone.utc).replace(tzinfo=None)
 
@@ -244,7 +249,10 @@ class LegalClaim(Base):
     id = Column(Integer, primary_key=True)
     case_id = Column(Integer, ForeignKey("legal_cases.id"), nullable=False, index=True)
     asserted_by = Column(String(255), default="user")
+    position_role = Column(String(80), default="unknown")
+    subject_party = Column(String(255), default="")
     claim_type = Column(String(80), default="factual")
+    materiality = Column(String(40), default="medium")
     statement = Column(Text, nullable=False)
     status = Column(String(80), default="unreviewed")
     confidence = Column(Float, default=0.0)
@@ -601,23 +609,31 @@ class LegalLedger:
     def _ensure_additive_schema(self) -> None:
         """Add safe nullable/defaulted columns to databases created by older LARO versions."""
         inspector = inspect(self.engine)
-        if "case_events" not in inspector.get_table_names():
-            return
-        existing = {column["name"] for column in inspector.get_columns("case_events")}
-        additions = {
-            "event_kind": "VARCHAR(80) NOT NULL DEFAULT 'event'",
-            "actor": "VARCHAR(255) NOT NULL DEFAULT ''",
-            "action": "VARCHAR(120) NOT NULL DEFAULT ''",
-            "affected_party": "VARCHAR(255) NOT NULL DEFAULT ''",
+        table_additions = {
+            "case_events": {
+                "event_kind": "VARCHAR(80) NOT NULL DEFAULT 'event'",
+                "actor": "VARCHAR(255) NOT NULL DEFAULT ''",
+                "action": "VARCHAR(120) NOT NULL DEFAULT ''",
+                "affected_party": "VARCHAR(255) NOT NULL DEFAULT ''",
+            },
+            "legal_claims": {
+                "position_role": "VARCHAR(80) NOT NULL DEFAULT 'unknown'",
+                "subject_party": "VARCHAR(255) NOT NULL DEFAULT ''",
+                "materiality": "VARCHAR(40) NOT NULL DEFAULT 'medium'",
+            },
         }
-        missing = [(name, definition) for name, definition in additions.items() if name not in existing]
-        if not missing:
-            return
-        table_name = self.engine.dialect.identifier_preparer.quote("case_events")
+        known_tables = set(inspector.get_table_names())
         with self.engine.begin() as connection:
-            for name, definition in missing:
-                column_name = self.engine.dialect.identifier_preparer.quote(name)
-                connection.execute(sql_text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {definition}"))
+            for raw_table_name, additions in table_additions.items():
+                if raw_table_name not in known_tables:
+                    continue
+                existing = {column["name"] for column in inspector.get_columns(raw_table_name)}
+                table_name = self.engine.dialect.identifier_preparer.quote(raw_table_name)
+                for name, definition in additions.items():
+                    if name in existing:
+                        continue
+                    column_name = self.engine.dialect.identifier_preparer.quote(name)
+                    connection.execute(sql_text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {definition}"))
 
     def close(self) -> None:
         self.Session.remove()
@@ -881,18 +897,18 @@ class LegalLedger:
                     )
 
             for claim in session.query(LegalClaim).filter(LegalClaim.case_id.in_(case_ids)).all():
-                if matches(claim.statement, claim.asserted_by, claim.claim_type, claim.status):
+                if matches(claim.statement, claim.asserted_by, claim.position_role, claim.subject_party, claim.claim_type, claim.materiality, claim.status):
                     add_result(
                         results,
                         "claim",
                         case_by_id[claim.case_id],
                         claim.id,
                         claim.statement[:96],
-                        snippet(claim.statement, claim.asserted_by, claim.claim_type, claim.status),
+                        snippet(claim.statement, claim.asserted_by, claim.position_role, claim.subject_party, claim.claim_type, claim.materiality, claim.status),
                         target="claims",
                         queue_type="claim" if claim.status in {"needs_review", "unreviewed"} else None,
                         item_id=claim.id,
-                        metadata={"status": claim.status, "asserted_by": claim.asserted_by},
+                        metadata={"status": claim.status, "asserted_by": claim.asserted_by, "position_role": claim.position_role, "materiality": claim.materiality},
                     )
 
             for item in session.query(Contradiction).filter(Contradiction.case_id.in_(case_ids)).all():
@@ -1167,7 +1183,7 @@ class LegalLedger:
             supported_claim_ids = {
                 link.target_id
                 for link in evidence_links
-                if link.target_type == "claim" and link.relationship not in {"rejected_suggestion", "needs_review"}
+                if link.target_type == "claim" and link.relationship == "supports" and link.user_confirmed
             }
             timeline_needs_review = [item for item in timeline if not item.user_confirmed]
             evidence_needs_review = [
@@ -2081,7 +2097,9 @@ class LegalLedger:
                 target = LegalClaim(
                     case_id=case_id,
                     asserted_by="case_analysis",
+                    position_role="source",
                     claim_type="cross_document_observation",
+                    materiality="medium",
                     statement=item.description,
                     status="needs_review",
                     confidence=0.0,
@@ -2260,14 +2278,26 @@ class LegalLedger:
             return timeline
 
     def add_claim(self, case_id: int, data: Dict[str, Any], actor: str = "system") -> Optional[Dict[str, Any]]:
+        statement = str(data.get("statement") or data.get("description") or "").strip()
+        if not statement:
+            raise ValueError("Claim statement is required")
+        position_role = str(data.get("position_role") or "unknown").strip().lower()
+        if position_role not in CLAIM_POSITION_ROLES:
+            raise ValueError("Claim position_role must be client, counterparty, institution, court, third_party, source, or unknown")
+        materiality = str(data.get("materiality") or "medium").strip().lower()
+        if materiality not in CLAIM_MATERIALITY_LEVELS:
+            raise ValueError("Claim materiality must be low, medium, high, or critical")
         with self.session_scope() as session:
             if not session.get(LegalCase, case_id):
                 return None
             claim = LegalClaim(
                 case_id=case_id,
                 asserted_by=data.get("asserted_by") or "user",
+                position_role=position_role,
+                subject_party=data.get("subject_party") or "",
                 claim_type=data.get("claim_type") or "factual",
-                statement=data.get("statement") or data.get("description") or "",
+                materiality=materiality,
+                statement=statement,
                 status=data.get("status") or "unreviewed",
                 confidence=float(data.get("confidence") or 0.0),
             )
@@ -2291,9 +2321,17 @@ class LegalLedger:
                 return None
             before = self._serialize_claim(claim)
 
-            for key in ("asserted_by", "claim_type", "statement"):
-                if key in data and data[key] not in {None, ""}:
-                    setattr(claim, key, data[key])
+            position_role = str(data.get("position_role") or claim.position_role or "unknown").strip().lower()
+            materiality = str(data.get("materiality") or claim.materiality or "medium").strip().lower()
+            if position_role not in CLAIM_POSITION_ROLES:
+                raise ValueError("Claim position_role must be client, counterparty, institution, court, third_party, source, or unknown")
+            if materiality not in CLAIM_MATERIALITY_LEVELS:
+                raise ValueError("Claim materiality must be low, medium, high, or critical")
+
+            for key in ("asserted_by", "position_role", "subject_party", "claim_type", "materiality", "statement"):
+                if key in data and data[key] is not None and (key == "subject_party" or data[key] != ""):
+                    value = position_role if key == "position_role" else materiality if key == "materiality" else data[key]
+                    setattr(claim, key, value)
             if "confidence" in data and data["confidence"] not in {None, ""}:
                 claim.confidence = float(data["confidence"])
 
@@ -2312,6 +2350,15 @@ class LegalLedger:
             return self._serialize_claim(claim)
 
     def add_evidence_link(self, case_id: int, data: Dict[str, Any], actor: str = "system") -> Optional[Dict[str, Any]]:
+        target_type = str(data.get("target_type") or "claim").strip().lower()
+        relationship = str(data.get("relationship") or "supports").strip().lower()
+        snippet = str(data.get("snippet") or "").strip()
+        user_confirmed = bool(data.get("user_confirmed", False))
+        if target_type == "claim":
+            if not snippet:
+                raise ValueError("Claim evidence requires an exact source snippet")
+            if user_confirmed and relationship not in CLAIM_EVIDENCE_RELATIONSHIPS:
+                raise ValueError("Confirmed claim evidence must be classified as supports, disputes, or context")
         with self.session_scope() as session:
             if not session.get(LegalCase, case_id):
                 return None
@@ -2319,13 +2366,13 @@ class LegalLedger:
                 session,
                 case_id=case_id,
                 document_id=data.get("document_id"),
-                target_type=data.get("target_type") or "claim",
+                target_type=target_type,
                 target_id=data.get("target_id"),
-                snippet=data.get("snippet") or "",
-                relationship=data.get("relationship") or "supports",
+                snippet=snippet,
+                relationship=relationship,
                 strength=data.get("strength") or "medium",
                 source_confidence=float(data.get("source_confidence") or 0.0),
-                user_confirmed=bool(data.get("user_confirmed", False)),
+                user_confirmed=user_confirmed,
             )
             self._audit(session, case_id, "EvidenceLink", link.id, "created", actor, {}, self._serialize_evidence_link(link), "medium")
             return self._serialize_evidence_link(link)
@@ -2348,9 +2395,20 @@ class LegalLedger:
                 return None
             before = self._serialize_evidence_link(link)
 
+            target_type = str(data.get("target_type") or link.target_type or "").strip().lower()
+            relationship = str(data.get("relationship") or link.relationship or "").strip().lower()
+            snippet = str(data.get("snippet") if "snippet" in data else link.snippet or "").strip()
+            confirming = action == "confirm" or (action == "update" and bool(data.get("user_confirmed", link.user_confirmed)))
+            if target_type == "claim":
+                if not snippet:
+                    raise ValueError("Claim evidence requires an exact source snippet")
+                if confirming and relationship not in CLAIM_EVIDENCE_RELATIONSHIPS:
+                    raise ValueError("Choose whether this source supports, disputes, or contextualizes the claim before confirming it")
+
             for key in ("target_type", "snippet", "relationship", "strength"):
                 if key in data and data[key] not in {None, ""}:
-                    setattr(link, key, data[key])
+                    value = target_type if key == "target_type" else relationship if key == "relationship" else snippet if key == "snippet" else data[key]
+                    setattr(link, key, value)
             if "target_id" in data and data["target_id"] not in {None, ""}:
                 link.target_id = int(data["target_id"])
             if "document_id" in data and data["document_id"] not in {None, ""}:
@@ -2360,8 +2418,7 @@ class LegalLedger:
 
             if action == "confirm":
                 link.user_confirmed = True
-                if link.relationship in {"needs_review", "rejected_suggestion"}:
-                    link.relationship = data.get("relationship") or "supports"
+                link.relationship = relationship
             elif action == "reject":
                 link.user_confirmed = False
                 link.relationship = "rejected_suggestion"
@@ -3388,7 +3445,16 @@ class LegalLedger:
                     edges.append({"from": f"document:{event.created_from_document_id}", "to": f"event:{event.id}", "type": "supports", "review_status": review_status, "user_confirmed": event.user_confirmed})
 
             for claim in session.query(LegalClaim).filter_by(case_id=case_id).all():
-                nodes.append({"id": f"claim:{claim.id}", "type": "claim", "label": claim.statement[:120], "status": claim.status})
+                nodes.append({
+                    "id": f"claim:{claim.id}",
+                    "type": "claim",
+                    "label": claim.statement[:120],
+                    "status": claim.status,
+                    "asserted_by": claim.asserted_by,
+                    "position_role": claim.position_role,
+                    "subject_party": claim.subject_party,
+                    "materiality": claim.materiality,
+                })
                 edges.append({"from": f"case:{case.id}", "to": f"claim:{claim.id}", "type": "asserts"})
 
             linked_obligation_sources = set()
@@ -3506,14 +3572,28 @@ class LegalLedger:
                 link for link in evidence_links
                 if link["target_type"] == "claim" and link.get("relationship") != "rejected_suggestion"
             ]
-            confirmed_claim_ids = {
+            confirmed_support_ids = {
                 link["target_id"] for link in active_claim_links
-                if link.get("user_confirmed") and link.get("relationship") != "needs_review"
+                if link.get("user_confirmed") and link.get("relationship") == "supports"
+            }
+            confirmed_dispute_ids = {
+                link["target_id"] for link in active_claim_links
+                if link.get("user_confirmed") and link.get("relationship") == "disputes"
+            }
+            confirmed_context_ids = {
+                link["target_id"] for link in active_claim_links
+                if link.get("user_confirmed") and link.get("relationship") == "context"
             }
             proposed_claim_ids = {
                 link["target_id"] for link in active_claim_links
-                if not link.get("user_confirmed") or link.get("relationship") == "needs_review"
+                if not link.get("user_confirmed") or link.get("relationship") not in CLAIM_EVIDENCE_RELATIONSHIPS
             }
+            mixed_claim_ids = confirmed_support_ids & confirmed_dispute_ids
+            supported_claim_ids = confirmed_support_ids - mixed_claim_ids
+            disputed_claim_ids = confirmed_dispute_ids - mixed_claim_ids
+            contextual_claim_ids = confirmed_context_ids - confirmed_support_ids - confirmed_dispute_ids
+            needs_review_claim_ids = proposed_claim_ids - confirmed_support_ids - confirmed_dispute_ids - confirmed_context_ids
+            classified_claim_ids = confirmed_support_ids | confirmed_dispute_ids | confirmed_context_ids | proposed_claim_ids
             analysis_review_items = [
                 self._serialize_case_analysis_review_item(item)
                 for item in session.query(CaseAnalysisReviewItem)
@@ -3529,9 +3609,13 @@ class LegalLedger:
                     "source_documents": documents,
                 },
                 "claims": {
-                    "supported": [claim for claim in claims if claim["id"] in confirmed_claim_ids],
-                    "proposed_support": [claim for claim in claims if claim["id"] not in confirmed_claim_ids and claim["id"] in proposed_claim_ids],
-                    "unsupported": [claim for claim in claims if claim["id"] not in confirmed_claim_ids and claim["id"] not in proposed_claim_ids],
+                    "supported": [claim for claim in claims if claim["id"] in supported_claim_ids],
+                    "mixed": [claim for claim in claims if claim["id"] in mixed_claim_ids],
+                    "disputed": [claim for claim in claims if claim["id"] in disputed_claim_ids],
+                    "contextualized": [claim for claim in claims if claim["id"] in contextual_claim_ids],
+                    "needs_evidence_review": [claim for claim in claims if claim["id"] in needs_review_claim_ids],
+                    "proposed_support": [claim for claim in claims if claim["id"] in needs_review_claim_ids],
+                    "unsupported": [claim for claim in claims if claim["id"] not in classified_claim_ids],
                     "all": claims,
                 },
                 "risk_review": {
@@ -3606,9 +3690,14 @@ class LegalLedger:
             "source_documents": source_documents,
             "chronology": source_linked_events,
             "positions": {
-                "supported": [item for item in source_linked_claims if item["supporting_sources"]],
-                "proposed_support": [item for item in source_linked_claims if not item["supporting_sources"] and item["proposed_sources"]],
-                "unsupported": [item for item in source_linked_claims if not item["supporting_sources"] and not item["proposed_sources"]],
+                "supported": [item for item in source_linked_claims if item["evidence_state"] == "supported"],
+                "mixed": [item for item in source_linked_claims if item["evidence_state"] == "mixed"],
+                "disputed": [item for item in source_linked_claims if item["evidence_state"] == "disputed"],
+                "contextualized": [item for item in source_linked_claims if item["evidence_state"] == "context"],
+                "needs_evidence_review": [item for item in source_linked_claims if item["evidence_state"] == "needs_review"],
+                "evidence_review_pending": [item for item in source_linked_claims if item["proposed_sources"]],
+                "proposed_support": [item for item in source_linked_claims if item["evidence_state"] == "needs_review"],
+                "unsupported": [item for item in source_linked_claims if item["evidence_state"] == "unsupported"],
                 "all": source_linked_claims,
             },
             "review": {
@@ -3631,6 +3720,60 @@ class LegalLedger:
             "generated_at": _iso(utcnow()),
         }
 
+    def case_position_matrix(self, case_id: int) -> Optional[Dict[str, Any]]:
+        """Group source-assessed claims by the party or institution asserting them."""
+        dossier = self.case_comprehension_dossier(case_id)
+        if not dossier:
+            return None
+
+        claims = dossier["positions"]["all"]
+        groups_by_key: Dict[str, Dict[str, Any]] = {}
+        for claim in claims:
+            asserted_by = str(claim.get("asserted_by") or "Unknown source").strip()
+            position_role = str(claim.get("position_role") or "unknown").strip().lower()
+            key = f"{position_role}:{asserted_by.lower()}"
+            group = groups_by_key.setdefault(key, {
+                "key": key,
+                "asserted_by": asserted_by,
+                "position_role": position_role,
+                "claims": [],
+                "counts": {"supported": 0, "mixed": 0, "disputed": 0, "context": 0, "needs_review": 0, "unsupported": 0},
+            })
+            group["claims"].append(claim)
+            evidence_state = claim.get("evidence_state") or "unsupported"
+            group["counts"][evidence_state] = group["counts"].get(evidence_state, 0) + 1
+
+        materiality_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+        role_order = {"client": 0, "counterparty": 1, "institution": 2, "court": 3, "third_party": 4, "source": 5, "unknown": 6}
+        groups = list(groups_by_key.values())
+        for group in groups:
+            group["claims"].sort(key=lambda item: (
+                materiality_order.get(item.get("materiality") or "medium", 2),
+                item.get("id") or 0,
+            ))
+        groups.sort(key=lambda item: (role_order.get(item["position_role"], 7), item["asserted_by"].lower()))
+
+        counts = {"all": len(claims), "supported": 0, "mixed": 0, "disputed": 0, "context": 0, "needs_review": 0, "unsupported": 0}
+        for claim in claims:
+            evidence_state = claim.get("evidence_state") or "unsupported"
+            counts[evidence_state] = counts.get(evidence_state, 0) + 1
+        counts["open_review"] = len([claim for claim in claims if claim.get("status") in {"unreviewed", "needs_review"}])
+        counts["pending_source_classification"] = sum(len(claim.get("proposed_sources") or []) for claim in claims)
+
+        return {
+            "case_id": case_id,
+            "counts": counts,
+            "groups": groups,
+            "claims": claims,
+            "legal_safety": {
+                **dossier["legal_safety"],
+                "claim_review_does_not_establish_truth": True,
+                "confirmed_relationship_required_for_evidence_state": True,
+                "mixed_evidence_is_not_presented_as_supported": True,
+            },
+            "generated_at": _iso(utcnow()),
+        }
+
     def red_line_thread(self, case_id: int) -> Optional[Dict[str, Any]]:
         summary = self.case_summary(case_id)
         if not summary:
@@ -3641,6 +3784,10 @@ class LegalLedger:
         chronology = dossier.get("chronology") or summary["factual_reconstruction"]["known_events"]
         positions = dossier.get("positions") or {
             "supported": summary["claims"]["supported"],
+            "mixed": summary["claims"].get("mixed", []),
+            "disputed": summary["claims"].get("disputed", []),
+            "contextualized": summary["claims"].get("contextualized", []),
+            "needs_evidence_review": summary["claims"].get("needs_evidence_review", []),
             "unsupported": summary["claims"]["unsupported"],
             "all": summary["claims"]["all"],
         }
@@ -3678,14 +3825,21 @@ class LegalLedger:
 
         def claim_line(claim: Dict[str, Any]) -> str:
             sources = claim.get("supporting_sources") or []
+            disputing_sources = claim.get("disputing_sources") or []
+            context_sources = claim.get("context_sources") or []
             proposed_sources = claim.get("proposed_sources") or []
+            source_parts = []
             if sources:
-                source_bits = "; ".join(source_ref(item) for item in sources[:3])
-            elif proposed_sources:
-                source_bits = "proposed evidence: " + "; ".join(source_ref(item) for item in proposed_sources[:3])
-            else:
-                source_bits = "source: not linked"
-            return f"- {claim.get('asserted_by') or 'unknown'}: {claim.get('statement') or ''} [{source_bits}]"
+                source_parts.append("supports: " + "; ".join(source_ref(item) for item in sources[:3]))
+            if disputing_sources:
+                source_parts.append("disputes: " + "; ".join(source_ref(item) for item in disputing_sources[:3]))
+            if context_sources:
+                source_parts.append("context: " + "; ".join(source_ref(item) for item in context_sources[:3]))
+            if proposed_sources:
+                source_parts.append("pending classification: " + "; ".join(source_ref(item) for item in proposed_sources[:3]))
+            source_bits = " | ".join(source_parts) or "source: not linked"
+            role = claim.get("position_role") or "unknown role"
+            return f"- {claim.get('asserted_by') or 'unknown'} ({role}): {claim.get('statement') or ''} [{source_bits}]"
 
         def review_line(item: Dict[str, Any]) -> str:
             return f"- {item.get('type') or item.get('warning_type') or item.get('deadline_type') or 'review'}: {item.get('title') or item.get('description') or item.get('suggested_action') or 'Review item'} ({item.get('status') or 'needs_review'})"
@@ -3718,8 +3872,15 @@ class LegalLedger:
         lines.append(f"- Documents linked: {len(source_documents)}")
         lines.append(f"- Confirmed supported claims: {len(positions.get('supported', []))}")
         lines.extend(claim_line(claim) for claim in positions.get("supported", [])[:8])
-        lines.append(f"- Claims with proposed support: {len(positions.get('proposed_support', []))}")
-        lines.extend(claim_line(claim) for claim in positions.get("proposed_support", [])[:8])
+        lines.append(f"- Mixed support and dispute: {len(positions.get('mixed', []))}")
+        lines.extend(claim_line(claim) for claim in positions.get("mixed", [])[:8])
+        lines.append(f"- Confirmed disputed claims: {len(positions.get('disputed', []))}")
+        lines.extend(claim_line(claim) for claim in positions.get("disputed", [])[:8])
+        lines.append(f"- Context-only claims: {len(positions.get('contextualized', []))}")
+        lines.extend(claim_line(claim) for claim in positions.get("contextualized", [])[:8])
+        pending_positions = positions.get("evidence_review_pending", positions.get("needs_evidence_review", positions.get("proposed_support", [])))
+        lines.append(f"- Claims with evidence awaiting classification: {len(pending_positions)}")
+        lines.extend(claim_line(claim) for claim in pending_positions[:8])
         lines.append(f"- Unsupported claims: {len(positions.get('unsupported', []))}")
         lines.extend(claim_line(claim) for claim in positions.get("unsupported", [])[:8])
 
@@ -3857,21 +4018,45 @@ class LegalLedger:
         links: List[Dict[str, Any]],
     ) -> Dict[str, Any]:
         active_links = [link for link in links if link.get("relationship") != "rejected_suggestion"]
-        confirmed_links = [
-            link for link in active_links
-            if link.get("user_confirmed") and link.get("relationship") != "needs_review"
-        ]
+        supporting_links = [link for link in active_links if link.get("user_confirmed") and link.get("relationship") == "supports"]
+        disputing_links = [link for link in active_links if link.get("user_confirmed") and link.get("relationship") == "disputes"]
+        context_links = [link for link in active_links if link.get("user_confirmed") and link.get("relationship") == "context"]
+        confirmed_links = supporting_links + disputing_links + context_links
         proposed_links = [link for link in active_links if link not in confirmed_links]
+        if supporting_links and disputing_links:
+            evidence_state = "mixed"
+        elif supporting_links:
+            evidence_state = "supported"
+        elif disputing_links:
+            evidence_state = "disputed"
+        elif context_links:
+            evidence_state = "context"
+        elif proposed_links:
+            evidence_state = "needs_review"
+        else:
+            evidence_state = "unsupported"
         return {
             "id": claim.get("id"),
             "asserted_by": claim.get("asserted_by"),
+            "position_role": claim.get("position_role"),
+            "subject_party": claim.get("subject_party"),
             "claim_type": claim.get("claim_type"),
+            "materiality": claim.get("materiality"),
             "statement": claim.get("statement"),
             "status": claim.get("status"),
             "confidence": claim.get("confidence"),
+            "evidence_state": evidence_state,
             "supporting_sources": [
                 self._source_summary(document_lookup.get(link.get("document_id")), [link])
-                for link in confirmed_links
+                for link in supporting_links
+            ],
+            "disputing_sources": [
+                self._source_summary(document_lookup.get(link.get("document_id")), [link])
+                for link in disputing_links
+            ],
+            "context_sources": [
+                self._source_summary(document_lookup.get(link.get("document_id")), [link])
+                for link in context_links
             ],
             "proposed_sources": [
                 self._source_summary(document_lookup.get(link.get("document_id")), [link])
@@ -3882,6 +4067,7 @@ class LegalLedger:
     def _source_summary(self, document: Optional[Dict[str, Any]], links: List[Dict[str, Any]]) -> Dict[str, Any]:
         link = links[0] if links else {}
         return {
+            "evidence_link_id": link.get("id"),
             "document_id": document.get("document_id") if document else link.get("document_id"),
             "title": (document or {}).get("title") or (document or {}).get("original_filename") or "Source document",
             "source_type": (document or {}).get("source_type"),
@@ -3889,6 +4075,7 @@ class LegalLedger:
             "snippet": link.get("snippet") or "",
             "relationship": link.get("relationship") or "",
             "strength": link.get("strength") or "",
+            "source_confidence": link.get("source_confidence") or 0.0,
             "user_confirmed": bool(link.get("user_confirmed", False)),
         }
 
@@ -3918,10 +4105,13 @@ class LegalLedger:
             actions.append({"target": "documents", "label": "Review unreadable documents", "detail": f"{len(unreadable)} document(s) need text extraction or manual review."})
         if any(event.get("review_status") == "needs_review" for event in events):
             actions.append({"target": "timeline", "label": "Confirm timeline suggestions", "detail": "Review extracted events before relying on the chronology."})
-        proposed_support = [claim for claim in claims if not claim.get("supporting_sources") and claim.get("proposed_sources")]
-        unsupported_claims = [claim for claim in claims if not claim.get("supporting_sources") and not claim.get("proposed_sources")]
+        proposed_support = [claim for claim in claims if claim.get("proposed_sources")]
+        disputed_claims = [claim for claim in claims if claim.get("evidence_state") in {"disputed", "mixed"}]
+        unsupported_claims = [claim for claim in claims if claim.get("evidence_state") == "unsupported"]
         if proposed_support:
-            actions.append({"target": "evidence", "label": "Confirm proposed evidence links", "detail": f"{len(proposed_support)} claim(s) have cited evidence that still needs confirmation."})
+            actions.append({"target": "evidence", "label": "Classify proposed evidence links", "detail": f"{len(proposed_support)} claim(s) have cited evidence that must be classified as support, dispute, or context."})
+        if disputed_claims:
+            actions.append({"target": "claims", "label": "Review disputed positions", "detail": f"{len(disputed_claims)} claim(s) have confirmed disputing evidence and must not be presented as established facts."})
         if unsupported_claims:
             actions.append({"target": "claims", "label": "Add evidence to unsupported claims", "detail": "Claims without source links should not be treated as proven facts."})
         if open_review_items:
@@ -4351,6 +4541,13 @@ class LegalLedger:
     ) -> EvidenceLink:
         if not document_id or not target_id:
             raise ValueError("Evidence links require document_id and target_id")
+        document = session.get(CaseDocument, int(document_id))
+        if not document or document.case_id != case_id:
+            raise ValueError("Evidence document must belong to this case")
+        if target_type == "claim":
+            claim = session.get(LegalClaim, int(target_id))
+            if not claim or claim.case_id != case_id:
+                raise ValueError("Evidence claim must belong to this case")
         link = EvidenceLink(
             case_id=case_id,
             document_id=document_id,
@@ -4424,6 +4621,8 @@ class LegalLedger:
                 case_id=case_id,
                 target_type="claim",
                 target_id=claim.id,
+                relationship="supports",
+                user_confirmed=True,
             ).first()
             warning = session.query(MissingEvidenceWarning).filter_by(
                 case_id=case_id,
@@ -5145,7 +5344,20 @@ class LegalLedger:
         }
 
     def _serialize_claim(self, claim: LegalClaim) -> Dict[str, Any]:
-        return {"id": claim.id, "case_id": claim.case_id, "asserted_by": claim.asserted_by, "claim_type": claim.claim_type, "statement": claim.statement, "status": claim.status, "confidence": claim.confidence, "created_at": _iso(claim.created_at)}
+        return {
+            "id": claim.id,
+            "case_id": claim.case_id,
+            "asserted_by": claim.asserted_by,
+            "position_role": claim.position_role,
+            "subject_party": claim.subject_party,
+            "claim_type": claim.claim_type,
+            "materiality": claim.materiality,
+            "statement": claim.statement,
+            "status": claim.status,
+            "confidence": claim.confidence,
+            "created_at": _iso(claim.created_at),
+            "updated_at": _iso(claim.updated_at),
+        }
 
     def _serialize_evidence_link(self, link: EvidenceLink) -> Dict[str, Any]:
         return {"id": link.id, "case_id": link.case_id, "document_id": link.document_id, "target_type": link.target_type, "target_id": link.target_id, "snippet": link.snippet, "relationship": link.relationship, "strength": link.strength, "source_confidence": link.source_confidence, "user_confirmed": link.user_confirmed, "created_at": _iso(link.created_at)}
