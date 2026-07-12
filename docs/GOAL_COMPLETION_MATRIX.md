@@ -89,6 +89,16 @@ Last updated: 2026-07-06 (after phases 000–070).
 | 018 | Rate limits, cooldowns & provider quotas | **Implemented** | `enforceRateLimit` applied to login, case-create, matching, outreach (+ existing search). Residual: distributed store (Redis) documented. |
 | 019 | Audit logging & event history | **Implemented** | Real filtering; wired into case CRUD + outreach + login; user-scoped `audit.list` read path. |
 | 020 | User-facing dashboard & next-action | **Partial** | Real `dashboard.nextActions` derived from case state (evidence/status/urgency). Residual: surface in UI + exception dashboard (109). |
+| 071 | User guide & in-app help | **Implemented** | `server/help.ts` + `help.topics/topic` (ordered topics incl. disclaimer); `docs/USER_GUIDE.md`. Tested. |
+| 072 | Troubleshooting & error catalog | **Implemented** | `server/errorCatalog.ts` + `help.errorCatalog` (code→message/cause/remedy); `docs/TROUBLESHOOTING.md`. Tested. |
+| 073 | UI action audit | **Implemented** | `docs/UI_ACTION_AUDIT.md` — found 14 renderer-referenced routers with no backend (broken UI actions) + billing/agent method gaps. |
+| 074 | Backend endpoint usage audit | **Implemented** | `docs/API_USAGE_AUDIT.md` — 46 routers/187 procedures; called-but-missing, mounted-but-unused, honest empty stubs mapped. |
+| 075 | Documentation truthfulness audit | **Implemented** | `docs/DOC_TRUTHFULNESS_AUDIT.md` — claims cross-checked vs code+tests; no overstatement (historical Docker/MySQL fixed in 004). |
+| 076 | Technical debt register | **Implemented** | `docs/TECH_DEBT.md` — 14 ranked items (D1 dead routers, D3 send, D4 token crypto…). |
+| 077 | Bug hunt log | **Implemented** | `docs/BUG_HUNT_LOG.md` — 7 real bugs found+fixed (GDPR orphans, LIKE wildcard, classification, …). |
+| 078 | Red-team loop 1 — isolation & erasure | **Implemented** | GDPR erasure now purges caseId-scoped children (`server/gdpr.ts`); test proves outreach rows gone. Residual: storage-blob sweep (D3). |
+| 079 | Red-team loop 2 — info disclosure | **Implemented** | `system.providerChecklist` made `protectedProcedure`; test asserts UNAUTHORIZED for anon. `docs/RED_TEAM.md`. |
+| 080 | Red-team loop 3 — abuse/DoS/supply-chain | **Partial** | Confirmed guards hold (adversarial/fileSafety/state-machine tests); residual findings (token crypto D4, CSRF/CORS D5, npm audit D7) tracked. |
 
 Note: phases 000–006/008/009 mark their **own deliverable** complete. 007 and 010
 are honestly **Partial** — real improvements landed, but named residual items
@@ -104,5 +114,7 @@ remain and are tracked in `docs/SECURITY.md` §5 and `docs/FRONTEND_ARCHITECTURE
 | 076–099 | Debt register, bug log, red-team loops, user sims, value/realism reviews, traceability, task graph, worklog, resume-safety, stabilization gates, DoD, fresh-clone, manual evidence, no-excuses search, completion matrix, final report, final response, maintenance, roadmap | Missing → Partial (worklog/checkpoints/matrix now started) |
 | 100–115 | Provider cleanup, debug bundle, retention, prod migration, emergency stop, onboarding, roles, confidence display, decision minimization, exception dashboard, safe retries, ambiguous-action, versioning, regression baseline, maintenance review, operator-readiness | mostly Missing |
 
-**Approximate tally across all 116 phases:** Implemented ~60 · Partial ~46 · Missing ~8 · Blocked 0 · N/A ~2.
-(Through phase 070: invariants, pre-action safety review, provider checklist, threat model, DPIA, supply-chain, licenses, CI gates, release process, operator runbook.)
+**Approximate tally across all 116 phases:** Implemented ~68 · Partial ~48 · Missing ~6 · Blocked 0 · N/A ~2.
+(Through phase 080: + user guide, troubleshooting/error catalog, UI-action audit, endpoint-usage audit, doc-truthfulness audit, tech-debt register, bug-hunt log, and 3 red-team loops — 2 real bugs fixed: GDPR-erasure orphans + providerChecklist auth.)
+
+_Last updated: 2026-07-06 (phases 071–080)._

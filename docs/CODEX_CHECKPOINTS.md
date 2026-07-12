@@ -177,3 +177,31 @@ component tests (041 follow-up).
 **Next safe action:** the real outreach **send** (scaffolded + gated), then 071–075
 (user guide, troubleshooting, UI/endpoint/doc audits) and triage the npm-audit
 advisories (066) + add a top-level LICENSE (067).
+
+---
+
+## Checkpoint 10 — 2026-07-06 — Phases 071–080
+
+**Branch:** `Phase-Imp`.
+
+**Done:** 071 in-app help (`server/help.ts`, `help.topics/topic`) + USER_GUIDE;
+072 error catalog (`server/errorCatalog.ts`, `help.errorCatalog`) + TROUBLESHOOTING;
+073 UI-action audit (found **14 renderer routers with no backend** = broken UI
+actions; + billing/agent method gaps); 074 endpoint-usage audit (46 routers /
+187 procedures; called-but-missing / mounted-but-unused / honest empty stubs);
+075 doc-truthfulness audit (no overstatement); 076 tech-debt register (14 ranked);
+077 bug-hunt log (7 real bugs); 078–080 three red-team loops.
+
+**Real bugs fixed this batch (not just documented):**
+- **078 (High/privacy):** GDPR erasure left caseId-scoped child rows (outreach,
+  gaps, patterns…) orphaned. `deleteUserData` now purges them for the user's cases
+  first. Proven by test (outreach rows gone after erasure).
+- **079 (Low/disclosure):** `system.providerChecklist` was public → now
+  `protectedProcedure`. Test asserts UNAUTHORIZED for anon.
+
+**Verified:** server tsc clean; `npx vitest run tests/backend/phase071_080.test.ts`
+→ 4/4 passed. (080 residuals — token crypto D4, CSRF/CORS D5, npm-audit D7 —
+tracked in TECH_DEBT, not fixed here.)
+
+**Next safe action:** remediate D1 (hide/implement the 14 dead-router UI screens)
+and the real outreach **send** (still scaffolded + flag-gated), then 081+.

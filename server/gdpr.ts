@@ -88,17 +88,45 @@ export async function deleteUserData(userId: string): Promise<{ deleted: Record<
 
   const tables = listUserTables(sqlite);
   const userScoped = tables.filter((t) => t !== "users" && tableColumns(sqlite, t).includes("userId"));
+  // Phase 078 (red-team fix): rows keyed only by caseId (outreach_status,
+  // email_activity, communication_gaps, expected_documents, suspicious_patterns,
+  // legal_inferences, case_strength_analysis, …) are NOT userId-scoped, so a
+  // userId-only delete left them orphaned after the user's cases were removed —
+  // incomplete GDPR erasure. We now collect the user's case ids first and purge
+  // every caseId-scoped child row for those cases.
+  const caseScoped = tables.filter(
+    (t) => t !== "cases" && !tableColumns(sqlite, t).includes("userId") && tableColumns(sqlite, t).includes("caseId")
+  );
 
   const deleted: Record<string, number> = {};
   const tx = sqlite.transaction(() => {
+    // 1. Which cases belong to this user (captured before anything is deleted)?
+    const userCaseIds = (sqlite.prepare("SELECT id FROM cases WHERE userId = ?").all(userId) as Array<{ id: string }>).map((r) => r.id);
+
+    // 2. Purge caseId-scoped children for those cases.
+    if (userCaseIds.length > 0) {
+      const placeholders = userCaseIds.map(() => "?").join(",");
+      for (const table of caseScoped) {
+        try {
+          const info = sqlite.prepare(`DELETE FROM "${table}" WHERE caseId IN (${placeholders})`).run(...userCaseIds);
+          if (info.changes) deleted[table] = info.changes;
+        } catch (e) {
+          console.warn(`[GDPR] delete: skipped caseId child ${table}:`, e instanceof Error ? e.message : e);
+        }
+      }
+    }
+
+    // 3. Delete userId-scoped rows (includes cases).
     for (const table of userScoped) {
       try {
         const info = sqlite.prepare(`DELETE FROM "${table}" WHERE userId = ?`).run(userId);
-        if (info.changes) deleted[table] = info.changes;
+        if (info.changes) deleted[table] = (deleted[table] ?? 0) + info.changes;
       } catch (e) {
         console.warn(`[GDPR] delete: skipped ${table}:`, e instanceof Error ? e.message : e);
       }
     }
+
+    // 4. Delete the user record itself.
     const userInfo = sqlite.prepare(`DELETE FROM "users" WHERE id = ?`).run(userId);
     if (userInfo.changes) deleted.users = userInfo.changes;
   });

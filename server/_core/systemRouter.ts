@@ -1,4 +1,4 @@
-import { router, publicProcedure } from './trpc';
+import { router, publicProcedure, protectedProcedure } from './trpc';
 import { ENV } from './env';
 
 export const systemRouter = router({
@@ -29,7 +29,9 @@ export const systemRouter = router({
   // integrations are configured (by env presence) WITHOUT exposing any secret
   // value — only booleans + the names of the required env vars. Lets an operator
   // see at a glance what still needs credentials before a feature will work.
-  providerChecklist: publicProcedure.query(() => {
+  // Phase 079 (red-team): require auth — even the "which integrations exist"
+  // signal should not be exposed to unauthenticated callers.
+  providerChecklist: protectedProcedure.query(() => {
     const has = (v: string | undefined) => !!(v && v.length > 0);
     const items = [
       { provider: 'AI (LLM)', category: 'ai', requiredEnv: ['OPENAI_API_KEY | ANTHROPIC_API_KEY | GOOGLE_GEMINI_API_KEY | FORGE_API_KEY'],

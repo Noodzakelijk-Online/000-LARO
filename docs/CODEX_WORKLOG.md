@@ -387,3 +387,24 @@ Built a real test harness `tests/helpers/app.ts` (`bootTestApp` + `makeCaller` v
 ### What remains after this batch
 - Phases 000–004 are documentation-and-integrity phases; the **product-behaviour** gaps they document (fake matching, missing classification, no real send, IDOR, default secrets, secrets-in-installer) are scheduled for Stage A–B phases (006, 007, 008, 011, 012, 014, 025, 026). No behaviour was changed in this batch beyond repo cleanup, the new smoke test, and truthful docs.
 - Changes are **not yet committed** — awaiting owner review (per repository policy, commits happen on request).
+
+## Batch: Phases 071–080 — docs, audits & two red-team fixes (2026-07-06)
+
+Real code:
+- **071** `server/help.ts` + `server/routers/help.ts` (`help.topics/topic`) — ordered
+  in-app help topics incl. the not-legal-advice disclaimer.
+- **072** `server/errorCatalog.ts` (`help.errorCatalog`) — code→message/cause/remedy.
+- **078 (red-team, High):** fixed incomplete GDPR erasure in `server/gdpr.ts` —
+  caseId-scoped children (outreach_status, communication_gaps, expected_documents,
+  suspicious_patterns, legal_inferences, case_strength_analysis, email_activity)
+  were orphaned; now purged for the user's cases before deleting userId rows + user.
+- **079 (red-team, Low):** `system.providerChecklist` → `protectedProcedure`.
+- Tests: `tests/backend/phase071_080.test.ts` (4/4) — help ordering, error catalog,
+  providerChecklist auth, GDPR-erasure child cleanup.
+
+Audits/docs: USER_GUIDE, TROUBLESHOOTING, UI_ACTION_AUDIT (14 broken renderer
+routers), API_USAGE_AUDIT (46 routers/187 procedures), DOC_TRUTHFULNESS_AUDIT,
+TECH_DEBT (14 ranked), BUG_HUNT_LOG (7 bugs), RED_TEAM (3 loops).
+
+Verified: server tsc clean; targeted vitest 4/4. Honest residuals: 080 loop-3
+findings (token crypto, CSRF/CORS, npm audit) documented+tracked, not fixed.

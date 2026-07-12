@@ -30,6 +30,7 @@ import { autoCollectionRouter } from "./autoCollection";
 import { googleDriveRouter } from "./googleDrive";
 import { notificationsRouter } from "./notifications";
 import { featureFlagsRouter } from "./featureFlags";
+import { helpRouter } from "./help";
 import { adminRouter } from "./admin";
 import { auditRouter } from "./audit";
 import { enforceRateLimit, RATE_LIMITS } from "../rateLimit";
@@ -84,6 +85,7 @@ export const appRouter = router({
   googleDrive: googleDriveRouter,
   notifications: notificationsRouter,
   featureFlags: featureFlagsRouter, // Phase 058
+  help: helpRouter, // Phase 071/072
 
   // Phase 056 — SaaS readiness WITHOUT forced billing. Core features work on the
   // free tier; Stripe is optional and unconfigured by default. This endpoint
