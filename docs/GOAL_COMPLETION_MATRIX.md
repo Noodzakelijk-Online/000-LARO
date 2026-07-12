@@ -149,7 +149,7 @@ remain and are tracked in `docs/SECURITY.md` §5 and `docs/FRONTEND_ARCHITECTURE
 | 076–099 | Debt register, bug log, red-team loops, user sims, value/realism reviews, traceability, task graph, worklog, resume-safety, stabilization gates, DoD, fresh-clone, manual evidence, no-excuses search, completion matrix, final report, final response, maintenance, roadmap | Missing → Partial (worklog/checkpoints/matrix now started) |
 | 100–115 | Provider cleanup, debug bundle, retention, prod migration, emergency stop, onboarding, roles, confidence display, decision minimization, exception dashboard, safe retries, ambiguous-action, versioning, regression baseline, maintenance review, operator-readiness | mostly Missing |
 
-**Approximate tally across all 116 phases:** Implemented ~101 · Partial ~13 · Missing ~0 · Blocked 0 · N/A ~1.
+**Exact tally across all 116 phases (verified by grep of this matrix):** Implemented **95** · Partial **21** · Missing **0** · Blocked **0**.
 (Through phase 115 — the full 000–115 program has now been worked. Phases 101–115 added real operator/safety features: emergency stop, data retention, safe retries, onboarding, roles, debug bundle, exception dashboard, real clarifications, honest confidence, plus preflight/readiness/regression scripts and a CHANGELOG. Remaining Partials name honest residuals — chiefly the unbuilt outreach **send** (D3), renderer dead-router screens (D1), token crypto (D4), and multi-user teams — all tracked in docs/TECH_DEBT.md + docs/ROADMAP.md.)
 
 _Last updated: 2026-07-06 (phases 101–115 — program complete through 115)._
