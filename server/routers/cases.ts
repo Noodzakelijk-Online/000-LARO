@@ -163,6 +163,18 @@ export const casesRouter = router({
       };
     }),
 
+  // Phase 023 — export a case's evidence as a real ZIP package (manifest +
+  // per-item metadata + provenance hashes). Owner-scoped. Returns base64 so the
+  // renderer can save it as a .zip file.
+  exportZip: protectedProcedure
+    .input(z.object({ caseId: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      await assertCaseOwnership(input.caseId, ctx.user.id);
+      const { buildCaseZip } = await import("../evidenceExport");
+      const buf = await buildCaseZip(ctx.user.id, input.caseId);
+      return { format: "laro-case-zip/v1", filename: `case-${input.caseId}.zip`, bytes: buf.length, base64: buf.toString("base64") };
+    }),
+
   // Phase 023 — export the user's case list as CSV text (client-downloadable).
   exportCsv: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();

@@ -270,6 +270,16 @@ export const appRouter = router({
       return { success: true } as const;
     }),
 
+    // Phase 007 — revoke ALL sessions for the current user (e.g. after suspected
+    // compromise). Every outstanding JWT issued at/before now stops working.
+    logoutAllDevices: protectedProcedure.mutation(async ({ ctx }) => {
+      const { revokeUserSessions } = await import("../sessionRevocation");
+      await revokeUserSessions(ctx.user.id);
+      const cookieOptions = getSessionCookieOptions(ctx.req);
+      ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
+      return { success: true } as const;
+    }),
+
     // Step 1 of password reset: email the user a one-time code. Always returns
     // success regardless of whether the email exists, to avoid leaking which
     // addresses have accounts (no user enumeration).

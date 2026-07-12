@@ -117,5 +117,16 @@ export function initCronScheduler() {
     }, { retries: 0 });
   });
 
+  // Phase 027 — daily reminder sweep: creates user notifications for items needing
+  // attention (approval-pending, urgent-no-evidence). Idempotent per case/kind/day.
+  ensureStatus('reminders');
+  cron.schedule('0 8 * * *', () => {
+    void runJob('reminders', async () => {
+      const { runReminderSweep } = await import('./reminders');
+      const res = await runReminderSweep();
+      console.log(`[Cron] Reminder sweep: ${res.created} reminder(s) across ${res.users} user(s).`);
+    }, { retries: 1 });
+  });
+
   console.log('[Cron] Scheduled tasks loaded:', getJobStatus().map((j) => j.name).join(', '));
 }

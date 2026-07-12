@@ -12,6 +12,14 @@ import { and, desc, eq, sql } from "drizzle-orm";
  * results, outreach updates, etc.) through `userNotification.ts`.
  */
 export const notificationsRouter = router({
+  // Phase 027 — run the reminder sweep for the caller: creates notifications for
+  // items needing timely attention (approval-pending, urgent-no-evidence),
+  // idempotent per case/kind/day so repeated runs don't duplicate.
+  runReminders: protectedProcedure.mutation(async ({ ctx }) => {
+    const { runRemindersForUser } = await import("../reminders");
+    return runRemindersForUser(ctx.user.id);
+  }),
+
   list: protectedProcedure
     .input(z.object({ limit: z.number().min(1).max(200).optional().default(50) }))
     .query(async ({ ctx, input }) => {

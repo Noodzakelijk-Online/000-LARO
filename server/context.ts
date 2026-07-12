@@ -39,8 +39,10 @@ export const createContext = async ({
       useLocalDefaultFallback = true;
     } else {
       try {
-        const decoded = jwt.verify(token, ENV.JWT_SECRET) as { userId: string };
-        userId = decoded.userId;
+        const decoded = jwt.verify(token, ENV.JWT_SECRET) as { userId: string; iat?: number };
+        // Phase 007 — reject tokens revoked by a logout-all / reset event.
+        const { isTokenRevoked } = await import("./sessionRevocation");
+        if (!(await isTokenRevoked(decoded.userId, decoded.iat))) userId = decoded.userId;
       } catch {
         // invalid token
       }
@@ -49,8 +51,11 @@ export const createContext = async ({
 
   if (!userId && sessionToken) {
     try {
-      const decoded = jwt.verify(sessionToken, ENV.JWT_SECRET) as { userId: string };
-      userId = decoded.userId;
+      const decoded = jwt.verify(sessionToken, ENV.JWT_SECRET) as { userId: string; iat?: number };
+      const { isTokenRevoked } = await import("./sessionRevocation");
+      if (!(await isTokenRevoked(decoded.userId, decoded.iat))) {
+        userId = decoded.userId;
+      }
     } catch (error) {
       console.error("[Auth] Session verification failed:", error);
     }

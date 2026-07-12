@@ -459,3 +459,15 @@ only old audit logs, debug bundle redacted/admin-only, exceptions, clarification
 
 Verified: `npm run gate` 6/6 green; vitest 25 files / 165 passed / 9 todo.
 Honest residuals tracked (D3 send, D1 renderer, D4 crypto, teams). NOT end-to-end send.
+
+## Batch: Closing Partials with real code (2026-07-06)
+
+007/030/D4 GCM token crypto (server/crypto.ts); 007 JWT revocation
+(server/sessionRevocation.ts + auth.logoutAllDevices); 080/D5 CSRF+CORS
+(server/_core/csrf.ts); 015 evidence sha256 provenance; 023 zip export
+(server/evidenceExport.ts + cases.exportZip); 027 reminders (server/reminders.ts +
+notifications.runReminders + cron); 067 LICENSE.
+
+Tests: tests/backend/partials_hardening.test.ts (10/10). Gate 6/6 green; 26 files /
+175 passed. Matrix 95→102 Implemented, 21→14 Partial. Tech-debt D4/D5/D11 RESOLVED.
+Version 1.2.0 + CHANGELOG. Remaining Partials: renderer (D1/D2), send (D3), teams/external.

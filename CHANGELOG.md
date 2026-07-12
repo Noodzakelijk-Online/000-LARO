@@ -4,6 +4,21 @@ All notable changes to LARO are documented here. This project follows semantic
 versioning; dates are ISO. Version is sourced from `package.json` and surfaced by
 `system.appInfo` / `admin.debugBundle`.
 
+## [1.2.0] — 2026-07-06
+Closing Partial phases with real code (security & data hardening).
+
+### Added / Fixed
+- **Authenticated token crypto (007/030/D4):** AES-256-GCM via `server/crypto.ts`
+  (was unauthenticated CBC with a weak key); legacy values still decrypt.
+- **CSRF + strict CORS (080/D5):** `server/_core/csrf.ts` — origin guard on
+  mutations, never `*` with credentials.
+- **Session/JWT revocation (007):** `server/sessionRevocation.ts` +
+  `auth.logoutAllDevices`; verified in `context.ts`.
+- **Evidence provenance (015):** sha256 content hash persisted on evidence writes.
+- **ZIP evidence export (023):** `cases.exportZip` (real `archiver` package).
+- **Reminders (027):** `notifications.runReminders` + daily cron, idempotent.
+- **LICENSE (067):** top-level proprietary license file.
+
 ## [1.1.0] — 2026-07-06
 Phases 101–115: operator-readiness, safety controls, and lifecycle.
 

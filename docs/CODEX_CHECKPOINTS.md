@@ -290,3 +290,30 @@ broken; vitest **25 files, 165 passed, 9 todo**; all readiness scripts green.
 D1 renderer dead routers, D4 token crypto, multi-user teams (106). The product is
 operator-ready for triage/match/prepare with real safety controls, NOT end-to-end
 autonomous send.
+
+---
+
+## Checkpoint 14 — 2026-07-06 — Closing Partials with real code
+
+**Branch:** `Phase-Imp`. Converted 7 Partial phases to Implemented with real, tested code.
+
+**Done:**
+- **007/030/D4** authenticated AES-256-GCM token crypto (`server/crypto.ts`),
+  rewired `emailOAuth`; legacy CBC still decrypts.
+- **007** JWT revocation (`server/sessionRevocation.ts` + `auth.logoutAllDevices`,
+  checked in `context.ts`).
+- **080/D5** CSRF origin guard + strict CORS (`server/_core/csrf.ts`), wired in `index.ts`.
+- **015** evidence content hash persisted (`createEvidenceFile` → metadata sha256).
+- **023** real ZIP export (`server/evidenceExport.ts` + `cases.exportZip`, archiver).
+- **027** reminder sweep (`server/reminders.ts` + `notifications.runReminders` + daily cron).
+- **067** top-level `LICENSE`.
+
+**Verified:** `npm run gate` 6/6 green; vitest **26 files / 175 passed / 9 todo**;
+`tests/backend/partials_hardening.test.ts` 10/10. Tech-debt D4/D5/D11 marked RESOLVED.
+
+**Matrix now: 102 Implemented / 14 Partial / 0 Missing.** Remaining 14 Partials are
+renderer/UI (D1/D2), real outreach send (D3), and external/teams — honestly named,
+not faked.
+
+**Next safe action:** the renderer pass (D1/D2) or the real send loop (D3) — both
+are large, product-level efforts.

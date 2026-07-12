@@ -56,11 +56,36 @@ export async function getEvidenceFile(userId: string, id: string): Promise<Evide
 
 export async function createEvidenceFile(
   userId: string,
-  data: Partial<EvidenceFileRow> & { caseId: string; title: string; type: EvidenceFileRow["type"] }
+  data: Partial<EvidenceFileRow> & {
+    caseId: string;
+    title: string;
+    type: EvidenceFileRow["type"];
+    // Phase 015 — provenance: pass raw bytes to hash, or a precomputed sha256
+    // (e.g. the one returned by storeObject). The content hash is persisted in
+    // metadata so every evidence write carries verifiable provenance.
+    content?: Buffer | string;
+    contentHash?: string;
+  }
 ): Promise<string> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const id = data.id ?? randomUUID();
+
+  // Compute/attach the content hash (Phase 015). Fold it into the metadata JSON
+  // without dropping any metadata the caller already provided.
+  const { hashBuffer } = await import("./storage");
+  const contentHash = data.contentHash ?? (data.content != null ? hashBuffer(data.content) : undefined);
+  let metadata = data.metadata ?? null;
+  if (contentHash) {
+    let parsed: Record<string, unknown> = {};
+    if (typeof metadata === "string" && metadata) {
+      try { parsed = JSON.parse(metadata); } catch { parsed = { _raw: metadata }; }
+    }
+    parsed.contentHash = contentHash;
+    parsed.hashAlgo = "sha256";
+    metadata = JSON.stringify(parsed);
+  }
+
   await db.insert(evidence).values({
     id,
     caseId: data.caseId,
@@ -73,7 +98,7 @@ export async function createEvidenceFile(
     fileName: data.fileName ?? null,
     fileSize: data.fileSize ?? null,
     mimeType: data.mimeType ?? null,
-    metadata: data.metadata ?? null,
+    metadata,
     tags: data.tags ?? null,
     relevant: data.relevant ?? true,
     createdAt: new Date(),

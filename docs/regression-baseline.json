@@ -5,6 +5,7 @@
     "tests/acceptance/acceptance.test.ts",
     "tests/backend/criticalPath.backend.test.ts",
     "tests/backend/i18n.test.ts",
+    "tests/backend/partials_hardening.test.ts",
     "tests/backend/phase051_060.test.ts",
     "tests/backend/phase061_070.test.ts",
     "tests/backend/phase071_080.test.ts",
@@ -27,5 +28,5 @@
     "tests/smoke/phase021_030.smoke.test.ts",
     "tests/smoke/storage.smoke.test.ts"
   ],
-  "count": 25
+  "count": 26
 }

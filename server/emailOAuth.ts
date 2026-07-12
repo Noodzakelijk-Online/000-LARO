@@ -1,43 +1,23 @@
-import crypto from 'crypto';
 import { ENV } from './_core/env';
+import { encryptSecret, decryptSecret } from './crypto';
 
 /**
- * Token Encryption & OAuth Refresh Utilities
+ * Token Encryption & OAuth Refresh Utilities.
+ *
+ * Phase 007/030 (D4): token confidentiality now uses authenticated AES-256-GCM via
+ * `server/crypto.ts` (previously unauthenticated AES-256-CBC with a weak key).
+ * The function names are unchanged so all callers keep working; legacy CBC values
+ * still decrypt transparently until they are re-saved (and thereby upgraded).
  */
 
-const ALGORITHM = 'aes-256-cbc';
-const ENCRYPTION_KEY = Buffer.alloc(32, ENV.JWT_SECRET || 'fallback-secret-at-least-32-chars-long');
-const IV_LENGTH = 16;
-
-/**
- * Encrypt a token for storage in the database
- */
+/** Encrypt an OAuth token for storage (authenticated encryption). */
 export function encryptToken(text: string): string {
-  if (!text) return '';
-  const iv = crypto.randomBytes(IV_LENGTH);
-  const cipher = crypto.createCipheriv(ALGORITHM, ENCRYPTION_KEY, iv);
-  let encrypted = cipher.update(text);
-  encrypted = Buffer.concat([encrypted, cipher.final()]);
-  return iv.toString('hex') + ':' + encrypted.toString('hex');
+  return encryptSecret(text);
 }
 
-/**
- * Decrypt a token retrieved from the database
- */
+/** Decrypt a stored OAuth token (handles both the current and legacy schemes). */
 export function decryptToken(text: string): string {
-  if (!text) return '';
-  try {
-    const textParts = text.split(':');
-    const iv = Buffer.from(textParts.shift()!, 'hex');
-    const encryptedText = Buffer.from(textParts.join(':'), 'hex');
-    const decipher = crypto.createDecipheriv(ALGORITHM, ENCRYPTION_KEY, iv);
-    let decrypted = decipher.update(encryptedText);
-    decrypted = Buffer.concat([decrypted, decipher.final()]);
-    return decrypted.toString();
-  } catch (error) {
-    console.error('[emailOAuth] Token decryption failed:', error);
-    return text; // Return raw if decryption fails (fallback for legacy data)
-  }
+  return decryptSecret(text);
 }
 
 /**

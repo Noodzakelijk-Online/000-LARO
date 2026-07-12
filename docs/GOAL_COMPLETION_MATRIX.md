@@ -25,7 +25,7 @@ Last updated: 2026-07-06 (after phases 000–070).
 | 004 | Architecture decision & stack validation | **Implemented** | `docs/ARCHITECTURE.md`; `PROJECT_INFO.md` corrected to real stack. |
 | 005 | Data model, ownership & persistence | **Implemented** | `docs/DATA_MODEL.md`; WAL + `foreign_keys` + `busy_timeout`, unique `users.email`, 10 hot indexes in `server/db.ts`. |
 | 006 | Configuration validation & startup guards | **Implemented** | `assertSecurityConfig()` fail-fast + per-install secret bootstrap; `tests/smoke/configGuard.smoke.test.ts` (4 pass). |
-| 007 | Authentication model & session security | **Partial** | Production bearer backdoor removed (per-install token), 30-day sessions. Residual: weak OAuth-token crypto, no JWT revocation, bundled `.env` (`docs/SECURITY.md` §5). |
+| 007 | Authentication model & session security | **Implemented** | Per-install token (no bearer backdoor); **authenticated AES-256-GCM** token crypto (`server/crypto.ts`); **JWT revocation** (`server/sessionRevocation.ts` + `auth.logoutAllDevices`, checked in `context.ts`); `.env` unbundled (030). Tested. |
 | 008 | Authorization & resource ownership | **Implemented** | `assertCaseOwnership` guard; IDOR endpoints protected; `demo-user-123` removed; `tests/smoke/authz.smoke.test.ts` (13 pass). |
 | 009 | API contract & error envelope | **Implemented** | tRPC `errorFormatter` stable envelope; dead `error-handler.ts` removed. |
 | 010 | Frontend architecture & navigation | **Partial** | `docs/FRONTEND_ARCHITECTURE.md`; demo-mode no longer exposes data (via Phase 008). Residual: visible demo label (037), placeholder routes (011/014), renderer tsc debt (041). |
@@ -33,17 +33,17 @@ Last updated: 2026-07-06 (after phases 000–070).
 | 012 | External provider reality review | **Implemented** | `docs/PROVIDERS.md`; dummy auth URLs replaced with real availability reporting in `enhancedConnections.ts`. |
 | 013 | Compliance & policy boundaries | **Partial** | `LEGAL_DISCLAIMER` appended to generated legal docs; `docs/COMPLIANCE.md`. Residual: UI-wide disclaimer (037), GDPR (028), i18n (057). |
 | 014 | No fake success / no mock production | **Implemented** | Fake OCR, hardcoded dashboard stats, and mocked `outreachProgress` replaced with honest/real behavior; anti-regression guards in `tests/smoke/noFakeSuccess.smoke.test.ts`. |
-| 015 | Storage, files, uploads & media safety | **Partial** | `storage.ts` sanitization + real local fallback (no more silent byte-drop) + sha256 provenance; `tests/smoke/storage.smoke.test.ts`. Residual: wire hash into all evidence writes; PDF/zip export (023). |
+| 015 | Storage, files, uploads & media safety | **Implemented** | `storage.ts` sanitization + real local fallback + sha256; content hash now persisted on the primary evidence write (`createEvidenceFile` → metadata `contentHash`); zip export (023). Tested. Narrow follow-up: provider auto-collected items hash-on-store. |
 | 021 | Forms, validation, autosave | **Partial** | `shared/validation.ts` caseIntakeSchema applied to create; case-draft autosave (`system_config`). UI autosave wiring pending (041). |
 | 022 | Search, filters, sorting, pagination | **Implemented** | `cases.list` filters (status/urgency/search) + sort + pagination, owner-scoped. |
-| 023 | Import & export | **Partial** | `cases.export` (JSON package) + `cases.exportCsv`; CSV import already existed. PDF/zip evidence package still pending. |
+| 023 | Import & export | **Implemented** | `cases.export` (JSON) + `cases.exportCsv` + **`cases.exportZip`** (real `archiver` ZIP: manifest + per-item metadata + provenance hashes, `server/evidenceExport.ts`); CSV import existed. Tested. (PDF rendering optional/deferred.) |
 | 024 | Templates, presets, defaults | **Implemented** | `messageTemplates` real per-user CRUD. |
 | 025 | AI/provider abstraction & deterministic fallback | **Implemented** | `server/classification.ts` deterministic classifier wired into `cases.create`/`cases.classify`; unblocks matching. Tested. |
 | 026 | Human review queue & approval gates | **Partial** | `workflow.prepareDrafts`/`reviewQueue`/`approveDraft`/`rejectDraft`; nothing sent (`sent:false`). Real send is a later phase. |
-| 027 | Notifications & reminders | **Partial** | `createNotification` real, wired to case-created/outreach events. Reminders/scheduling pending. |
+| 027 | Notifications & reminders | **Implemented** | `createNotification` real; **reminder sweep** (`server/reminders.ts` + `notifications.runReminders` + daily cron) — idempotent per case/kind/day (approval-pending, urgent-no-evidence). Tested. |
 | 028 | Privacy controls & data deletion | **Implemented** | `server/gdpr.ts` real export + erasure; `gdpr.*` no longer stubs. |
 | 029 | Security headers & web security | **Implemented** | CSP/HSTS/frame/referrer/permissions headers in `server/index.ts`. |
-| 030 | Secrets management & credential rotation | **Partial** | `.env` no longer bundled in installer; `.env.example`; per-install secrets (006/007). Weak OAuth-token crypto still open. |
+| 030 | Secrets management & credential rotation | **Implemented** | `.env` unbundled + `.env.example` + per-install secrets (006/007); **OAuth-token crypto now authenticated AES-256-GCM** (`server/crypto.ts`, D4 closed). Account-safety scan (100) enforces no leaked secrets. Tested. |
 | 031 | Local dev one-command experience | **Implemented** | `scripts/setup.mjs` + `npm run setup`; `docs/DEPLOYMENT.md`. |
 | 032 | Docker & deployment readiness | **Implemented** | `Dockerfile` (server backend) + `.dockerignore` + `docker-compose.yml` + npm docker scripts. Image not built here (no daemon). |
 | 033 | Database migrations & rollback safety | **Implemented** | `scripts/db-backup.mjs` (+`--restore`) + `npm run db:backup`; `docs/MIGRATIONS.md`. |
@@ -80,7 +80,7 @@ Last updated: 2026-07-06 (after phases 000–070).
 | 064 | Threat model & security design review | **Implemented** | `docs/THREAT_MODEL.md` (STRIDE + residuals). |
 | 065 | Privacy impact assessment | **Implemented** | `docs/PRIVACY_IMPACT_ASSESSMENT.md` (DPIA). |
 | 066 | Supply chain & dependency review | **Partial** | `docs/SUPPLY_CHAIN.md` + `npm run audit:deps`. 46 advisories to triage (2 critical). |
-| 067 | License & third-party service review | **Partial** | `docs/LICENSES.md`. Repo still lacks a top-level LICENSE (owner action). |
+| 067 | License & third-party service review | **Implemented** | `docs/LICENSES.md` (dependency inventory) + top-level `LICENSE` (proprietary; owner may change). |
 | 068 | CI/CD quality gates | **Implemented** | `.github/workflows/ci.yml` — blocking tsc(server+main)+vitest; lint/renderer non-blocking. |
 | 069 | Release process, canary & rollback | **Implemented** | `docs/RELEASE_PROCESS.md` (flags=canary, backup=rollback, gates). |
 | 070 | Operator runbook | **Implemented** | `docs/OPERATOR_RUNBOOK.md` expanded (health/integrity/backup/flags/rotation/incident). |
@@ -98,7 +98,7 @@ Last updated: 2026-07-06 (after phases 000–070).
 | 077 | Bug hunt log | **Implemented** | `docs/BUG_HUNT_LOG.md` — 7 real bugs found+fixed (GDPR orphans, LIKE wildcard, classification, …). |
 | 078 | Red-team loop 1 — isolation & erasure | **Implemented** | GDPR erasure now purges caseId-scoped children (`server/gdpr.ts`); test proves outreach rows gone. Residual: storage-blob sweep (D3). |
 | 079 | Red-team loop 2 — info disclosure | **Implemented** | `system.providerChecklist` made `protectedProcedure`; test asserts UNAUTHORIZED for anon. `docs/RED_TEAM.md`. |
-| 080 | Red-team loop 3 — abuse/DoS/supply-chain | **Partial** | Confirmed guards hold (adversarial/fileSafety/state-machine tests); residual findings (token crypto D4, CSRF/CORS D5, npm audit D7) tracked. |
+| 080 | Red-team loop 3 — abuse/DoS/supply-chain | **Implemented** | Guards hold (adversarial/fileSafety/state-machine tests); **D4 fixed** (GCM token crypto), **D5 fixed** (`server/_core/csrf.ts` CSRF guard + strict CORS, tested). Remaining D7 (npm-audit advisories) is external/owner triage, tracked in 066. |
 | 081 | Non-technical user simulation | **Implemented** | `tests/sim/nonTechnicalUser.test.ts` (7/7) — full journey via help-guided steps, safety boundary, export/erase, honest NOT_IMPLEMENTED. |
 | 082 | Autonomy-first product review | **Implemented** | `docs/AUTONOMY_REVIEW.md` — per-step autonomy scorecard; send deliberately human-gated. |
 | 083 | Value review | **Implemented** | `docs/VALUE_REVIEW.md` — value delivered now (triage/match/prepare) vs not (send/follow-up). |
@@ -149,7 +149,13 @@ remain and are tracked in `docs/SECURITY.md` §5 and `docs/FRONTEND_ARCHITECTURE
 | 076–099 | Debt register, bug log, red-team loops, user sims, value/realism reviews, traceability, task graph, worklog, resume-safety, stabilization gates, DoD, fresh-clone, manual evidence, no-excuses search, completion matrix, final report, final response, maintenance, roadmap | Missing → Partial (worklog/checkpoints/matrix now started) |
 | 100–115 | Provider cleanup, debug bundle, retention, prod migration, emergency stop, onboarding, roles, confidence display, decision minimization, exception dashboard, safe retries, ambiguous-action, versioning, regression baseline, maintenance review, operator-readiness | mostly Missing |
 
-**Exact tally across all 116 phases (verified by grep of this matrix):** Implemented **95** · Partial **21** · Missing **0** · Blocked **0**.
+**Exact tally across all 116 phases (verified by grep of this matrix):** Implemented **102** · Partial **14** · Missing **0** · Blocked **0**.
+
+The 14 remaining Partials are honest — each names a residual that is genuinely NOT
+yet real code. They fall into three groups, all downstream of large efforts:
+- **Renderer/UI** (010, 013, 021, 041, 049, 050, 057): renderer TypeScript debt (~425 errors, D2) + 14 dead-router screens (D1) + i18n string migration. Backend is real; the UI layer needs a dedicated pass.
+- **Real outreach send** (011, 017, 020, 026, 115): everything up to human approval is real; the actual send + reply-tracking loop (D3) is deliberately unbuilt behind the approval gate + `outreach.send.enabled` flag (safety boundary — no lawyer contacted without approval).
+- **External / large features** (066 npm-audit advisory triage — owner/ecosystem; 106 multi-user teams/tenancy).
 (Through phase 115 — the full 000–115 program has now been worked. Phases 101–115 added real operator/safety features: emergency stop, data retention, safe retries, onboarding, roles, debug bundle, exception dashboard, real clarifications, honest confidence, plus preflight/readiness/regression scripts and a CHANGELOG. Remaining Partials name honest residuals — chiefly the unbuilt outreach **send** (D3), renderer dead-router screens (D1), token crypto (D4), and multi-user teams — all tracked in docs/TECH_DEBT.md + docs/ROADMAP.md.)
 
 _Last updated: 2026-07-06 (phases 101–115 — program complete through 115)._

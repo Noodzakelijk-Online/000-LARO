@@ -25,6 +25,7 @@ import express from 'express';
 import { createServer } from 'http';
 import { createExpressMiddleware } from '@trpc/server/adapters/express';
 import cookieParser from 'cookie-parser';
+import { corsMiddleware, csrfGuard } from './_core/csrf';
 
 import { appRouter } from './routers';
 import { createContext } from './context';
@@ -47,22 +48,9 @@ const httpServer = createServer(app);
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
 
-app.use((req, res, next) => {
-  const origin = req.headers.origin || '';
-  const allowed = [
-    'http://localhost:3000',
-    'http://localhost:5173',
-    'app://.',
-  ];
-  if (allowed.includes(origin) || isDev) {
-    res.setHeader('Access-Control-Allow-Origin', origin || '*');
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,Cookie');
-  }
-  if (req.method === 'OPTIONS') { res.sendStatus(200); return; }
-  next();
-});
+// Phase 080 (D5) — strict CORS (never `*` with credentials) + CSRF origin guard.
+app.use(corsMiddleware);
+app.use(csrfGuard);
 
 // ─── Security headers (Phase 029) ───────────────────────────────────────────
 // Applied to every response. No external dependency (helmet) is required.
