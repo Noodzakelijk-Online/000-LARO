@@ -109,6 +109,16 @@ Last updated: 2026-07-06 (after phases 000–070).
 | 088 | Context-loss resume safety | **Implemented** | `docs/RESUME_SAFETY.md` — read checkpoints→worklog→matrix→`npm run gate`→traceability; commit-per-batch. |
 | 089 | Progressive stabilization gates | **Implemented** | `scripts/stabilization-gate.mjs` + `npm run gate/verify` — fail-fast tsc→traceability→tests; renderer tsc non-blocking. |
 | 090 | No vanity work rule | **Implemented** | `docs/PROCESS_RULES.md` — adherence via task graph + honest matrix + gate; gaps surfaced (D1/D3) not faked. |
+| 091 | Feature-level definition of done | **Implemented** | `docs/DEFINITION_OF_DONE.md` — 7-point DoD applied to real features; core features pass, D1/D3 explicitly "not done". |
+| 092 | Fresh-clone dry run | **Implemented** | `docs/FRESH_CLONE.md` — real clone: source complete, no secrets leak, server tsc + suites green from clean checkout; setup documented. |
+| 093 | Manual verification evidence | **Implemented** | `docs/MANUAL_VERIFICATION.md` — captured real outputs of gate/tests/traceability/scans; states what was NOT manually verified. |
+| 094 | Final no-excuses search | **Implemented** | `scripts/no-excuses-scan.mjs` (in gate) — 0 actionable markers in runtime; `docs/NO_EXCUSES_SEARCH.md` triage. |
+| 095 | Completion matrix | **Implemented** | This document — honest per-phase status maintained every batch through 100. |
+| 096 | Final verification report | **Implemented** | `docs/FINAL_VERIFICATION_REPORT.md` — 000–100 status, real gate results, ranked known gaps, honest verdict. |
+| 097 | Final response requirements | **Implemented** | `docs/FINAL_RESPONSE.md` — rules + template for a truthful completion report. |
+| 098 | Post-completion maintenance plan | **Implemented** | `docs/MAINTENANCE_PLAN.md` — cadence, ownership, debt burn-down order. |
+| 099 | Roadmap & blocked items | **Implemented** | `docs/ROADMAP.md` — phases 101–115 + blocked items with unblock conditions. |
+| 100 | Real-provider cleanup & account safety | **Implemented** | `scripts/account-safety-check.mjs` (in gate) — 0 HIGH; `.env` unbundled/gitignored, no hardcoded secrets; `docs/ACCOUNT_SAFETY.md` cleanup checklist. |
 
 Note: phases 000–006/008/009 mark their **own deliverable** complete. 007 and 010
 are honestly **Partial** — real improvements landed, but named residual items
@@ -124,7 +134,7 @@ remain and are tracked in `docs/SECURITY.md` §5 and `docs/FRONTEND_ARCHITECTURE
 | 076–099 | Debt register, bug log, red-team loops, user sims, value/realism reviews, traceability, task graph, worklog, resume-safety, stabilization gates, DoD, fresh-clone, manual evidence, no-excuses search, completion matrix, final report, final response, maintenance, roadmap | Missing → Partial (worklog/checkpoints/matrix now started) |
 | 100–115 | Provider cleanup, debug bundle, retention, prod migration, emergency stop, onboarding, roles, confidence display, decision minimization, exception dashboard, safe retries, ambiguous-action, versioning, regression baseline, maintenance review, operator-readiness | mostly Missing |
 
-**Approximate tally across all 116 phases:** Implemented ~78 · Partial ~46 · Missing ~4 · Blocked 0 · N/A ~2.
-(Through phase 090: + non-technical user simulation test, autonomy/value/realism reviews, runnable traceability generator, task graph, resume-safety protocol, stabilization-gate command, and worklog/no-vanity process rules.)
+**Approximate tally across all 116 phases:** Implemented ~88 · Partial ~44 · Missing ~2 · Blocked 0 · N/A ~2.
+(Through phase 100: + feature DoD, real fresh-clone dry run, captured manual verification, runnable no-excuses scanner (0 actionable in runtime), final verification report, final-response rules, maintenance plan, roadmap, and account-safety scanner (0 HIGH). Phases 101–115 remain — see docs/ROADMAP.md.)
 
-_Last updated: 2026-07-06 (phases 081–090)._
+_Last updated: 2026-07-06 (phases 091–100)._

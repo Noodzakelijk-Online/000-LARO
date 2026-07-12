@@ -30,7 +30,9 @@
     "postinstall": "electron-rebuild -f -w better-sqlite3",
     "traceability": "node scripts/traceability.mjs --write",
     "gate": "node scripts/stabilization-gate.mjs",
-    "verify": "node scripts/stabilization-gate.mjs"
+    "verify": "node scripts/stabilization-gate.mjs",
+    "scan:no-excuses": "node scripts/no-excuses-scan.mjs --write",
+    "scan:safety": "node scripts/account-safety-check.mjs --write"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1022.0",

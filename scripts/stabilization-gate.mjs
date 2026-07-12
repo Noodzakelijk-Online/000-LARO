@@ -28,6 +28,8 @@ const BLOCKING = [
   { name: 'server typecheck', cmd: 'npx', args: ['tsc', '-p', 'tsconfig.server.json', '--noEmit'] },
   { name: 'main typecheck', cmd: 'npx', args: ['tsc', '-p', 'tsconfig.main.json', '--noEmit'] },
   { name: 'traceability', cmd: 'node', args: ['scripts/traceability.mjs', '--write'] },
+  { name: 'no-excuses scan', cmd: 'node', args: ['scripts/no-excuses-scan.mjs', '--write'] },
+  { name: 'account safety', cmd: 'node', args: ['scripts/account-safety-check.mjs', '--write'] },
   { name: 'tests', cmd: 'npx', args: ['vitest', 'run'] },
 ];
 

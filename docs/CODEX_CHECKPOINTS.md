@@ -232,3 +232,30 @@ files, 154 passed, 9 todo. Server+main tsc clean; traceability 0 broken.
 **Next safe action:** 091+ (feature-level DoD, fresh-clone dry run, manual
 verification evidence). Highest-leverage product work remains D1 (hide/implement
 the 14 dead-router UI screens) and D3 (real outreach send, still flag-gated).
+
+---
+
+## Checkpoint 12 — 2026-07-06 — Phases 091–100
+
+**Branch:** `Phase-Imp`.
+
+**Done (real code + grounded verification):**
+- **094** `scripts/no-excuses-scan.mjs` (in gate + `npm run scan:no-excuses`) —
+  splits actionable (TODO/FIXME) from review markers; **0 actionable in runtime**;
+  triaged review hits as honest; `docs/NO_EXCUSES_SEARCH.md`.
+- **100** `scripts/account-safety-check.mjs` (in gate + `npm run scan:safety`) —
+  **0 HIGH**: `.env` untracked/gitignored/unbundled, no hardcoded secrets;
+  `docs/ACCOUNT_SAFETY.md` + operator cleanup checklist.
+- **092** real fresh clone performed — source complete, no secret leak, server tsc
+  + suites green from clean checkout; `docs/FRESH_CLONE.md` (honestly notes the
+  symlinked-deps `main` tsc TS2742 artifact that does not occur with real `npm ci`).
+- **093** `docs/MANUAL_VERIFICATION.md` — captured real gate/test/scan outputs +
+  what was NOT manually verified (UI click-testing, send path).
+- **091** DoD, **095** matrix (maintained), **096** final verification report,
+  **097** final-response rules, **098** maintenance plan, **099** roadmap (101–115).
+
+**Verified:** `npm run gate` → 6 blocking gates green (server+main tsc, traceability
+0/101, no-excuses 0 actionable, account-safety 0 HIGH, vitest 24 files/154 passed).
+
+**Next safe action:** phases 101–115 (see docs/ROADMAP.md). Product blockers before
+any "autonomous outreach" claim: D1 (dead UI routers) and D3 (real send).

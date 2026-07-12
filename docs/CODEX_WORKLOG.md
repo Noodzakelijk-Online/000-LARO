@@ -423,3 +423,20 @@ Verified: `npm run gate` green (server+main tsc, traceability 0 broken, vitest 2
 files / 154 passed / 9 todo). Honest note: renderer tsc still carries known debt
 (D2) and the gate reports it as a non-blocking warning — which surfaces the D1
 dead-router references (unifiedInbox, billing.createCheckoutSession, …).
+
+## Batch: Phases 091–100 — final verification, scanners & fresh-clone (2026-07-06)
+
+Real code:
+- **094** `scripts/no-excuses-scan.mjs` — actionable vs review marker split; 0
+  actionable in runtime; wired into `npm run gate` (+ `scan:no-excuses`).
+- **100** `scripts/account-safety-check.mjs` — 0 HIGH; wired into gate (+ `scan:safety`).
+- **092** performed a real git clone into an isolated dir and verified build/test
+  of the tracked source (server tsc + user-sim + e2e green; no `.env` leak).
+
+Docs: DEFINITION_OF_DONE (091), FRESH_CLONE (092), MANUAL_VERIFICATION (093),
+NO_EXCUSES_SEARCH (094, generated), FINAL_VERIFICATION_REPORT (096), FINAL_RESPONSE
+(097), MAINTENANCE_PLAN (098), ROADMAP (099), ACCOUNT_SAFETY (100, generated).
+
+Verified: `npm run gate` → 6 blocking gates green (added no-excuses + account-safety
+gates this batch). vitest 24 files / 154 passed / 9 todo. Honest residuals unchanged
+and tracked (D1 dead routers, D3 send, D4 token crypto); renderer tsc still D2 debt.
