@@ -66,6 +66,12 @@
             display: flex;
             gap: 0.9rem;
             margin: 0;
+            min-width: 0;
+        }
+
+        #outreachCaseTitle {
+            min-width: 0;
+            overflow-wrap: anywhere;
         }
 
         .case-icon,
@@ -306,6 +312,11 @@
             display: none !important;
         }
 
+        body[data-outreach-depth="guided"] .focus-command-panel,
+        body[data-outreach-depth="expert"] .focus-command-panel {
+            display: none;
+        }
+
         body[data-outreach-depth="focus"] .subnav a:not([data-subnav="overview"]) {
             display: none;
         }
@@ -348,8 +359,12 @@
             display: grid;
             gap: 1rem;
             grid-column: 1 / -1;
-            grid-template-columns: 180px repeat(2, minmax(0, 1fr));
+            grid-template-columns: 150px minmax(180px, 1fr) repeat(3, minmax(0, 1fr));
             padding-top: 1rem;
+        }
+
+        .expert-controls[hidden] {
+            display: none;
         }
 
         .toggle-field {
@@ -376,6 +391,100 @@
             color: var(--outreach-muted);
             font-size: 1.05rem;
             margin: 0;
+        }
+
+        .source-panel {
+            border-bottom: 1px solid var(--outreach-border);
+            border-top: 1px solid var(--outreach-border);
+            display: grid;
+            gap: 0.85rem;
+            margin-bottom: 1.25rem;
+            padding: 1rem 0;
+        }
+
+        .source-panel[hidden] {
+            display: none;
+        }
+
+        .source-panel-main {
+            align-items: center;
+            display: flex;
+            gap: 1rem;
+            justify-content: space-between;
+        }
+
+        .source-panel-copy {
+            min-width: 0;
+        }
+
+        .source-panel-copy strong {
+            display: block;
+            font-size: 0.98rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .source-panel-copy p {
+            color: var(--outreach-muted);
+            font-size: 0.86rem;
+            line-height: 1.45;
+            margin: 0;
+        }
+
+        .source-filter-strip {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.45rem;
+        }
+
+        .source-filter-chip {
+            border: 1px solid var(--outreach-border);
+            border-radius: 999px;
+            color: var(--outreach-muted);
+            font-size: 0.78rem;
+            font-weight: 800;
+            padding: 0.3rem 0.6rem;
+        }
+
+        .source-filter-chip.is-applied {
+            border-color: rgba(95, 183, 173, 0.55);
+            color: var(--outreach-green);
+        }
+
+        .source-filter-chip.is-unresolved {
+            border-color: rgba(255, 107, 0, 0.55);
+            color: var(--outreach-orange);
+        }
+
+        .source-details {
+            color: var(--outreach-muted);
+            font-size: 0.84rem;
+        }
+
+        .source-details summary {
+            color: var(--dark-text-primary);
+            cursor: pointer;
+            font-weight: 800;
+        }
+
+        .source-detail-grid {
+            display: grid;
+            gap: 0.65rem;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            margin-top: 0.8rem;
+        }
+
+        .source-detail-row {
+            border-left: 2px solid var(--outreach-border);
+            line-height: 1.45;
+            padding-left: 0.7rem;
+        }
+
+        .source-detail-row strong {
+            color: var(--dark-text-primary);
+            display: block;
+            font-size: 0.76rem;
+            margin-bottom: 0.2rem;
+            text-transform: uppercase;
         }
 
         .result-list {
@@ -757,8 +866,61 @@
 
             .sidebar {
                 height: auto;
+                overflow-x: auto;
+                padding: 0.45rem 0;
                 position: static;
                 width: 100%;
+            }
+
+            .sidebar-menu {
+                align-items: center;
+                display: flex;
+                gap: 0.2rem;
+                margin: 0;
+                min-width: max-content;
+                padding: 0 0.65rem;
+            }
+
+            .sidebar-item {
+                display: none;
+                flex: 0 0 auto;
+                margin: 0;
+            }
+
+            .sidebar-item:nth-child(2),
+            .sidebar-item.outreach-nav-group {
+                display: flex;
+            }
+
+            .sidebar-link {
+                border-bottom: 2px solid transparent;
+                border-left: 0;
+                padding: 0.65rem 0.7rem;
+                white-space: nowrap;
+            }
+
+            .sidebar-link.active {
+                border-bottom-color: var(--outreach-orange);
+            }
+
+            .sidebar-icon {
+                display: none;
+            }
+
+            .outreach-nav-group {
+                align-items: center;
+                display: flex;
+            }
+
+            .outreach-nav-group > .sidebar-link {
+                display: none;
+            }
+
+            .outreach-nav-group .subnav {
+                flex-wrap: nowrap;
+                margin: 0;
+                padding-right: 0.65rem;
+                white-space: nowrap;
             }
 
             .outreach-shell {
@@ -768,7 +930,8 @@
 
             .case-bar,
             .page-heading,
-            .results-header {
+            .results-header,
+            .source-panel-main {
                 align-items: flex-start;
                 flex-direction: column;
             }
@@ -787,7 +950,8 @@
             .directory-discovery-row,
             .progress-row,
             .history-item,
-            .insight-list {
+            .insight-list,
+            .source-detail-grid {
                 grid-template-columns: 1fr;
             }
 
@@ -818,7 +982,7 @@
                 <li class="sidebar-item"><a href="dashboard_dark.html#documents" class="sidebar-link"><span class="sidebar-icon">E</span> Evidence</a></li>
                 <li class="sidebar-item"><a href="evidence_timeline.html" class="sidebar-link"><span class="sidebar-icon">T</span> Evidence Timeline</a></li>
                 <li class="sidebar-item"><a href="#" class="sidebar-link"><span class="sidebar-icon">G</span> Gap Analysis</a></li>
-                <li class="sidebar-item">
+                <li class="sidebar-item outreach-nav-group">
                     <a href="outreach.html" class="sidebar-link active"><span class="sidebar-icon">O</span> Outreach</a>
                     <div class="subnav" aria-label="Outreach sections">
                         <a href="#overview" data-subnav="overview">Overview</a>
@@ -925,11 +1089,12 @@
                 <section class="filter-panel" aria-label="Outreach filters">
                     <label>
                         <span class="field-label" id="primaryLabel">Case location</span>
-                        <input class="field-input" id="primaryInput" value="Amsterdam">
+                        <input class="field-input" id="primaryInput" placeholder="City or postcode">
                     </label>
                     <label>
                         <span class="field-label" id="fieldLabel">Legal field</span>
                         <select class="field-select" id="legalField">
+                            <option value="">Use case analysis</option>
                             <option value="ADMINISTRATIVE_LAW">Administrative law</option>
                             <option value="EMPLOYMENT_LAW">Employment law</option>
                             <option value="PROPERTY_LAW">Tenancy/property</option>
@@ -949,23 +1114,31 @@
                         <button class="btn btn-primary" id="refreshMatches">Refresh</button>
                     </div>
                     <div class="expert-controls expert-depth" aria-label="Advanced outreach matching controls">
-                        <label>
+                        <label class="lawyer-only">
                             <span class="field-label">Radius</span>
                             <select class="field-select" id="radiusKm">
+                                <option value="5">5 km</option>
+                                <option value="10">10 km</option>
                                 <option value="25">25 km</option>
                                 <option value="50" selected>50 km</option>
-                                <option value="100">100 km</option>
-                                <option value="250">250 km</option>
-                                <option value="999">National</option>
+                                <option value="56">National</option>
                             </select>
                         </label>
-                        <label class="toggle-field">
+                        <label class="lawyer-only">
+                            <span class="field-label">Lawyer or firm name</span>
+                            <input class="field-input" id="lawyerName" placeholder="Optional exact name">
+                        </label>
+                        <label class="toggle-field lawyer-only">
                             <input type="checkbox" id="legalAidOnly" checked>
                             Require financed legal aid
                         </label>
-                        <label class="toggle-field">
+                        <label class="toggle-field lawyer-only">
                             <input type="checkbox" id="preferAssociation" checked>
                             Prefer specialization association
+                        </label>
+                        <label class="toggle-field lawyer-only">
+                            <input type="checkbox" id="requireAssociation">
+                            Require relevant association
                         </label>
                     </div>
                 </section>
@@ -973,6 +1146,21 @@
                 <section class="results-header">
                     <h3 id="resultCount">Matched targets (0)</h3>
                     <span class="muted" id="sourceMode">no live data</span>
+                </section>
+
+                <section class="source-panel" id="sourcePanel" aria-label="Matching source" hidden>
+                    <div class="source-panel-main">
+                        <div class="source-panel-copy">
+                            <strong id="sourceTitle">Matching source</strong>
+                            <p id="sourceSummary"></p>
+                        </div>
+                        <a class="source-link" id="sourceSearchLink" href="#" target="_blank" rel="noopener">Open source search</a>
+                    </div>
+                    <div class="source-filter-strip" id="sourceFilterStrip"></div>
+                    <details class="source-details expert-depth">
+                        <summary>Source and ranking details</summary>
+                        <div class="source-detail-grid" id="sourceDetailGrid"></div>
+                    </details>
                 </section>
 
                 <section>
@@ -1057,7 +1245,22 @@
             guided: "Show category tabs and matching workflow without advanced tuning.",
             expert: "Expose granular filters and score breakdowns for deep review."
         };
-        const state = { activeTab: "overview", caseId: null, cases: [], matches: [], analytics: EMPTY_OUTREACH_ANALYTICS, depth: "focus", sourceDetails: {}, directoryTargets: [] };
+        const state = {
+            activeTab: "overview",
+            caseId: null,
+            cases: [],
+            matches: [],
+            analytics: EMPTY_OUTREACH_ANALYTICS,
+            depth: "focus",
+            sourceDetails: {},
+            sourceUrl: "",
+            directoryTargets: [],
+            matchRequestId: 0,
+            matchInFlight: false,
+            matchQueued: false,
+            filterDrafts: {}
+        };
+        let matchRefreshTimer = null;
 
         function targetAccountEmail() {
             const params = new URLSearchParams(window.location.search);
@@ -1066,6 +1269,40 @@
 
         function currentCaseId() {
             return state.caseId;
+        }
+
+        function normalizedCaseLegalField(caseItem = {}) {
+            const raw = String(caseItem.legal_domain || "").trim().toUpperCase().replace(/[\s-]+/g, "_");
+            if (["", "UNKNOWN", "GENERAL", "GENERAL_LAW"].includes(raw)) return "";
+            const aliases = {
+                TENANCY_LAW: "PROPERTY_LAW",
+                REAL_ESTATE_LAW: "PROPERTY_LAW",
+                CONSUMER_LAW: "CONTRACT_LAW",
+                LABOUR_LAW: "EMPLOYMENT_LAW"
+            };
+            return aliases[raw] || raw;
+        }
+
+        function saveFilterDraft(tab = state.activeTab) {
+            if (tab === "overview") return;
+            state.filterDrafts[tab] = {
+                primary: document.getElementById("primaryInput").value,
+                legalField: document.getElementById("legalField").value,
+                lawyerName: document.getElementById("lawyerName").value
+            };
+        }
+
+        function restoreFilterDraft(tab) {
+            const draft = state.filterDrafts[tab] || {};
+            const caseItem = activeCase() || {};
+            const field = draft.legalField ?? normalizedCaseLegalField(caseItem);
+            const legalField = document.getElementById("legalField");
+            if (Array.from(legalField.options).some((option) => option.value === field)) {
+                legalField.value = field;
+            }
+            const caseLocation = caseItem.postcode_or_city || caseItem.location || caseItem.city || "";
+            document.getElementById("primaryInput").value = draft.primary ?? (tab === "lawyers" ? caseLocation : "");
+            document.getElementById("lawyerName").value = draft.lawyerName ?? "";
         }
 
         function isDevelopmentQaCase(caseItem = {}) {
@@ -1132,12 +1369,15 @@
             state.caseId = Number(caseId) || null;
             state.matches = [];
             state.sourceDetails = {};
+            state.sourceUrl = "";
             state.directoryTargets = [];
+            state.filterDrafts = {};
             renderActiveCase();
+            if (state.activeTab !== "overview") restoreFilterDraft(state.activeTab);
             syncCaseUrl();
             await refreshAnalytics();
             if (state.activeTab !== "overview") {
-                await Promise.all([refreshMatches(), refreshDirectoryTargets()]);
+                await Promise.all([refreshMatches({ quiet: true }), refreshDirectoryTargets()]);
             }
         }
 
@@ -1207,7 +1447,7 @@
                         <p class="muted">${escapeHtml(target.subtype || target.target_type)} - ${escapeHtml(target.status)} - ${escapeHtml(target.source_label || target.source_url)}</p>
                     </div>
                     <div class="case-actions">
-                        <a class="source-link" href="${escapeHtml(target.source_url)}" target="_blank" rel="noopener">Source</a>
+                        ${safeExternalUrl(target.source_url) ? `<a class="source-link" href="${escapeHtml(safeExternalUrl(target.source_url))}" target="_blank" rel="noopener">Source</a>` : `<span class="muted">No source URL</span>`}
                         ${target.status === "needs_review" ? `<button class="btn btn-secondary" type="button" data-directory-action="approve" data-directory-id="${target.id}">Approve</button>` : ""}
                         ${target.status !== "archived" ? `<button class="btn btn-secondary" type="button" data-directory-action="archive" data-directory-id="${target.id}">Archive</button>` : ""}
                     </div>
@@ -1300,6 +1540,16 @@
             }[character]));
         }
 
+        function safeExternalUrl(value) {
+            if (!value) return "";
+            try {
+                const parsed = new URL(String(value), window.location.origin);
+                return ["http:", "https:"].includes(parsed.protocol) ? parsed.href : "";
+            } catch (error) {
+                return "";
+            }
+        }
+
         function barWidth(value, max) {
             return `${Math.max(4, Math.min(100, Math.round((Number(value || 0) / max) * 100)))}%`;
         }
@@ -1326,6 +1576,7 @@
         }
 
         function setActiveTab(tab) {
+            saveFilterDraft();
             if (tab !== "overview" && state.depth === "focus") {
                 setOutreachDepth(tab === "organizations" ? "expert" : "guided", { keepTab: true });
             }
@@ -1338,59 +1589,106 @@
             document.getElementById("matchingView").hidden = tab === "overview";
 
             if (tab === "overview") {
+                state.matchRequestId += 1;
+                state.matchQueued = false;
                 refreshAnalytics();
                 return;
             }
 
             document.getElementById("primaryLabel").textContent = tab === "lawyers" ? "Case location" : "Case angle";
-            document.getElementById("primaryInput").value = "";
+            document.getElementById("primaryInput").placeholder = tab === "lawyers" ? "City or postcode" : "Issue, audience, or angle";
             document.getElementById("fieldLabel").textContent = tab === "lawyers" ? "Legal field" : "Primary issue";
-            refreshMatches();
+            document.querySelector(".expert-controls").hidden = tab !== "lawyers";
+            restoreFilterDraft(tab);
+            refreshMatches({ quiet: true });
             refreshDirectoryTargets();
         }
 
         function payloadFromControls() {
             const targetType = state.activeTab === "organizations" ? "organization" : state.activeTab === "media" ? "media" : "lawyer";
+            const selectedLegalField = document.getElementById("legalField").value;
             return {
                 case_id: currentCaseId(),
                 target_type: targetType,
-                legal_fields: [document.getElementById("legalField").value],
+                legal_fields: selectedLegalField ? [selectedLegalField] : [],
                 evidence_topics: document.getElementById("primaryInput").value.split(/\s+/).filter(Boolean),
                 postcode_or_city: document.getElementById("primaryInput").value,
                 radius_km: Number(document.getElementById("radiusKm")?.value || 50),
                 requires_financed_legal_aid: Boolean(document.getElementById("legalAidOnly")?.checked),
                 prefer_specialization_association: Boolean(document.getElementById("preferAssociation")?.checked),
+                require_specialization_association: Boolean(document.getElementById("requireAssociation")?.checked),
+                lawyer_name: document.getElementById("lawyerName")?.value.trim() || "",
                 max_results: Number(document.getElementById("maxResults").value)
             };
         }
 
-        async function refreshMatches() {
+        function scheduleMatchRefresh() {
+            clearTimeout(matchRefreshTimer);
+            matchRefreshTimer = window.setTimeout(() => {
+                refreshMatches({ quiet: true }).catch(() => {});
+            }, 650);
+        }
+
+        async function refreshMatches(options = {}) {
+            clearTimeout(matchRefreshTimer);
+            matchRefreshTimer = null;
             const payload = payloadFromControls();
             const caseId = currentCaseId();
             if (!caseId) {
                 state.matches = [];
                 state.sourceDetails = { reason: "Select or create a persisted case before running outreach matching." };
+                state.sourceUrl = "";
                 renderMatches("case required");
                 return;
             }
 
+            if (state.matchInFlight) {
+                state.matchQueued = true;
+                state.matchRequestId += 1;
+                document.getElementById("sourceMode").textContent = "updating filters";
+                return;
+            }
+
+            state.matchInFlight = true;
+            const requestId = ++state.matchRequestId;
+            const refreshButton = document.getElementById("refreshMatches");
+            refreshButton.disabled = true;
+            refreshButton.textContent = "Matching...";
+            document.getElementById("matchingView").setAttribute("aria-busy", "true");
+            document.getElementById("sourceMode").textContent = "checking live source";
             const endpoint = state.activeTab === "lawyers" ? "/api/lawyers/match" : "/api/outreach/targets/match";
             try {
                 const body = await apiFetch(endpoint, {
                     method: "POST",
                     body: JSON.stringify(payload)
                 });
+                if (requestId !== state.matchRequestId) return;
                 state.matches = state.activeTab === "lawyers" ? body.matched_lawyers || [] : body.matched_targets || [];
                 state.sourceDetails = body.source_details || {};
+                state.sourceUrl = body.nova_search_url || state.sourceDetails.search_url || "";
                 renderMatches(body.source_mode || "api");
-                showToast(state.matches.length ? `${labelForTab(state.activeTab)} matches refreshed` : (state.sourceDetails.reason || "No live matches available"));
+                if (!options.quiet) {
+                    showToast(state.matches.length ? `${labelForTab(state.activeTab)} matches refreshed` : (state.sourceDetails.reason || "No live matches available"));
+                }
                 await refreshAnalytics();
             } catch (error) {
+                if (requestId !== state.matchRequestId) return;
                 state.matches = [];
                 state.sourceDetails = { reason: "The matching source could not be reached. No fallback data is shown." };
+                state.sourceUrl = "";
                 renderMatches("no live data");
                 await refreshAnalytics();
-                showToast("No live outreach matches available");
+                if (!options.quiet) showToast("No live outreach matches available");
+            } finally {
+                state.matchInFlight = false;
+                if (state.matchQueued) {
+                    state.matchQueued = false;
+                    window.setTimeout(() => refreshMatches({ quiet: true }).catch(() => {}), 0);
+                } else {
+                    refreshButton.disabled = false;
+                    refreshButton.textContent = "Refresh";
+                    document.getElementById("matchingView").removeAttribute("aria-busy");
+                }
             }
         }
 
@@ -1434,9 +1732,9 @@
             document.getElementById("analyticsSource").textContent = sourceMode;
             document.getElementById("analyticsMetrics").innerHTML = metrics.map((metric) => `
                 <article class="metric-card">
-                    <div class="metric-title"><h3>${metric.title}</h3><span class="metric-icon">${metric.icon}</span></div>
-                    <div class="metric-value">${metric.value}</div>
-                    <div class="metric-detail ${metric.tone || ""}">${metric.detail}</div>
+                    <div class="metric-title"><h3>${escapeHtml(metric.title)}</h3><span class="metric-icon">${escapeHtml(metric.icon)}</span></div>
+                    <div class="metric-value">${escapeHtml(metric.value)}</div>
+                    <div class="metric-detail ${metric.tone || ""}">${escapeHtml(metric.detail)}</div>
                 </article>
             `).join("");
 
@@ -1447,16 +1745,16 @@
                     <article class="progress-row">
                         <div>
                             <div class="progress-name">${categoryLabel(key)}</div>
-                            <div class="muted">${item.ready || 0} ready</div>
+                            <div class="muted">${escapeHtml(item.ready || 0)} ready</div>
                         </div>
                         <div>
                             <div class="progress-track"><i class="progress-fill" style="width:${Math.min(100, Math.max(0, Number(item.progress_percent || 0)))}%"></i></div>
                         </div>
                         <div class="progress-stats">
-                            <span>${item.matched || 0} matched</span>
-                            <span>${item.contacted || 0} contacted</span>
-                            <span>${item.responded || 0} responses</span>
-                            <span>${item.accepted || 0} accepted</span>
+                            <span>${escapeHtml(item.matched || 0)} matched</span>
+                            <span>${escapeHtml(item.contacted || 0)} contacted</span>
+                            <span>${escapeHtml(item.responded || 0)} responses</span>
+                            <span>${escapeHtml(item.accepted || 0)} accepted</span>
                         </div>
                     </article>
                 `;
@@ -1466,20 +1764,23 @@
             document.getElementById("outreachHistory").innerHTML = history.length ? history.map((item) => `
                 <article class="history-item">
                     <div>
-                        <h4>${item.title}</h4>
-                        <p class="muted">${categoryLabel(item.category || "lawyers")} - ${item.detail || item.status || "Activity recorded"}</p>
+                        <h4>${escapeHtml(item.title)}</h4>
+                        <p class="muted">${escapeHtml(categoryLabel(item.category || "lawyers"))} - ${escapeHtml(item.detail || item.status || "Activity recorded")}</p>
                     </div>
-                    <span class="chip positive">${item.status || "ready"}</span>
+                    <span class="chip positive">${escapeHtml(item.status || "ready")}</span>
                 </article>
             `).join("") : `<div class="empty-state is-visible"><div><strong>No outreach activity yet.</strong><br>Start matching to populate this overview.</div></div>`;
 
             const insights = analytics.insights || [];
-            document.getElementById("performanceInsights").innerHTML = insights.map((item) => `
-                <article class="insight-card" data-tone="${item.tone || "info"}">
-                    <h4>${item.title}</h4>
-                    <p class="muted">${item.detail}</p>
-                </article>
-            `).join("");
+            document.getElementById("performanceInsights").innerHTML = insights.map((item) => {
+                const tone = ["success", "warning", "info"].includes(item.tone) ? item.tone : "info";
+                return `
+                    <article class="insight-card" data-tone="${tone}">
+                        <h4>${escapeHtml(item.title)}</h4>
+                        <p class="muted">${escapeHtml(item.detail)}</p>
+                    </article>
+                `;
+            }).join("");
             renderFocusSummary(sourceMode);
         }
 
@@ -1497,9 +1798,80 @@
             ];
             progressStrip.innerHTML = stats.map((stat) => `
                 <article class="focus-stat">
-                    <strong>${stat.value}</strong>
-                    <span>${stat.label}</span>
+                    <strong>${escapeHtml(stat.value)}</strong>
+                    <span>${escapeHtml(stat.label)}</span>
                 </article>
+            `).join("");
+        }
+
+        function formatSourceTimestamp(value) {
+            if (!value) return "Not reported";
+            const parsed = new Date(value);
+            if (Number.isNaN(parsed.getTime())) return String(value);
+            return new Intl.DateTimeFormat("en-GB", {
+                dateStyle: "medium",
+                timeStyle: "short"
+            }).format(parsed);
+        }
+
+        function renderSourcePanel(sourceMode) {
+            const panel = document.getElementById("sourcePanel");
+            const details = state.sourceDetails || {};
+            const isNova = String(sourceMode || "").startsWith("nova_") || String(details.source || "").includes("NOvA");
+            const hasSourceState = Boolean(details.source || details.reason || isNova);
+            panel.hidden = !hasSourceState;
+            if (!hasSourceState) return;
+
+            const reportedTotal = Number(details.reported_total);
+            const hasReportedTotal = details.reported_total !== null && details.reported_total !== undefined && Number.isFinite(reportedTotal);
+            const inspected = Number(details.unique_candidate_count || state.matches.length || 0);
+            const pages = Number(details.pages_fetched || 0);
+            const sourceTitle = isNova ? "Official NOvA lawyer directory" : (details.source || labelForTab(state.activeTab));
+            let summary = details.reason || "Live source records ranked against the active case.";
+            if (isNova && hasReportedTotal) {
+                summary = `${reportedTotal} official result${reportedTotal === 1 ? "" : "s"}; LARO inspected ${inspected} across ${pages} page${pages === 1 ? "" : "s"} before local case ranking.`;
+                if (details.partial_results) summary += " The inspected window is partial.";
+            }
+            document.getElementById("sourceTitle").textContent = sourceTitle;
+            document.getElementById("sourceSummary").textContent = summary;
+
+            const sourceLink = document.getElementById("sourceSearchLink");
+            const sourceUrl = safeExternalUrl(state.sourceUrl || details.search_url || details.source_home_url || "");
+            sourceLink.hidden = !sourceUrl;
+            if (sourceUrl) sourceLink.href = sourceUrl;
+
+            const requested = details.filters_requested || {};
+            const applied = details.filters_applied || {};
+            const chips = [];
+            const addChip = (label, status) => chips.push({ label, status });
+            if (isNova) {
+                addChip("Legal area", applied.legal_area ? "applied" : "unresolved");
+                if (requested.lawyer_name) addChip(`Name: ${requested.lawyer_name}`, applied.lawyer_name ? "applied" : "unresolved");
+                if (requested.location) {
+                    addChip(`Location: ${requested.location}`, applied.location ? "applied" : "unresolved");
+                    addChip(requested.radius_km >= 56 ? "National radius" : `${requested.radius_km} km radius`, applied.radius ? "applied" : "unresolved");
+                }
+                if (requested.financed_legal_aid) addChip("Financed legal aid", applied.financed_legal_aid ? "applied" : "unresolved");
+                if (requested.require_specialization_association) {
+                    addChip("Required association", applied.specialization_association ? "applied" : "unresolved");
+                } else if (requested.prefer_specialization_association) {
+                    addChip("Association ranked", applied.specialization_ranking_preference ? "applied" : "neutral");
+                }
+            }
+            document.getElementById("sourceFilterStrip").innerHTML = chips.map((chip) => `
+                <span class="source-filter-chip ${chip.status === "applied" ? "is-applied" : chip.status === "unresolved" ? "is-unresolved" : ""}">${escapeHtml(chip.label)}</span>
+            `).join("");
+
+            const rows = [
+                ["Authority", details.source_authority || details.source || sourceMode],
+                ["Retrieved", formatSourceTimestamp(details.retrieved_at)],
+                ["Location", details.location_filter_note],
+                ["Specialization", details.specialization_filter_note],
+                ["Method", details.ranking_method],
+                ["Source limitation", details.source_notice]
+            ].filter(([, value]) => value);
+            document.getElementById("sourceDetailGrid").innerHTML = rows.map(([label, value]) => `
+                <div class="source-detail-row"><strong>${escapeHtml(label)}</strong>${escapeHtml(value)}</div>
             `).join("");
         }
 
@@ -1511,35 +1883,40 @@
             list.innerHTML = "";
             count.textContent = `Matched ${labelForTab(state.activeTab)} (${state.matches.length})`;
             source.textContent = sourceMode;
+            renderSourcePanel(sourceMode);
             const emptyCopy = empty.querySelector("div");
             emptyCopy.innerHTML = state.sourceDetails.reason
-                ? `<strong>No matching records available.</strong><br>${state.sourceDetails.reason}`
+                ? `<strong>No matching records available.</strong><br>${escapeHtml(state.sourceDetails.reason)}`
                 : `<strong>No matches found.</strong><br>Broaden the category or reduce strict filters.`;
             empty.classList.toggle("is-visible", state.matches.length === 0);
 
             state.matches.forEach((target) => {
                 const breakdown = target.score_breakdown || {};
                 const channels = target.channels || target.nova_rechtsgebieden || target.legal_fields || [];
-                const sourceUrl = target.contact_url || target.profile_url || target.url || "";
+                const associations = target.specialization_associations || [];
+                const targetType = target.subtype || (state.activeTab === "lawyers" ? "lawyer" : "outreach target");
+                const affiliation = target.parent_org || target.firm_name || "";
+                const sourceUrl = safeExternalUrl(target.contact_url || target.profile_url || target.url || "");
                 const sourceAction = sourceUrl
-                    ? `<a class="source-link" href="${sourceUrl}" target="_blank" rel="noopener">Open</a>`
+                    ? `<a class="source-link" href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener">Open</a>`
                     : `<button type="button" class="source-link source-link-button" data-missing-source>Open</button>`;
                 const card = document.createElement("article");
                 card.className = "target-card";
                 card.innerHTML = `
                     <div>
                         <div class="target-topline">
-                            <div class="target-avatar">${initials(target.name)}</div>
+                            <div class="target-avatar">${escapeHtml(initials(target.name))}</div>
                             <div>
-                                <h4 class="target-name">${target.name}</h4>
-                                <p class="target-meta">${target.subtype || "outreach target"}${target.parent_org ? ` - ${target.parent_org}` : ""}${target.city ? ` - ${target.city}` : ""}</p>
+                                <h4 class="target-name">${escapeHtml(target.name)}</h4>
+                                <p class="target-meta">${escapeHtml(targetType)}${affiliation ? ` - ${escapeHtml(affiliation)}` : ""}${target.city ? ` - ${escapeHtml(target.city)}` : ""}</p>
                             </div>
                         </div>
                         <div class="chips">
-                            ${channels.slice(0, 5).map((item) => `<span class="chip">${String(item).replace(/_/g, " ").toLowerCase()}</span>`).join("")}
-                            ${(target.topics || []).slice(0, 2).map((item) => `<span class="chip positive">${item}</span>`).join("")}
+                            ${channels.slice(0, 5).map((item) => `<span class="chip">${escapeHtml(String(item).replace(/_/g, " ").toLowerCase())}</span>`).join("")}
+                            ${associations.slice(0, 2).map((item) => `<span class="chip positive">${escapeHtml(item)}</span>`).join("")}
+                            ${(target.topics || []).slice(0, 2).map((item) => `<span class="chip positive">${escapeHtml(item)}</span>`).join("")}
                         </div>
-                        <p class="reasons">${(target.match_reasons || []).slice(0, 3).join(" - ")}</p>
+                        <p class="reasons">${escapeHtml((target.match_reasons || []).slice(0, 3).join(" - "))}</p>
                     </div>
                     <div>
                         <div class="score-wrap">
@@ -1603,16 +1980,21 @@
                 showToast(link.dataset.actionMessage || "Gap Analysis will appear after live evidence is classified.");
             });
         });
-        document.getElementById("refreshMatches").addEventListener("click", refreshMatches);
+        document.getElementById("refreshMatches").addEventListener("click", () => refreshMatches());
         document.getElementById("outreachCaseSelect").addEventListener("change", (event) => {
             changeActiveCase(event.target.value).catch((error) => showToast(error.message || "Unable to switch outreach case"));
         });
-        document.getElementById("maxResults").addEventListener("change", refreshMatches);
-        document.getElementById("legalField").addEventListener("change", refreshMatches);
-        document.getElementById("primaryInput").addEventListener("change", refreshMatches);
-        document.getElementById("radiusKm").addEventListener("change", refreshMatches);
-        document.getElementById("legalAidOnly").addEventListener("change", refreshMatches);
-        document.getElementById("preferAssociation").addEventListener("change", refreshMatches);
+        document.getElementById("maxResults").addEventListener("change", scheduleMatchRefresh);
+        document.getElementById("legalField").addEventListener("change", scheduleMatchRefresh);
+        document.getElementById("primaryInput").addEventListener("input", scheduleMatchRefresh);
+        document.getElementById("radiusKm").addEventListener("change", scheduleMatchRefresh);
+        document.getElementById("lawyerName").addEventListener("input", scheduleMatchRefresh);
+        document.getElementById("legalAidOnly").addEventListener("change", scheduleMatchRefresh);
+        document.getElementById("preferAssociation").addEventListener("change", scheduleMatchRefresh);
+        document.getElementById("requireAssociation").addEventListener("change", (event) => {
+            if (event.target.checked) document.getElementById("preferAssociation").checked = true;
+            scheduleMatchRefresh();
+        });
         document.getElementById("importDirectory").addEventListener("click", () => {
             importDirectoryTargets().catch((error) => showToast(error.message || "Unable to import directory records"));
         });

@@ -177,7 +177,11 @@ def _case_matching_payload(ledger_case, legacy_case, request_data):
     )
     if not isinstance(requested_fields, list):
         requested_fields = [requested_fields]
-    legal_fields = [field for field in (_field_id(item) for item in requested_fields) if field]
+    legal_fields = [
+        field
+        for field in (_field_id(item) for item in requested_fields)
+        if field and str(field).strip().lower() not in {'unknown', 'general', 'general_law'}
+    ]
     return {
         'description': (ledger_case or {}).get('description') or (legacy_case or {}).get('case_description', ''),
         'summary': (ledger_case or {}).get('current_summary') or (legacy_case or {}).get('summary', ''),
@@ -191,6 +195,9 @@ def _case_matching_payload(ledger_case, legacy_case, request_data):
         'radius_km': request_data.get('radius_km') or request_data.get('search_radius_km') or 50,
         'requires_financed_legal_aid': request_data.get('requires_financed_legal_aid', False),
         'prefer_specialization_association': request_data.get('prefer_specialization_association', True),
+        'require_specialization_association': request_data.get('require_specialization_association', False),
+        'nova_subject_ids': request_data.get('nova_subject_ids', []),
+        'nova_specialization_ids': request_data.get('nova_specialization_ids', []),
         'lawyer_name': request_data.get('lawyer_name', ''),
         'max_results': request_data.get('max_results', 30),
     }

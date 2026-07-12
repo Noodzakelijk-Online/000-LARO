@@ -10,7 +10,9 @@ the case intelligence that LARO already builds from documents.
 from __future__ import annotations
 
 import json
+import math
 import os
+import re
 from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
@@ -20,11 +22,17 @@ import requests
 from bs4 import BeautifulSoup
 
 NOVA_BASE_URL = "https://zoekeenadvocaat.advocatenorde.nl"
+NOVA_DIRECTORY_NOTICE = (
+    "NOvA publishes directory data supplied by lawyers and third parties and does not guarantee "
+    "that every public field is accurate or complete. LARO ranks official search results for review; "
+    "it does not endorse or select counsel."
+)
 
 # IDs currently used by the public NOvA finder.  A field absent from this map
 # falls back to its public subject-search API instead of broadening the result
 # set silently.
 NOVA_FIELD_IDS = {
+    "FAMILY_LAW": 2,
     "EMPLOYMENT_LAW": 14,
     "CRIMINAL_LAW": 56,
     "CONTRACT_LAW": 197,
@@ -90,18 +98,21 @@ class NovaSearchCriteria:
     legal_fields: List[str] = field(default_factory=list)
     nova_subject_terms: List[str] = field(default_factory=list)
     nova_subject_ids: List[int] = field(default_factory=list)
+    nova_specialization_ids: List[int] = field(default_factory=list)
     case_summary: str = ""
     case_description: str = ""
     postcode_or_city: str = ""
     radius_km: int = 50
     requires_financed_legal_aid: bool = False
     prefer_specialization_association: bool = True
+    require_specialization_association: bool = False
     lawyer_name: str = ""
     language: str = "nl"
     urgency: str = "normal"
     complexity: str = "medium"
     evidence_topics: List[str] = field(default_factory=list)
     max_results: int = 30
+    resolved_location: Dict[str, str] = field(default_factory=dict)
 
 
 class NovaDirectoryClient:
@@ -112,20 +123,8 @@ class NovaDirectoryClient:
         self.timeout_seconds = timeout_seconds
 
     def build_search_url(self, criteria: NovaSearchCriteria) -> str:
-        params: Dict[str, Any] = {"type": "advocaten"}
-        subject_ids = criteria.nova_subject_ids or self._known_subject_ids(criteria)
-        if subject_ids:
-            params["filters[rechtsgebieden]"] = json.dumps(subject_ids, separators=(",", ":"))
-        if criteria.lawyer_name:
-            params["advocaat"] = criteria.lawyer_name
-        if criteria.postcode_or_city:
-            params["locatie[adres]"] = criteria.postcode_or_city
-        if criteria.radius_km:
-            params["locatie[straal]"] = str(criteria.radius_km)
-        if criteria.prefer_specialization_association:
-            params["filters[specialisatie]"] = "1"
-        if criteria.requires_financed_legal_aid:
-            params["filters[toevoegingen]"] = "1"
+        params = self._official_filter_params(criteria)
+        params["weergave"] = "lijst"
         suffix = f"?{urlencode(params)}" if params else ""
         return f"{self.base_url}/zoeken{suffix}"
 
@@ -156,68 +155,285 @@ class NovaDirectoryClient:
         criteria: NovaSearchCriteria,
     ) -> Tuple[List[Dict[str, Any]], str, Dict[str, Any]]:
         criteria.nova_subject_ids = self._resolve_subject_ids(criteria)
+        location_note = ""
+        if criteria.postcode_or_city:
+            criteria.resolved_location, location_note = self._resolve_location(criteria.postcode_or_city)
+        if criteria.require_specialization_association:
+            criteria.nova_specialization_ids = self._resolve_specialization_ids(criteria)
+
         retrieved_at = datetime.now(timezone.utc).isoformat()
         search_url = self.build_search_url(criteria)
         if not criteria.nova_subject_ids and not criteria.lawyer_name:
-            return [], "live_directory_unavailable", {
-                "source": "NOvA public lawyer finder",
-                "retrieved_at": retrieved_at,
-                "search_url": search_url,
-                "reason": "No official legal-field filter could be resolved for this case.",
-            }
+            details = self._source_details(
+                criteria,
+                retrieved_at,
+                search_url,
+                location_note=location_note,
+                reason="No official legal-field filter could be resolved for this case.",
+            )
+            return [], "live_directory_unavailable", details
 
-        params: Dict[str, Any] = {
-            "type": "advocaten",
-            "limiet": str(min(max(criteria.max_results, 1), 30)),
-            "pagina": "1",
-        }
-        if criteria.nova_subject_ids:
-            params["filters[rechtsgebieden]"] = json.dumps(criteria.nova_subject_ids, separators=(",", ":"))
+        max_results = normalize_max_results(criteria.max_results)
+        page_size = 10
+        max_pages = min(3, max(1, math.ceil(max_results / page_size)))
+        candidates: List[Dict[str, Any]] = []
+        seen_profiles = set()
+        fetch_urls: List[str] = []
+        page_errors: List[str] = []
+        reported_total: Optional[int] = None
+        pages_fetched = 0
+
+        for page in range(1, max_pages + 1):
+            params = self._official_filter_params(criteria)
+            params.update({"limiet": str(page_size), "pagina": str(page)})
+            fetch_url = f"{self.base_url}/zoeken/fetch?{urlencode(params)}"
+            fetch_urls.append(fetch_url)
+            try:
+                response = requests.get(
+                    fetch_url,
+                    headers=self._request_headers(json_response=True),
+                    timeout=self.timeout_seconds,
+                )
+                response.raise_for_status()
+                payload = response.json()
+                if not isinstance(payload, dict):
+                    raise ValueError("The public directory returned an invalid response.")
+                html = payload.get("html", "") or ""
+            except (requests.RequestException, ValueError) as exc:
+                page_errors.append(f"Page {page}: {exc}")
+                if page == 1:
+                    details = self._source_details(
+                        criteria,
+                        retrieved_at,
+                        search_url,
+                        location_note=location_note,
+                        fetch_urls=fetch_urls,
+                        reason=f"Public directory request failed: {exc}",
+                    )
+                    return [], "live_directory_unavailable", details
+                break
+
+            pages_fetched += 1
+            if reported_total is None:
+                reported_total = optional_int(payload.get("count"))
+            page_candidates = self._parse_public_results(
+                html,
+                criteria,
+                search_url,
+                retrieved_at,
+                page=page,
+            )
+            for candidate in page_candidates:
+                profile_key = candidate.get("profile_url") or candidate.get("id")
+                if profile_key and profile_key not in seen_profiles:
+                    seen_profiles.add(profile_key)
+                    candidates.append(candidate)
+            if len(candidates) >= max_results:
+                break
+            if len(page_candidates) < page_size:
+                break
+            if reported_total is not None and page * page_size >= reported_total:
+                break
+
+        details = self._source_details(
+            criteria,
+            retrieved_at,
+            search_url,
+            location_note=location_note,
+            fetch_urls=fetch_urls,
+            reported_total=reported_total,
+            pages_fetched=pages_fetched,
+            unique_candidate_count=len(candidates),
+            page_errors=page_errors,
+        )
+        source_mode = "nova_public_directory_partial" if page_errors else "nova_public_directory"
+        return candidates[:max_results], source_mode, details
+
+    def _official_filter_params(self, criteria: NovaSearchCriteria) -> Dict[str, Any]:
+        params: Dict[str, Any] = {"type": "advocaten"}
+        subject_ids = criteria.nova_subject_ids or self._known_subject_ids(criteria)
+        if subject_ids:
+            params["filters[rechtsgebieden]"] = json.dumps(subject_ids, separators=(",", ":"))
         if criteria.lawyer_name:
             params["q"] = criteria.lawyer_name
-        if criteria.prefer_specialization_association:
-            params["filters[specialisatie]"] = "1"
+
+        location = criteria.resolved_location or {}
+        if location:
+            params["locatie[adres]"] = location.get("title") or criteria.postcode_or_city
+            params["locatie[geo][lat]"] = location.get("lat", "")
+            params["locatie[geo][lng]"] = location.get("lng", "")
+            params["locatie[hash]"] = location.get("hash", "")
+            params["locatie[straal]"] = str(normalize_nova_radius(criteria.radius_km))
+            params["sortering"] = "afstand"
+
+        if criteria.require_specialization_association and criteria.nova_specialization_ids:
+            params["filters[specialisatieverenigingen]"] = json.dumps(
+                criteria.nova_specialization_ids,
+                separators=(",", ":"),
+            )
         if criteria.requires_financed_legal_aid:
             params["filters[toevoegingen]"] = "1"
+        return params
 
-        fetch_url = f"{self.base_url}/zoeken/fetch?{urlencode(params)}"
+    def _request_headers(self, json_response: bool = False) -> Dict[str, str]:
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0 Safari/537.36"
+            ),
+            "Referer": f"{self.base_url}/zoeken",
+        }
+        if json_response:
+            headers.update({
+                "Accept": "application/json, text/javascript, */*; q=0.01",
+                "X-Requested-With": "XMLHttpRequest",
+            })
+        else:
+            headers["Accept"] = "application/json"
+        return headers
+
+    def _resolve_location(self, query: str) -> Tuple[Dict[str, str], str]:
         try:
             response = requests.get(
-                fetch_url,
-                headers={"Accept": "application/json", "Referer": f"{self.base_url}/zoeken"},
+                f"{self.base_url}/api/autocomplete/cities",
+                params={"filter": query},
+                headers=self._request_headers(),
                 timeout=self.timeout_seconds,
             )
             response.raise_for_status()
             payload = response.json()
-            html = payload.get("html", "") if isinstance(payload, dict) else ""
         except (requests.RequestException, ValueError) as exc:
-            return [], "live_directory_unavailable", {
-                "source": "NOvA public lawyer finder",
-                "retrieved_at": retrieved_at,
-                "search_url": search_url,
-                "fetch_url": fetch_url,
-                "reason": f"Public directory request failed: {exc}",
-            }
+            return {}, f"The official location service could not resolve '{query}': {exc}"
 
-        candidates = self._parse_public_results(html, criteria, search_url, retrieved_at)
-        return candidates, "nova_public_directory", {
+        options = payload if isinstance(payload, list) else []
+        exact = next(
+            (item for item in options if str(item.get("title", "")).casefold() == str(query).strip().casefold()),
+            None,
+        )
+        selected = exact or (options[0] if options else None)
+        if not isinstance(selected, dict) or not all(selected.get(key) for key in ("title", "lat", "lng", "hash")):
+            return {}, f"The official location service did not recognize '{query}'; no radius filter was applied."
+        resolved = {key: str(selected[key]) for key in ("title", "lat", "lng", "hash")}
+        return resolved, f"Resolved '{query}' to {resolved['title']} through the official location service."
+
+    def _resolve_specialization_ids(self, criteria: NovaSearchCriteria) -> List[int]:
+        if criteria.nova_specialization_ids:
+            return dedupe_ints(criteria.nova_specialization_ids)
+        if not criteria.nova_subject_ids:
+            return []
+        try:
+            response = requests.get(
+                f"{self.base_url}/api/search/specialisations",
+                params={
+                    "rechtsgebieden": json.dumps(criteria.nova_subject_ids, separators=(",", ":")),
+                },
+                headers=self._request_headers(),
+                timeout=self.timeout_seconds,
+            )
+            response.raise_for_status()
+            payload = response.json()
+        except (requests.RequestException, ValueError):
+            return []
+        return dedupe_ints(payload if isinstance(payload, list) else [])
+
+    def _source_details(
+        self,
+        criteria: NovaSearchCriteria,
+        retrieved_at: str,
+        search_url: str,
+        *,
+        location_note: str = "",
+        fetch_urls: Optional[List[str]] = None,
+        reason: str = "",
+        reported_total: Optional[int] = None,
+        pages_fetched: int = 0,
+        unique_candidate_count: int = 0,
+        page_errors: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        location_requested = bool(criteria.postcode_or_city)
+        location_applied = bool(criteria.resolved_location)
+        specialization_requested = bool(criteria.require_specialization_association)
+        specialization_applied = specialization_requested and bool(criteria.nova_specialization_ids)
+        unresolved = []
+        if location_requested and not location_applied:
+            unresolved.append("location")
+        if specialization_requested and not specialization_applied:
+            unresolved.append("specialization association")
+
+        if location_applied:
+            location_note = (
+                f"Resolved '{criteria.postcode_or_city}' to {criteria.resolved_location.get('title')} and applied "
+                f"the official {format_radius(normalize_nova_radius(criteria.radius_km))} radius."
+            )
+        elif not location_requested:
+            location_note = "No location was requested; official results were not radius filtered."
+
+        if specialization_applied:
+            specialization_note = "Required official specialization associations relevant to the selected legal area."
+        elif specialization_requested:
+            specialization_note = "No relevant official association filter could be resolved, so it was not applied."
+        elif criteria.prefer_specialization_association:
+            specialization_note = "Association membership is a LARO ranking preference, not an official exclusion filter."
+        else:
+            specialization_note = "Association membership is not used as a filter or ranking preference."
+
+        details = {
             "source": "NOvA public lawyer finder",
+            "source_authority": "Nederlandse orde van advocaten (NOvA)",
+            "source_home_url": self.base_url,
+            "source_about_url": f"{self.base_url}/over-zoek-een-advocaat",
             "retrieved_at": retrieved_at,
+            "freshness": "live",
             "search_url": search_url,
-            "fetch_url": fetch_url,
-            "reported_total": payload.get("count") if isinstance(payload, dict) else None,
-            "location_filter_applied": False,
-            "location_filter_note": (
-                "The live NOvA query applies legal-field, specialization, and legal-aid filters. "
-                "Location/radius remain in the source link for user review because the public fetch endpoint "
-                "requires an interactive location token."
-            ) if criteria.postcode_or_city else "",
+            "fetch_urls": fetch_urls or [],
+            "reported_total": reported_total,
+            "pages_fetched": pages_fetched,
+            "page_size": 10,
+            "unique_candidate_count": unique_candidate_count,
+            "result_cap": normalize_max_results(criteria.max_results),
+            "filters_requested": {
+                "legal_area_ids": criteria.nova_subject_ids,
+                "lawyer_name": criteria.lawyer_name,
+                "location": criteria.postcode_or_city,
+                "radius_km": normalize_nova_radius(criteria.radius_km) if location_requested else None,
+                "financed_legal_aid": criteria.requires_financed_legal_aid,
+                "require_specialization_association": criteria.require_specialization_association,
+                "prefer_specialization_association": criteria.prefer_specialization_association,
+            },
+            "filters_applied": {
+                "legal_area": bool(criteria.nova_subject_ids),
+                "lawyer_name": bool(criteria.lawyer_name),
+                "location": location_applied,
+                "radius": location_applied,
+                "financed_legal_aid": criteria.requires_financed_legal_aid,
+                "specialization_association": specialization_applied,
+                "specialization_ranking_preference": (
+                    criteria.prefer_specialization_association and not specialization_applied
+                ),
+            },
+            "filters_unresolved": unresolved,
+            "resolved_location": criteria.resolved_location or None,
+            "official_legal_area_ids": criteria.nova_subject_ids,
+            "official_specialization_ids": criteria.nova_specialization_ids,
+            "location_filter_applied": location_applied,
+            "location_filter_note": location_note,
+            "specialization_filter_applied": specialization_applied,
+            "specialization_filter_note": specialization_note,
+            "ranking_method": "Official NOvA filters followed by local case-evidence ranking in LARO.",
+            "source_notice": NOVA_DIRECTORY_NOTICE,
+            "page_errors": page_errors or [],
+            "partial_results": bool(page_errors),
         }
+        if reason:
+            details["reason"] = reason
+        return details
 
     def _known_subject_ids(self, criteria: NovaSearchCriteria) -> List[int]:
         return [NOVA_FIELD_IDS[field_name] for field_name in criteria.legal_fields if field_name in NOVA_FIELD_IDS]
 
     def _resolve_subject_ids(self, criteria: NovaSearchCriteria) -> List[int]:
+        if criteria.nova_subject_ids:
+            return dedupe_ints(criteria.nova_subject_ids)
         known_ids = self._known_subject_ids(criteria)
         if known_ids:
             return dedupe_ints(known_ids)
@@ -235,9 +451,20 @@ class NovaDirectoryClient:
                 payload = response.json()
             except (requests.RequestException, ValueError):
                 continue
-            if not isinstance(payload, dict):
-                continue
-            ids = [item.get("id") for item in payload.values() if isinstance(item, dict) and item.get("id")]
+            items = list(payload.values()) if isinstance(payload, dict) else payload if isinstance(payload, list) else []
+            main_ids = [
+                item.get("id")
+                for item in items
+                if isinstance(item, dict) and item.get("type") == "hoofdrechtsgebied" and item.get("id")
+            ]
+            parent_ids = [
+                (item.get("parent") or {}).get("id")
+                for item in items
+                if isinstance(item, dict) and isinstance(item.get("parent"), dict)
+            ]
+            ids = main_ids or parent_ids or [
+                item.get("id") for item in items if isinstance(item, dict) and item.get("id")
+            ]
             if ids:
                 return dedupe_ints(ids[:3])
         return []
@@ -248,6 +475,7 @@ class NovaDirectoryClient:
         criteria: NovaSearchCriteria,
         search_url: str,
         retrieved_at: str,
+        page: int = 1,
     ) -> List[Dict[str, Any]]:
         soup = BeautifulSoup(html or "", "html.parser")
         candidates: List[Dict[str, Any]] = []
@@ -263,6 +491,8 @@ class NovaDirectoryClient:
                 for node in result.select(".specialisations li")
                 if node.get_text(" ", strip=True).lower() != "geen"
             ])
+            distance_node = result.select_one(".heading .align-right")
+            distance_km = parse_distance_km(distance_node.get_text(" ", strip=True) if distance_node else "")
             profile_path = profile.get("href") or ""
             profile_url = profile_path if profile_path.startswith("http") else f"{self.base_url}{profile_path}"
             lawyer_id = profile_path.rstrip("/").split("/")[-1] or profile_url
@@ -276,11 +506,13 @@ class NovaDirectoryClient:
                 "nova_rechtsgebieden": fields,
                 "specialization_associations": associations,
                 "financed_legal_aid": criteria.requires_financed_legal_aid,
+                "distance_km": distance_km,
                 "profile_url": profile_url,
                 "source_url": profile_url,
                 "source_search_url": search_url,
                 "source_retrieved_at": retrieved_at,
                 "source_name": "NOvA public lawyer finder",
+                "source_page": page,
                 "is_active": True,
             }))
         return candidates
@@ -318,6 +550,8 @@ class LawyerMatchingEngine:
         return NovaSearchCriteria(
             legal_fields=legal_fields,
             nova_subject_terms=dedupe(case_data.get("nova_subject_terms", [])),
+            nova_subject_ids=dedupe_ints(case_data.get("nova_subject_ids", [])),
+            nova_specialization_ids=dedupe_ints(case_data.get("nova_specialization_ids", [])),
             case_summary=str(case_data.get("summary") or case_data.get("case_summary") or ""),
             case_description=str(case_data.get("description") or case_data.get("case_description") or ""),
             postcode_or_city=str(
@@ -326,19 +560,22 @@ class LawyerMatchingEngine:
                 or case_data.get("city")
                 or ""
             ),
-            radius_km=int(case_data.get("radius_km") or case_data.get("search_radius_km") or 50),
+            radius_km=normalize_nova_radius(
+                case_data.get("radius_km") or case_data.get("search_radius_km") or 50
+            ),
             requires_financed_legal_aid=bool(
                 case_data.get("requires_financed_legal_aid")
                 or case_data.get("financed_legal_aid")
                 or case_data.get("toevoeging")
             ),
             prefer_specialization_association=case_data.get("prefer_specialization_association", True) is not False,
+            require_specialization_association=bool(case_data.get("require_specialization_association")),
             lawyer_name=str(case_data.get("lawyer_name") or ""),
             language=str(case_data.get("language") or "nl"),
             urgency=str(case_data.get("urgency") or "normal"),
             complexity=str(case_data.get("complexity") or "medium"),
             evidence_topics=dedupe(case_data.get("evidence_topics", []) + case_data.get("topics", [])),
-            max_results=int(case_data.get("max_results") or 30),
+            max_results=normalize_max_results(case_data.get("max_results") or 30),
         )
 
     def match(
@@ -375,7 +612,8 @@ class LawyerMatchingEngine:
             return None
 
         distance = lawyer.get("distance_km")
-        if distance is not None and criteria.radius_km and distance > criteria.radius_km:
+        national_search = criteria.radius_km >= 56
+        if distance is not None and not national_search and criteria.radius_km and distance > criteria.radius_km:
             return None
 
         if criteria.requires_financed_legal_aid and not lawyer.get("financed_legal_aid"):
@@ -408,10 +646,11 @@ class LawyerMatchingEngine:
         if distance is None:
             location_score = 0.0
         else:
-            location_score = max(0.0, 15.0 * (1 - min(distance, criteria.radius_km) / max(criteria.radius_km, 1)))
+            scoring_radius = 50 if national_search else criteria.radius_km
+            location_score = max(0.0, 15.0 * (1 - min(distance, scoring_radius) / max(scoring_radius, 1)))
 
         specialization_score = 10.0 if lawyer.get("specialization_associations") else 0.0
-        if not criteria.prefer_specialization_association:
+        if not criteria.prefer_specialization_association and not criteria.require_specialization_association:
             specialization_score *= 0.5
 
         legal_aid_score = 8.0 if lawyer.get("financed_legal_aid") else 0.0
@@ -446,7 +685,7 @@ class LawyerMatchingEngine:
                 "filter_hits": {
                     "legal_fields": sorted(field_overlap),
                     "nova_terms": sorted(term_overlap),
-                    "within_radius": distance <= criteria.radius_km if distance is not None else None,
+                    "within_radius": (national_search or distance <= criteria.radius_km) if distance is not None else None,
                     "financed_legal_aid": bool(lawyer.get("financed_legal_aid")),
                     "specialization_association": bool(lawyer.get("specialization_associations")),
                 },
@@ -484,16 +723,19 @@ def criteria_to_dict(criteria: NovaSearchCriteria) -> Dict[str, Any]:
         "legal_fields": criteria.legal_fields,
         "nova_subject_terms": criteria.nova_subject_terms or legal_fields_to_nova_terms(criteria.legal_fields),
         "nova_subject_ids": criteria.nova_subject_ids,
+        "nova_specialization_ids": criteria.nova_specialization_ids,
         "postcode_or_city": criteria.postcode_or_city,
         "radius_km": criteria.radius_km,
         "requires_financed_legal_aid": criteria.requires_financed_legal_aid,
         "prefer_specialization_association": criteria.prefer_specialization_association,
+        "require_specialization_association": criteria.require_specialization_association,
         "lawyer_name": criteria.lawyer_name,
         "language": criteria.language,
         "urgency": criteria.urgency,
         "complexity": criteria.complexity,
         "evidence_topics": criteria.evidence_topics,
         "max_results": criteria.max_results,
+        "resolved_location": criteria.resolved_location or None,
     }
 
 
@@ -602,6 +844,10 @@ def dedupe(values: Any) -> List[str]:
 
 
 def dedupe_ints(values: Iterable[Any]) -> List[int]:
+    if not values:
+        return []
+    if isinstance(values, (str, int, float)):
+        values = [values]
     result: List[int] = []
     for value in values:
         try:
@@ -611,6 +857,45 @@ def dedupe_ints(values: Iterable[Any]) -> List[int]:
         if parsed not in result:
             result.append(parsed)
     return result
+
+
+def normalize_nova_radius(value: Any) -> int:
+    try:
+        radius = int(value)
+    except (TypeError, ValueError):
+        radius = 50
+    if radius >= 56:
+        return 56
+    return max(5, min(radius, 50))
+
+
+def format_radius(radius: int) -> str:
+    return "national" if int(radius) >= 56 else f"{int(radius)} km"
+
+
+def normalize_max_results(value: Any) -> int:
+    try:
+        limit = int(value)
+    except (TypeError, ValueError):
+        limit = 30
+    return max(1, min(limit, 30))
+
+
+def optional_int(value: Any) -> Optional[int]:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def parse_distance_km(value: Any) -> Optional[float]:
+    match = re.search(r"([0-9]+(?:[.,][0-9]+)?)\s*km", str(value or ""), flags=re.IGNORECASE)
+    if not match:
+        return None
+    try:
+        return float(match.group(1).replace(",", "."))
+    except ValueError:
+        return None
 
 
 def _optional_rate(value: Any) -> Optional[float]:
