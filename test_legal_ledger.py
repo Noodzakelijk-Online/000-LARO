@@ -2310,6 +2310,157 @@ class TestLegalLedgerApi(unittest.TestCase):
         evidence = self.client.get(f"/api/cases/{case_id}/evidence", headers=self.headers).get_json()["evidence_links"]
         self.assertTrue(any(link["target_type"] == "event" and link["target_id"] == event["id"] for link in evidence))
 
+    def test_case_wide_timeline_proposal_can_be_confirmed_in_one_review_action(self):
+        created = self.client.post("/api/cases", json={"title": "Direct timeline confirmation"}, headers=self.headers)
+        case_id = created.get_json()["case_id"]
+        source_quote = "The authority issued its decision on 2024-05-01."
+        document = self.client.post(f"/api/cases/{case_id}/documents", json={
+            "title": "Dated decision",
+            "extracted_text": source_quote,
+        }, headers=self.headers).get_json()
+
+        fixture_analysis = {
+            "status": "completed",
+            "provider": "rule_based",
+            "findings": [],
+            "review_questions": [],
+            "timeline_suggestions": [{
+                "event_date": "2024-05-01",
+                "title": "Decision mentioned in source",
+                "description": f"Cited source passage for 2024-05-01: {source_quote}",
+                "sources": [{
+                    "document_id": str(document["document_id"]),
+                    "source_quote": source_quote,
+                }],
+            }],
+            "source_documents": [],
+            "limitations": [],
+        }
+        with mock.patch.object(self.app_module.document_intelligence.semantic_provider, "analyze_case", return_value=fixture_analysis):
+            analysis = self.client.post(f"/api/cases/{case_id}/case-analysis", headers=self.headers)
+        review_item = next(item for item in analysis.get_json()["run"]["review_items"] if item["item_type"] == "timeline_suggestion")
+
+        confirmed = self.client.patch(
+            f"/api/cases/{case_id}/case-analysis/review-items/{review_item['id']}",
+            json={"action": "confirm_timeline"},
+            headers=self.headers,
+        )
+        self.assertEqual(confirmed.status_code, 200)
+        payload = confirmed.get_json()
+        self.assertTrue(payload["confirmation_applied"])
+        self.assertFalse(payload["requires_human_review"])
+        self.assertEqual(payload["review_item"]["status"], "converted")
+
+        timeline = self.client.get(f"/api/cases/{case_id}/timeline", headers=self.headers).get_json()["timeline"]
+        event = next(item for item in timeline if item["id"] == payload["review_item"]["target_id"])
+        self.assertTrue(event["user_confirmed"])
+        self.assertFalse(event["is_suggestion"])
+        self.assertEqual(event["event_type"], "confirmed_from_case_analysis")
+        evidence = self.client.get(f"/api/cases/{case_id}/evidence", headers=self.headers).get_json()["evidence_links"]
+        link = next(item for item in evidence if item["target_type"] == "event" and item["target_id"] == event["id"])
+        self.assertTrue(link["user_confirmed"])
+        self.assertEqual(link["relationship"], "supports")
+        queue = self.client.get(f"/api/cases/{case_id}/review-queue", headers=self.headers).get_json()["items"]
+        self.assertFalse(any(item["queue_type"] in {"case_analysis", "timeline"} for item in queue))
+        audit = self.client.get(f"/api/audit?case_id={case_id}", headers=self.headers).get_json()["audit_events"]
+        self.assertTrue(any(item["entity_type"] == "CaseAnalysisReviewItem" and item["action"] == "confirmed_as_event" for item in audit))
+
+    def test_case_wide_review_citations_accept_normalized_whitespace_only(self):
+        created = self.client.post("/api/cases", json={"title": "Whitespace citation"}, headers=self.headers)
+        case_id = created.get_json()["case_id"]
+        document = self.client.post(f"/api/cases/{case_id}/documents", json={
+            "title": "Wrapped decision",
+            "extracted_text": "The authority issued\nits decision on 2024-05-01.",
+        }, headers=self.headers).get_json()
+        fixture_analysis = {
+            "status": "completed",
+            "provider": "rule_based",
+            "findings": [],
+            "review_questions": [],
+            "timeline_suggestions": [{
+                "event_date": "2024-05-01",
+                "title": "Decision mentioned in source",
+                "description": "The authority issued its decision.",
+                "sources": [{
+                    "document_id": str(document["document_id"]),
+                    "source_quote": "The authority issued its decision on 2024-05-01.",
+                }],
+            }],
+            "source_documents": [],
+            "limitations": [],
+        }
+        with mock.patch.object(self.app_module.document_intelligence.semantic_provider, "analyze_case", return_value=fixture_analysis):
+            analysis = self.client.post(f"/api/cases/{case_id}/case-analysis", headers=self.headers)
+
+        self.assertEqual(analysis.status_code, 201)
+        review_items = analysis.get_json()["run"]["review_items"]
+        self.assertEqual(len(review_items), 1)
+        self.assertEqual(review_items[0]["source_refs"][0]["document_id"], document["document_id"])
+
+    def test_partial_case_analysis_coverage_enters_and_clears_the_review_queue(self):
+        created = self.client.post("/api/cases", json={"title": "Coverage warning"}, headers=self.headers)
+        case_id = created.get_json()["case_id"]
+        document = self.client.post(f"/api/cases/{case_id}/documents", json={
+            "title": "Long authority file",
+            "extracted_text": "Authority evidence " * 200,
+        }, headers=self.headers).get_json()
+        source_document = {
+            "document_id": document["document_id"],
+            "title": "Long authority file",
+            "source_characters_total": 3800,
+            "source_characters_analyzed": 900,
+            "source_was_truncated": True,
+        }
+        partial_analysis = {
+            "status": "completed",
+            "provider": "rule_based",
+            "findings": [],
+            "review_questions": [],
+            "timeline_suggestions": [],
+            "source_documents": [source_document],
+            "source_was_truncated": True,
+            "source_coverage": {
+                "sources_readable": 1,
+                "sources_represented": 1,
+                "sources_fully_read": 0,
+                "sources_partially_read": 1,
+            },
+            "limitations": [],
+        }
+        full_analysis = {
+            **partial_analysis,
+            "source_documents": [{**source_document, "source_characters_analyzed": 3800, "source_was_truncated": False}],
+            "source_was_truncated": False,
+            "source_coverage": {
+                "sources_readable": 1,
+                "sources_represented": 1,
+                "sources_fully_read": 1,
+                "sources_partially_read": 0,
+            },
+        }
+        with mock.patch.object(
+            self.app_module.document_intelligence.semantic_provider,
+            "analyze_case",
+            side_effect=[partial_analysis, full_analysis],
+        ):
+            first_run = self.client.post(f"/api/cases/{case_id}/case-analysis", headers=self.headers)
+            self.assertEqual(first_run.status_code, 201)
+            warnings = self.client.get(f"/api/cases/{case_id}/missing-evidence", headers=self.headers).get_json()["missing_evidence"]
+            warning = next(item for item in warnings if item["warning_type"] == "analysis_partial_coverage")
+            self.assertEqual(warning["status"], "needs_review")
+            self.assertEqual(warning["document_id"], document["document_id"])
+            queue = self.client.get(f"/api/cases/{case_id}/review-queue", headers=self.headers).get_json()["items"]
+            self.assertTrue(any(item["queue_type"] == "gap" and item["item_id"] == warning["id"] for item in queue))
+
+            second_run = self.client.post(f"/api/cases/{case_id}/case-analysis", headers=self.headers)
+            self.assertEqual(second_run.status_code, 201)
+
+        warnings = self.client.get(f"/api/cases/{case_id}/missing-evidence", headers=self.headers).get_json()["missing_evidence"]
+        warning = next(item for item in warnings if item["warning_type"] == "analysis_partial_coverage")
+        self.assertEqual(warning["status"], "resolved")
+        queue = self.client.get(f"/api/cases/{case_id}/review-queue", headers=self.headers).get_json()["items"]
+        self.assertFalse(any(item["queue_type"] == "gap" and item["item_id"] == warning["id"] for item in queue))
+
     def test_case_wide_timeline_conversion_reuses_exact_source_linked_event(self):
         created = self.client.post("/api/cases", json={"title": "Timeline deduplication"}, headers=self.headers)
         case_id = created.get_json()["case_id"]

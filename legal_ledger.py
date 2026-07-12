@@ -1621,6 +1621,7 @@ class LegalLedger:
             session.add(item)
             session.flush()
             self._ensure_case_analysis_review_items(session, case_id, item)
+            self._sync_case_analysis_coverage_warning(session, case_id, item)
             self._audit(
                 session,
                 case_id,
@@ -1670,8 +1671,8 @@ class LegalLedger:
     ) -> Optional[Dict[str, Any]]:
         """Convert a cited observation only after an explicit user decision."""
         action = str(data.get("action") or "").strip().lower()
-        if action not in {"timeline", "contradiction", "claim", "follow_up", "dismiss", "reopen"}:
-            raise ValueError("Case analysis action must be timeline, contradiction, claim, follow_up, dismiss, or reopen")
+        if action not in {"timeline", "confirm_timeline", "contradiction", "claim", "follow_up", "dismiss", "reopen"}:
+            raise ValueError("Case analysis action must be timeline, confirm_timeline, contradiction, claim, follow_up, dismiss, or reopen")
 
         with self.session_scope() as session:
             item = session.get(CaseAnalysisReviewItem, item_id)
@@ -1704,10 +1705,12 @@ class LegalLedger:
                 raise ValueError("This case-wide observation was already converted. Reopen it before creating another ledger item.")
             if not sources:
                 raise ValueError("This case-wide observation has no validated source citations.")
+            if action == "confirm_timeline" and item.item_type != "timeline_suggestion":
+                raise ValueError("Only a cited timeline proposal can be confirmed directly into the chronology.")
             if action == "contradiction" and len(sources) < 2:
                 raise ValueError("A contradiction needs at least two validated source citations.")
 
-            if action == "timeline":
+            if action in {"timeline", "confirm_timeline"}:
                 event_date = next((str(source.get("event_date") or "").strip() for source in sources if source.get("event_date")), "")
                 try:
                     event_date = _dt.date.fromisoformat(event_date).isoformat()
@@ -1739,16 +1742,23 @@ class LegalLedger:
                     target = CaseEvent(
                         case_id=case_id,
                         event_date=event_date,
-                        event_type="case_analysis_suggestion",
+                        event_type="confirmed_from_case_analysis" if action == "confirm_timeline" else "case_analysis_suggestion",
                         title=item.title or "Case-wide timeline proposal",
                         description=item.description,
                         source_confidence=0.0,
-                        user_confirmed=False,
+                        user_confirmed=action == "confirm_timeline",
                         created_from_document_id=sources[0]["document_id"],
                     )
                     session.add(target)
                     session.flush()
                     self._audit(session, case_id, "CaseEvent", target.id, "created", actor, {}, self._serialize_event(target), "medium")
+                elif action == "confirm_timeline" and not target.user_confirmed:
+                    target_before = self._serialize_event(target)
+                    target.user_confirmed = True
+                    if target.event_type in {"case_analysis_suggestion", "suggested_from_document", "rejected_suggestion"}:
+                        target.event_type = "confirmed_from_case_analysis"
+                    target.updated_at = utcnow()
+                    self._audit(session, case_id, "CaseEvent", target.id, "confirmed", actor, target_before, self._serialize_event(target), "medium")
                 target_type = "event"
             elif action == "contradiction":
                 target = Contradiction(
@@ -1801,6 +1811,14 @@ class LegalLedger:
                     snippet=source["source_quote"],
                 ).first()
                 if existing_link:
+                    if action == "confirm_timeline" and (not existing_link.user_confirmed or existing_link.relationship != "supports"):
+                        link_before = self._serialize_evidence_link(existing_link)
+                        existing_link.user_confirmed = True
+                        existing_link.relationship = "supports"
+                        self._audit(
+                            session, case_id, "EvidenceLink", existing_link.id, "confirmed", actor,
+                            link_before, self._serialize_evidence_link(existing_link), "medium",
+                        )
                     continue
                 link = self._create_evidence_link(
                     session,
@@ -1809,10 +1827,10 @@ class LegalLedger:
                     target_type=target_type,
                     target_id=target.id,
                     snippet=source["source_quote"],
-                    relationship="needs_review",
+                    relationship="supports" if action == "confirm_timeline" else "needs_review",
                     strength="medium",
                     source_confidence=0.0,
-                    user_confirmed=False,
+                    user_confirmed=action == "confirm_timeline",
                 )
                 self._audit(session, case_id, "EvidenceLink", link.id, "created", actor, {}, self._serialize_evidence_link(link), "medium")
 
@@ -1821,7 +1839,8 @@ class LegalLedger:
             item.target_id = target.id
             item.updated_at = utcnow()
             self._audit(
-                session, case_id, "CaseAnalysisReviewItem", item.id, f"converted_to_{target_type}", actor,
+                session, case_id, "CaseAnalysisReviewItem", item.id,
+                "confirmed_as_event" if action == "confirm_timeline" else f"converted_to_{target_type}", actor,
                 before, self._case_analysis_review_item_audit_state(item), "medium",
             )
             return self._serialize_case_analysis_review_item(item)
@@ -4266,7 +4285,7 @@ class LegalLedger:
                     quote = str(source.get("source_quote") or "").strip()
                     document = documents.get(document_id)
                     source_text = str((document.extracted_text or document.ocr_text or "") if document else "")
-                    if not quote or quote not in source_text:
+                    if not self._source_contains_quote(source_text, quote):
                         continue
                     source_key = (document_id, quote)
                     if source_key in seen_sources:
@@ -4309,6 +4328,134 @@ class LegalLedger:
                     session, case_id, "CaseAnalysisReviewItem", review_item.id, "created", "system",
                     {}, self._case_analysis_review_item_audit_state(review_item), "low",
                 )
+
+    def _sync_case_analysis_coverage_warning(
+        self,
+        session,
+        case_id: int,
+        analysis_run: CaseAnalysisRun,
+    ) -> None:
+        """Keep partial analysis coverage visible in the operational review queue."""
+        content = _json_load(analysis_run.content_json, {})
+        coverage = content.get("source_coverage") or {}
+        if not isinstance(coverage, dict) or not coverage:
+            return
+
+        def count(value: Any, fallback: int = 0) -> int:
+            try:
+                return max(0, int(value))
+            except (TypeError, ValueError):
+                return fallback
+
+        sources = [
+            source for source in _json_load(analysis_run.source_snapshot_json, [])
+            if isinstance(source, dict)
+        ]
+        readable = count(coverage.get("sources_readable"), len(sources))
+        represented = count(
+            coverage.get("sources_represented"),
+            len([source for source in sources if count(source.get("source_characters_analyzed")) > 0]),
+        )
+        fully_read = count(
+            coverage.get("sources_fully_read"),
+            len([source for source in sources if not source.get("source_was_truncated")]),
+        )
+        partially_read = count(
+            coverage.get("sources_partially_read"),
+            max(0, represented - fully_read),
+        )
+        partial_sources = [source for source in sources if source.get("source_was_truncated")]
+        is_partial = bool(
+            content.get("source_was_truncated")
+            or partially_read
+            or (readable and represented < readable)
+            or partial_sources
+        )
+        open_warnings = [
+            warning
+            for warning in session.query(MissingEvidenceWarning)
+            .filter_by(case_id=case_id, warning_type="analysis_partial_coverage")
+            .order_by(MissingEvidenceWarning.id.desc())
+            .all()
+            if warning.status not in {"resolved", "dismissed"}
+        ]
+
+        if not is_partial:
+            for warning in open_warnings:
+                before = self._serialize_missing_evidence(warning)
+                warning.status = "resolved"
+                warning.updated_at = utcnow()
+                self._audit(
+                    session, case_id, "MissingEvidenceWarning", warning.id, "resolved", "system",
+                    before, self._serialize_missing_evidence(warning), "low",
+                )
+            return
+
+        source_titles = [str(source.get("title") or "Source document") for source in partial_sources[:3]]
+        omitted_sources = max(0, readable - represented)
+        description_parts = [
+            f"The latest case-wide reading represented {represented} of {readable} readable sources",
+            f"fully read {fully_read}",
+        ]
+        if partially_read:
+            description_parts.append(f"sampled {partially_read} long source{'s' if partially_read != 1 else ''}")
+        if omitted_sources:
+            description_parts.append(f"did not represent {omitted_sources} readable source{'s' if omitted_sources != 1 else ''}")
+        description = "; ".join(description_parts) + "."
+        if source_titles:
+            description += f" Partial source{'s' if len(source_titles) != 1 else ''}: {', '.join(source_titles)}."
+        suggested_action = (
+            "Open the partial source with the ? control and review omitted passages before relying on the synthesis. "
+            "Rerun case analysis after shortening, splitting, or recovering the source when full coverage is required."
+        )
+        document_id = None
+        if partial_sources:
+            try:
+                document_id = int(partial_sources[0].get("document_id"))
+            except (TypeError, ValueError):
+                document_id = None
+        severity = "high" if omitted_sources else "medium"
+
+        warning = open_warnings[0] if open_warnings else None
+        if not warning:
+            warning = MissingEvidenceWarning(
+                case_id=case_id,
+                document_id=document_id,
+                warning_type="analysis_partial_coverage",
+                title="Case analysis used partial source coverage",
+                description=description,
+                suggested_action=suggested_action,
+                status="needs_review",
+                severity=severity,
+            )
+            session.add(warning)
+            session.flush()
+            self._audit(
+                session, case_id, "MissingEvidenceWarning", warning.id, "created", "system",
+                {}, self._serialize_missing_evidence(warning), "medium",
+            )
+            return
+
+        before = self._serialize_missing_evidence(warning)
+        warning.document_id = document_id
+        warning.title = "Case analysis used partial source coverage"
+        warning.description = description
+        warning.suggested_action = suggested_action
+        warning.status = "needs_review"
+        warning.severity = severity
+        warning.updated_at = utcnow()
+        after = self._serialize_missing_evidence(warning)
+        if before != after:
+            self._audit(
+                session, case_id, "MissingEvidenceWarning", warning.id, "updated", "system",
+                before, after, "medium",
+            )
+
+    @staticmethod
+    def _source_contains_quote(source_text: str, quote: str) -> bool:
+        normalized_source = " ".join(str(source_text or "").split())
+        normalized_quote = " ".join(str(quote or "").split())
+        return bool(normalized_quote and normalized_quote in normalized_source)
 
     def _case_analysis_review_items_for_run(self, session, analysis_run_id: int) -> List[Dict[str, Any]]:
         return [

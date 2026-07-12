@@ -4403,8 +4403,37 @@
             return (detailState.timeline || []).filter((event) => includeRejected || eventStatus(event) !== "rejected");
         }
 
+        function caseAnalysisTimelineProposals() {
+            const run = detailState.caseAnalysis?.latest;
+            const suggestions = run?.content?.timeline_suggestions || [];
+            const reviewItems = new Map((run?.review_items || []).map((item) => [item.finding_key, item]));
+            return suggestions.map((suggestion, index) => {
+                const reviewItem = reviewItems.get(`timeline_suggestion:${index}`);
+                if (!reviewItem || reviewItem.status !== "needs_review") return null;
+                const source = (suggestion.sources || [])[0] || {};
+                return {
+                    id: `analysis-${reviewItem.id}`,
+                    analysis_review_id: reviewItem.id,
+                    event_date: suggestion.event_date || "",
+                    date: suggestion.event_date || "",
+                    title: suggestion.title || "Cited timeline proposal",
+                    description: suggestion.description || "Review the cited passage before confirming this event.",
+                    created_from_document_id: source.document_id || "",
+                    evidence_quote: source.source_quote || "",
+                    source_refs: suggestion.sources || [],
+                    review_status: "needs_review",
+                    user_confirmed: false,
+                    _analysisProposal: true
+                };
+            }).filter(Boolean);
+        }
+
+        function timelineDisplayEvents(includeRejected = false) {
+            return [...timelineEvents(includeRejected), ...caseAnalysisTimelineProposals()];
+        }
+
         function filteredTimelineEvents() {
-            const events = timelineEvents(timelineStatusFilter === "rejected");
+            const events = timelineDisplayEvents(timelineStatusFilter === "rejected");
             if (timelineStatusFilter === "all") return events.filter((event) => eventStatus(event) !== "rejected");
             return events.filter((event) => eventStatus(event) === timelineStatusFilter);
         }
@@ -4455,7 +4484,7 @@
             const sorted = sortedTimeline(events);
             const first = sorted.find((event) => timelineDateValue(event));
             const last = [...sorted].reverse().find((event) => timelineDateValue(event));
-            const sourceDocs = new Set(sorted.map((event) => event.created_from_document_id).filter(Boolean));
+            const sourceDocs = new Set(sorted.map((event) => event.created_from_document_id).filter(Boolean).map(String));
             const needsReview = sorted.filter((event) => eventStatus(event) === "needs_review").length;
             const lead = sorted[0];
             const close = sorted.length > 1 ? sorted[sorted.length - 1] : null;
@@ -4495,7 +4524,7 @@
                     <div class="timeline-source-card guided-depth">
                         <div>
                             <strong>Source coverage</strong>
-                            <p>${escapeHtml(counts.all || 0)} event${counts.all === 1 ? "" : "s"} in the ledger, ${escapeHtml(counts.confirmed || 0)} confirmed, ${escapeHtml(counts.needs_review || 0)} waiting for Robert.</p>
+                            <p>${escapeHtml(counts.all || 0)} visible timeline entr${counts.all === 1 ? "y" : "ies"}, ${escapeHtml(counts.confirmed || 0)} confirmed, ${escapeHtml(counts.needs_review || 0)} waiting for Robert.</p>
                         </div>
                         <button class="btn-secondary-ledger" type="button" data-jump-tab="evidence">Inspect source links</button>
                     </div>
@@ -4519,7 +4548,7 @@
                         ${evidenceSnippet("event", event.id)}
                     </div>
                     <div class="button-row">
-                        ${timelineReviewButtons(status, true)}
+                        ${timelineReviewButtons(status, true, event)}
                     </div>
                 </article>
             `;
@@ -4541,13 +4570,20 @@
                     <p class="timeline-source-line">${escapeHtml(eventSourceLine(event))}</p>
                     <div class="timeline-card-footer">
                         <span class="tag ${status === "needs_review" ? "orange" : ""}">${escapeHtml(status)}</span>
-                        ${timelineReviewButtons(status, compact)}
+                        ${timelineReviewButtons(status, compact, event)}
                     </div>
                 </article>
             `;
         }
 
-        function timelineReviewButtons(status, compact = false) {
+        function timelineReviewButtons(status, compact = false, event = {}) {
+            if (event._analysisProposal) {
+                return `
+                    <button class="btn-ledger analysis-review-action" type="button" data-analysis-review-id="${escapeHtml(event.analysis_review_id)}" data-analysis-action="confirm_timeline">Confirm event</button>
+                    <button class="btn-secondary-ledger analysis-review-action guided-depth" type="button" data-analysis-review-id="${escapeHtml(event.analysis_review_id)}" data-analysis-action="timeline">Prepare for edit</button>
+                    ${compact ? `<button class="btn-secondary-ledger guided-depth" type="button" data-jump-tab="timeline">Inspect</button>` : `<button class="btn-secondary-ledger analysis-review-action guided-depth" type="button" data-analysis-review-id="${escapeHtml(event.analysis_review_id)}" data-analysis-action="dismiss">Dismiss</button>`}
+                `;
+            }
             if (status === "needs_review") {
                 return `
                     <button class="btn-ledger timeline-approve" type="button">Confirm</button>
@@ -5191,7 +5227,7 @@
         function focusBriefItems(focus) {
             const documents = detailState.documents?.length || 0;
             const sourceLinks = detailState.operatingState?.traceability?.source_links ?? (detailState.evidenceLinks?.length || 0);
-            const timeline = timelineEvents();
+            const timeline = timelineDisplayEvents();
             const reviewItems = reviewQueueItems().length;
             const suggested = timeline.filter((event) => eventStatus(event) === "needs_review").length;
             return [
@@ -5208,7 +5244,7 @@
                 {
                     label: "Timeline",
                     value: `${timeline.length} event${timeline.length === 1 ? "" : "s"}`,
-                    body: suggested ? `${suggested} event${suggested === 1 ? "" : "s"} need confirmation.` : "Chronology is ready for review."
+                    body: suggested ? `${suggested} cited event${suggested === 1 ? "" : "s"} await confirmation.` : "Chronology is ready for review."
                 },
                 {
                     label: "Review",
@@ -5242,7 +5278,7 @@
         }
 
         function renderFocusChronology(limit = 3) {
-            const events = sortedTimeline(timelineEvents()).slice(0, limit);
+            const events = sortedTimeline(timelineDisplayEvents()).slice(0, limit);
             return `
                 <section class="focus-chronology" aria-label="Source-linked chronology preview">
                     <div class="focus-chronology-header">
@@ -5262,13 +5298,14 @@
                                         <div class="focus-event-main">
                                             <div class="record-heading">
                                                 <strong>${escapeHtml(eventActor(event))} - ${escapeHtml(event.title || "Timeline event")}</strong>
-                                                ${evidenceSourceButton("event", event.id, event.created_from_document_id)}
+                                                ${evidenceSourceButton("event", event.id, event.created_from_document_id, event.evidence_quote)}
                                             </div>
                                             <p>${escapeHtml(eventActionText(event))}</p>
                                             <div class="focus-event-meta">
-                                                <span class="tag ${status === "needs_review" ? "orange" : ""}">${escapeHtml(status)}</span>
+                                                <span class="tag ${status === "needs_review" ? "orange" : ""}">${escapeHtml(event._analysisProposal ? "cited proposal" : status)}</span>
                                                 <span>${escapeHtml(eventSourceTitle(event))}</span>
                                             </div>
+                                            ${event._analysisProposal ? `<div class="button-row">${timelineReviewButtons(status, true, event)}</div>` : ""}
                                         </div>
                                     </article>
                                 `;
@@ -6150,16 +6187,23 @@
             const reviewControls = (reviewItem, type, sourceCount) => {
                 if (!reviewItem) return `<p class="muted">Needs review</p>`;
                 if (reviewItem.status === "converted") {
+                    const targetEvent = reviewItem.target_type === "event"
+                        ? (detailState.timeline || []).find((event) => String(event.id) === String(reviewItem.target_id))
+                        : null;
+                    if (targetEvent?.user_confirmed) {
+                        return `<div class="button-row"><p class="muted">Confirmed in the source-linked chronology.</p><button class="btn-secondary-ledger" type="button" data-jump-tab="timeline">Open timeline</button></div>`;
+                    }
                     return `<p class="muted">Prepared as ${escapeHtml(String(reviewItem.target_type || "ledger item").replace(/_/g, " "))}; it still needs review in the case ledger.</p>`;
                 }
                 if (reviewItem.status === "dismissed") {
                     return `<div class="button-row"><p class="muted">Dismissed from this review run.</p><button class="btn-secondary-ledger analysis-review-action" type="button" data-analysis-review-id="${escapeHtml(reviewItem.id)}" data-analysis-action="reopen">Reopen</button></div>`;
                 }
-                const primaryAction = type === "timeline_suggestion" ? "timeline" : type === "review_question" ? "follow_up" : sourceCount > 1 ? "contradiction" : "claim";
-                const primaryLabel = primaryAction === "timeline" ? "Add timeline proposal" : primaryAction === "follow_up" ? "Create follow-up" : primaryAction === "contradiction" ? "Prepare conflict" : "Prepare claim";
+                const primaryAction = type === "timeline_suggestion" ? "confirm_timeline" : type === "review_question" ? "follow_up" : sourceCount > 1 ? "contradiction" : "claim";
+                const primaryLabel = primaryAction === "confirm_timeline" ? "Confirm event" : primaryAction === "follow_up" ? "Create follow-up" : primaryAction === "contradiction" ? "Prepare conflict" : "Prepare claim";
                 return `
                     <div class="button-row case-analysis-actions">
                         <button class="btn-ledger analysis-review-action" type="button" data-analysis-review-id="${escapeHtml(reviewItem.id)}" data-analysis-action="${primaryAction}">${primaryLabel}</button>
+                        ${type === "timeline_suggestion" ? `<button class="btn-secondary-ledger analysis-review-action" type="button" data-analysis-review-id="${escapeHtml(reviewItem.id)}" data-analysis-action="timeline">Prepare for edit</button>` : ""}
                         ${type === "finding" && primaryAction !== "claim" ? `<button class="btn-secondary-ledger analysis-review-action" type="button" data-analysis-review-id="${escapeHtml(reviewItem.id)}" data-analysis-action="claim">Prepare claim</button>` : ""}
                         ${type === "finding" && primaryAction !== "follow_up" ? `<button class="btn-secondary-ledger analysis-review-action" type="button" data-analysis-review-id="${escapeHtml(reviewItem.id)}" data-analysis-action="follow_up">Create follow-up</button>` : ""}
                         <button class="btn-secondary-ledger analysis-review-action" type="button" data-analysis-review-id="${escapeHtml(reviewItem.id)}" data-analysis-action="dismiss">Dismiss</button>
@@ -6321,7 +6365,7 @@
         function renderOverview() {
             const c = detailState.case;
             if (!c) return `<div class="empty-state">Select a case first.</div>`;
-            const timeline = timelineEvents().slice(0, 8);
+            const timeline = timelineDisplayEvents().slice(0, 8);
             if ((document.body.dataset.depth || "simple") === "simple") {
                 return `
                     <section class="detail-section">
@@ -6594,12 +6638,13 @@
         }
 
         function renderTimeline() {
-            if (!detailState.timeline || !detailState.timeline.length) return `<div class="empty-state">No timeline events yet.</div>`;
+            const displayEvents = timelineDisplayEvents(true);
+            if (!displayEvents.length) return `<div class="empty-state">No timeline events or cited proposals yet.</div>`;
             const counts = {
-                all: timelineEvents().length,
-                needs_review: timelineEvents(true).filter((event) => eventStatus(event) === "needs_review").length,
-                confirmed: timelineEvents(true).filter((event) => eventStatus(event) === "confirmed").length,
-                rejected: timelineEvents(true).filter((event) => eventStatus(event) === "rejected").length
+                all: displayEvents.filter((event) => eventStatus(event) !== "rejected").length,
+                needs_review: displayEvents.filter((event) => eventStatus(event) === "needs_review").length,
+                confirmed: displayEvents.filter((event) => eventStatus(event) === "confirmed").length,
+                rejected: displayEvents.filter((event) => eventStatus(event) === "rejected").length
             };
             const visibleEvents = sortedTimeline(filteredTimelineEvents());
             const timelineBody = timelineViewMode === "story"
@@ -6607,7 +6652,7 @@
                 : timelineViewMode === "horizontal"
                     ? `<div class="timeline-strip">${visibleEvents.map((event) => renderTimelineCard(event)).join("")}</div>`
                     : `<div class="timeline-vertical">${visibleEvents.map((event) => {
-                const status = event.review_status || (event.user_confirmed ? "confirmed" : "needs_review");
+                const status = eventStatus(event);
                 const canReview = status === "needs_review";
                 return `
                     <article class="record-row timeline-row" data-event-id="${escapeHtml(event.id)}">
@@ -6615,12 +6660,12 @@
                         <div>
                             <div class="record-heading">
                                 <strong>${escapeHtml(eventActor(event))} - ${escapeHtml(event.title)}</strong>
-                                ${evidenceSourceButton("event", event.id, event.created_from_document_id)}
+                                ${evidenceSourceButton("event", event.id, event.created_from_document_id, event.evidence_quote)}
                             </div>
                             <p>${escapeHtml(eventActionText(event))}</p>
                             ${evidenceSnippet("event", event.id)}
-                            <p class="muted">${escapeHtml(status)} - ${escapeHtml(eventSourceLine(event))}</p>
-                            ${canReview ? `
+                            <p class="muted">${escapeHtml(event._analysisProposal ? "cited proposal" : status)} - ${escapeHtml(eventSourceLine(event))}</p>
+                            ${event._analysisProposal ? `<div class="button-row guided-depth">${timelineReviewButtons(status, false, event)}</div>` : canReview ? `
                                 <div class="form-grid guided-depth">
                                     <label class="input-field"><span>Date</span><input class="control timeline-date" value="${escapeHtml(event.event_date || event.date || "")}"></label>
                                     <label class="input-field"><span>Title</span><input class="control timeline-title" value="${escapeHtml(event.title || "")}"></label>
@@ -6641,7 +6686,7 @@
                     <div class="timeline-toolbar">
                         <div>
                             <h3 class="panel-title">Evidence Timeline</h3>
-                            <p class="muted">${escapeHtml(visibleEvents.length)} visible event${visibleEvents.length === 1 ? "" : "s"} from persisted case evidence.</p>
+                            <p class="muted">${escapeHtml(visibleEvents.length)} visible event${visibleEvents.length === 1 ? "" : "s"} from persisted evidence and cited review proposals.</p>
                         </div>
                         <div class="timeline-control-group" role="group" aria-label="Timeline layout">
                             <button class="timeline-mode-button ${timelineViewMode === "story" ? "is-active" : ""}" type="button" data-timeline-mode="story">Story</button>
@@ -7571,7 +7616,7 @@
             if (!itemId || !action) return showToast("This case-wide review item is unavailable.");
             const originalLabel = button.textContent;
             button.disabled = true;
-            button.textContent = "Preparing...";
+            button.textContent = action === "confirm_timeline" ? "Confirming..." : "Preparing...";
             try {
                 const response = await apiFetch(`/api/cases/${selectedCaseId}/case-analysis/review-items/${itemId}`, {
                     method: "PATCH",
@@ -7582,11 +7627,13 @@
                     ? "Case-wide observation dismissed."
                     : action === "reopen"
                         ? "Case-wide observation reopened for review."
+                        : action === "confirm_timeline"
+                            ? "Cited event confirmed in the source-linked chronology."
                         : `Prepared as ${String(item.target_type || "ledger item").replace(/_/g, " ")}. Review it before relying on it.`;
                 showToast(message);
                 await loadCaseDetail(selectedCaseId);
                 await loadCommandCenter();
-                if (item.status === "converted") activateDetailTab(item.target_type === "event" ? "timeline" : "review");
+                if (item.status === "converted" && action !== "confirm_timeline") activateDetailTab(item.target_type === "event" ? "timeline" : "review");
             } catch (error) {
                 showToast(error.message);
                 throw error;

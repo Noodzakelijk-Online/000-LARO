@@ -1793,11 +1793,12 @@ def create_ledger_case_analysis(case_id):
 @auth_system._require_auth
 def update_ledger_case_analysis_review_item(case_id, item_id):
     """Apply a cited case-wide observation only after an explicit ledger choice."""
+    payload = request.json or {}
     try:
         item = legal_ledger.update_case_analysis_review_item(
             case_id,
             item_id,
-            request.json or {},
+            payload,
             actor=_ledger_actor(),
         )
     except ValueError as exc:
@@ -1807,7 +1808,8 @@ def update_ledger_case_analysis_review_item(case_id, item_id):
     return jsonify({
         'review_item': item,
         'source_preserved': True,
-        'requires_human_review': item.get('status') == 'converted',
+        'confirmation_applied': payload.get('action') == 'confirm_timeline',
+        'requires_human_review': item.get('status') == 'converted' and payload.get('action') != 'confirm_timeline',
     }), 200
 
 
