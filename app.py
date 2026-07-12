@@ -42,6 +42,11 @@ from google_oauth import (
 )
 from google_evidence import GoogleEvidenceConnector, GoogleEvidenceError
 from google_token_store import LocalEncryptedTokenStore, TokenStoreError
+from dutch_legal_taxonomy import (
+    build_case_matching_profile,
+    normalize_legal_fields,
+    public_taxonomy,
+)
 from legal_ledger import init_legal_ledger
 from outreach_discovery import OutreachDiscoveryError, OutreachTargetDiscovery
 
@@ -169,25 +174,47 @@ def _case_for_legacy_endpoint(case_id):
 
 
 def _case_matching_payload(ledger_case, legacy_case, request_data):
+    case_profile = build_case_matching_profile(
+        ledger_case,
+        documents=legal_ledger.list_documents(int(ledger_case['case_id'])) if ledger_case else [],
+        claims=legal_ledger.list_claims(int(ledger_case['case_id'])) if ledger_case else [],
+        contradictions=legal_ledger.list_contradictions(int(ledger_case['case_id'])) if ledger_case else [],
+        deadlines=legal_ledger.list_deadlines(int(ledger_case['case_id'])) if ledger_case else [],
+        obligations=legal_ledger.list_obligations(int(ledger_case['case_id'])) if ledger_case else [],
+    )
     legal_domain = (ledger_case or {}).get('legal_domain') or 'unknown'
+    manual_fields = request_data.get('legal_fields')
     requested_fields = (
-        request_data.get('legal_fields')
+        manual_fields
         or (legacy_case or {}).get('matched_fields')
         or ([legal_domain] if legal_domain else [])
     )
     if not isinstance(requested_fields, list):
         requested_fields = [requested_fields]
-    legal_fields = [
-        field
-        for field in (_field_id(item) for item in requested_fields)
+    legal_fields = normalize_legal_fields([
+        field for field in (_field_id(item) for item in requested_fields)
         if field and str(field).strip().lower() not in {'unknown', 'general', 'general_law'}
-    ]
+    ])
+    if not manual_fields:
+        legal_fields = list(dict.fromkeys(
+            legal_fields + case_profile.get('inferred_legal_fields', [])
+        ))[:4]
+    requested_topics = request_data.get('evidence_topics') or []
+    if isinstance(requested_topics, str):
+        requested_topics = [requested_topics]
+    evidence_topics = list(dict.fromkeys([
+        *[str(item).strip() for item in requested_topics if str(item).strip()],
+        *case_profile.get('evidence_topics', []),
+    ]))
     return {
         'description': (ledger_case or {}).get('description') or (legacy_case or {}).get('case_description', ''),
         'summary': (ledger_case or {}).get('current_summary') or (legacy_case or {}).get('summary', ''),
         'legal_fields': legal_fields,
+        'manual_legal_field_override': bool(manual_fields),
         'complexity': (legacy_case or {}).get('complexity') or {'complexity_level': (ledger_case or {}).get('risk_level', 'medium')},
-        'evidence_topics': request_data.get('evidence_topics', []),
+        'evidence_topics': evidence_topics,
+        'case_profile': case_profile,
+        'case_source_coverage': case_profile.get('source_coverage', {}),
         'desired_outcome': request_data.get('desired_outcome') or (ledger_case or {}).get('desired_outcome', ''),
         'urgency': request_data.get('urgency') or (ledger_case or {}).get('priority', 'normal'),
         'region': request_data.get('region') or request_data.get('location') or (ledger_case or {}).get('court_or_institution') or 'Netherlands',
@@ -3249,6 +3276,14 @@ def get_evidence_timeline(case_id):
         'storage': 'legal_ledger',
     }), 200
 
+
+@app.route('/api/lawyers/taxonomy', methods=['GET'])
+@auth_system._require_auth
+def get_lawyer_matching_taxonomy():
+    """Expose the official NOvA-area vocabulary used by case matching."""
+    return jsonify(public_taxonomy()), 200
+
+
 @app.route('/api/lawyers/match', methods=['POST'])
 @auth_system._require_auth
 def match_case_lawyers():
@@ -3280,6 +3315,8 @@ def match_case_lawyers():
 
     if result.get('statusCode') != 200:
         return jsonify(result.get('body', {'error': 'Unable to match lawyers'})), result.get('statusCode', 500)
+
+    result['body'].setdefault('case_profile', case_data.get('case_profile') or {})
 
     legal_ledger.save_match_result(
         case_id,
@@ -3431,6 +3468,8 @@ def match_case_outreach_targets():
 
     if result.get('statusCode') != 200:
         return jsonify(result.get('body', {'error': 'Unable to match outreach targets'})), result.get('statusCode', 500)
+
+    result['body'].setdefault('case_profile', case_data.get('case_profile') or {})
 
     legal_ledger.save_match_result(
         case_id,

@@ -380,6 +380,52 @@
             padding: 0.65rem 0.85rem;
         }
 
+        .official-area-picker {
+            border-top: 1px solid var(--outreach-border);
+            color: var(--outreach-muted);
+            grid-column: 1 / -1;
+            padding-top: 0.85rem;
+        }
+
+        .official-area-picker summary {
+            align-items: center;
+            color: var(--dark-text-primary);
+            cursor: pointer;
+            display: flex;
+            font-weight: 800;
+            gap: 0.7rem;
+            justify-content: space-between;
+        }
+
+        .official-area-picker summary span {
+            color: var(--outreach-green);
+            font-size: 0.78rem;
+        }
+
+        .legal-area-options {
+            display: grid;
+            gap: 0.4rem 0.85rem;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            max-height: 260px;
+            overflow: auto;
+            padding-right: 0.3rem;
+        }
+
+        .legal-area-option {
+            align-items: flex-start;
+            display: flex;
+            font-size: 0.82rem;
+            gap: 0.5rem;
+            line-height: 1.35;
+            min-width: 0;
+            padding: 0.35rem 0;
+        }
+
+        .legal-area-option input {
+            flex: 0 0 auto;
+            margin-top: 0.15rem;
+        }
+
         .results-header {
             align-items: center;
             display: flex;
@@ -955,6 +1001,11 @@
                 grid-template-columns: 1fr;
             }
 
+            .legal-area-options {
+                grid-template-columns: 1fr;
+                max-height: 320px;
+            }
+
             .score-wrap,
             .refresh-wrap,
             .progress-stats {
@@ -1094,12 +1145,7 @@
                     <label>
                         <span class="field-label" id="fieldLabel">Legal field</span>
                         <select class="field-select" id="legalField">
-                            <option value="">Use case analysis</option>
-                            <option value="ADMINISTRATIVE_LAW">Administrative law</option>
-                            <option value="EMPLOYMENT_LAW">Employment law</option>
-                            <option value="PROPERTY_LAW">Tenancy/property</option>
-                            <option value="CONTRACT_LAW">Contract/consumer</option>
-                            <option value="FAMILY_LAW">Family law</option>
+                            <option value="">Use complete case analysis</option>
                         </select>
                     </label>
                     <label>
@@ -1108,6 +1154,8 @@
                             <option value="10">Top 10</option>
                             <option value="20">Top 20</option>
                             <option value="30" selected>Top 30</option>
+                            <option value="60">Top 60</option>
+                            <option value="100">Top 100</option>
                         </select>
                     </label>
                     <div class="refresh-wrap">
@@ -1129,7 +1177,7 @@
                             <input class="field-input" id="lawyerName" placeholder="Optional exact name">
                         </label>
                         <label class="toggle-field lawyer-only">
-                            <input type="checkbox" id="legalAidOnly" checked>
+                            <input type="checkbox" id="legalAidOnly">
                             Require financed legal aid
                         </label>
                         <label class="toggle-field lawyer-only">
@@ -1140,6 +1188,10 @@
                             <input type="checkbox" id="requireAssociation">
                             Require relevant association
                         </label>
+                        <details class="official-area-picker lawyer-only">
+                            <summary>Official legal areas (expert override) <span id="legalAreaSelectionSummary">automatic</span></summary>
+                            <div class="legal-area-options" id="legalAreaOptions" aria-label="Additional official NOvA legal areas"></div>
+                        </details>
                     </div>
                 </section>
 
@@ -1254,6 +1306,9 @@
             depth: "focus",
             sourceDetails: {},
             sourceUrl: "",
+            searchCriteria: {},
+            caseProfile: {},
+            legalTaxonomy: [],
             directoryTargets: [],
             matchRequestId: 0,
             matchInFlight: false,
@@ -1271,16 +1326,51 @@
             return state.caseId;
         }
 
-        function normalizedCaseLegalField(caseItem = {}) {
-            const raw = String(caseItem.legal_domain || "").trim().toUpperCase().replace(/[\s-]+/g, "_");
-            if (["", "UNKNOWN", "GENERAL", "GENERAL_LAW"].includes(raw)) return "";
-            const aliases = {
-                TENANCY_LAW: "PROPERTY_LAW",
-                REAL_ESTATE_LAW: "PROPERTY_LAW",
-                CONSUMER_LAW: "CONTRACT_LAW",
-                LABOUR_LAW: "EMPLOYMENT_LAW"
-            };
-            return aliases[raw] || raw;
+        function legalAreaLabel(key) {
+            const area = state.legalTaxonomy.find((item) => item.key === key);
+            return area?.name_nl || String(key || "").replace(/_/g, " ").toLowerCase();
+        }
+
+        function checkedLegalFields() {
+            return Array.from(document.querySelectorAll("#legalAreaOptions input:checked"))
+                .map((input) => input.value)
+                .filter(Boolean);
+        }
+
+        function updateLegalAreaSelectionSummary() {
+            const selected = Array.from(new Set([
+                document.getElementById("legalField")?.value,
+                ...checkedLegalFields()
+            ].filter(Boolean)));
+            const summary = document.getElementById("legalAreaSelectionSummary");
+            if (summary) summary.textContent = selected.length ? `${selected.length} selected` : "automatic";
+        }
+
+        async function loadLawyerTaxonomy() {
+            const select = document.getElementById("legalField");
+            const options = document.getElementById("legalAreaOptions");
+            try {
+                const payload = await apiFetch("/api/lawyers/taxonomy");
+                state.legalTaxonomy = (payload.areas || []).slice().sort((left, right) =>
+                    String(left.name_nl || "").localeCompare(String(right.name_nl || ""), "nl")
+                );
+            } catch (error) {
+                state.legalTaxonomy = [];
+            }
+            select.innerHTML = `<option value="">Use complete case analysis</option>${state.legalTaxonomy.map((area) => `
+                <option value="${escapeHtml(area.key)}">${escapeHtml(area.name_nl)} - ${escapeHtml(area.label_en)}</option>
+            `).join("")}`;
+            options.innerHTML = state.legalTaxonomy.length ? state.legalTaxonomy.map((area) => `
+                <label class="legal-area-option">
+                    <input type="checkbox" value="${escapeHtml(area.key)}">
+                    <span>${escapeHtml(area.name_nl)}</span>
+                </label>
+            `).join("") : `<span class="muted">Official legal areas could not be loaded. Automatic case analysis remains available.</span>`;
+            options.querySelectorAll("input").forEach((input) => input.addEventListener("change", () => {
+                updateLegalAreaSelectionSummary();
+                scheduleMatchRefresh();
+            }));
+            updateLegalAreaSelectionSummary();
         }
 
         function saveFilterDraft(tab = state.activeTab) {
@@ -1288,6 +1378,7 @@
             state.filterDrafts[tab] = {
                 primary: document.getElementById("primaryInput").value,
                 legalField: document.getElementById("legalField").value,
+                legalFields: checkedLegalFields(),
                 lawyerName: document.getElementById("lawyerName").value
             };
         }
@@ -1295,14 +1386,19 @@
         function restoreFilterDraft(tab) {
             const draft = state.filterDrafts[tab] || {};
             const caseItem = activeCase() || {};
-            const field = draft.legalField ?? normalizedCaseLegalField(caseItem);
+            const field = draft.legalField ?? "";
             const legalField = document.getElementById("legalField");
             if (Array.from(legalField.options).some((option) => option.value === field)) {
                 legalField.value = field;
             }
+            const additional = new Set(draft.legalFields || []);
+            document.querySelectorAll("#legalAreaOptions input").forEach((input) => {
+                input.checked = additional.has(input.value);
+            });
             const caseLocation = caseItem.postcode_or_city || caseItem.location || caseItem.city || "";
             document.getElementById("primaryInput").value = draft.primary ?? (tab === "lawyers" ? caseLocation : "");
             document.getElementById("lawyerName").value = draft.lawyerName ?? "";
+            updateLegalAreaSelectionSummary();
         }
 
         function isDevelopmentQaCase(caseItem = {}) {
@@ -1370,6 +1466,8 @@
             state.matches = [];
             state.sourceDetails = {};
             state.sourceUrl = "";
+            state.searchCriteria = {};
+            state.caseProfile = {};
             state.directoryTargets = [];
             state.filterDrafts = {};
             renderActiveCase();
@@ -1607,12 +1705,17 @@
         function payloadFromControls() {
             const targetType = state.activeTab === "organizations" ? "organization" : state.activeTab === "media" ? "media" : "lawyer";
             const selectedLegalField = document.getElementById("legalField").value;
+            const legalFields = Array.from(new Set([
+                selectedLegalField,
+                ...(targetType === "lawyer" ? checkedLegalFields() : [])
+            ].filter(Boolean)));
+            const primaryValue = document.getElementById("primaryInput").value.trim();
             return {
                 case_id: currentCaseId(),
                 target_type: targetType,
-                legal_fields: selectedLegalField ? [selectedLegalField] : [],
-                evidence_topics: document.getElementById("primaryInput").value.split(/\s+/).filter(Boolean),
-                postcode_or_city: document.getElementById("primaryInput").value,
+                legal_fields: legalFields,
+                evidence_topics: targetType === "lawyer" ? [] : primaryValue.split(/\s+/).filter(Boolean),
+                postcode_or_city: targetType === "lawyer" ? primaryValue : "",
                 radius_km: Number(document.getElementById("radiusKm")?.value || 50),
                 requires_financed_legal_aid: Boolean(document.getElementById("legalAidOnly")?.checked),
                 prefer_specialization_association: Boolean(document.getElementById("preferAssociation")?.checked),
@@ -1638,6 +1741,8 @@
                 state.matches = [];
                 state.sourceDetails = { reason: "Select or create a persisted case before running outreach matching." };
                 state.sourceUrl = "";
+                state.searchCriteria = {};
+                state.caseProfile = {};
                 renderMatches("case required");
                 return;
             }
@@ -1665,7 +1770,9 @@
                 if (requestId !== state.matchRequestId) return;
                 state.matches = state.activeTab === "lawyers" ? body.matched_lawyers || [] : body.matched_targets || [];
                 state.sourceDetails = body.source_details || {};
-                state.sourceUrl = body.nova_search_url || state.sourceDetails.search_url || "";
+                state.sourceUrl = state.sourceDetails.search_url || body.nova_search_url || "";
+                state.searchCriteria = body.search_criteria || {};
+                state.caseProfile = body.case_profile || {};
                 renderMatches(body.source_mode || "api");
                 if (!options.quiet) {
                     showToast(state.matches.length ? `${labelForTab(state.activeTab)} matches refreshed` : (state.sourceDetails.reason || "No live matches available"));
@@ -1676,6 +1783,8 @@
                 state.matches = [];
                 state.sourceDetails = { reason: "The matching source could not be reached. No fallback data is shown." };
                 state.sourceUrl = "";
+                state.searchCriteria = {};
+                state.caseProfile = {};
                 renderMatches("no live data");
                 await refreshAnalytics();
                 if (!options.quiet) showToast("No live outreach matches available");
@@ -1829,8 +1938,10 @@
             const sourceTitle = isNova ? "Official NOvA lawyer directory" : (details.source || labelForTab(state.activeTab));
             let summary = details.reason || "Live source records ranked against the active case.";
             if (isNova && hasReportedTotal) {
-                summary = `${reportedTotal} official result${reportedTotal === 1 ? "" : "s"}; LARO inspected ${inspected} across ${pages} page${pages === 1 ? "" : "s"} before local case ranking.`;
-                if (details.partial_results) summary += " The inspected window is partial.";
+                summary = details.reported_total_is_sum_across_areas
+                    ? `${reportedTotal} reported listings across ${(details.area_queries || []).length} official area queries; LARO inspected ${inspected} unique profiles across ${pages} pages before local case ranking.`
+                    : `${reportedTotal} official result${reportedTotal === 1 ? "" : "s"}; LARO inspected ${inspected} across ${pages} page${pages === 1 ? "" : "s"} before local case ranking.`;
+                if (details.partial_results) summary += " The official result set is larger than the inspected ranking window.";
             }
             document.getElementById("sourceTitle").textContent = sourceTitle;
             document.getElementById("sourceSummary").textContent = summary;
@@ -1845,7 +1956,12 @@
             const chips = [];
             const addChip = (label, status) => chips.push({ label, status });
             if (isNova) {
-                addChip("Legal area", applied.legal_area ? "applied" : "unresolved");
+                const selectedAreas = state.caseProfile.selected_legal_fields || requested.legal_fields || state.searchCriteria.legal_fields || [];
+                if (selectedAreas.length) {
+                    selectedAreas.forEach((field) => addChip(legalAreaLabel(field), applied.legal_area ? "applied" : "unresolved"));
+                } else {
+                    addChip("Legal area", applied.legal_area ? "applied" : "unresolved");
+                }
                 if (requested.lawyer_name) addChip(`Name: ${requested.lawyer_name}`, applied.lawyer_name ? "applied" : "unresolved");
                 if (requested.location) {
                     addChip(`Location: ${requested.location}`, applied.location ? "applied" : "unresolved");
@@ -1862,12 +1978,21 @@
                 <span class="source-filter-chip ${chip.status === "applied" ? "is-applied" : chip.status === "unresolved" ? "is-unresolved" : ""}">${escapeHtml(chip.label)}</span>
             `).join("");
 
+            const coverage = state.caseProfile.source_coverage || details.case_source_coverage || {};
+            const coverageText = Object.entries(coverage)
+                .filter(([, count]) => Number(count || 0) > 0)
+                .map(([key, count]) => `${count} ${String(key).replace(/_/g, " ")}`)
+                .join(", ");
+            const inferredAreas = state.caseProfile.inferred_legal_fields || requested.inferred_legal_fields || [];
             const rows = [
                 ["Authority", details.source_authority || details.source || sourceMode],
                 ["Retrieved", formatSourceTimestamp(details.retrieved_at)],
+                ["Case sources", coverageText || "Persisted case context"],
+                ["Local inference", inferredAreas.length ? inferredAreas.map(legalAreaLabel).join(", ") : "No additional area inferred"],
                 ["Location", details.location_filter_note],
                 ["Specialization", details.specialization_filter_note],
                 ["Method", details.ranking_method],
+                ["Privacy", details.raw_case_text_shared_with_directory === false ? "Raw case text stayed local; only official filters were sent." : "Review external query scope."],
                 ["Source limitation", details.source_notice]
             ].filter(([, value]) => value);
             document.getElementById("sourceDetailGrid").innerHTML = rows.map(([label, value]) => `
@@ -1985,7 +2110,10 @@
             changeActiveCase(event.target.value).catch((error) => showToast(error.message || "Unable to switch outreach case"));
         });
         document.getElementById("maxResults").addEventListener("change", scheduleMatchRefresh);
-        document.getElementById("legalField").addEventListener("change", scheduleMatchRefresh);
+        document.getElementById("legalField").addEventListener("change", () => {
+            updateLegalAreaSelectionSummary();
+            scheduleMatchRefresh();
+        });
         document.getElementById("primaryInput").addEventListener("input", scheduleMatchRefresh);
         document.getElementById("radiusKm").addEventListener("change", scheduleMatchRefresh);
         document.getElementById("lawyerName").addEventListener("input", scheduleMatchRefresh);
@@ -2015,7 +2143,7 @@
             }
             setOutreachDepth(["lawyers", "media", "organizations"].includes(initialHash) && storedDepth === "focus" ? "guided" : storedDepth, { keepTab: true });
             try {
-                await loadCases();
+                await Promise.all([loadLawyerTaxonomy(), loadCases()]);
             } catch (error) {
                 state.cases = [];
                 state.caseId = null;

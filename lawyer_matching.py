@@ -21,6 +21,14 @@ from urllib.parse import urlencode
 import requests
 from bs4 import BeautifulSoup
 
+from dutch_legal_taxonomy import (
+    DUTCH_LEGAL_AREAS,
+    infer_legal_fields as infer_dutch_legal_fields,
+    legal_field_ids,
+    legal_field_terms,
+    normalize_legal_fields as normalize_dutch_legal_fields,
+)
+
 NOVA_BASE_URL = "https://zoekeenadvocaat.advocatenorde.nl"
 NOVA_DIRECTORY_NOTICE = (
     "NOvA publishes directory data supplied by lawyers and third parties and does not guarantee "
@@ -28,74 +36,20 @@ NOVA_DIRECTORY_NOTICE = (
     "it does not endorse or select counsel."
 )
 
-# IDs currently used by the public NOvA finder.  A field absent from this map
-# falls back to its public subject-search API instead of broadening the result
-# set silently.
-NOVA_FIELD_IDS = {
-    "FAMILY_LAW": 2,
-    "EMPLOYMENT_LAW": 14,
-    "CRIMINAL_LAW": 56,
-    "CONTRACT_LAW": 197,
-    "PROPERTY_LAW": 24,
-    "ADMINISTRATIVE_LAW": 227,
-    "IMMIGRATION_LAW": 68,
-    "TAX_LAW": 48,
-}
-
-
+# The official ids are kept in the shared taxonomy so case intake, matching,
+# API output, and UI controls cannot drift into different legal vocabularies.
+NOVA_FIELD_IDS = legal_field_ids()
 FIELD_TO_NOVA_TERMS = {
-    "FAMILY_LAW": ["personen- en familierecht", "echtscheiding", "alimentatie"],
-    "family_law": ["personen- en familierecht", "echtscheiding", "alimentatie"],
-    "CRIMINAL_LAW": ["strafrecht"],
-    "criminal_law": ["strafrecht"],
-    "CONTRACT_LAW": ["verbintenissenrecht", "contractenrecht"],
-    "contract_law": ["verbintenissenrecht", "contractenrecht"],
-    "PROPERTY_LAW": ["huurrecht", "vastgoedrecht"],
-    "property_law": ["huurrecht", "vastgoedrecht"],
-    "real_estate_law": ["huurrecht", "vastgoedrecht"],
-    "EMPLOYMENT_LAW": ["arbeidsrecht", "ontslag", "arbeidsovereenkomst"],
-    "employment_law": ["arbeidsrecht", "ontslag", "arbeidsovereenkomst"],
-    "ADMINISTRATIVE_LAW": ["bestuursrecht", "bezwaar", "beroep"],
-    "administrative_law": ["bestuursrecht", "bezwaar", "beroep"],
-    "IMMIGRATION_LAW": ["vreemdelingenrecht", "asielrecht"],
-    "immigration_law": ["vreemdelingenrecht", "asielrecht"],
-    "TAX_LAW": ["belastingrecht"],
-    "tax_law": ["belastingrecht"],
-    "DEBT_COLLECTION": ["incasso", "schulden"],
-    "debt_collection": ["incasso", "schulden"],
-    "GENERAL_LAW": ["algemene praktijk"],
-    "general_law": ["algemene praktijk"],
-}
-
-
-KEYWORD_TO_FIELD = {
-    "ontslag": "EMPLOYMENT_LAW",
-    "arbeid": "EMPLOYMENT_LAW",
-    "werkgever": "EMPLOYMENT_LAW",
-    "discriminatie": "EMPLOYMENT_LAW",
-    "contract": "CONTRACT_LAW",
-    "overeenkomst": "CONTRACT_LAW",
-    "huur": "PROPERTY_LAW",
-    "verhuur": "PROPERTY_LAW",
-    "woning": "PROPERTY_LAW",
-    "echtscheiding": "FAMILY_LAW",
-    "alimentatie": "FAMILY_LAW",
-    "gezag": "FAMILY_LAW",
-    "straf": "CRIMINAL_LAW",
-    "verdachte": "CRIMINAL_LAW",
-    "bezwaar": "ADMINISTRATIVE_LAW",
-    "beroep": "ADMINISTRATIVE_LAW",
-    "bestuursorgaan": "ADMINISTRATIVE_LAW",
-    "cak": "ADMINISTRATIVE_LAW",
-    "belasting": "TAX_LAW",
-    "asiel": "IMMIGRATION_LAW",
-    "verblijf": "IMMIGRATION_LAW",
+    area["key"]: [area["name_nl"], *area["subareas"]]
+    for area in DUTCH_LEGAL_AREAS
 }
 
 
 @dataclass
 class NovaSearchCriteria:
     legal_fields: List[str] = field(default_factory=list)
+    explicit_legal_fields: List[str] = field(default_factory=list)
+    inferred_legal_fields: List[str] = field(default_factory=list)
     nova_subject_terms: List[str] = field(default_factory=list)
     nova_subject_ids: List[int] = field(default_factory=list)
     nova_specialization_ids: List[int] = field(default_factory=list)
@@ -111,6 +65,7 @@ class NovaSearchCriteria:
     urgency: str = "normal"
     complexity: str = "medium"
     evidence_topics: List[str] = field(default_factory=list)
+    case_source_coverage: Dict[str, int] = field(default_factory=dict)
     max_results: int = 30
     resolved_location: Dict[str, str] = field(default_factory=dict)
 
@@ -122,8 +77,12 @@ class NovaDirectoryClient:
         self.base_url = base_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
 
-    def build_search_url(self, criteria: NovaSearchCriteria) -> str:
-        params = self._official_filter_params(criteria)
+    def build_search_url(
+        self,
+        criteria: NovaSearchCriteria,
+        subject_ids: Optional[Sequence[int]] = None,
+    ) -> str:
+        params = self._official_filter_params(criteria, subject_ids=subject_ids)
         params["weergave"] = "lijst"
         suffix = f"?{urlencode(params)}" if params else ""
         return f"{self.base_url}/zoeken{suffix}"
@@ -175,85 +134,129 @@ class NovaDirectoryClient:
 
         max_results = normalize_max_results(criteria.max_results)
         page_size = 10
-        max_pages = min(3, max(1, math.ceil(max_results / page_size)))
+        subject_ids = criteria.nova_subject_ids or self._known_subject_ids(criteria)
+        query_groups = [[subject_id] for subject_id in subject_ids] if len(subject_ids) > 1 else [subject_ids]
+        target_per_query = max(page_size, math.ceil(max_results / max(len(query_groups), 1) / page_size) * page_size)
+        max_pages_per_query = max(1, math.ceil(target_per_query / page_size))
         candidates: List[Dict[str, Any]] = []
         seen_profiles = set()
         fetch_urls: List[str] = []
+        search_urls: List[str] = []
         page_errors: List[str] = []
-        reported_total: Optional[int] = None
+        query_details: List[Dict[str, Any]] = []
+        reported_total = 0
+        reported_total_known = True
         pages_fetched = 0
 
-        for page in range(1, max_pages + 1):
-            params = self._official_filter_params(criteria)
-            params.update({"limiet": str(page_size), "pagina": str(page)})
-            fetch_url = f"{self.base_url}/zoeken/fetch?{urlencode(params)}"
-            fetch_urls.append(fetch_url)
-            try:
-                response = requests.get(
-                    fetch_url,
-                    headers=self._request_headers(json_response=True),
-                    timeout=self.timeout_seconds,
-                )
-                response.raise_for_status()
-                payload = response.json()
-                if not isinstance(payload, dict):
-                    raise ValueError("The public directory returned an invalid response.")
-                html = payload.get("html", "") or ""
-            except (requests.RequestException, ValueError) as exc:
-                page_errors.append(f"Page {page}: {exc}")
-                if page == 1:
-                    details = self._source_details(
-                        criteria,
-                        retrieved_at,
-                        search_url,
-                        location_note=location_note,
-                        fetch_urls=fetch_urls,
-                        reason=f"Public directory request failed: {exc}",
+        for query_index, query_subject_ids in enumerate(query_groups, start=1):
+            query_search_url = self.build_search_url(criteria, query_subject_ids)
+            search_urls.append(query_search_url)
+            query_reported_total: Optional[int] = None
+            query_pages = 0
+            query_candidates = set()
+            query_errors: List[str] = []
+            for page in range(1, max_pages_per_query + 1):
+                params = self._official_filter_params(criteria, subject_ids=query_subject_ids)
+                params.update({"limiet": str(page_size), "pagina": str(page)})
+                fetch_url = f"{self.base_url}/zoeken/fetch?{urlencode(params)}"
+                fetch_urls.append(fetch_url)
+                try:
+                    response = requests.get(
+                        fetch_url,
+                        headers=self._request_headers(json_response=True),
+                        timeout=self.timeout_seconds,
                     )
-                    return [], "live_directory_unavailable", details
-                break
+                    response.raise_for_status()
+                    payload = response.json()
+                    if not isinstance(payload, dict):
+                        raise ValueError("The public directory returned an invalid response.")
+                    html = payload.get("html", "") or ""
+                except (requests.RequestException, ValueError) as exc:
+                    message = f"Area query {query_index}, page {page}: {exc}"
+                    page_errors.append(message)
+                    query_errors.append(message)
+                    break
 
-            pages_fetched += 1
-            if reported_total is None:
-                reported_total = optional_int(payload.get("count"))
-            page_candidates = self._parse_public_results(
-                html,
+                pages_fetched += 1
+                query_pages += 1
+                if query_reported_total is None:
+                    query_reported_total = optional_int(payload.get("count"))
+                page_candidates = self._parse_public_results(
+                    html,
+                    criteria,
+                    query_search_url,
+                    retrieved_at,
+                    page=page,
+                )
+                for candidate in page_candidates:
+                    profile_key = candidate.get("profile_url") or candidate.get("id")
+                    if not profile_key:
+                        continue
+                    query_candidates.add(profile_key)
+                    if profile_key not in seen_profiles:
+                        seen_profiles.add(profile_key)
+                        candidates.append(candidate)
+                if len(query_candidates) >= target_per_query:
+                    break
+                if len(page_candidates) < page_size:
+                    break
+                if query_reported_total is not None and page * page_size >= query_reported_total:
+                    break
+
+            if query_reported_total is None:
+                reported_total_known = False
+            else:
+                reported_total += query_reported_total
+            query_details.append({
+                "legal_area_ids": query_subject_ids,
+                "search_url": query_search_url,
+                "reported_total": query_reported_total,
+                "pages_fetched": query_pages,
+                "unique_candidates": len(query_candidates),
+                "errors": query_errors,
+            })
+
+        if not candidates and page_errors and all(not item["pages_fetched"] for item in query_details):
+            details = self._source_details(
                 criteria,
-                search_url,
                 retrieved_at,
-                page=page,
+                search_urls[0] if search_urls else search_url,
+                location_note=location_note,
+                fetch_urls=fetch_urls,
+                search_urls=search_urls,
+                area_queries=query_details,
+                reason="Every official legal-area query failed; no fallback records were used.",
+                page_errors=page_errors,
             )
-            for candidate in page_candidates:
-                profile_key = candidate.get("profile_url") or candidate.get("id")
-                if profile_key and profile_key not in seen_profiles:
-                    seen_profiles.add(profile_key)
-                    candidates.append(candidate)
-            if len(candidates) >= max_results:
-                break
-            if len(page_candidates) < page_size:
-                break
-            if reported_total is not None and page * page_size >= reported_total:
-                break
+            return [], "live_directory_unavailable", details
 
         details = self._source_details(
             criteria,
             retrieved_at,
-            search_url,
+            search_urls[0] if search_urls else search_url,
             location_note=location_note,
             fetch_urls=fetch_urls,
-            reported_total=reported_total,
+            search_urls=search_urls,
+            area_queries=query_details,
+            reported_total=reported_total if reported_total_known else None,
             pages_fetched=pages_fetched,
             unique_candidate_count=len(candidates),
             page_errors=page_errors,
         )
-        source_mode = "nova_public_directory_partial" if page_errors else "nova_public_directory"
-        return candidates[:max_results], source_mode, details
+        source_mode = "nova_public_directory_partial" if details["partial_results"] else "nova_public_directory"
+        return candidates, source_mode, details
 
-    def _official_filter_params(self, criteria: NovaSearchCriteria) -> Dict[str, Any]:
+    def _official_filter_params(
+        self,
+        criteria: NovaSearchCriteria,
+        subject_ids: Optional[Sequence[int]] = None,
+    ) -> Dict[str, Any]:
         params: Dict[str, Any] = {"type": "advocaten"}
-        subject_ids = criteria.nova_subject_ids or self._known_subject_ids(criteria)
-        if subject_ids:
-            params["filters[rechtsgebieden]"] = json.dumps(subject_ids, separators=(",", ":"))
+        resolved_subject_ids = list(subject_ids) if subject_ids is not None else (
+            criteria.nova_subject_ids or self._known_subject_ids(criteria)
+        )
+        if resolved_subject_ids:
+            params["filters[rechtsgebieden]"] = json.dumps(resolved_subject_ids, separators=(",", ":"))
         if criteria.lawyer_name:
             params["q"] = criteria.lawyer_name
 
@@ -344,6 +347,8 @@ class NovaDirectoryClient:
         *,
         location_note: str = "",
         fetch_urls: Optional[List[str]] = None,
+        search_urls: Optional[List[str]] = None,
+        area_queries: Optional[List[Dict[str, Any]]] = None,
         reason: str = "",
         reported_total: Optional[int] = None,
         pages_fetched: int = 0,
@@ -385,14 +390,21 @@ class NovaDirectoryClient:
             "retrieved_at": retrieved_at,
             "freshness": "live",
             "search_url": search_url,
+            "search_urls": search_urls or [search_url],
             "fetch_urls": fetch_urls or [],
+            "area_queries": area_queries or [],
+            "multi_area_strategy": "separate_official_queries_then_local_deduplication" if len(search_urls or []) > 1 else "single_official_query",
             "reported_total": reported_total,
+            "reported_total_is_sum_across_areas": len(search_urls or []) > 1,
             "pages_fetched": pages_fetched,
             "page_size": 10,
             "unique_candidate_count": unique_candidate_count,
             "result_cap": normalize_max_results(criteria.max_results),
             "filters_requested": {
                 "legal_area_ids": criteria.nova_subject_ids,
+                "legal_fields": criteria.legal_fields,
+                "explicit_legal_fields": criteria.explicit_legal_fields,
+                "inferred_legal_fields": criteria.inferred_legal_fields,
                 "lawyer_name": criteria.lawyer_name,
                 "location": criteria.postcode_or_city,
                 "radius_km": normalize_nova_radius(criteria.radius_km) if location_requested else None,
@@ -415,6 +427,10 @@ class NovaDirectoryClient:
             "resolved_location": criteria.resolved_location or None,
             "official_legal_area_ids": criteria.nova_subject_ids,
             "official_specialization_ids": criteria.nova_specialization_ids,
+            "case_source_coverage": criteria.case_source_coverage,
+            "case_source_items_considered": sum(criteria.case_source_coverage.values()),
+            "case_content_classification": "local_only",
+            "raw_case_text_shared_with_directory": False,
             "location_filter_applied": location_applied,
             "location_filter_note": location_note,
             "specialization_filter_applied": specialization_applied,
@@ -422,7 +438,10 @@ class NovaDirectoryClient:
             "ranking_method": "Official NOvA filters followed by local case-evidence ranking in LARO.",
             "source_notice": NOVA_DIRECTORY_NOTICE,
             "page_errors": page_errors or [],
-            "partial_results": bool(page_errors),
+            "partial_results": bool(
+                page_errors
+                or (reported_total is not None and unique_candidate_count < reported_total)
+            ),
         }
         if reason:
             details["reason"] = reason
@@ -541,14 +560,25 @@ class LawyerMatchingEngine:
             for key in ("description", "case_description", "summary", "case_summary")
             if case_data.get(key)
         )
-        legal_fields = normalize_legal_fields(
+        explicit_legal_fields = normalize_legal_fields(
             case_data.get("legal_fields")
             or case_data.get("matched_fields")
+        )
+        profile = case_data.get("case_profile") if isinstance(case_data.get("case_profile"), dict) else {}
+        inferred_legal_fields = normalize_legal_fields(
+            profile.get("inferred_legal_fields")
             or infer_legal_fields(description, case_data.get("evidence_topics", []))
+        )
+        legal_fields = (
+            explicit_legal_fields[:4]
+            if case_data.get("manual_legal_field_override") and explicit_legal_fields
+            else dedupe(explicit_legal_fields + inferred_legal_fields)[:4]
         )
 
         return NovaSearchCriteria(
             legal_fields=legal_fields,
+            explicit_legal_fields=explicit_legal_fields,
+            inferred_legal_fields=inferred_legal_fields,
             nova_subject_terms=dedupe(case_data.get("nova_subject_terms", [])),
             nova_subject_ids=dedupe_ints(case_data.get("nova_subject_ids", [])),
             nova_specialization_ids=dedupe_ints(case_data.get("nova_specialization_ids", [])),
@@ -574,7 +604,11 @@ class LawyerMatchingEngine:
             language=str(case_data.get("language") or "nl"),
             urgency=str(case_data.get("urgency") or "normal"),
             complexity=str(case_data.get("complexity") or "medium"),
-            evidence_topics=dedupe(case_data.get("evidence_topics", []) + case_data.get("topics", [])),
+            evidence_topics=dedupe(
+                dedupe(case_data.get("evidence_topics", []))
+                + dedupe(case_data.get("topics", []))
+            ),
+            case_source_coverage=dict(profile.get("source_coverage") or case_data.get("case_source_coverage") or {}),
             max_results=normalize_max_results(case_data.get("max_results") or 30),
         )
 
@@ -600,6 +634,15 @@ class LawyerMatchingEngine:
         return {
             "matched_lawyers": ranked[: criteria.max_results],
             "search_criteria": criteria_to_dict(criteria),
+            "case_profile": {
+                "inferred_legal_fields": criteria.inferred_legal_fields,
+                "explicit_legal_fields": criteria.explicit_legal_fields,
+                "selected_legal_fields": criteria.legal_fields,
+                "manual_legal_field_override": bool(case_data.get("manual_legal_field_override")),
+                "evidence_topics": criteria.evidence_topics,
+                "source_coverage": criteria.case_source_coverage,
+                "raw_case_text_shared_with_directory": False,
+            },
             "source_mode": source_mode,
             "source_details": source_details,
             "nova_search_url": search_url,
@@ -721,6 +764,8 @@ def build_match_reasons(
 def criteria_to_dict(criteria: NovaSearchCriteria) -> Dict[str, Any]:
     return {
         "legal_fields": criteria.legal_fields,
+        "explicit_legal_fields": criteria.explicit_legal_fields,
+        "inferred_legal_fields": criteria.inferred_legal_fields,
         "nova_subject_terms": criteria.nova_subject_terms or legal_fields_to_nova_terms(criteria.legal_fields),
         "nova_subject_ids": criteria.nova_subject_ids,
         "nova_specialization_ids": criteria.nova_specialization_ids,
@@ -734,51 +779,22 @@ def criteria_to_dict(criteria: NovaSearchCriteria) -> Dict[str, Any]:
         "urgency": criteria.urgency,
         "complexity": criteria.complexity,
         "evidence_topics": criteria.evidence_topics,
+        "case_source_coverage": criteria.case_source_coverage,
         "max_results": criteria.max_results,
         "resolved_location": criteria.resolved_location or None,
     }
 
 
 def legal_fields_to_nova_terms(legal_fields: Sequence[str]) -> List[str]:
-    terms: List[str] = []
-    for field_name in legal_fields:
-        terms.extend(FIELD_TO_NOVA_TERMS.get(field_name, []))
-        terms.extend(FIELD_TO_NOVA_TERMS.get(field_name.upper(), []))
-    return dedupe(terms)
+    return dedupe(legal_field_terms(legal_fields))
 
 
 def infer_legal_fields(text: str, evidence_topics: Sequence[str]) -> List[str]:
-    haystack = f"{text} {' '.join(evidence_topics)}".lower()
-    inferred = []
-    for keyword, field_name in KEYWORD_TO_FIELD.items():
-        if keyword in haystack:
-            inferred.append(field_name)
-    return dedupe(inferred) or ["GENERAL_LAW"]
+    return infer_dutch_legal_fields(text, evidence_topics, limit=4) or ["GENERAL_LAW"]
 
 
 def normalize_legal_fields(values: Any) -> List[str]:
-    if not values:
-        return []
-    if isinstance(values, str):
-        values = [values]
-    normalized = []
-    for value in values:
-        field_name = str(value).strip()
-        if not field_name:
-            continue
-        key = field_name.upper().replace(" ", "_").replace("-", "_")
-        aliases = {
-            "ARBEIDSRECHT": "EMPLOYMENT_LAW",
-            "EMPLOYMENT": "EMPLOYMENT_LAW",
-            "HUURRECHT": "PROPERTY_LAW",
-            "VASTGOEDRECHT": "PROPERTY_LAW",
-            "FAMILY": "FAMILY_LAW",
-            "PERSONEN_EN_FAMILIERECHT": "FAMILY_LAW",
-            "BESTUURSRECHT": "ADMINISTRATIVE_LAW",
-            "STRAFRECHT": "CRIMINAL_LAW",
-        }
-        normalized.append(aliases.get(key, key))
-    return dedupe(normalized)
+    return normalize_dutch_legal_fields(values)
 
 
 def normalize_lawyer_record(record: Dict[str, Any]) -> Dict[str, Any]:
@@ -878,7 +894,7 @@ def normalize_max_results(value: Any) -> int:
         limit = int(value)
     except (TypeError, ValueError):
         limit = 30
-    return max(1, min(limit, 30))
+    return max(1, min(limit, 100))
 
 
 def optional_int(value: Any) -> Optional[int]:

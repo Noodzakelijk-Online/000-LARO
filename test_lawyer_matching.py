@@ -176,6 +176,68 @@ class TestLawyerMatching(unittest.TestCase):
         self.assertTrue(result["source_details"]["specialization_filter_applied"])
         self.assertEqual(result["source_details"]["official_specialization_ids"], [6])
 
+    def test_social_security_case_uses_the_official_registered_area(self):
+        html = public_result_html(18, legal_area="Sociaal-zekerheidsrecht")
+
+        with patch("lawyer_matching.requests.get", return_value=FakeResponse({"count": 1, "html": html})) as get:
+            result = LawyerMatchingEngine().match({
+                "description": "UWV heeft de WIA-uitkering geweigerd.",
+                "legal_fields": ["SOCIAL_SECURITY_LAW"],
+                "max_results": 10,
+            })
+
+        fetch_url = next(call.args[0] for call in get.call_args_list if "/zoeken/fetch" in call.args[0])
+        self.assertIn("filters%5Brechtsgebieden%5D=%5B18%5D", fetch_url)
+        self.assertEqual(result["search_criteria"]["legal_fields"][0], "SOCIAL_SECURITY_LAW")
+        self.assertEqual(result["matched_lawyers"][0]["legal_fields"], ["SOCIAL_SECURITY_LAW"])
+
+    def test_multidomain_case_queries_each_official_area_and_unions_results(self):
+        social_html = public_result_html(18, legal_area="Sociaal-zekerheidsrecht")
+        insurance_html = public_result_html(205, legal_area="Verzekeringsrecht")
+        administrative_html = public_result_html(227, legal_area="Bestuursrecht")
+
+        def fake_get(url, **kwargs):
+            if "%5B18%5D" in url:
+                return FakeResponse({"count": 482, "html": social_html})
+            if "%5B205%5D" in url:
+                return FakeResponse({"count": 117, "html": insurance_html})
+            if "%5B227%5D" in url:
+                return FakeResponse({"count": 1234, "html": administrative_html})
+            raise AssertionError(f"Unexpected NOvA request: {url}")
+
+        with patch("lawyer_matching.requests.get", side_effect=fake_get) as get:
+            result = LawyerMatchingEngine().match({
+                "description": "UWV rejected the WIA benefit and the insurance company refused policy coverage.",
+                "max_results": 20,
+            })
+
+        fetch_urls = [call.args[0] for call in get.call_args_list]
+        self.assertEqual(len(fetch_urls), 3)
+        self.assertFalse(any("%5B18%2C205%5D" in url or "%5B205%2C18%5D" in url for url in fetch_urls))
+        self.assertEqual({item["id"] for item in result["matched_lawyers"]}, {"18", "205", "227"})
+        self.assertEqual(result["source_details"]["multi_area_strategy"], "separate_official_queries_then_local_deduplication")
+        self.assertNotIn("CORPORATE_LAW", result["search_criteria"]["legal_fields"])
+
+    def test_directory_window_is_reported_as_partial_when_more_official_results_exist(self):
+        def page_html(page):
+            start = ((page - 1) * 10) + 1
+            return "".join(public_result_html(index) for index in range(start, start + 10))
+
+        def fake_get(url, **kwargs):
+            page = 2 if "pagina=2" in url else 1
+            return FakeResponse({"count": 200, "html": page_html(page)})
+
+        with patch("lawyer_matching.requests.get", side_effect=fake_get):
+            result = LawyerMatchingEngine().match({
+                "legal_fields": ["PROPERTY_LAW"],
+                "max_results": 20,
+            })
+
+        self.assertEqual(result["source_details"]["pages_fetched"], 2)
+        self.assertEqual(result["source_details"]["unique_candidate_count"], 20)
+        self.assertTrue(result["source_details"]["partial_results"])
+        self.assertEqual(result["source_details"]["reported_total"], 200)
+
     def test_unresolved_location_is_reported_and_not_silently_applied(self):
         html = public_result_html(1)
 

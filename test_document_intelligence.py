@@ -4,6 +4,7 @@ import unittest
 
 from document_aggregation import DocumentAggregator
 from document_intelligence import DocumentIntelligenceEngine
+from serverless_functions import logger as serverless_logger
 from serverless_functions import process_document
 
 
@@ -139,6 +140,25 @@ class TestServerlessDocumentProcessing(unittest.TestCase):
         self.assertIn("legal_analysis", body["analysis"])
         self.assertTrue(body["analysis"]["legal_analysis"]["facts"]["dates"])
         self.assertGreater(body["metadata"]["relevance_score"], 0)
+
+    def test_process_document_does_not_log_legal_text(self):
+        legal_text = "Confidential client statement that must not enter application logs."
+
+        with self.assertLogs(serverless_logger, level="INFO") as captured:
+            result = process_document(
+                {
+                    "document_id": "doc-private",
+                    "document_data": {
+                        "case_id": 11,
+                        "document_name": "client-statement.txt",
+                        "content": legal_text,
+                    },
+                },
+                {},
+            )
+
+        self.assertEqual(result["statusCode"], 200)
+        self.assertNotIn(legal_text, "\n".join(captured.output))
 
 
 if __name__ == "__main__":

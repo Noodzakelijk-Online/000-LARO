@@ -1730,6 +1730,11 @@ class TestLegalLedgerApi(unittest.TestCase):
         }, headers=self.headers)
         self.assertEqual(document.status_code, 201)
 
+        taxonomy = self.client.get("/api/lawyers/taxonomy", headers=self.headers)
+        self.assertEqual(taxonomy.status_code, 200)
+        self.assertEqual(taxonomy.get_json()["registered_area_count"], 35)
+        self.assertTrue(any(item["key"] == "ADMINISTRATIVE_LAW" for item in taxonomy.get_json()["areas"]))
+
         lawyers = self.client.post("/api/lawyers/match", json={
             "case_id": case_id,
             "max_results": 2,
@@ -1746,7 +1751,11 @@ class TestLegalLedgerApi(unittest.TestCase):
             ],
         }, headers=self.headers)
         self.assertEqual(lawyers.status_code, 200)
-        self.assertEqual(lawyers.get_json()["matched_lawyers"][0]["name"], "Persisted Case Lawyer")
+        lawyer_payload = lawyers.get_json()
+        self.assertEqual(lawyer_payload["matched_lawyers"][0]["name"], "Persisted Case Lawyer")
+        self.assertIn("ADMINISTRATIVE_LAW", lawyer_payload["case_profile"]["selected_legal_fields"])
+        self.assertEqual(lawyer_payload["case_profile"]["source_coverage"]["documents"], 1)
+        self.assertFalse(lawyer_payload["case_profile"]["raw_case_text_shared_with_directory"])
         stored_lawyers = self.client.get(f"/api/lawyers/{case_id}/matches", headers=self.headers)
         self.assertEqual(stored_lawyers.status_code, 200)
         self.assertEqual(stored_lawyers.get_json()["matched_lawyers"][0]["name"], "Persisted Case Lawyer")
