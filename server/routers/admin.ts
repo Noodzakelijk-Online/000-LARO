@@ -1,7 +1,12 @@
+import { z } from "zod";
 import { adminProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { getJobStatus } from "../cronScheduler";
 import { ENV } from "../_core/env";
+import { isEmergencyStopped, setEmergencyStop } from "../systemState";
+import { runRetentionSweep, previewRetentionSweep, RETENTION_POLICY } from "../retention";
+import { getAllFlags } from "../featureFlags";
+import { createAuditLog } from "../audit";
 
 /**
  * Phase 036 — admin/operator diagnostics.
@@ -75,5 +80,72 @@ export const adminRouter = router({
   repairOrphans: adminProcedure.mutation(async () => {
     const { repairOrphans } = await import("../reconcile");
     return repairOrphans();
+  }),
+
+  // Phase 104 — operator emergency stop (kill switch) for all outreach actions.
+  emergencyStopStatus: adminProcedure.query(async () => ({ engaged: await isEmergencyStopped() })),
+  setEmergencyStop: adminProcedure
+    .input(z.object({ engaged: z.boolean() }))
+    .mutation(async ({ input, ctx }) => {
+      await setEmergencyStop(input.engaged);
+      await createAuditLog({
+        userId: ctx.user.id,
+        action: input.engaged ? "emergency_stop.engaged" : "emergency_stop.released",
+        entityType: "system",
+        entityId: "emergency_stop",
+      });
+      return { engaged: input.engaged };
+    }),
+
+  // Phase 102 — data retention: preview (dry run) and run the sweep.
+  retentionPreview: adminProcedure.query(async () => previewRetentionSweep()),
+  retentionRun: adminProcedure.mutation(async ({ ctx }) => {
+    const report = await runRetentionSweep();
+    await createAuditLog({
+      userId: ctx.user.id,
+      action: "retention.sweep",
+      entityType: "system",
+      entityId: "audit_logs",
+      details: report,
+    });
+    return report;
+  }),
+
+  // Phase 101 — support/debug bundle: a redacted diagnostic snapshot an operator
+  // can attach to a support ticket. Contains NO secret values and NO user PII —
+  // only system state, table counts, invariant results, flags, and job status.
+  debugBundle: adminProcedure.query(async () => {
+    let dbReady = false;
+    try { dbReady = !!(await getDb()); } catch { dbReady = false; }
+    const { verifyInvariants } = await import("../invariants");
+    const db = await getDb();
+    const counts: Record<string, number> = {};
+    if (db) {
+      const sqlite: any = (db as any).$client ?? (db as any).session?.client;
+      if (sqlite) {
+        const tables = (sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as Array<{ name: string }>)
+          .filter((t) => !t.name.startsWith("sqlite_") && !t.name.startsWith("__"));
+        for (const t of tables) {
+          try { counts[t.name] = (sqlite.prepare(`SELECT COUNT(*) AS c FROM "${t.name}"`).get() as { c: number }).c; } catch { /* skip */ }
+        }
+      }
+    }
+    return {
+      generatedAt: new Date().toISOString(),
+      redacted: true,
+      system: {
+        node: process.version, platform: process.platform,
+        uptimeSeconds: Math.round(process.uptime()),
+        env: ENV.NODE_ENV, isProduction: ENV.isProd, demoMode: ENV.isDemo,
+        appVersion: process.env.npm_package_version || "1.0.0",
+      },
+      db: { ready: dbReady },
+      tableCounts: counts,
+      invariants: await verifyInvariants(),
+      flags: await getAllFlags(),
+      emergencyStop: await isEmergencyStopped(),
+      retentionPolicy: RETENTION_POLICY,
+      jobs: getJobStatus(),
+    };
   }),
 });

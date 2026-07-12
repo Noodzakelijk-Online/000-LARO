@@ -1,6 +1,6 @@
 {
   "name": "laro-desktop",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "LARO - Legal Aid Reach Out",
   "main": "dist/main/src-main/index.js",
   "scripts": {
@@ -32,7 +32,10 @@
     "gate": "node scripts/stabilization-gate.mjs",
     "verify": "node scripts/stabilization-gate.mjs",
     "scan:no-excuses": "node scripts/no-excuses-scan.mjs --write",
-    "scan:safety": "node scripts/account-safety-check.mjs --write"
+    "scan:safety": "node scripts/account-safety-check.mjs --write",
+    "preflight": "node scripts/prod-preflight.mjs",
+    "readiness": "node scripts/operator-readiness.mjs",
+    "regression:baseline": "node scripts/regression-baseline.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1022.0",

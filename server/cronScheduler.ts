@@ -1,5 +1,6 @@
 import cron from 'node-cron';
 import { runAutoCollectionForAllCases } from './autoCollectionService';
+import { retryWithBackoff } from './retry';
 
 /**
  * Phase 016 — background jobs, schedulers, and workers.
@@ -64,26 +65,29 @@ export async function runJob(
   s.runs += 1;
   s.lastRunAt = nowMs();
 
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      await fn();
-      s.lastSuccessAt = nowMs();
-      s.lastError = null;
-      return;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (attempt < retries) {
-        const delay = baseDelayMs * Math.pow(2, attempt);
-        console.warn(`[Cron] Job "${name}" failed (attempt ${attempt + 1}/${retries + 1}); retrying in ${delay}ms:`, msg);
-        await sleep(delay);
-        continue;
-      }
-      s.failures += 1;
-      s.lastErrorAt = nowMs();
-      s.lastError = msg;
-      console.error(`[Cron] Job "${name}" failed after ${retries + 1} attempts:`, msg);
-      return;
-    }
+  try {
+    // Phase 110 — delegate to the shared, tested retry primitive. A scheduled job
+    // wants to retry on ANY failure (transient or not), so isRetryable is forced
+    // true here; the default heuristic is used elsewhere for external calls.
+    await retryWithBackoff(fn, {
+      attempts: retries + 1,
+      baseDelayMs,
+      isRetryable: () => true,
+      sleep,
+      jitter: () => 0, // deterministic backoff for the scheduler
+      onRetry: ({ attempt, delayMs, err }) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn(`[Cron] Job "${name}" failed (attempt ${attempt}/${retries + 1}); retrying in ${delayMs}ms:`, msg);
+      },
+    });
+    s.lastSuccessAt = nowMs();
+    s.lastError = null;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    s.failures += 1;
+    s.lastErrorAt = nowMs();
+    s.lastError = msg;
+    console.error(`[Cron] Job "${name}" failed after ${retries + 1} attempts:`, msg);
   }
 }
 

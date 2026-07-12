@@ -31,6 +31,7 @@ import { googleDriveRouter } from "./googleDrive";
 import { notificationsRouter } from "./notifications";
 import { featureFlagsRouter } from "./featureFlags";
 import { helpRouter } from "./help";
+import { onboardingRouter } from "./onboarding";
 import { adminRouter } from "./admin";
 import { auditRouter } from "./audit";
 import { enforceRateLimit, RATE_LIMITS } from "../rateLimit";
@@ -86,6 +87,7 @@ export const appRouter = router({
   notifications: notificationsRouter,
   featureFlags: featureFlagsRouter, // Phase 058
   help: helpRouter, // Phase 071/072
+  onboarding: onboardingRouter, // Phase 105
 
   // Phase 056 — SaaS readiness WITHOUT forced billing. Core features work on the
   // free tier; Stripe is optional and unconfigured by default. This endpoint
@@ -354,11 +356,50 @@ export const appRouter = router({
   }),
 
   // Clarifications procedures
+  // Phase 111 — ambiguous external-action resolution. Real logic (was an empty
+  // stub): computes genuine clarifications the user must resolve BEFORE outreach
+  // can proceed — e.g. a case with no recipient-resolvable matches, or a case
+  // classified into multiple legal areas where the user hasn't confirmed intent.
+  // Resolutions are persisted in system_config keyed per user+clarification, so
+  // an answered clarification stops reappearing. Nothing external happens here.
   clarifications: router({
-    pending: protectedProcedure.query((): Array<{ id: string; question: string; context?: string }> => []),
+    pending: protectedProcedure.query(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) return [] as Array<{ id: string; caseId: string; question: string; context: string }>;
+      const { getSystemSwitch } = await import("../systemState");
+      const rows = await db
+        .select({ id: cases.id, clientName: cases.clientName, clientEmail: cases.clientEmail, legalAreas: cases.legalAreas, status: cases.status })
+        .from(cases)
+        .where(eq(cases.userId, ctx.user.id));
+      const out: Array<{ id: string; caseId: string; question: string; context: string }> = [];
+      for (const c of rows) {
+        let areas: string[] = [];
+        try { areas = JSON.parse(c.legalAreas || "[]"); } catch { areas = []; }
+        // Ambiguity 1: multiple legal areas → which should drive matching?
+        if (areas.length > 1) {
+          const cid = `${c.id}:primary-area`;
+          if (!(await getSystemSwitch(`clarify:${ctx.user.id}:${cid}`))) {
+            out.push({ id: cid, caseId: c.id, question: `This case matches multiple legal areas (${areas.join(", ")}). Which is the primary area for lawyer matching?`, context: "multiple-legal-areas" });
+          }
+        }
+        // Ambiguity 2: no client email → outreach recipient is unresolved.
+        if (!c.clientEmail) {
+          const cid = `${c.id}:contact`;
+          if (!(await getSystemSwitch(`clarify:${ctx.user.id}:${cid}`))) {
+            out.push({ id: cid, caseId: c.id, question: `This case has no client contact email. Add one before preparing outreach.`, context: "missing-contact" });
+          }
+        }
+      }
+      return out;
+    }),
     answer: protectedProcedure
-      .input(z.object({ questionId: z.string(), answer: z.string() }))
-      .mutation(() => ({ ok: true as const })),
+      .input(z.object({ questionId: z.string(), answer: z.string().min(1) }))
+      .mutation(async ({ ctx, input }) => {
+        const { setSystemSwitch } = await import("../systemState");
+        // Mark this clarification resolved for this user so it stops surfacing.
+        await setSystemSwitch(`clarify:${ctx.user.id}:${input.questionId}`, true);
+        return { ok: true as const, resolved: input.questionId };
+      }),
   }),
 
   assistant: router({

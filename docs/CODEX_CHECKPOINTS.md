@@ -259,3 +259,34 @@ the 14 dead-router UI screens) and D3 (real outreach send, still flag-gated).
 
 **Next safe action:** phases 101–115 (see docs/ROADMAP.md). Product blockers before
 any "autonomous outreach" claim: D1 (dead UI routers) and D3 (real send).
+
+---
+
+## Checkpoint 13 — 2026-07-06 — Phases 101–115 (program complete through 115)
+
+**Branch:** `Phase-Imp`.
+
+**Done — real backend features (all tested, `tests/backend/phase101_115.test.ts` 11/11):**
+- **104 Emergency stop** `server/systemState.ts` + `admin.setEmergencyStop`; wired
+  into `workflow.prepareDrafts/approveDraft` — outreach halts under stop, admin-gated.
+- **102 Retention** `server/retention.ts` + `admin.retentionPreview/Run` — purges
+  audit logs > window, never business data.
+- **110 Safe retries** `server/retry.ts` `retryWithBackoff`; live job runner delegates.
+- **105 Onboarding** `server/onboarding.ts` + `onboarding.*` (per-user completion).
+- **106 Roles** `server/_core/roles.ts` + `system.capabilities` (Partial: no teams).
+- **101 Debug bundle** `admin.debugBundle` (redacted, no secrets).
+- **109 Exceptions** `dashboard.exceptions` (only cases needing attention).
+- **111 Clarifications** real compute+resolve (was empty stub).
+- **107 Confidence** `server/confidence.ts` from real score (no hardcoded constant).
+
+**Scripts:** `prod-preflight` (103), `regression-baseline` (113, 25 files),
+`operator-readiness` (115), `CHANGELOG.md` + version 1.1.0 (112). Docs: 102/103/108/
+114/115.
+
+**Verified:** `npm run gate` → 6 blocking gates green; traceability 116 rows / 0
+broken; vitest **25 files, 165 passed, 9 todo**; all readiness scripts green.
+
+**Honest residuals (unchanged, tracked):** D3 outreach send unbuilt/flag-gated,
+D1 renderer dead routers, D4 token crypto, multi-user teams (106). The product is
+operator-ready for triage/match/prepare with real safety controls, NOT end-to-end
+autonomous send.

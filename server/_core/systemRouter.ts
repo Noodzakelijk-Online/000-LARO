@@ -1,5 +1,6 @@
 import { router, publicProcedure, protectedProcedure } from './trpc';
 import { ENV } from './env';
+import { capabilitiesFor, normalizeRole } from './roles';
 
 export const systemRouter = router({
   health: publicProcedure.query(() => ({
@@ -31,6 +32,13 @@ export const systemRouter = router({
   // see at a glance what still needs credentials before a feature will work.
   // Phase 079 (red-team): require auth — even the "which integrations exist"
   // signal should not be exposed to unauthenticated callers.
+  // Phase 106 — role-based capabilities for the current user, so the renderer can
+  // show/hide role-gated settings. Derived from the real users.role value.
+  capabilities: protectedProcedure.query(({ ctx }) => {
+    const role = normalizeRole((ctx.user as { role?: string | null }).role);
+    return { role, capabilities: capabilitiesFor(role) };
+  }),
+
   providerChecklist: protectedProcedure.query(() => {
     const has = (v: string | undefined) => !!(v && v.length > 0);
     const items = [

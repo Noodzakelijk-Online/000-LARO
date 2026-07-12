@@ -440,3 +440,22 @@ NO_EXCUSES_SEARCH (094, generated), FINAL_VERIFICATION_REPORT (096), FINAL_RESPO
 Verified: `npm run gate` → 6 blocking gates green (added no-excuses + account-safety
 gates this batch). vitest 24 files / 154 passed / 9 todo. Honest residuals unchanged
 and tracked (D1 dead routers, D3 send, D4 token crypto); renderer tsc still D2 debt.
+
+## Batch: Phases 101–115 — operator controls, safety & lifecycle (2026-07-06)
+
+Real code (server): systemState.ts (emergency stop, 104), retention.ts (102),
+retry.ts (110, wired into cronScheduler.runJob), onboarding.ts (105), _core/roles.ts
+(106), confidence.ts (107); routers: admin.debugBundle/retention/emergencyStop,
+dashboard.exceptions (109), real clarifications (111), onboarding router,
+system.capabilities. Emergency stop wired into workflow prepare/approve.
+
+Scripts: prod-preflight.mjs (103), regression-baseline.mjs (113), operator-readiness.mjs
+(115); CHANGELOG.md + version 1.1.0 (112). Docs: DATA_RETENTION, PROD_MIGRATION,
+DECISION_MINIMIZATION (108), MAINTENANCE_REVIEW (114), OPERATOR_READINESS (115).
+
+Tests: tests/backend/phase101_115.test.ts (11/11) — retry semantics, confidence,
+roles, onboarding, emergency-stop halts outreach + admin-gating, retention purges
+only old audit logs, debug bundle redacted/admin-only, exceptions, clarifications.
+
+Verified: `npm run gate` 6/6 green; vitest 25 files / 165 passed / 9 todo.
+Honest residuals tracked (D3 send, D1 renderer, D4 crypto, teams). NOT end-to-end send.

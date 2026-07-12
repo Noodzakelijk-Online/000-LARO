@@ -207,6 +207,60 @@ export const dashboardRouter = router({
     return actions;
   }),
 
+  // Phase 109 — exception-based workflow. Surfaces ONLY cases that need human
+  // attention (the exceptions), so an operator works the exceptions instead of
+  // scanning everything (Phase 108 decision minimization). Every item is derived
+  // from real case state; a healthy pipeline returns an empty list.
+  exceptions: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    type Exc = { caseId: string; caseTitle: string; kind: string; detail: string; severity: "high" | "medium" };
+    if (!db) return { count: 0, exceptions: [] as Exc[] };
+    const userId = ctx.user.id;
+
+    const userCases = await db
+      .select({ id: casesTable.id, clientName: casesTable.clientName, clientEmail: casesTable.clientEmail, status: casesTable.status, urgency: casesTable.urgency, legalAreas: casesTable.legalAreas })
+      .from(casesTable)
+      .where(eq(casesTable.userId, userId))
+      .orderBy(desc(casesTable.createdAt))
+      .limit(100);
+
+    const exceptions: Exc[] = [];
+    for (const c of userCases) {
+      const title = c.clientName || c.id;
+      const high = (c.urgency || "").toLowerCase() === "high";
+
+      // Missing recipient contact blocks outreach.
+      if (!c.clientEmail) {
+        exceptions.push({ caseId: c.id, caseTitle: title, kind: "missing-contact", detail: "No client email — outreach cannot be prepared.", severity: high ? "high" : "medium" });
+      }
+      // Unclassified case cannot be matched.
+      let areas: string[] = [];
+      try { areas = JSON.parse(c.legalAreas || "[]"); } catch { areas = []; }
+      if (areas.length === 0) {
+        exceptions.push({ caseId: c.id, caseTitle: title, kind: "unclassified", detail: "Case has no legal area — classification needed before matching.", severity: high ? "high" : "medium" });
+      }
+      // No evidence yet.
+      const evCount = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(evidence)
+        .where(and(eq(evidence.userId, userId), eq(evidence.caseId, c.id)));
+      if (Number(evCount[0]?.count || 0) === 0) {
+        exceptions.push({ caseId: c.id, caseTitle: title, kind: "no-evidence", detail: "No evidence uploaded — the case cannot be assessed.", severity: high ? "high" : "medium" });
+      }
+      // Outreach drafts stuck awaiting approval.
+      const pending = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(outreachStatus)
+        .where(and(eq(outreachStatus.caseId, c.id), eq(outreachStatus.status, "PendingApproval")));
+      if (Number(pending[0]?.count || 0) > 0) {
+        exceptions.push({ caseId: c.id, caseTitle: title, kind: "awaiting-approval", detail: `${pending[0].count} outreach draft(s) awaiting your approval.`, severity: high ? "high" : "medium" });
+      }
+    }
+
+    exceptions.sort((a, b) => (a.severity === b.severity ? 0 : a.severity === "high" ? -1 : 1));
+    return { count: exceptions.length, exceptions };
+  }),
+
 });
 
 

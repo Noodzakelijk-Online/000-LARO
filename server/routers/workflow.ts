@@ -7,6 +7,7 @@ import { enforceRateLimit, RATE_LIMITS } from "../rateLimit";
 import { createAuditLog, AUDIT_ACTIONS } from "../audit";
 import { createNotification } from "../notifications";
 import { getFlag } from "../featureFlags";
+import { assertNotEmergencyStopped } from "../systemState";
 import { assertOutreachTransition } from "../stateMachines";
 import { cases as casesTable, outreachStatus, lawyers } from '../schema';
 import { eq, and, inArray } from "drizzle-orm";
@@ -81,6 +82,7 @@ export const workflowRouter = router({
     .input(z.object({ caseId: z.string(), maxResults: z.number().optional().default(5) }))
     .mutation(async ({ input, ctx }) => {
       await assertCaseOwnership(input.caseId, ctx.user.id);
+      await assertNotEmergencyStopped(); // Phase 104 — operator kill switch
       enforceRateLimit(ctx, "outreach-prepare", RATE_LIMITS.aiAnalysis);
       const db = await getDb();
       if (!db) throw new Error("Database not available");
@@ -161,6 +163,7 @@ export const workflowRouter = router({
   approveDraft: protectedProcedure
     .input(z.object({ outreachId: z.string() }))
     .mutation(async ({ input, ctx }) => {
+      await assertNotEmergencyStopped(); // Phase 104 — approval also halts under stop
       return setDraftStatus(ctx.user.id, input.outreachId, OUTREACH_APPROVED);
     }),
 

@@ -32,11 +32,18 @@ export const matchingRouter = router({
       await assertCaseOwnership(input.caseId, ctx.user.id); // Phase 008
       enforceRateLimit(ctx, "lawyerSearch", RATE_LIMITS.lawyerSearch); // Phase 018
       try {
-        return await findMatchingLawyers(input.caseId, {
+        const matched = await findMatchingLawyers(input.caseId, {
           maxDistance: input.maxDistance,
           maxResults: input.maxResults,
           sortBy: "score",
         });
+        // Phase 107 — attach an honest confidence derived from the REAL score
+        // (no hardcoded constant). Preserves the array shape callers expect.
+        const { scoreToConfidence } = await import("../confidence");
+        return (matched as any[]).map((m) => ({
+          ...m,
+          confidence: scoreToConfidence(Number(m.matchScore ?? m.score ?? 0)),
+        }));
       } catch (err) {
         // Real engine throws e.g. "Case must have at least one legal area
         // specified" before classification exists. Return an honest empty list.

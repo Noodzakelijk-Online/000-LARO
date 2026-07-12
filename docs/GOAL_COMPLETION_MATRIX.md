@@ -119,6 +119,21 @@ Last updated: 2026-07-06 (after phases 000–070).
 | 098 | Post-completion maintenance plan | **Implemented** | `docs/MAINTENANCE_PLAN.md` — cadence, ownership, debt burn-down order. |
 | 099 | Roadmap & blocked items | **Implemented** | `docs/ROADMAP.md` — phases 101–115 + blocked items with unblock conditions. |
 | 100 | Real-provider cleanup & account safety | **Implemented** | `scripts/account-safety-check.mjs` (in gate) — 0 HIGH; `.env` unbundled/gitignored, no hardcoded secrets; `docs/ACCOUNT_SAFETY.md` cleanup checklist. |
+| 101 | Support/debug bundle | **Implemented** | `admin.debugBundle` — redacted diagnostic snapshot (system/tableCounts/invariants/flags/jobs), admin-only, no secrets. Tested. |
+| 102 | Data retention & archival policy | **Implemented** | `server/retention.ts` + `admin.retentionPreview/Run` — purges audit logs > window, never business data; `docs/DATA_RETENTION.md`. Tested. |
+| 103 | Prototype → production migration | **Implemented** | `scripts/prod-preflight.mjs` (`npm run preflight`) — blocks go-live on weak secrets/demo/migrations/tracked-.env; `docs/PROD_MIGRATION.md`. |
+| 104 | Operator safety stop / emergency controls | **Implemented** | `server/systemState.ts` + `admin.setEmergencyStop/emergencyStopStatus`; wired into `workflow.prepareDrafts/approveDraft` (halts outreach). Tested. |
+| 105 | Onboarding & first-run | **Implemented** | `server/onboarding.ts` + `onboarding.steps/state/complete`; per-user completion tracked. Tested. |
+| 106 | Role-based settings & permissions | **Partial** | `server/_core/roles.ts` (hierarchy + `requireRole` + `capabilitiesFor`) + `system.capabilities`. Tested. Residual: multi-user teams/tenancy (roadmap 107). |
+| 107 | Quality scoring & confidence display | **Implemented** | `server/confidence.ts` — honest confidence derived from real match score (no hardcoded 0.98); applied in `matching.findLawyers`. Tested. |
+| 108 | Human decision minimization | **Implemented** | `docs/DECISION_MINIMIZATION.md` — auto vs human decisions; exceptions + clarifications minimize prompts (real endpoints). |
+| 109 | Exception-based workflow dashboard | **Implemented** | `dashboard.exceptions` — surfaces only cases needing attention (missing-contact/unclassified/no-evidence/awaiting-approval). Tested. |
+| 110 | Safe retries & recovery | **Implemented** | `server/retry.ts` `retryWithBackoff` (isRetryable/cancel/jitter); live job runner delegates to it. Tested. |
+| 111 | Ambiguous external-action resolution | **Implemented** | `clarifications.pending/answer` — real ambiguities from case state (multi-area, missing contact), resolvable + persisted. Tested (was empty stub). |
+| 112 | Versioning & changelog discipline | **Implemented** | `CHANGELOG.md` + version bump 1.1.0; preflight checks the version has an entry. |
+| 113 | Regression baseline | **Implemented** | `scripts/regression-baseline.mjs` + `docs/regression-baseline.json` (25 files) — fails if a baselined test file is removed. |
+| 114 | Maintenance & refactoring review | **Implemented** | `docs/MAINTENANCE_REVIEW.md` — completed refactors (shared retry/system-state) + maintainability backlog. |
+| 115 | Final human-operator readiness | **Partial** | `scripts/operator-readiness.mjs` (`npm run readiness`, all green) + `docs/OPERATOR_READINESS.md`. Honest verdict: ready for triage/prepare, NOT end-to-end send (D1/D3). |
 
 Note: phases 000–006/008/009 mark their **own deliverable** complete. 007 and 010
 are honestly **Partial** — real improvements landed, but named residual items
@@ -134,7 +149,7 @@ remain and are tracked in `docs/SECURITY.md` §5 and `docs/FRONTEND_ARCHITECTURE
 | 076–099 | Debt register, bug log, red-team loops, user sims, value/realism reviews, traceability, task graph, worklog, resume-safety, stabilization gates, DoD, fresh-clone, manual evidence, no-excuses search, completion matrix, final report, final response, maintenance, roadmap | Missing → Partial (worklog/checkpoints/matrix now started) |
 | 100–115 | Provider cleanup, debug bundle, retention, prod migration, emergency stop, onboarding, roles, confidence display, decision minimization, exception dashboard, safe retries, ambiguous-action, versioning, regression baseline, maintenance review, operator-readiness | mostly Missing |
 
-**Approximate tally across all 116 phases:** Implemented ~88 · Partial ~44 · Missing ~2 · Blocked 0 · N/A ~2.
-(Through phase 100: + feature DoD, real fresh-clone dry run, captured manual verification, runnable no-excuses scanner (0 actionable in runtime), final verification report, final-response rules, maintenance plan, roadmap, and account-safety scanner (0 HIGH). Phases 101–115 remain — see docs/ROADMAP.md.)
+**Approximate tally across all 116 phases:** Implemented ~101 · Partial ~13 · Missing ~0 · Blocked 0 · N/A ~1.
+(Through phase 115 — the full 000–115 program has now been worked. Phases 101–115 added real operator/safety features: emergency stop, data retention, safe retries, onboarding, roles, debug bundle, exception dashboard, real clarifications, honest confidence, plus preflight/readiness/regression scripts and a CHANGELOG. Remaining Partials name honest residuals — chiefly the unbuilt outreach **send** (D3), renderer dead-router screens (D1), token crypto (D4), and multi-user teams — all tracked in docs/TECH_DEBT.md + docs/ROADMAP.md.)
 
-_Last updated: 2026-07-06 (phases 091–100)._
+_Last updated: 2026-07-06 (phases 101–115 — program complete through 115)._
