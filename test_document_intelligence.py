@@ -80,6 +80,25 @@ class TestDocumentIntelligenceEngine(unittest.TestCase):
         self.assertIn("event_label", timeline[0])
         self.assertIn("evidence_quote", timeline[0])
 
+    def test_timeline_event_fields_capture_who_did_what_from_source_metadata(self):
+        analysis = self.engine.analyze_text(
+            "On 2026-07-10, CAK stated Robert must provide the bank statement by 2026-08-14.",
+            document_name="CAK request.txt",
+            metadata={"sender": "CAK", "recipient": "Robert"},
+        )
+
+        events = analysis["evidence"]["chronology_events"]
+        self.assertTrue(events)
+        self.assertEqual(events[0]["actor"], "CAK")
+        self.assertEqual(events[0]["action"], "stated")
+        self.assertEqual(events[0]["affected_party"], "Robert")
+        self.assertEqual(events[0]["event_kind"], "communication")
+
+        inferred = self.engine.timeline_event_fields(
+            "On 2026-07-10, CAK stated Robert must provide the bank statement by 2026-08-14."
+        )
+        self.assertEqual(inferred["actor"], "CAK")
+
 
 class TestDocumentAggregationIntelligence(unittest.TestCase):
     def test_manual_upload_is_enriched_with_legal_analysis(self):

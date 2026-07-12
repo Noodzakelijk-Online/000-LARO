@@ -192,6 +192,7 @@ class LocalSemanticAnalysisProvider:
                 records.append({
                     "document_id": str(document["document_id"]),
                     "source_quote": sentence,
+                    "source_metadata": document,
                     "tags": {
                         name for name, cues in self.CASE_SIGNAL_CUES.items()
                         if any(cue in lowered for cue in cues)
@@ -322,10 +323,12 @@ class LocalSemanticAnalysisProvider:
                 continue
             timeline_seen.add(signature)
             quote = record["source_quote"]
+            event_fields = self._timeline_event_fields(quote, record.get("source_metadata") or {})
             timeline_suggestions.append({
                 "event_date": event_date,
                 "title": self._timeline_title(record["tags"]),
                 "description": f"Cited source passage for {event_date}: {quote}",
+                **event_fields,
                 "sources": citations(record),
                 "review_status": "needs_review",
             })
@@ -337,7 +340,10 @@ class LocalSemanticAnalysisProvider:
             questions, source_map, "question", limit=100
         )
         validated_timeline, rejected_timeline = self._validated_case_timeline(
-            timeline_suggestions, source_map, limit=200
+            timeline_suggestions,
+            source_map,
+            limit=200,
+            source_metadata={str(item["document_id"]): item for item in documents},
         )
         coverage = self._case_coverage(source_snapshot)
         was_truncated = coverage["sources_partially_read"] > 0
@@ -410,6 +416,81 @@ class LocalSemanticAnalysisProvider:
         if "obligation" in tags:
             return "Obligation mentioned in source"
         return "Dated source event"
+
+    @classmethod
+    def _timeline_event_fields(cls, source_quote: str, metadata: Dict[str, Any]) -> Dict[str, str]:
+        """Derive bounded chronology facts from the cited passage and source envelope."""
+        quote = cls._clean(source_quote)
+        lowered = quote.lower()
+        actor = cls._clean(metadata.get("sender"))[:255]
+        if not actor:
+            actor_pattern = (
+                r"\b(sent|received|wrote|stated|decided|requested|demanded|confirmed|explained|filed|paid|rejected|approved|"
+                r"verzond|ontving|schreef|verklaarde|besloot|verzocht|sommeerde|bevestigde|diende|betaalde)\b"
+            )
+            match = re.search(actor_pattern, quote, flags=re.IGNORECASE)
+            if match:
+                candidate = quote[:match.start()].strip(" ,.;:-")
+                if "," in candidate:
+                    candidate = candidate.rsplit(",", 1)[-1].strip()
+                candidate = re.sub(
+                    r"^(?:on|op)\s+\d{4}[-/]\d{1,2}[-/]\d{1,2}\s*",
+                    "",
+                    candidate,
+                    flags=re.IGNORECASE,
+                ).strip(" ,.;:-")
+                actor = " ".join(candidate.split()[-4:])[:255]
+        if not actor:
+            party_match = re.search(
+                r"\b(CAK|Robert|gemeente|municipality|rechtbank|court|landlord|verhuurder|tenant|huurder|lawyer|advocaat)\b",
+                quote,
+                flags=re.IGNORECASE,
+            )
+            actor = party_match.group(0) if party_match else "Unknown party"
+
+        action_map = (
+            (("sent", "verzond"), "sent", "communication"),
+            (("received", "ontving"), "received", "communication"),
+            (("wrote", "schreef"), "wrote", "communication"),
+            (("stated", "verklaarde"), "stated", "communication"),
+            (("requested", "verzocht"), "requested", "communication"),
+            (("demanded", "sommeerde"), "demanded", "communication"),
+            (("confirmed", "bevestigde"), "confirmed", "communication"),
+            (("explained", "lichtte toe"), "explained", "communication"),
+            (("decided", "decision", "besloot", "beslissing", "beschikking"), "decided", "decision"),
+            (("rejected", "wees af"), "rejected", "decision"),
+            (("approved", "keurde goed"), "approved", "decision"),
+            (("filed", "diende"), "filed", "filing"),
+            (("paid", "betaalde"), "paid", "financial"),
+            (("invoice", "factuur"), "issued invoice", "financial"),
+            (("deadline", "termijn", "uiterlijk"), "set deadline", "deadline"),
+            (("must", "shall", "moet", "dient", "verplicht"), "created obligation", "obligation"),
+        )
+        action = "documented"
+        event_kind = "event"
+        for cues, candidate_action, candidate_kind in action_map:
+            if any(cue in lowered for cue in cues):
+                action = candidate_action
+                event_kind = candidate_kind
+                break
+
+        affected_party = cls._clean(metadata.get("recipient"))[:255]
+        if affected_party.lower() == actor.lower():
+            affected_party = ""
+        if not affected_party:
+            affected_match = re.search(
+                r"\b(?:stated|decided|requested|demanded|confirmed|verklaarde|besloot|verzocht|sommeerde|bevestigde)\s+(?:that\s+)?([A-Z][A-Za-z0-9 .'-]{1,60}?)\s+(?:must|shall|should|moet|dient)\b",
+                quote,
+            )
+            if affected_match:
+                affected_party = affected_match.group(1).strip(" ,.;:-")[:255]
+
+        return {
+            "actor": actor,
+            "action": action,
+            "affected_party": affected_party,
+            "event_kind": event_kind,
+        }
 
     def _status(self, status: str, message: str) -> Dict[str, Any]:
         return {
@@ -502,6 +583,10 @@ class LocalSemanticAnalysisProvider:
                 "document_id": document_id,
                 "title": self._clean(document.get("title") or document.get("original_filename") or f"Document {document_id}")[:255],
                 "content_hash": document.get("content_hash") or "",
+                "sender": self._clean(document.get("sender"))[:255],
+                "recipient": self._clean(document.get("recipient"))[:255],
+                "document_type": self._clean(document.get("document_type"))[:80],
+                "date_on_document": self._clean(document.get("date_on_document"))[:40],
                 "text": text,
             })
         return readable
@@ -558,7 +643,9 @@ class LocalSemanticAnalysisProvider:
                     model_result.get("review_questions"), source_map, "question"
                 )
                 batch_timeline, batch_rejected_timeline = self._validated_case_timeline(
-                    model_result.get("timeline_suggestions"), source_map
+                    model_result.get("timeline_suggestions"),
+                    source_map,
+                    source_metadata={str(item["document_id"]): item for item in documents},
                 )
                 findings.extend(batch_findings)
                 questions.extend(batch_questions)
@@ -619,7 +706,10 @@ class LocalSemanticAnalysisProvider:
             [*(deterministic.get("review_questions") or []), *questions], full_source_map, "question", limit=100
         )
         combined_timeline, merge_rejected_timeline = self._validated_case_timeline(
-            [*(deterministic.get("timeline_suggestions") or []), *timeline_suggestions], full_source_map, limit=200
+            [*(deterministic.get("timeline_suggestions") or []), *timeline_suggestions],
+            full_source_map,
+            limit=200,
+            source_metadata={str(item["document_id"]): item for item in documents},
         )
         combined_findings = self._dedupe_case_items(combined_findings, "observation", 200)
         combined_questions = self._dedupe_case_items(combined_questions, "question", 100)
@@ -899,6 +989,7 @@ class LocalSemanticAnalysisProvider:
         values: Any,
         source_map: Dict[str, str],
         limit: int = 20,
+        source_metadata: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> tuple[List[Dict[str, Any]], int]:
         valid: List[Dict[str, Any]] = []
         rejected = 0
@@ -917,11 +1008,18 @@ class LocalSemanticAnalysisProvider:
             if not event_date or not title or not description or not validated:
                 rejected += 1 + source_rejections
                 continue
+            sources = validated[0]["sources"]
+            primary = sources[0]
+            event_fields = self._timeline_event_fields(
+                primary["source_quote"],
+                (source_metadata or {}).get(str(primary["document_id"]), {}),
+            )
             valid.append({
                 "event_date": event_date,
                 "title": title[:255],
                 "description": description[:700],
-                "sources": validated[0]["sources"],
+                **event_fields,
+                "sources": sources,
                 "review_status": "needs_review",
             })
             if len(valid) >= limit:

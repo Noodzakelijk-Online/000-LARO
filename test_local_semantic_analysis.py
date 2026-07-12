@@ -157,6 +157,8 @@ class TestLocalSemanticAnalysisProvider(unittest.TestCase):
             {
                 "document_id": 1,
                 "title": "Decision",
+                "sender": "CAK",
+                "recipient": "Robert",
                 "extracted_text": "Decision dated 2024-05-01. Case reference CAK-42. The decision records a payment amount of EUR 125.",
             },
             {
@@ -182,6 +184,10 @@ class TestLocalSemanticAnalysisProvider(unittest.TestCase):
         self.assertTrue(any("current" in item["question"] for item in result["review_questions"]))
         self.assertEqual([item["event_date"] for item in result["timeline_suggestions"]], ["2024-05-01", "2024-05-15"])
         self.assertIn("Decision dated 2024-05-01", result["timeline_suggestions"][0]["sources"][0]["source_quote"])
+        self.assertEqual(result["timeline_suggestions"][0]["actor"], "CAK")
+        self.assertEqual(result["timeline_suggestions"][0]["action"], "decided")
+        self.assertEqual(result["timeline_suggestions"][0]["affected_party"], "Robert")
+        self.assertEqual(result["timeline_suggestions"][0]["event_kind"], "decision")
 
     def test_default_case_analysis_proposes_each_unambiguous_date_in_a_source_passage(self):
         provider = LocalSemanticAnalysisProvider({"provider": "rule_based"})

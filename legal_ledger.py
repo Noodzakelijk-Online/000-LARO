@@ -27,6 +27,8 @@ from sqlalchemy import (
     String,
     Text,
     create_engine,
+    inspect,
+    text as sql_text,
 )
 from sqlalchemy.orm import declarative_base, relationship, scoped_session, sessionmaker
 
@@ -205,8 +207,12 @@ class CaseEvent(Base):
     case_id = Column(Integer, ForeignKey("legal_cases.id"), nullable=False, index=True)
     event_date = Column(String(40), nullable=False, index=True)
     event_type = Column(String(80), default="event")
+    event_kind = Column(String(80), default="event")
     title = Column(String(255), nullable=False)
     description = Column(Text, default="")
+    actor = Column(String(255), default="")
+    action = Column(String(120), default="")
+    affected_party = Column(String(255), default="")
     source_confidence = Column(Float, default=0.0)
     user_confirmed = Column(Boolean, default=False)
     created_from_document_id = Column(Integer, ForeignKey("case_documents.id"))
@@ -590,6 +596,28 @@ class LegalLedger:
 
     def create_all(self) -> None:
         Base.metadata.create_all(self.engine)
+        self._ensure_additive_schema()
+
+    def _ensure_additive_schema(self) -> None:
+        """Add safe nullable/defaulted columns to databases created by older LARO versions."""
+        inspector = inspect(self.engine)
+        if "case_events" not in inspector.get_table_names():
+            return
+        existing = {column["name"] for column in inspector.get_columns("case_events")}
+        additions = {
+            "event_kind": "VARCHAR(80) NOT NULL DEFAULT 'event'",
+            "actor": "VARCHAR(255) NOT NULL DEFAULT ''",
+            "action": "VARCHAR(120) NOT NULL DEFAULT ''",
+            "affected_party": "VARCHAR(255) NOT NULL DEFAULT ''",
+        }
+        missing = [(name, definition) for name, definition in additions.items() if name not in existing]
+        if not missing:
+            return
+        table_name = self.engine.dialect.identifier_preparer.quote("case_events")
+        with self.engine.begin() as connection:
+            for name, definition in missing:
+                column_name = self.engine.dialect.identifier_preparer.quote(name)
+                connection.execute(sql_text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {definition}"))
 
     def close(self) -> None:
         self.Session.remove()
@@ -831,18 +859,25 @@ class LegalLedger:
                     )
 
             for event in session.query(CaseEvent).filter(CaseEvent.case_id.in_(case_ids)).all():
-                if matches(event.title, event.description, event.event_date, event.event_type):
+                if matches(event.title, event.description, event.event_date, event.event_type, event.event_kind, event.actor, event.action, event.affected_party):
                     add_result(
                         results,
                         "timeline",
                         case_by_id[event.case_id],
                         event.id,
                         event.title,
-                        snippet(event.event_date, event.description, event.event_type),
+                        snippet(event.event_date, event.actor, event.action, event.affected_party, event.description, event.event_kind),
                         target="timeline",
                         queue_type="timeline" if not event.user_confirmed else None,
                         item_id=event.id,
-                        metadata={"event_date": event.event_date, "confirmed": event.user_confirmed},
+                        metadata={
+                            "event_date": event.event_date,
+                            "event_kind": event.event_kind,
+                            "actor": event.actor,
+                            "action": event.action,
+                            "affected_party": event.affected_party,
+                            "confirmed": event.user_confirmed,
+                        },
                     )
 
             for claim in session.query(LegalClaim).filter(LegalClaim.case_id.in_(case_ids)).all():
@@ -1999,12 +2034,20 @@ class LegalLedger:
                     if target:
                         break
                 if not target:
+                    event_actor = next((str(source.get("actor") or "").strip() for source in sources if source.get("actor")), "")
+                    event_action = next((str(source.get("action") or "").strip() for source in sources if source.get("action")), "")
+                    event_affected_party = next((str(source.get("affected_party") or "").strip() for source in sources if source.get("affected_party")), "")
+                    event_kind = next((str(source.get("event_kind") or "").strip() for source in sources if source.get("event_kind")), "event")
                     target = CaseEvent(
                         case_id=case_id,
                         event_date=event_date,
                         event_type="confirmed_from_case_analysis" if action == "confirm_timeline" else "case_analysis_suggestion",
+                        event_kind=str(data.get("event_kind") or event_kind)[:80],
                         title=item.title or "Case-wide timeline proposal",
                         description=item.description,
+                        actor=str(data.get("actor") or event_actor)[:255],
+                        action=str(data.get("event_action") or data.get("action_label") or event_action)[:120],
+                        affected_party=str(data.get("affected_party") or event_affected_party)[:255],
                         source_confidence=0.0,
                         user_confirmed=action == "confirm_timeline",
                         created_from_document_id=sources[0]["document_id"],
@@ -2113,8 +2156,12 @@ class LegalLedger:
                 case_id=case_id,
                 event_date=data.get("event_date") or data.get("date") or utcnow().date().isoformat(),
                 event_type=data.get("event_type") or data.get("type") or "event",
+                event_kind=data.get("event_kind") or data.get("category") or "event",
                 title=data.get("title") or data.get("event_label") or "Timeline event",
                 description=data.get("description") or data.get("summary") or "",
+                actor=data.get("actor") or "",
+                action=data.get("event_action") or data.get("action_label") or data.get("timeline_action") or data.get("action") or "",
+                affected_party=data.get("affected_party") or data.get("recipient") or "",
                 source_confidence=float(data.get("source_confidence") or data.get("confidence") or 0.0),
                 user_confirmed=bool(data.get("user_confirmed", False)),
                 created_from_document_id=data.get("created_from_document_id") or data.get("source_document_id"),
@@ -2152,9 +2199,17 @@ class LegalLedger:
                 "event_date": "event_date",
                 "date": "event_date",
                 "event_type": "event_type",
+                "event_kind": "event_kind",
+                "category": "event_kind",
                 "title": "title",
                 "description": "description",
                 "summary": "description",
+                "actor": "actor",
+                "event_action": "action",
+                "action_label": "action",
+                "timeline_action": "action",
+                "affected_party": "affected_party",
+                "recipient": "affected_party",
             }.items():
                 if key in data and data[key] not in {None, ""}:
                     setattr(event, attr, data[key])
@@ -3316,7 +3371,18 @@ class LegalLedger:
 
             for event in session.query(CaseEvent).filter_by(case_id=case_id).all():
                 review_status = "rejected" if event.event_type == "rejected_suggestion" else "confirmed" if event.user_confirmed else "needs_review"
-                nodes.append({"id": f"event:{event.id}", "type": "event", "label": event.title, "date": event.event_date, "review_status": review_status, "user_confirmed": event.user_confirmed})
+                nodes.append({
+                    "id": f"event:{event.id}",
+                    "type": "event",
+                    "label": event.title,
+                    "date": event.event_date,
+                    "event_kind": event.event_kind,
+                    "actor": event.actor,
+                    "action": event.action,
+                    "affected_party": event.affected_party,
+                    "review_status": review_status,
+                    "user_confirmed": event.user_confirmed,
+                })
                 edges.append({"from": f"case:{case.id}", "to": f"event:{event.id}", "type": "chronology", "review_status": review_status, "user_confirmed": event.user_confirmed})
                 if event.created_from_document_id:
                     edges.append({"from": f"document:{event.created_from_document_id}", "to": f"event:{event.id}", "type": "supports", "review_status": review_status, "user_confirmed": event.user_confirmed})
@@ -3602,9 +3668,13 @@ class LegalLedger:
 
         def event_line(event: Dict[str, Any]) -> str:
             status = "confirmed" if event.get("user_confirmed") else event.get("review_status") or "needs_review"
+            actor = event.get("actor") or "unknown actor"
+            action = event.get("action") or event.get("title") or "documented event"
+            affected = f" -> {event.get('affected_party')}" if event.get("affected_party") else ""
+            event_fact = f"{actor}: {action}{affected}"
             if event.get("source"):
-                return f"- {event.get('date') or event.get('event_date')}: {event.get('title')} - {event.get('what') or event.get('description') or 'no detail'} [{source_ref(event.get('source') or {})}; {status}]"
-            return f"- {event.get('event_date')}: {event.get('title')} ({event.get('description') or 'no description'}) [{status}]"
+                return f"- {event.get('date') or event.get('event_date')}: {event_fact} - {event.get('what') or event.get('description') or 'no detail'} [{source_ref(event.get('source') or {})}; {status}]"
+            return f"- {event.get('event_date')}: {event_fact} ({event.get('description') or 'no description'}) [{status}]"
 
         def claim_line(claim: Dict[str, Any]) -> str:
             sources = claim.get("supporting_sources") or []
@@ -4751,6 +4821,29 @@ class LegalLedger:
                     source_payload = {"document_id": document_id, "source_quote": quote}
                     if event_date:
                         source_payload["event_date"] = event_date
+                        for field, limit in {
+                            "actor": 255,
+                            "action": 120,
+                            "affected_party": 255,
+                            "event_kind": 80,
+                        }.items():
+                            value = str(candidate.get(field) or "").strip()
+                            source_identity = " ".join((quote, document.sender or "", document.recipient or "")).lower()
+                            if field in {"actor", "affected_party"} and value.lower() not in source_identity:
+                                continue
+                            if field == "action" and value not in {
+                                "sent", "received", "wrote", "stated", "requested", "demanded",
+                                "confirmed", "explained", "decided", "rejected", "approved", "filed",
+                                "paid", "issued invoice", "set deadline", "created obligation", "documented",
+                            }:
+                                continue
+                            if field == "event_kind" and value not in {
+                                "event", "communication", "decision", "filing", "financial",
+                                "obligation", "deadline", "hearing",
+                            }:
+                                continue
+                            if value:
+                                source_payload[field] = value[:limit]
                     validated_sources.append(source_payload)
                 if not validated_sources:
                     continue
@@ -5035,9 +5128,13 @@ class LegalLedger:
             "event_date": event.event_date,
             "date": event.event_date,
             "event_type": event.event_type,
+            "event_kind": event.event_kind,
             "title": event.title,
             "description": event.description,
             "summary": event.description,
+            "actor": event.actor,
+            "action": event.action,
+            "affected_party": event.affected_party,
             "source_confidence": event.source_confidence,
             "user_confirmed": event.user_confirmed,
             "review_status": review_status,

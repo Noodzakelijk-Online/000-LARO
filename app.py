@@ -393,15 +393,25 @@ def _timeline_suggestions_from_analysis(case_id, document, analysis, actor):
     source_confidence = _source_confidence_from_analysis(analysis)
     events = []
     for item in (analysis.get('evidence') or {}).get('chronology_events', [])[:12]:
+        description = item.get('description') or ''
+        event_fields = document_intelligence.timeline_event_fields(description, {
+            **(document.get('metadata') or {}),
+            'sender': document.get('sender') or '',
+            'recipient': document.get('recipient') or '',
+        })
         event = legal_ledger.add_event(case_id, {
             'event_date': item.get('date') or datetime.datetime.utcnow().date().isoformat(),
-            'title': item.get('description') or 'Timeline suggestion',
-            'description': item.get('description') or '',
+            'title': description or 'Timeline suggestion',
+            'description': description,
             'event_type': 'suggested_from_document',
+            'event_kind': item.get('event_kind') or event_fields['event_kind'],
+            'actor': item.get('actor') or event_fields['actor'],
+            'event_action': item.get('action') or event_fields['action'],
+            'affected_party': item.get('affected_party') or event_fields['affected_party'],
             'source_confidence': source_confidence,
             'user_confirmed': False,
             'created_from_document_id': document['document_id'],
-            'evidence_quote': item.get('description') or '',
+            'evidence_quote': description,
         }, actor=actor)
         if event:
             events.append(event)
@@ -1652,6 +1662,9 @@ def create_ledger_document(case_id):
                 'source_type': data.get('source_type') or 'manual_text',
                 'original_filename': data.get('original_filename') or document_name,
                 'document_type': data.get('document_type') or 'manual_note',
+                'sender': data.get('sender') or '',
+                'recipient': data.get('recipient') or '',
+                'date_on_document': data.get('date_on_document') or '',
             },
             case_context=ledger_case,
         )

@@ -10,6 +10,7 @@ It organizes and prepares legal material. It is not a lawyer, does not provide d
 - Document intelligence: read local text, PDF, DOCX, HTML, email-shaped, and Drive-shaped records; preserve source metadata and content hashes.
 - Evidence timeline and papertrail: connect who said or did what and when back to the underlying document.
 - Review workbench: confirm or reject suggested events, claims, evidence links, contradictions, deadlines, obligations, and open loops.
+- Who-did-what chronology: timeline events persist the actor, action, affected party, and event type beside the exact source passage; story, horizontal, and vertical views can be filtered by person and event type.
 - Obligation register: track who must do what, for whose benefit, by which date, and from which source; extracted duties remain unconfirmed until reviewed.
 - Generated briefs: create source-linked case summaries, lawyer briefings, and red-line drafts without copying ledger data into a separate tool.
 - Approval-gated outreach: create lawyer/media/organization matches and drafts, but do not send external messages.

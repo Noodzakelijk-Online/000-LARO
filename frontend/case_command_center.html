@@ -2714,6 +2714,16 @@
             gap: 0.35rem;
         }
 
+        .timeline-filters {
+            flex-basis: 100%;
+            margin-top: 0;
+            width: 100%;
+        }
+
+        .timeline-filters .form-grid {
+            margin-top: 0.7rem;
+        }
+
         .timeline-mode-button,
         .timeline-filter-button {
             background: #07101f;
@@ -3459,6 +3469,8 @@
         let selectedTab = "overview";
         let timelineViewMode = "story";
         let timelineStatusFilter = "all";
+        let timelineActorFilter = "all";
+        let timelineKindFilter = "all";
         let reviewTypeFilter = "all";
         let papertrailTypeFilter = "all";
         let papertrailQuery = "";
@@ -4514,6 +4526,10 @@
                     date: suggestion.event_date || "",
                     title: suggestion.title || "Cited timeline proposal",
                     description: suggestion.description || "Review the cited passage before confirming this event.",
+                    actor: suggestion.actor || "",
+                    action: suggestion.action || "",
+                    affected_party: suggestion.affected_party || "",
+                    event_kind: suggestion.event_kind || "event",
                     created_from_document_id: source.document_id || "",
                     evidence_quote: source.source_quote || "",
                     source_refs: suggestion.sources || [],
@@ -4530,8 +4546,14 @@
 
         function filteredTimelineEvents() {
             const events = timelineDisplayEvents(timelineStatusFilter === "rejected");
-            if (timelineStatusFilter === "all") return events.filter((event) => eventStatus(event) !== "rejected");
-            return events.filter((event) => eventStatus(event) === timelineStatusFilter);
+            return events.filter((event) => {
+                const statusMatch = timelineStatusFilter === "all"
+                    ? eventStatus(event) !== "rejected"
+                    : eventStatus(event) === timelineStatusFilter;
+                const actorMatch = timelineActorFilter === "all" || eventActor(event) === timelineActorFilter;
+                const kindMatch = timelineKindFilter === "all" || eventKind(event) === timelineKindFilter;
+                return statusMatch && actorMatch && kindMatch;
+            });
         }
 
         function eventSourceLine(event) {
@@ -4543,6 +4565,7 @@
         }
 
         function eventActor(event) {
+            if (event.actor) return event.actor;
             const doc = documentById(event.created_from_document_id);
             if (doc?.sender) return doc.sender;
             const c = detailState.case || {};
@@ -4550,6 +4573,21 @@
             const firstParty = (c.parties || [])[0];
             if (firstParty?.name) return firstParty.name;
             return "Unknown party";
+        }
+
+        function eventKind(event) {
+            return event.event_kind || "event";
+        }
+
+        function eventFactLabel(event) {
+            const actor = eventActor(event);
+            const action = event.action && event.action !== "documented" ? event.action : "documented";
+            const affected = event.affected_party ? ` for ${event.affected_party}` : "";
+            return `${actor} ${action}${affected}`;
+        }
+
+        function timelineFacetOptions(events, getter) {
+            return [...new Set(events.map(getter).filter(Boolean))].sort((left, right) => left.localeCompare(right));
         }
 
         function eventActionText(event) {
@@ -4585,10 +4623,10 @@
             const lead = sorted[0];
             const close = sorted.length > 1 ? sorted[sorted.length - 1] : null;
             const leadText = lead
-                ? `${eventActor(lead)}: ${eventActionText(lead)}`
+                ? `${eventFactLabel(lead)}: ${eventActionText(lead)}`
                 : "No source-linked chronology is visible under this filter.";
             const closeText = close
-                ? ` Later: ${eventActor(close)}: ${eventActionText(close)}`
+                ? ` Later: ${eventFactLabel(close)}: ${eventActionText(close)}`
                 : "";
             return {
                 firstDate: timelineDateValue(first) || "undated",
@@ -4634,9 +4672,10 @@
                 <article class="timeline-story-event ${eventStatusClass(event)}" data-event-id="${escapeHtml(event.id)}">
                     <span class="timeline-story-date">${escapeHtml(event.event_date || event.date || "undated")}</span>
                     <div class="timeline-story-main">
-                        <strong>${escapeHtml(eventActor(event))} - ${escapeHtml(event.title || "Untitled event")}</strong>
+                        <strong>${escapeHtml(eventFactLabel(event))}</strong>
                         <p>${escapeHtml(eventActionText(event))}</p>
                         <div class="timeline-story-meta">
+                            <span class="tag">${escapeHtml(eventKind(event))}</span>
                             <span class="tag ${status === "needs_review" ? "orange" : ""}">${escapeHtml(status)}</span>
                             <span class="timeline-story-source">${escapeHtml(eventSourceTitle(event))}</span>
                             ${evidenceSourceButton("event", event.id, event.created_from_document_id, event.evidence_quote)}
@@ -4657,10 +4696,11 @@
                     <span class="timeline-card-date">${escapeHtml(event.event_date || event.date || "undated")}</span>
                     <div>
                         <div class="record-heading">
-                            <strong>${escapeHtml(eventActor(event))} - ${escapeHtml(event.title || "Untitled event")}</strong>
+                            <strong>${escapeHtml(eventFactLabel(event))}</strong>
                             ${evidenceSourceButton("event", event.id, event.created_from_document_id, event.evidence_quote)}
                         </div>
                         <p>${escapeHtml(eventActionText(event))}</p>
+                        <p class="muted">${escapeHtml(eventKind(event))} - ${escapeHtml(event.title || "Untitled event")}</p>
                         ${evidenceSnippet("event", event.id)}
                     </div>
                     <p class="timeline-source-line">${escapeHtml(eventSourceLine(event))}</p>
@@ -6789,6 +6829,10 @@
         function renderTimeline() {
             const displayEvents = timelineDisplayEvents(true);
             if (!displayEvents.length) return `<div class="empty-state">No timeline events or cited proposals yet.</div>`;
+            const actorOptions = timelineFacetOptions(displayEvents, eventActor);
+            const kindOptions = timelineFacetOptions(displayEvents, eventKind);
+            if (timelineActorFilter !== "all" && !actorOptions.includes(timelineActorFilter)) timelineActorFilter = "all";
+            if (timelineKindFilter !== "all" && !kindOptions.includes(timelineKindFilter)) timelineKindFilter = "all";
             const counts = {
                 all: displayEvents.filter((event) => eventStatus(event) !== "rejected").length,
                 needs_review: displayEvents.filter((event) => eventStatus(event) === "needs_review").length,
@@ -6808,18 +6852,29 @@
                         <span class="record-kicker">${escapeHtml(event.event_date || event.date)}</span>
                         <div>
                             <div class="record-heading">
-                                <strong>${escapeHtml(eventActor(event))} - ${escapeHtml(event.title)}</strong>
+                                <strong>${escapeHtml(eventFactLabel(event))}</strong>
                                 ${evidenceSourceButton("event", event.id, event.created_from_document_id, event.evidence_quote)}
                             </div>
                             <p>${escapeHtml(eventActionText(event))}</p>
                             ${evidenceSnippet("event", event.id)}
-                            <p class="muted">${escapeHtml(event._analysisProposal ? "cited proposal" : status)} - ${escapeHtml(eventSourceLine(event))}</p>
+                            <p class="muted">${escapeHtml(eventKind(event))} - ${escapeHtml(event._analysisProposal ? "cited proposal" : status)} - ${escapeHtml(eventSourceLine(event))}</p>
                             ${event._analysisProposal ? `<div class="button-row guided-depth">${timelineReviewButtons(status, false, event)}</div>` : canReview ? `
                                 <div class="form-grid guided-depth">
                                     <label class="input-field"><span>Date</span><input class="control timeline-date" value="${escapeHtml(event.event_date || event.date || "")}"></label>
                                     <label class="input-field"><span>Title</span><input class="control timeline-title" value="${escapeHtml(event.title || "")}"></label>
                                     <label class="input-field"><span>Description</span><textarea class="control timeline-description">${escapeHtml(event.description || event.summary || "")}</textarea></label>
                                 </div>
+                                <details class="source-import-advanced expert-depth">
+                                    <summary>Who and what</summary>
+                                    <div class="form-grid">
+                                        <label class="input-field"><span>Actor</span><input class="control timeline-actor" value="${escapeHtml(event.actor || "")}" placeholder="Who said or acted"></label>
+                                        <label class="input-field"><span>Action</span><input class="control timeline-action" value="${escapeHtml(event.action || "")}" placeholder="stated, decided, paid"></label>
+                                        <label class="input-field"><span>Affected party</span><input class="control timeline-affected-party" value="${escapeHtml(event.affected_party || "")}" placeholder="Who was affected"></label>
+                                        <label class="input-field"><span>Event type</span><select class="control timeline-kind">
+                                            ${["event", "communication", "decision", "filing", "financial", "obligation", "deadline", "hearing"].map((kind) => `<option value="${kind}" ${eventKind(event) === kind ? "selected" : ""}>${kind}</option>`).join("")}
+                                        </select></label>
+                                    </div>
+                                </details>
                                 <div class="button-row guided-depth">
                                     <button class="btn-ledger timeline-approve" type="button">Approve</button>
                                     <button class="btn-secondary-ledger timeline-update" type="button">Update</button>
@@ -6848,6 +6903,19 @@
                             <button class="timeline-filter-button ${timelineStatusFilter === "confirmed" ? "is-active" : ""}" type="button" data-timeline-filter="confirmed">Confirmed ${escapeHtml(counts.confirmed)}</button>
                             <button class="timeline-filter-button ${timelineStatusFilter === "rejected" ? "is-active" : ""}" type="button" data-timeline-filter="rejected">Rejected ${escapeHtml(counts.rejected)}</button>
                         </div>
+                        <details class="source-import-advanced guided-depth timeline-filters">
+                            <summary>Filter people and event types</summary>
+                            <div class="form-grid">
+                                <label class="input-field"><span>Actor</span><select class="control" id="timelineActorFilter">
+                                    <option value="all">All actors</option>
+                                    ${actorOptions.map((actor) => `<option value="${escapeHtml(actor)}" ${timelineActorFilter === actor ? "selected" : ""}>${escapeHtml(actor)}</option>`).join("")}
+                                </select></label>
+                                <label class="input-field"><span>Event type</span><select class="control" id="timelineKindFilter">
+                                    <option value="all">All event types</option>
+                                    ${kindOptions.map((kind) => `<option value="${escapeHtml(kind)}" ${timelineKindFilter === kind ? "selected" : ""}>${escapeHtml(kind)}</option>`).join("")}
+                                </select></label>
+                            </div>
+                        </details>
                     </div>
                     ${renderTimelineBrief(visibleEvents, counts)}
                     ${visibleEvents.length ? timelineBody : `<div class="empty-state">No timeline events match this filter.</div>`}
@@ -6994,6 +7062,9 @@
                 node.status,
                 node.review_status,
                 node.role,
+                node.actor,
+                node.affected_party,
+                node.event_kind,
                 node.responsible_party,
                 node.beneficiary_party,
                 node.source,
@@ -7025,6 +7096,10 @@
                 node.status,
                 node.review_status,
                 node.role,
+                node.actor,
+                node.action,
+                node.affected_party,
+                node.event_kind,
                 node.responsible_party,
                 node.beneficiary_party,
                 node.source,
@@ -7381,7 +7456,11 @@
                 action,
                 event_date: row.querySelector(".timeline-date")?.value.trim(),
                 title: row.querySelector(".timeline-title")?.value.trim(),
-                description: row.querySelector(".timeline-description")?.value.trim()
+                description: row.querySelector(".timeline-description")?.value.trim(),
+                actor: row.querySelector(".timeline-actor")?.value.trim(),
+                event_action: row.querySelector(".timeline-action")?.value.trim(),
+                affected_party: row.querySelector(".timeline-affected-party")?.value.trim(),
+                event_kind: row.querySelector(".timeline-kind")?.value
             };
             await apiFetch(`/api/cases/${selectedCaseId}/timeline/${eventId}`, {
                 method: "PATCH",
@@ -8093,6 +8172,14 @@
                     timelineStatusFilter = allowed.includes(button.dataset.timelineFilter) ? button.dataset.timelineFilter : "all";
                     renderDetail();
                 });
+            });
+            document.getElementById("timelineActorFilter")?.addEventListener("change", (event) => {
+                timelineActorFilter = event.target.value || "all";
+                renderDetail();
+            });
+            document.getElementById("timelineKindFilter")?.addEventListener("change", (event) => {
+                timelineKindFilter = event.target.value || "all";
+                renderDetail();
             });
             document.querySelectorAll("[data-papertrail-filter]").forEach((button) => {
                 button.addEventListener("click", () => {

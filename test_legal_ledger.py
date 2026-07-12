@@ -1,6 +1,7 @@
 ﻿import io
 import gc
 import os
+import sqlite3
 import tempfile
 import unittest
 import datetime as dt
@@ -49,6 +50,10 @@ class TestLegalLedgerService(unittest.TestCase):
             "event_date": "2024-03-10",
             "title": "Vivare received notice",
             "description": "Notice sent and received.",
+            "actor": "Robert",
+            "event_action": "sent",
+            "affected_party": "Vivare",
+            "event_kind": "communication",
             "created_from_document_id": document["document_id"],
             "source_confidence": 0.91,
         }, actor="robert")
@@ -88,7 +93,12 @@ class TestLegalLedgerService(unittest.TestCase):
 
         self.assertEqual(len(self.ledger.list_cases("robert")), 1)
         self.assertEqual(len(self.ledger.list_documents(case["case_id"])), 1)
-        self.assertEqual(len(self.ledger.list_timeline(case["case_id"])), 1)
+        timeline = self.ledger.list_timeline(case["case_id"])
+        self.assertEqual(len(timeline), 1)
+        self.assertEqual(timeline[0]["actor"], "Robert")
+        self.assertEqual(timeline[0]["action"], "sent")
+        self.assertEqual(timeline[0]["affected_party"], "Vivare")
+        self.assertEqual(timeline[0]["event_kind"], "communication")
         self.assertEqual(link["relationship"], "supports")
         self.assertEqual(contradiction["status"], "needs_review")
         self.assertEqual(deadline["requires_approval"], True)
@@ -107,6 +117,30 @@ class TestLegalLedgerService(unittest.TestCase):
         self.assertIn("confirmed", audit_actions)
         self.assertIn("resolved", audit_actions)
         self.assertGreaterEqual(len(audit_actions), 9)
+
+    def test_create_all_adds_timeline_fact_columns_to_an_existing_database(self):
+        legacy_path = os.path.join(self.tmp.name, "legacy-ledger.sqlite3")
+        connection = sqlite3.connect(legacy_path)
+        connection.execute(
+            "CREATE TABLE case_events ("
+            "id INTEGER PRIMARY KEY, case_id INTEGER NOT NULL, event_date VARCHAR(40) NOT NULL, "
+            "event_type VARCHAR(80), title VARCHAR(255) NOT NULL, description TEXT, "
+            "source_confidence FLOAT, user_confirmed BOOLEAN, created_from_document_id INTEGER, "
+            "created_at DATETIME, updated_at DATETIME)"
+        )
+        connection.commit()
+        connection.close()
+
+        legacy = LegalLedger("sqlite:///" + legacy_path)
+        try:
+            legacy.create_all()
+            connection = sqlite3.connect(legacy_path)
+            columns = {row[1] for row in connection.execute("PRAGMA table_info(case_events)")}
+            connection.close()
+        finally:
+            legacy.close()
+
+        self.assertTrue({"actor", "action", "affected_party", "event_kind"}.issubset(columns))
 
     def test_source_linked_obligations_are_reviewed_audited_and_exported(self):
         case = self.ledger.create_case({
@@ -2565,7 +2599,7 @@ class TestLegalLedgerApi(unittest.TestCase):
         case_id = created.get_json()["case_id"]
         document = self.client.post(f"/api/cases/{case_id}/documents", json={
             "title": "Dated decision",
-            "extracted_text": "The authority issued its decision on 2024-05-01.",
+            "extracted_text": "The authority issued its decision to Robert on 2024-05-01.",
         }, headers=self.headers).get_json()
 
         def fixture_analysis(documents, case_context):
@@ -2577,10 +2611,14 @@ class TestLegalLedgerApi(unittest.TestCase):
                 "timeline_suggestions": [{
                     "event_date": "2024-05-01",
                     "title": "Decision mentioned in source",
-                    "description": "Cited source passage for 2024-05-01: The authority issued its decision on 2024-05-01.",
+                    "description": "Cited source passage for 2024-05-01: The authority issued its decision to Robert on 2024-05-01.",
+                    "actor": "The authority",
+                    "action": "decided",
+                    "affected_party": "Robert",
+                    "event_kind": "decision",
                     "sources": [{
                         "document_id": str(document["document_id"]),
-                        "source_quote": "The authority issued its decision on 2024-05-01.",
+                        "source_quote": "The authority issued its decision to Robert on 2024-05-01.",
                     }],
                 }],
                 "source_documents": [],
@@ -2593,6 +2631,7 @@ class TestLegalLedgerApi(unittest.TestCase):
         run = analysis.get_json()["run"]
         review_item = next(item for item in run["review_items"] if item["item_type"] == "timeline_suggestion")
         self.assertEqual(review_item["source_refs"][0]["event_date"], "2024-05-01")
+        self.assertEqual(review_item["source_refs"][0]["actor"], "The authority")
 
         converted = self.client.patch(
             f"/api/cases/{case_id}/case-analysis/review-items/{review_item['id']}",
@@ -2607,6 +2646,10 @@ class TestLegalLedgerApi(unittest.TestCase):
         timeline = self.client.get(f"/api/cases/{case_id}/timeline", headers=self.headers).get_json()["timeline"]
         event = next(item for item in timeline if item["id"] == converted_item["target_id"])
         self.assertEqual(event["event_date"], "2024-05-01")
+        self.assertEqual(event["actor"], "The authority")
+        self.assertEqual(event["action"], "decided")
+        self.assertEqual(event["affected_party"], "Robert")
+        self.assertEqual(event["event_kind"], "decision")
         self.assertTrue(event["is_suggestion"])
         self.assertEqual(event["source"]["document_id"], document["document_id"])
         evidence = self.client.get(f"/api/cases/{case_id}/evidence", headers=self.headers).get_json()["evidence_links"]
@@ -3030,6 +3073,47 @@ class TestLegalLedgerApi(unittest.TestCase):
 
         document_file = self.client.get(f"/api/cases/{case_id}/documents/{document_id}/file", headers=self.headers)
         self.assertEqual(document_file.status_code, 403)
+
+    def test_analyzed_source_persists_who_did_what_timeline_facts(self):
+        created = self.client.post("/api/cases", json={
+            "title": "CAK source chronology",
+            "description": "Who did what and when must stay attached to the source.",
+        }, headers=self.headers)
+        case_id = created.get_json()["case_id"]
+        source_text = "On 2026-07-10, CAK stated Robert must provide the bank statement by 2026-08-14."
+
+        document = self.client.post(f"/api/cases/{case_id}/documents", json={
+            "title": "CAK evidence request",
+            "sender": "CAK",
+            "recipient": "Robert",
+            "content": source_text,
+            "analyze": True,
+        }, headers=self.headers)
+        self.assertEqual(document.status_code, 201)
+        document_payload = document.get_json()
+        event = next(item for item in document_payload["timeline_suggestions"] if item["event_date"] == "2026-07-10")
+
+        self.assertEqual(event["actor"], "CAK")
+        self.assertEqual(event["action"], "stated")
+        self.assertEqual(event["affected_party"], "Robert")
+        self.assertEqual(event["event_kind"], "communication")
+        self.assertFalse(event["user_confirmed"])
+
+        graph = self.client.get(f"/api/cases/{case_id}/papertrail", headers=self.headers).get_json()
+        event_node = next(item for item in graph["nodes"] if item["id"] == f"event:{event['id']}")
+        self.assertEqual(event_node["actor"], "CAK")
+        self.assertEqual(event_node["action"], "stated")
+
+        updated = self.client.patch(f"/api/cases/{case_id}/timeline/{event['id']}", json={
+            "action": "update",
+            "actor": "CAK appeals team",
+            "event_action": "requested",
+            "affected_party": "Robert",
+            "event_kind": "communication",
+        }, headers=self.headers)
+        self.assertEqual(updated.status_code, 200)
+        self.assertEqual(updated.get_json()["actor"], "CAK appeals team")
+        self.assertEqual(updated.get_json()["action"], "requested")
 
 
 if __name__ == "__main__":
