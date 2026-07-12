@@ -1,6 +1,6 @@
 # LARO: Legal Case Ledger
 
-LARO is a local-first legal case operating system. It keeps a persistent, source-linked record of a case: documents, extracted text, timeline suggestions, claims, evidence links, contradictions, deadlines, open loops, outreach drafts, approvals, and audit history.
+LARO is a local-first legal case operating system. It keeps a persistent, source-linked record of a case: documents, extracted text, timeline suggestions, claims, evidence links, contradictions, deadlines, obligations, open loops, outreach drafts, approvals, and audit history.
 
 It organizes and prepares legal material. It is not a lawyer, does not provide definitive legal advice, and never sends legal communication or shares evidence externally without an explicit approval record.
 
@@ -9,7 +9,8 @@ It organizes and prepares legal material. It is not a lawyer, does not provide d
 - Case Command Center: create and operate cases with progressive Focus, Guided, and Expert views.
 - Document intelligence: read local text, PDF, DOCX, HTML, email-shaped, and Drive-shaped records; preserve source metadata and content hashes.
 - Evidence timeline and papertrail: connect who said or did what and when back to the underlying document.
-- Review workbench: confirm or reject suggested events, claims, evidence links, contradictions, deadlines, and open loops.
+- Review workbench: confirm or reject suggested events, claims, evidence links, contradictions, deadlines, obligations, and open loops.
+- Obligation register: track who must do what, for whose benefit, by which date, and from which source; extracted duties remain unconfirmed until reviewed.
 - Generated briefs: create source-linked case summaries, lawyer briefings, and red-line drafts without copying ledger data into a separate tool.
 - Approval-gated outreach: create lawyer/media/organization matches and drafts, but do not send external messages.
 

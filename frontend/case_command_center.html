@@ -3289,7 +3289,7 @@
                 <div class="panel-header">
                     <div>
                         <h2 class="panel-title">Find In Papertrail</h2>
-                        <p class="muted">Search cases, documents, events, claims, gaps, deadlines, drafts, and outreach.</p>
+                        <p class="muted">Search cases, documents, events, claims, gaps, deadlines, obligations, drafts, and outreach.</p>
                     </div>
                     <span class="tag" id="ledgerSearchCount">Ready</span>
                 </div>
@@ -3362,7 +3362,7 @@
                         <span>First source text</span>
                         <textarea class="control" id="caseInitialEvidence" placeholder="Optional: paste the first letter, email, decision, PDF text, or notes. LARO will attach and analyze it immediately after creating the case."></textarea>
                     </label>
-                    <p class="form-note is-wide" id="caseCreateStatus">Create the case once. If source text is included, LARO also creates the first evidence document, timeline suggestions, claims, gaps, deadlines, and open loops.</p>
+                    <p class="form-note is-wide" id="caseCreateStatus">Create the case once. If source text is included, LARO also creates the first evidence document, timeline suggestions, claims, gaps, deadlines, obligations, and open loops.</p>
                     <button class="btn-ledger" type="button" id="submitCase">Create Ledger Case</button>
                 </div>
                 <div class="case-table-wrap">
@@ -3981,6 +3981,7 @@
             const visibleContradictions = (state?.contradictions || []).filter(belongsToVisibleCase);
             const visibleMissingEvidence = (state?.missing_evidence || []).filter(belongsToVisibleCase);
             const visibleDeadlines = (state?.deadlines || []).filter(belongsToVisibleCase);
+            const visibleObligations = (state?.obligations || []).filter(belongsToVisibleCase);
             return {
                 ...(state || {}),
                 hidden_development_case_count: hiddenIds.size,
@@ -3990,6 +3991,7 @@
                 contradictions: visibleContradictions,
                 missing_evidence: visibleMissingEvidence,
                 deadlines: visibleDeadlines,
+                obligations: visibleObligations,
                 recent_activity: (state?.recent_activity || []).filter(belongsToVisibleCase),
                 next_actions: (state?.next_actions || []).filter(belongsToVisibleCase),
                 counts: {
@@ -4000,7 +4002,8 @@
                     open_loops: visibleLoops.length,
                     contradictions: visibleContradictions.length,
                     missing_evidence: visibleMissingEvidence.length,
-                    deadlines: visibleDeadlines.length
+                    deadlines: visibleDeadlines.length,
+                    obligations: visibleObligations.length
                 }
             };
         }
@@ -4074,7 +4077,8 @@
                 metric("open loops", counts.open_loops || 0),
                 metric("contradictions", counts.contradictions || 0),
                 metric("missing evidence", counts.missing_evidence || 0),
-                metric("deadlines", counts.deadlines || 0)
+                metric("deadlines", counts.deadlines || 0),
+                metric("obligations", counts.obligations || 0)
             ].join("");
         }
 
@@ -4082,6 +4086,7 @@
             const map = {
                 approvals: "review",
                 deadlines: "review",
+                obligations: "review",
                 contradictions: "review",
                 "missing-evidence": "review",
                 "open-loops": "review",
@@ -4208,7 +4213,7 @@
                         <article class="decision-item">
                             <span>Needs Robert</span>
                             <strong>${escapeHtml(reviewCount)}</strong>
-                            <p>Approvals, gaps, contradictions, and open loops are surfaced first.</p>
+                            <p>Approvals, obligations, gaps, contradictions, and open loops are surfaced first.</p>
                         </article>
                         <article class="decision-item">
                             <span>Safe automation</span>
@@ -4703,6 +4708,7 @@
             const timelineSuggestion = (detailState.timeline || []).find((event) => event.review_status === "needs_review");
             const evidenceLink = (detailState.evidenceLinks || []).find(evidenceLinkNeedsReview);
             const deadline = (detailState.deadlines || []).find((item) => item.status !== "resolved");
+            const obligation = (detailState.obligations || []).find((item) => !["resolved", "dismissed"].includes(item.status) && !item.user_confirmed);
             const approval = (detailState.approvals || []).find((item) => item.status === "pending");
             const waitingDraft = (detailState.drafts || []).find((item) => item.status === "waiting_approval");
             const missing = (detailState.missingEvidence || []).find((item) => item.status !== "resolved");
@@ -4710,17 +4716,19 @@
             if (waitingDraft) return { tab: "drafts", title: "Draft waiting approval", body: waitingDraft.title || "Review this generated draft before external use.", depth: "guided" };
             if (approval) return { tab: "review", title: "Approval waiting", body: approval.reason || approval.action || "Review this high-risk action before anything external happens.", queueType: "approval", itemId: approval.id };
             if (deadline) return { tab: "review", title: deadline.title || "Deadline needs review", body: `${deadline.due_date || "No date"} - ${deadline.description || "Confirm or resolve this deadline."}`, queueType: "deadline", itemId: deadline.id };
+            if (obligation) return { tab: "review", title: obligation.title || "Obligation needs review", body: obligation.description || obligation.source_quote || "Confirm who must do what before relying on this duty.", queueType: "obligation", itemId: obligation.id };
             if (timelineSuggestion) return { tab: "timeline", title: "Timeline suggestion ready", body: timelineSuggestion.title || "Review the extracted event and its source.", queueType: "timeline", itemId: timelineSuggestion.id };
             if (evidenceLink) return { tab: "evidence", title: "Source link needs review", body: evidenceLink.snippet || `${evidenceLink.relationship || "supports"} ${evidenceLink.target_type || "item"} ${evidenceLink.target_id || ""}`, queueType: "evidence", itemId: evidenceLink.id };
             if (missing) return { tab: "review", title: missing.title || "Evidence gap", body: missing.suggested_action || missing.description || "Review missing evidence.", queueType: "gap", itemId: missing.id };
             if (loop) return { tab: "review", title: loop.title || "Open loop", body: loop.next_action || loop.description || "Resolve this open action.", queueType: "loop", itemId: loop.id };
-            return { tab: "documents", title: "Add or review evidence", body: "Upload a document to build the timeline, evidence links, deadlines, and open loops." };
+            return { tab: "documents", title: "Add or review evidence", body: "Upload a document to build the timeline, evidence links, deadlines, obligations, and open loops." };
         }
 
         function queueFilterFor(queueType = "") {
             const map = {
                 approval: "approval",
                 deadline: "deadline",
+                obligation: "obligation",
                 contradiction: "contradiction",
                 gap: "gap",
                 missing_evidence: "gap",
@@ -4737,6 +4745,7 @@
             const selectors = {
                 approval: itemId ? `.approval-row[data-approval-id="${id}"]` : ".approval-row",
                 deadline: itemId ? `.deadline-row[data-deadline-id="${id}"]` : ".deadline-row",
+                obligation: itemId ? `.obligation-row[data-obligation-id="${id}"]` : ".obligation-row",
                 contradiction: itemId ? `.contradiction-row[data-contradiction-id="${id}"]` : ".contradiction-row",
                 gap: itemId ? `.missing-evidence-row[data-warning-id="${id}"]` : ".missing-evidence-row",
                 missing_evidence: itemId ? `.missing-evidence-row[data-warning-id="${id}"]` : ".missing-evidence-row",
@@ -4767,6 +4776,7 @@
         function queueTargetType(queueType = "") {
             const map = {
                 deadline: "deadline",
+                obligation: "obligation",
                 loop: "open_loop",
                 timeline: "event",
                 claim: "claim",
@@ -4934,6 +4944,9 @@
                 ...(detailState.deadlines || [])
                     .filter((item) => item.status !== "resolved")
                     .map((item) => ({ ...item, queueType: "deadline", tab: "review", label: item.title, body: `${item.due_date || "No date"} - ${item.description || item.status}` })),
+                ...(detailState.obligations || [])
+                    .filter((item) => !["resolved", "dismissed"].includes(item.status) && !item.user_confirmed)
+                    .map((item) => ({ ...item, queueType: "obligation", tab: "review", label: item.title, body: item.description || item.source_quote || "Source-linked obligation needs confirmation." })),
                 ...(detailState.timeline || [])
                     .filter((item) => eventStatus(item) === "needs_review")
                     .map((item) => ({ ...item, queueType: "timeline", tab: "timeline", label: item.title, body: item.description || item.summary || "Timeline suggestion needs confirmation." })),
@@ -5141,7 +5154,7 @@
                     : { kicker: "evidence", label: "Add first source document", body: "Start the papertrail from a document, email export, letter, or pasted text.", tab: "documents" }
             ];
             if (queue.length) {
-                commands.push({ kicker: "review", label: `Work ${queue.length} review item${queue.length === 1 ? "" : "s"}`, body: "Resolve approvals, deadlines, gaps, contradictions, and open loops from one queue.", tab: "review", depth: "guided" });
+                commands.push({ kicker: "review", label: `Work ${queue.length} review item${queue.length === 1 ? "" : "s"}`, body: "Resolve approvals, deadlines, obligations, gaps, contradictions, and open loops from one queue.", tab: "review", depth: "guided" });
             } else if (timelineNeedsReview) {
                 commands.push({ kicker: "timeline", label: "Review suggested events", body: "Confirm or reject extracted events before they become part of the chronology.", tab: "timeline", depth: "guided" });
             } else {
@@ -5215,7 +5228,7 @@
                     { tab: "timeline", kicker: "chronology", label: "Timeline builder", body: "Confirm who said or did what and when.", depth: "guided" },
                     { tab: "claims", kicker: "position", label: "Claims and support", body: "Review factual positions, source links, and unsupported gaps.", depth: "guided" },
                     { tab: "evidence", kicker: "source links", label: "Evidence links", body: "Confirm or reject source links before treating them as support.", depth: "guided" },
-                    { tab: "review", kicker: "review", label: "Review workbench", body: "Resolve approvals, deadlines, gaps, contradictions, and open loops.", depth: "guided" },
+                    { tab: "review", kicker: "review", label: "Review workbench", body: "Resolve approvals, deadlines, obligations, gaps, contradictions, and open loops.", depth: "guided" },
                     { tab: "drafts", kicker: "drafts", label: "Drafts and formal letters", body: "Review generated summaries, formal correspondence, and approval state.", depth: "guided" },
                     { tab: "papertrail", kicker: "graph", label: "Papertrail graph", body: "Inspect the source-linked graph of documents, events, claims, and risks.", depth: "expert" },
                     { tab: "bundle", kicker: "export", label: "Internal case bundle", body: "Review lawyer-ready material before any external sharing approval.", depth: "expert" },
@@ -5488,7 +5501,7 @@
                 : {
                     kicker: "review",
                     title: "Review queue clear",
-                    body: "No approvals, deadlines, contradictions, gaps, or open loops are waiting.",
+                    body: "No approvals, deadlines, obligations, contradictions, gaps, or open loops are waiting.",
                     tab: "review",
                     depth: "guided"
                 };
@@ -5632,7 +5645,7 @@
                     label: "Guided",
                     metric: `${queue} review item${queue === 1 ? "" : "s"}`,
                     progress: Math.max(12, Math.min(100, readiness + (queue ? 8 : 0))),
-                    body: laneDetail("guided") || "Documents, chronology, claims, gaps, deadlines, and open loops.",
+                    body: laneDetail("guided") || "Documents, chronology, claims, gaps, deadlines, obligations, and open loops.",
                     active: activeDepth === "guided"
                 },
                 {
@@ -5698,15 +5711,17 @@
             const counts = response.artifact_counts || {};
             const timelineCount = response.timeline_suggestions?.length || counts.timeline_suggestions || 0;
             const deadlineCount = response.deadline_suggestions?.length || counts.deadline_suggestions || 0;
+            const obligationCount = response.obligation_suggestions?.length || counts.obligation_suggestions || 0;
             const loopCount = response.open_loop_suggestions?.length || counts.open_loop_suggestions || 0;
             const claimCount = response.claim_suggestions?.length || counts.claim_suggestions || 0;
             const contradictionCount = response.contradiction_suggestions?.length || counts.contradiction_suggestions || 0;
             const missingCount = response.missing_evidence_suggestions?.length || counts.missing_evidence_suggestions || 0;
             const evidenceLinkCount = response.evidence_links_created || response.evidence_links?.length || counts.evidence_links || 0;
-            const reviewCount = deadlineCount + loopCount + claimCount + contradictionCount + missingCount;
+            const reviewCount = deadlineCount + obligationCount + loopCount + claimCount + contradictionCount + missingCount;
             const parts = [
                 `${timelineCount} timeline item${timelineCount === 1 ? "" : "s"}`,
                 `${deadlineCount} deadline${deadlineCount === 1 ? "" : "s"}`,
+                `${obligationCount} obligation${obligationCount === 1 ? "" : "s"}`,
                 `${loopCount} action loop${loopCount === 1 ? "" : "s"}`,
                 `${claimCount} claim suggestion${claimCount === 1 ? "" : "s"}`,
                 `${contradictionCount} contradiction${contradictionCount === 1 ? "" : "s"}`,
@@ -5863,7 +5878,7 @@
                 {
                     kicker: "case",
                     title: reviewItems ? "Needs review" : "Case under control",
-                    body: reviewItems ? "Resolve the next approval, deadline, contradiction, gap, or open loop before expanding scope." : "No review queue items are open. Keep collecting sources and confirming the timeline.",
+                    body: reviewItems ? "Resolve the next approval, deadline, obligation, contradiction, gap, or open loop before expanding scope." : "No review queue items are open. Keep collecting sources and confirming the timeline.",
                     count: reviewItems,
                     action: reviewItems ? "Open review" : "View overview",
                     tab: reviewItems ? "review" : "overview",
@@ -5953,6 +5968,7 @@
             const types = [
                 { type: "approval", label: "Approvals" },
                 { type: "deadline", label: "Deadlines" },
+                { type: "obligation", label: "Obligations" },
                 { type: "timeline", label: "Timeline" },
                 { type: "claim", label: "Claims" },
                 { type: "evidence", label: "Sources" },
@@ -6007,6 +6023,37 @@
                             <div class="button-row">
                                 <button class="btn-ledger deadline-confirm" type="button">Confirm</button>
                                 <button class="btn-secondary-ledger deadline-resolve" type="button">Resolve</button>
+                            </div>
+                        </div>
+                    </article>
+                `;
+            }
+            if (item.queueType === "obligation") {
+                return `
+                    <article class="record-row obligation-row" data-obligation-id="${escapeHtml(item.id)}">
+                        <span class="record-kicker">obligation</span>
+                        <div>
+                            <div class="record-heading">
+                                <strong>${escapeHtml(item.label || "Obligation needs review")}</strong>
+                                ${evidenceSourceButton("obligation", item.id, item.source_document_id, item.source_quote)}
+                            </div>
+                            <p>${escapeHtml(item.body || item.source_quote || "Confirm the source-linked duty before relying on it.")}</p>
+                            ${evidenceSnippet("obligation", item.id)}
+                            <p class="muted">Responsible: ${escapeHtml(item.responsible_party || "unassigned")}${item.due_date ? ` · due ${escapeHtml(item.due_date)}` : " · no due date confirmed"} · ${escapeHtml(item.risk_level || "medium")} risk</p>
+                            <details class="source-import-advanced expert-depth">
+                                <summary>Edit obligation details</summary>
+                                <div class="form-grid">
+                                    <label class="input-field"><span>Responsible party</span><input class="control obligation-owner" value="${escapeHtml(item.responsible_party || "unassigned")}"></label>
+                                    <label class="input-field"><span>Due date</span><input class="control obligation-due-date" type="date" value="${escapeHtml(String(item.due_date || "").slice(0, 10))}"></label>
+                                    <label class="input-field"><span>Beneficiary</span><input class="control obligation-beneficiary" value="${escapeHtml(item.beneficiary_party || "")}"></label>
+                                    <label class="input-field"><span>Risk</span><select class="control obligation-risk"><option value="low" ${item.risk_level === "low" ? "selected" : ""}>Low</option><option value="medium" ${!item.risk_level || item.risk_level === "medium" ? "selected" : ""}>Medium</option><option value="high" ${item.risk_level === "high" ? "selected" : ""}>High</option></select></label>
+                                    <button class="btn-secondary-ledger obligation-save" type="button">Save details</button>
+                                </div>
+                            </details>
+                            <div class="button-row">
+                                <button class="btn-ledger obligation-confirm" type="button">Confirm</button>
+                                <button class="btn-secondary-ledger obligation-resolve" type="button">Mark fulfilled</button>
+                                <button class="btn-secondary-ledger obligation-dismiss" type="button">Dismiss</button>
                             </div>
                         </div>
                     </article>
@@ -6498,7 +6545,7 @@
                             <label class="input-field"><span>Document text</span><textarea class="control" id="quickDocText" placeholder="Paste extracted text or a short description"></textarea></label>
                             <button class="btn-ledger" type="button" id="quickAddDocument"><span class="nav-glyph">+</span> Add Document</button>
                         </div>
-                        <p class="muted" id="quickDocStatus">Pasted text is analyzed locally for timeline events, deadlines, claims, gaps, and source links.</p>
+                        <p class="muted" id="quickDocStatus">Pasted text is analyzed locally for timeline events, deadlines, obligations, claims, gaps, and source links.</p>
                     </section>
                 `;
             }
@@ -6566,6 +6613,16 @@
                     <p>${escapeHtml((detailState.summary?.claims?.supported || []).length)} supported claims / ${escapeHtml((detailState.summary?.claims?.unsupported || []).length)} unsupported claims.</p>
                     <p>${escapeHtml((detailState.summary?.risk_review?.missing_evidence || []).filter((item) => item.status !== "resolved").length)} missing-evidence review items are open.</p>
                 </section>
+                <section class="detail-section guided-depth">
+                    <div class="panel-header">
+                        <div>
+                            <h3 class="panel-title">Who Must Do What</h3>
+                            <p class="muted">Confirmed and proposed duties remain separate until reviewed against their source.</p>
+                        </div>
+                        <button class="btn-secondary-ledger" type="button" data-jump-tab="review" data-queue-type="obligation">Review obligations</button>
+                    </div>
+                    ${renderObligationRegister()}
+                </section>
                 <section class="detail-section">
                     <div class="panel-header">
                         <h3 class="panel-title">Review Snapshot</h3>
@@ -6591,7 +6648,7 @@
                         <label class="input-field"><span>Document text</span><textarea class="control" id="quickDocText" placeholder="Paste extracted text or a short description"></textarea></label>
                         <button class="btn-ledger" type="button" id="quickAddDocument"><span class="nav-glyph">+</span> Add Document</button>
                     </div>
-                    <p class="muted" id="quickDocStatus">Pasted text is analyzed locally for timeline events, deadlines, claims, gaps, and source links.</p>
+                    <p class="muted" id="quickDocStatus">Pasted text is analyzed locally for timeline events, deadlines, obligations, claims, gaps, and source links.</p>
                 </section>
             `;
         }
@@ -6837,7 +6894,7 @@
                     <div class="panel-header">
                         <div>
                             <h3 class="panel-title">Evidence Links</h3>
-                            <p class="muted">${escapeHtml(links.length)} persisted source link${links.length === 1 ? "" : "s"} connect documents to events, claims, deadlines, and open loops.</p>
+                            <p class="muted">${escapeHtml(links.length)} persisted source link${links.length === 1 ? "" : "s"} connect documents to events, claims, deadlines, obligations, and open loops.</p>
                         </div>
                     </div>
                     ${recordRows(links, "No evidence links yet. Upload or analyze a document to generate source-linked facts.", (link) => {
@@ -6868,10 +6925,55 @@
             `;
         }
 
+        function renderObligationRegister() {
+            const items = (detailState.obligations || []).filter((item) => !["resolved", "dismissed"].includes(item.status));
+            return recordRows(items, "No active obligations are recorded.", (item) => `
+                <article class="record-row obligation-row" data-obligation-id="${escapeHtml(item.id)}">
+                    <span class="record-kicker">${escapeHtml(item.status || "needs review")}</span>
+                    <div>
+                        <div class="record-heading">
+                            <strong>${escapeHtml(item.title || "Obligation")}</strong>
+                            ${evidenceSourceButton("obligation", item.id, item.source_document_id, item.source_quote)}
+                        </div>
+                        <p>${escapeHtml(item.description || item.source_quote || "No obligation detail recorded.")}</p>
+                        <p class="muted">Responsible: ${escapeHtml(item.responsible_party || "unassigned")}${item.due_date ? ` · due ${escapeHtml(item.due_date)}` : " · no due date confirmed"}</p>
+                        <div class="button-row guided-depth">
+                            ${item.user_confirmed ? `
+                                <button class="btn-ledger obligation-resolve" type="button">Mark fulfilled</button>
+                                <button class="btn-secondary-ledger obligation-reopen" type="button">Reopen review</button>
+                            ` : `
+                                <button class="btn-ledger obligation-confirm" type="button">Confirm</button>
+                                <button class="btn-secondary-ledger obligation-dismiss" type="button">Dismiss</button>
+                            `}
+                        </div>
+                    </div>
+                </article>
+            `);
+        }
+
+        function renderObligationCapture() {
+            const options = (detailState.documents || []).map((doc) => `<option value="${escapeHtml(doc.document_id)}">${escapeHtml(doc.title || doc.original_filename || `Document ${doc.document_id}`)}</option>`).join("");
+            return `
+                <details class="source-import-advanced guided-depth">
+                    <summary>Add an obligation manually</summary>
+                    <div class="form-grid">
+                        <label class="input-field"><span>What must happen</span><textarea class="control" id="obligationDescription" placeholder="Describe the duty without treating an allegation as confirmed fact"></textarea></label>
+                        <label class="input-field"><span>Responsible party</span><input class="control" id="obligationOwner" value="unassigned" placeholder="Robert, landlord, CAK, insurer"></label>
+                        <label class="input-field"><span>Due date</span><input class="control" id="obligationDueDate" type="date"></label>
+                        <label class="input-field"><span>Source document</span><select class="control" id="obligationSourceDocument"><option value="">No source selected</option>${options}</select></label>
+                        <label class="input-field"><span>Exact source passage</span><textarea class="control" id="obligationSourceQuote" placeholder="Required when a source document is selected"></textarea></label>
+                        <label class="input-field"><span>Risk</span><select class="control" id="obligationRisk"><option value="medium">Medium</option><option value="low">Low</option><option value="high">High</option></select></label>
+                        <button class="btn-ledger" type="button" id="addObligation">Store for review</button>
+                    </div>
+                </details>
+            `;
+        }
+
         function renderReview() {
             const items = filteredReviewQueueItems();
             return `
                 ${renderReviewWorkbench()}
+                ${renderObligationCapture()}
                 ${items.length ? `<div class="review-snapshot">${items.map((item) => renderReviewQueueItem(item)).join("")}</div>` : `<div class="empty-state">No review items match this filter.</div>`}
             `;
         }
@@ -6883,7 +6985,7 @@
 
         function papertrailNodeClass(node = {}) {
             if (node.type === "case") return "is-case";
-            if (["contradiction", "missing_evidence", "deadline", "approval", "case_analysis_review"].includes(node.type)) return "is-risk";
+            if (["contradiction", "missing_evidence", "deadline", "obligation", "approval", "case_analysis_review"].includes(node.type)) return "is-risk";
             return "";
         }
 
@@ -6892,6 +6994,8 @@
                 node.status,
                 node.review_status,
                 node.role,
+                node.responsible_party,
+                node.beneficiary_party,
                 node.source,
                 node.identifier_type,
                 node.item_type,
@@ -6921,6 +7025,8 @@
                 node.status,
                 node.review_status,
                 node.role,
+                node.responsible_party,
+                node.beneficiary_party,
                 node.source,
                 node.identifier_type,
                 node.source_party,
@@ -6938,7 +7044,7 @@
                 acc[node.type] = (acc[node.type] || 0) + 1;
                 return acc;
             }, {});
-            const preferred = ["case", "document", "event", "claim", "draft", "approval", "party", "identifier", "deadline", "contradiction", "case_analysis_review", "missing_evidence", "open_loop"];
+            const preferred = ["case", "document", "event", "claim", "obligation", "draft", "approval", "party", "identifier", "deadline", "contradiction", "case_analysis_review", "missing_evidence", "open_loop"];
             const types = [...preferred, ...Object.keys(counts).filter((type) => !preferred.includes(type)).sort()];
             return [
                 { type: "all", label: "All", count: nodes.length },
@@ -7305,6 +7411,60 @@
                 body: JSON.stringify({ action })
             });
             showToast(action === "confirm" ? "Deadline confirmed." : action === "resolve" ? "Deadline resolved." : "Deadline reopened.");
+            await loadCaseDetail(selectedCaseId);
+            await loadCommandCenter();
+        }
+
+        async function updateObligation(row, action) {
+            if (!selectedCaseId) return showToast("Select a case first.");
+            const obligationId = Number(row.dataset.obligationId);
+            const payload = { action };
+            const owner = row.querySelector(".obligation-owner");
+            const dueDate = row.querySelector(".obligation-due-date");
+            const beneficiary = row.querySelector(".obligation-beneficiary");
+            const risk = row.querySelector(".obligation-risk");
+            if (owner) payload.responsible_party = owner.value.trim() || "unassigned";
+            if (dueDate) payload.due_date = dueDate.value;
+            if (beneficiary) payload.beneficiary_party = beneficiary.value.trim();
+            if (risk) payload.risk_level = risk.value;
+            await apiFetch(`/api/cases/${selectedCaseId}/obligations/${obligationId}`, {
+                method: "PATCH",
+                body: JSON.stringify(payload)
+            });
+            const labels = {
+                confirm: "Obligation confirmed.",
+                resolve: "Obligation marked fulfilled.",
+                dismiss: "Obligation dismissed.",
+                reopen: "Obligation reopened for review.",
+                update: "Obligation details saved."
+            };
+            showToast(labels[action] || "Obligation updated.");
+            await loadCaseDetail(selectedCaseId);
+            await loadCommandCenter();
+        }
+
+        async function createManualObligation() {
+            if (!selectedCaseId) return showToast("Select a case first.");
+            const description = document.getElementById("obligationDescription")?.value.trim() || "";
+            if (!description) return showToast("Describe what must happen first.");
+            const sourceDocumentId = Number(document.getElementById("obligationSourceDocument")?.value || 0) || null;
+            const sourceQuote = document.getElementById("obligationSourceQuote")?.value.trim() || "";
+            if (sourceDocumentId && !sourceQuote) return showToast("Paste the exact source passage for the selected document.");
+            await apiFetch(`/api/cases/${selectedCaseId}/obligations`, {
+                method: "POST",
+                body: JSON.stringify({
+                    title: description.length > 88 ? `${description.slice(0, 87).trim()}...` : description,
+                    description,
+                    responsible_party: document.getElementById("obligationOwner")?.value.trim() || "unassigned",
+                    due_date: document.getElementById("obligationDueDate")?.value || "",
+                    risk_level: document.getElementById("obligationRisk")?.value || "medium",
+                    source_document_id: sourceDocumentId,
+                    source_quote: sourceQuote,
+                    status: "needs_review",
+                    user_confirmed: false
+                })
+            });
+            showToast("Obligation stored for source review.");
             await loadCaseDetail(selectedCaseId);
             await loadCommandCenter();
         }
@@ -7816,8 +7976,8 @@
             const status = document.getElementById("caseCreateStatus");
             if (status) {
                 status.textContent = options.focusSource
-                    ? "Paste the first source now. When you create the case, LARO stores it as evidence and extracts timeline items, claims, gaps, deadlines, and open loops."
-                    : "Create the case once. If source text is included, LARO also creates the first evidence document, timeline suggestions, claims, gaps, deadlines, and open loops.";
+                    ? "Paste the first source now. When you create the case, LARO stores it as evidence and extracts timeline items, claims, gaps, deadlines, obligations, and open loops."
+                    : "Create the case once. If source text is included, LARO also creates the first evidence document, timeline suggestions, claims, gaps, deadlines, obligations, and open loops.";
             }
             document.getElementById("case-intake")?.scrollIntoView({ behavior: "smooth", block: "start" });
             window.setTimeout(() => {
@@ -7964,6 +8124,14 @@
                 row.querySelector(".deadline-resolve")?.addEventListener("click", () => updateDeadline(row, "resolve").catch((error) => showToast(error.message)));
                 row.querySelector(".deadline-reopen")?.addEventListener("click", () => updateDeadline(row, "reopen").catch((error) => showToast(error.message)));
             });
+            document.querySelectorAll(".obligation-row").forEach((row) => {
+                row.querySelector(".obligation-confirm")?.addEventListener("click", () => updateObligation(row, "confirm").catch((error) => showToast(error.message)));
+                row.querySelector(".obligation-resolve")?.addEventListener("click", () => updateObligation(row, "resolve").catch((error) => showToast(error.message)));
+                row.querySelector(".obligation-dismiss")?.addEventListener("click", () => updateObligation(row, "dismiss").catch((error) => showToast(error.message)));
+                row.querySelector(".obligation-reopen")?.addEventListener("click", () => updateObligation(row, "reopen").catch((error) => showToast(error.message)));
+                row.querySelector(".obligation-save")?.addEventListener("click", () => updateObligation(row, "update").catch((error) => showToast(error.message)));
+            });
+            document.getElementById("addObligation")?.addEventListener("click", () => createManualObligation().catch((error) => showToast(error.message)));
             document.querySelectorAll(".open-loop-row").forEach((row) => {
                 row.querySelector(".open-loop-resolve")?.addEventListener("click", () => updateOpenLoop(row, "resolve").catch((error) => showToast(error.message)));
                 row.querySelector(".open-loop-reopen")?.addEventListener("click", () => updateOpenLoop(row, "reopen").catch((error) => showToast(error.message)));
@@ -8185,7 +8353,7 @@
         }
 
         async function loadCaseDetail(caseId) {
-            const [caseData, docs, timeline, claims, evidence, contradictions, missingEvidence, deadlines, loops, approvals, drafts, reviewQueue, operatingState, papertrail, summary, comprehension, redLine, bundle, audit, googleJobs, caseAnalysis, caseAnalysisJobs] = await Promise.all([
+            const [caseData, docs, timeline, claims, evidence, contradictions, missingEvidence, deadlines, obligations, loops, approvals, drafts, reviewQueue, operatingState, papertrail, summary, comprehension, redLine, bundle, audit, googleJobs, caseAnalysis, caseAnalysisJobs] = await Promise.all([
                 apiFetch(`/api/cases/${caseId}`),
                 apiFetch(`/api/cases/${caseId}/documents`),
                 apiFetch(`/api/cases/${caseId}/timeline`),
@@ -8194,6 +8362,7 @@
                 apiFetch(`/api/cases/${caseId}/contradictions`),
                 apiFetch(`/api/cases/${caseId}/missing-evidence`),
                 apiFetch(`/api/cases/${caseId}/deadlines`),
+                apiFetch(`/api/cases/${caseId}/obligations`),
                 apiFetch(`/api/cases/${caseId}/open-loops`),
                 apiFetch(`/api/approvals?case_id=${caseId}`),
                 apiFetch(`/api/cases/${caseId}/drafts`),
@@ -8219,6 +8388,7 @@
                 contradictions: contradictions.contradictions || [],
                 missingEvidence: missingEvidence.missing_evidence || [],
                 deadlines: deadlines.deadlines || [],
+                obligations: obligations.obligations || [],
                 openLoops: loops.open_loops || [],
                 approvals: approvals.approvals || [],
                 drafts: drafts.drafts || [],
@@ -8286,7 +8456,7 @@
             }
             if (!title) return showToast("Add a case title or paste the first source text.");
 
-            const defaultStatus = "Create the case once. If source text is included, LARO also creates the first evidence document, timeline suggestions, claims, gaps, deadlines, and open loops.";
+            const defaultStatus = "Create the case once. If source text is included, LARO also creates the first evidence document, timeline suggestions, claims, gaps, deadlines, obligations, and open loops.";
             const progress = initialEvidence
                 ? startAnalysisProgress(status, { label: "Creating case and analyzing first source", text: initialEvidence })
                 : null;

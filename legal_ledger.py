@@ -113,6 +113,7 @@ class LegalCase(Base):
     contradictions = relationship("Contradiction", back_populates="case", cascade="all, delete-orphan")
     missing_evidence = relationship("MissingEvidenceWarning", back_populates="case", cascade="all, delete-orphan")
     deadlines = relationship("Deadline", back_populates="case", cascade="all, delete-orphan")
+    obligations = relationship("Obligation", back_populates="case", cascade="all, delete-orphan")
     open_loops = relationship("OpenLoop", back_populates="case", cascade="all, delete-orphan")
     outreach = relationship("LawyerOutreach", back_populates="case", cascade="all, delete-orphan")
     identifiers = relationship("CaseIdentifier", back_populates="case", cascade="all, delete-orphan")
@@ -299,6 +300,29 @@ class Deadline(Base):
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
 
     case = relationship("LegalCase", back_populates="deadlines")
+
+
+class Obligation(Base):
+    __tablename__ = "obligations"
+
+    id = Column(Integer, primary_key=True)
+    case_id = Column(Integer, ForeignKey("legal_cases.id"), nullable=False, index=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, default="")
+    responsible_party = Column(String(255), default="unassigned", index=True)
+    beneficiary_party = Column(String(255), default="")
+    obligation_type = Column(String(80), default="action")
+    due_date = Column(String(40), default="", index=True)
+    status = Column(String(80), default="needs_review", index=True)
+    risk_level = Column(String(40), default="medium")
+    source_document_id = Column(Integer, ForeignKey("case_documents.id"), index=True)
+    source_quote = Column(Text, default="")
+    source_confidence = Column(Float, default=0.0)
+    user_confirmed = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
+
+    case = relationship("LegalCase", back_populates="obligations")
 
 
 class OpenLoop(Base):
@@ -848,6 +872,21 @@ class LegalLedger:
                 if matches(item.title, item.description, item.due_date, item.status):
                     add_result(results, "deadline", case_by_id[item.case_id], item.id, item.title, snippet(item.due_date, item.description, item.status), target="review", queue_type="deadline", item_id=item.id)
 
+            for item in session.query(Obligation).filter(Obligation.case_id.in_(case_ids)).all():
+                if matches(item.title, item.description, item.responsible_party, item.beneficiary_party, item.due_date, item.source_quote, item.status):
+                    add_result(
+                        results,
+                        "obligation",
+                        case_by_id[item.case_id],
+                        item.id,
+                        item.title,
+                        snippet(item.description, item.responsible_party, item.beneficiary_party, item.due_date, item.source_quote, item.status),
+                        target="review",
+                        queue_type="obligation" if item.status not in {"resolved", "dismissed"} else None,
+                        item_id=item.id,
+                        metadata={"status": item.status, "responsible_party": item.responsible_party, "due_date": item.due_date},
+                    )
+
             for item in session.query(OpenLoop).filter(OpenLoop.case_id.in_(case_ids)).all():
                 if matches(item.title, item.description, item.next_action, item.status):
                     add_result(results, "open_loop", case_by_id[item.case_id], item.id, item.title, snippet(item.description, item.next_action, item.status), target="review", queue_type="loop", item_id=item.id)
@@ -920,6 +959,13 @@ class LegalLedger:
                 .order_by(Deadline.due_date.asc())
                 .all()
             ]
+            obligations = [
+                self._serialize_obligation(item)
+                for item in session.query(Obligation)
+                .filter(Obligation.case_id.in_(case_ids), Obligation.status.notin_(["resolved", "dismissed"]))
+                .order_by(Obligation.updated_at.desc(), Obligation.id.desc())
+                .all()
+            ]
             outreach = [
                 self._serialize_outreach(item)
                 for item in session.query(LawyerOutreach)
@@ -943,6 +989,7 @@ class LegalLedger:
                 pending_approvals,
                 contradictions,
                 missing_evidence,
+                obligations,
                 open_loops,
                 urgent_deadlines,
             )
@@ -953,6 +1000,7 @@ class LegalLedger:
                     *open_loops,
                     *contradictions,
                     *missing_evidence,
+                    *obligations,
                     *urgent_deadlines,
                 ]
                 if item.get("case_id")
@@ -998,6 +1046,7 @@ class LegalLedger:
                     "contradictions": len(contradictions),
                     "missing_evidence": len(missing_evidence),
                     "deadlines": len(deadlines),
+                    "obligations": len(obligations),
                     "high_risk_items": len(high_risk_items),
                 },
                 "cases": cases[:25],
@@ -1007,6 +1056,7 @@ class LegalLedger:
                 "contradictions": contradictions[:10],
                 "missing_evidence": missing_evidence[:10],
                 "deadlines": deadlines[:10],
+                "obligations": obligations[:10],
                 "urgent_deadlines": urgent_deadlines[:10],
                 "awaiting_lawyer_response": awaiting_lawyer_response[:10],
                 "high_risk_items": high_risk_items[:12],
@@ -1019,7 +1069,7 @@ class LegalLedger:
                     "high_risk_items": high_risk_items[:12],
                 },
                 "recent_activity": recent_activity,
-                "next_actions": self._next_actions(cases, pending_approvals, open_loops, contradictions, missing_evidence, urgent_deadlines or deadlines),
+                "next_actions": self._next_actions(cases, pending_approvals, obligations, open_loops, contradictions, missing_evidence, urgent_deadlines or deadlines),
             }
 
     def case_operating_state(self, case_id: int) -> Optional[Dict[str, Any]]:
@@ -1054,6 +1104,14 @@ class LegalLedger:
             deadlines = [
                 item for item in session.query(Deadline).filter_by(case_id=case_id).all()
                 if item.status not in {"resolved", "dismissed"}
+            ]
+            obligations = [
+                item for item in session.query(Obligation).filter_by(case_id=case_id).all()
+                if item.status not in {"resolved", "dismissed"}
+            ]
+            obligations_needing_review = [
+                item for item in obligations
+                if not item.user_confirmed or item.status == "needs_review"
             ]
             open_loops = [
                 item for item in session.query(OpenLoop).filter_by(case_id=case_id).all()
@@ -1091,6 +1149,7 @@ class LegalLedger:
                 "evidence_links": len(evidence_needs_review),
                 "contradictions": len(contradictions),
                 "missing_evidence": len(missing_evidence),
+                "obligations": len(obligations_needing_review),
                 "open_loops": len(open_loops),
                 "case_analysis": len(analysis_review_items),
             }
@@ -1115,15 +1174,15 @@ class LegalLedger:
             chronology_score = 0 if not timeline else min(100, round(ratio_score(confirmed_events, len(timeline)) * 0.7 + ratio_score(source_backed_events, len(timeline)) * 0.3))
             claims_score = 0 if not claims else min(100, round(ratio_score(len(reviewed_claims), len(claims)) * 0.4 + ratio_score(len(supported_claim_ids), len(claims)) * 0.45 + (15 if not unsupported_claims else 0)))
             review_score = max(0, 100 - review_counts["approvals"] * 24 - review_counts["deadlines"] * 18 - (review_total - review_counts["approvals"] - review_counts["deadlines"]) * 10)
-            graph_nodes = 1 + len(parties) + len(documents) + len(identifiers) + len(timeline) + len(claims) + len(contradictions) + len(missing_evidence) + len(deadlines) + len(open_loops)
-            graph_edges = len(parties) + len(documents) + len(identifiers) + len(timeline) + len(evidence_links) + len(claims) + len(contradictions) + len(missing_evidence) + len(deadlines) + len(open_loops)
+            graph_nodes = 1 + len(parties) + len(documents) + len(identifiers) + len(timeline) + len(claims) + len(contradictions) + len(missing_evidence) + len(deadlines) + len(obligations) + len(open_loops)
+            graph_edges = len(parties) + len(documents) + len(identifiers) + len(timeline) + len(evidence_links) + len(claims) + len(contradictions) + len(missing_evidence) + len(deadlines) + len(obligations) + len(open_loops)
             trace_score = min(100, (35 if graph_nodes > 1 else 0) + (25 if evidence_links else 0) + (20 if identifiers else 0) + (20 if audit_count else 0))
             lanes = [
                 {"key": "context", "label": "Case context", "score": context_score, "target": "overview", "detail": "Parties, institution, desired outcome, legal domain, and source references."},
                 {"key": "evidence", "label": "Evidence", "score": evidence_score, "target": "documents", "detail": "Documents and confirmed source links."},
                 {"key": "chronology", "label": "Chronology", "score": chronology_score, "target": "timeline", "detail": "Timeline events confirmed and backed by sources."},
                 {"key": "claims", "label": "Claims", "score": claims_score, "target": "claims", "detail": "Factual positions reviewed and supported."},
-                {"key": "review", "label": "Review load", "score": review_score, "target": "review", "detail": "Open approvals, deadlines, gaps, conflicts, and loops."},
+                {"key": "review", "label": "Review load", "score": review_score, "target": "review", "detail": "Open approvals, deadlines, obligations, gaps, conflicts, and loops."},
                 {"key": "traceability", "label": "Traceability", "score": trace_score, "target": "papertrail", "detail": "Papertrail nodes, source references, and audit history."},
             ]
             for lane in lanes:
@@ -1137,6 +1196,11 @@ class LegalLedger:
                 if deadlines:
                     item = sorted(deadlines, key=lambda value: value.due_date or "9999-99-99")[0]
                     return {"priority": "urgent", "label": f"Decide deadline: {item.title}", "detail": item.description or f"Due {item.due_date or 'unknown date'}; confirm, resolve, or reopen from the review queue.", "target": "review", "depth": "guided", "queue_type": "deadline", "item_id": item.id}
+                if obligations_needing_review:
+                    item = sorted(obligations_needing_review, key=lambda value: (value.due_date or "9999-99-99", value.id))[0]
+                    owner = item.responsible_party or "unassigned"
+                    due = f" Due {item.due_date}." if item.due_date else ""
+                    return {"priority": item.risk_level or "medium", "label": f"Confirm obligation: {item.title}", "detail": item.description or f"Responsible party: {owner}.{due} Confirm, edit, or dismiss before relying on it.", "target": "review", "depth": "guided", "queue_type": "obligation", "item_id": item.id}
                 if contradictions:
                     item = contradictions[0]
                     return {"priority": item.severity or "medium", "label": f"Resolve contradiction: {item.title}", "detail": item.description or "Conflicting case information needs review before it is relied on.", "target": "review", "depth": "guided", "queue_type": "contradiction", "item_id": item.id}
@@ -1268,6 +1332,23 @@ class LegalLedger:
                     action_label="Confirm or resolve",
                 ))
 
+            for item in session.query(Obligation).filter_by(case_id=case_id).order_by(Obligation.due_date.asc(), Obligation.id.asc()).all():
+                if item.status in {"resolved", "dismissed"} or (item.user_confirmed and item.status == "confirmed"):
+                    continue
+                source = self._serialize_obligation(item)
+                owner = item.responsible_party or "unassigned"
+                due = f" Due {item.due_date}." if item.due_date else ""
+                items.append(queue_item(
+                    "obligation",
+                    item.id,
+                    item.title or "Obligation needs review",
+                    item.description or f"Responsible party: {owner}.{due} Confirm the source-linked duty before relying on it.",
+                    source,
+                    status=item.status,
+                    priority="urgent" if self._is_urgent_due_date(item.due_date) else item.risk_level or "medium",
+                    action_label="Confirm, resolve, or dismiss",
+                ))
+
             for item in session.query(CaseEvent).filter_by(case_id=case_id).order_by(CaseEvent.event_date.asc(), CaseEvent.id.asc()).all():
                 if item.user_confirmed or item.event_type == "rejected_suggestion":
                     continue
@@ -1377,7 +1458,7 @@ class LegalLedger:
                 ))
 
             priority_rank = {"urgent": 0, "critical": 1, "high": 2, "medium": 3, "normal": 4, "low": 5}
-            target_rank = {"approval": 0, "deadline": 1, "contradiction": 2, "case_analysis": 3, "gap": 4, "loop": 5, "timeline": 6, "claim": 7, "evidence": 8}
+            target_rank = {"approval": 0, "deadline": 1, "obligation": 2, "contradiction": 3, "case_analysis": 4, "gap": 5, "loop": 6, "timeline": 7, "claim": 8, "evidence": 9}
             items.sort(key=lambda item: (
                 priority_rank.get(str(item.get("priority") or "medium"), 3),
                 target_rank.get(str(item.get("queue_type") or ""), 9),
@@ -2416,6 +2497,124 @@ class LegalLedger:
             self._audit(session, case_id, "Deadline", deadline.id, audit_action, actor, before, after, "medium")
             return after
 
+    def add_obligation(self, case_id: int, data: Dict[str, Any], actor: str = "system") -> Optional[Dict[str, Any]]:
+        with self.session_scope() as session:
+            if not session.get(LegalCase, case_id):
+                return None
+            source_document_id = data.get("source_document_id")
+            if source_document_id:
+                source_document = session.get(CaseDocument, int(source_document_id))
+                if not source_document or source_document.case_id != case_id:
+                    raise ValueError("Obligation source document must belong to the same case")
+                if not str(data.get("source_quote") or data.get("quote") or "").strip():
+                    raise ValueError("An exact source_quote is required when linking an obligation to a document")
+            item = Obligation(
+                case_id=case_id,
+                title=data.get("title") or "Obligation",
+                description=data.get("description") or "",
+                responsible_party=data.get("responsible_party") or data.get("owner") or "unassigned",
+                beneficiary_party=data.get("beneficiary_party") or "",
+                obligation_type=data.get("obligation_type") or data.get("type") or "action",
+                due_date=data.get("due_date") or "",
+                status=data.get("status") or "needs_review",
+                risk_level=data.get("risk_level") or "medium",
+                source_document_id=source_document_id,
+                source_quote=data.get("source_quote") or data.get("quote") or "",
+                source_confidence=float(data.get("source_confidence") or 0.0),
+                user_confirmed=bool(data.get("user_confirmed", False)),
+            )
+            session.add(item)
+            session.flush()
+            self._audit(session, case_id, "Obligation", item.id, "created", actor, {}, self._serialize_obligation(item), item.risk_level)
+            return self._serialize_obligation(item)
+
+    def list_obligations(self, case_id: int) -> List[Dict[str, Any]]:
+        with self.session_scope() as session:
+            return [
+                self._serialize_obligation(item)
+                for item in session.query(Obligation)
+                .filter_by(case_id=case_id)
+                .order_by(Obligation.due_date.asc(), Obligation.id.desc())
+                .all()
+            ]
+
+    def update_obligation(self, case_id: int, obligation_id: int, data: Dict[str, Any], actor: str = "system") -> Optional[Dict[str, Any]]:
+        action = (data.get("action") or "update").strip().lower()
+        if action not in {"update", "confirm", "resolve", "dismiss", "reopen"}:
+            raise ValueError("Obligation action must be update, confirm, resolve, dismiss, or reopen")
+
+        with self.session_scope() as session:
+            item = session.get(Obligation, obligation_id)
+            if not item or item.case_id != case_id:
+                return None
+            before = self._serialize_obligation(item)
+
+            for key in (
+                "title",
+                "description",
+                "responsible_party",
+                "beneficiary_party",
+                "obligation_type",
+                "due_date",
+                "risk_level",
+                "source_quote",
+            ):
+                if key in data:
+                    setattr(item, key, data[key] or "")
+            if "source_document_id" in data:
+                source_document_id = data.get("source_document_id")
+                if source_document_id:
+                    source_document = session.get(CaseDocument, int(source_document_id))
+                    if not source_document or source_document.case_id != case_id:
+                        raise ValueError("Obligation source document must belong to the same case")
+                item.source_document_id = source_document_id
+            if item.source_document_id and not str(item.source_quote or "").strip():
+                raise ValueError("An exact source_quote is required when linking an obligation to a document")
+            if "source_confidence" in data:
+                item.source_confidence = float(data.get("source_confidence") or 0.0)
+
+            if action == "confirm":
+                item.status = "confirmed"
+                item.user_confirmed = True
+            elif action == "resolve":
+                item.status = "resolved"
+                item.user_confirmed = True
+            elif action == "dismiss":
+                item.status = "dismissed"
+                item.user_confirmed = False
+            elif action == "reopen":
+                item.status = data.get("status") or "needs_review"
+                item.user_confirmed = False
+            else:
+                if "status" in data:
+                    item.status = data.get("status") or item.status
+                if "user_confirmed" in data:
+                    item.user_confirmed = bool(data.get("user_confirmed"))
+
+            for link in session.query(EvidenceLink).filter_by(case_id=case_id, target_type="obligation", target_id=item.id).all():
+                if action in {"confirm", "resolve"}:
+                    link.user_confirmed = True
+                    if link.relationship == "rejected_suggestion":
+                        link.relationship = "states_obligation"
+                elif action == "dismiss":
+                    link.user_confirmed = False
+                    link.relationship = "rejected_suggestion"
+                elif action == "reopen":
+                    link.user_confirmed = False
+                    if link.relationship == "rejected_suggestion":
+                        link.relationship = "states_obligation"
+
+            item.updated_at = utcnow()
+            after = self._serialize_obligation(item)
+            audit_action = {
+                "confirm": "confirmed",
+                "resolve": "resolved",
+                "dismiss": "dismissed",
+                "reopen": "reopened",
+            }.get(action, "updated")
+            self._audit(session, case_id, "Obligation", item.id, audit_action, actor, before, after, item.risk_level or "medium")
+            return after
+
     def add_open_loop(self, case_id: int, data: Dict[str, Any], actor: str = "system") -> Optional[Dict[str, Any]]:
         with self.session_scope() as session:
             if not session.get(LegalCase, case_id):
@@ -3095,9 +3294,11 @@ class LegalLedger:
             nodes: List[Dict[str, Any]] = [{"id": f"case:{case.id}", "type": "case", "label": case.title, "status": case.status}]
             edges: List[Dict[str, Any]] = []
 
+            party_nodes_by_name: Dict[str, str] = {}
             for party in session.query(Party).filter_by(case_id=case_id).all():
                 nodes.append({"id": f"party:{party.id}", "type": "party", "label": party.name, "role": party.role})
                 edges.append({"from": f"case:{case.id}", "to": f"party:{party.id}", "type": "involves"})
+                party_nodes_by_name[party.name.strip().lower()] = f"party:{party.id}"
 
             for document in session.query(CaseDocument).filter_by(case_id=case_id).all():
                 nodes.append({"id": f"document:{document.id}", "type": "document", "label": document.title or document.original_filename, "source": document.source_type})
@@ -3124,9 +3325,12 @@ class LegalLedger:
                 nodes.append({"id": f"claim:{claim.id}", "type": "claim", "label": claim.statement[:120], "status": claim.status})
                 edges.append({"from": f"case:{case.id}", "to": f"claim:{claim.id}", "type": "asserts"})
 
+            linked_obligation_sources = set()
             for link in session.query(EvidenceLink).filter_by(case_id=case_id).all():
                 target = f"{link.target_type}:{link.target_id}"
                 edges.append({"from": f"document:{link.document_id}", "to": target, "type": link.relationship, "strength": link.strength, "user_confirmed": link.user_confirmed})
+                if link.target_type == "obligation":
+                    linked_obligation_sources.add((link.document_id, link.target_id))
 
             for item in session.query(CaseAnalysisReviewItem).filter_by(case_id=case_id).all():
                 node_id = f"case_analysis_review:{item.id}"
@@ -3160,6 +3364,27 @@ class LegalLedger:
             for deadline in session.query(Deadline).filter_by(case_id=case_id).all():
                 nodes.append({"id": f"deadline:{deadline.id}", "type": "deadline", "label": deadline.title, "due_date": deadline.due_date, "status": deadline.status})
                 edges.append({"from": f"case:{case.id}", "to": f"deadline:{deadline.id}", "type": "requires_action"})
+
+            for obligation in session.query(Obligation).filter_by(case_id=case_id).all():
+                node_id = f"obligation:{obligation.id}"
+                nodes.append({
+                    "id": node_id,
+                    "type": "obligation",
+                    "label": obligation.title,
+                    "status": obligation.status,
+                    "responsible_party": obligation.responsible_party,
+                    "beneficiary_party": obligation.beneficiary_party,
+                    "due_date": obligation.due_date,
+                    "risk_level": obligation.risk_level,
+                    "source_document_id": obligation.source_document_id,
+                    "user_confirmed": obligation.user_confirmed,
+                })
+                edges.append({"from": f"case:{case.id}", "to": node_id, "type": "requires_action", "status": obligation.status})
+                if obligation.source_document_id and (obligation.source_document_id, obligation.id) not in linked_obligation_sources:
+                    edges.append({"from": f"document:{obligation.source_document_id}", "to": node_id, "type": "states_obligation", "user_confirmed": obligation.user_confirmed})
+                party_node = party_nodes_by_name.get((obligation.responsible_party or "").strip().lower())
+                if party_node:
+                    edges.append({"from": party_node, "to": node_id, "type": "responsible_for", "status": obligation.status})
 
             for item in session.query(OpenLoop).filter_by(case_id=case_id).all():
                 nodes.append({"id": f"open_loop:{item.id}", "type": "open_loop", "label": item.title, "status": item.status})
@@ -3247,6 +3472,7 @@ class LegalLedger:
                     "contradictions": [self._serialize_contradiction(item) for item in session.query(Contradiction).filter_by(case_id=case_id).all()],
                     "missing_evidence": [self._serialize_missing_evidence(item) for item in session.query(MissingEvidenceWarning).filter_by(case_id=case_id).all()],
                     "deadlines": [self._serialize_deadline(item) for item in session.query(Deadline).filter_by(case_id=case_id).all()],
+                    "obligations": [self._serialize_obligation(item) for item in session.query(Obligation).filter_by(case_id=case_id).all()],
                     "open_loops": [self._serialize_open_loop(item) for item in session.query(OpenLoop).filter_by(case_id=case_id).all()],
                     "case_analysis": analysis_review_items,
                 },
@@ -3293,6 +3519,7 @@ class LegalLedger:
             *[self._review_summary_item("contradiction", item) for item in review["contradictions"] if item.get("status") not in {"resolved", "dismissed"}],
             *[self._review_summary_item("missing_evidence", item) for item in review["missing_evidence"] if item.get("status") not in {"resolved", "dismissed"}],
             *[self._review_summary_item("deadline", item) for item in review["deadlines"] if item.get("status") not in {"resolved", "dismissed"}],
+            *[self._review_summary_item("obligation", item) for item in review["obligations"] if item.get("status") not in {"resolved", "dismissed"} and not item.get("user_confirmed")],
             *[self._review_summary_item("open_loop", item) for item in review["open_loops"] if item.get("status") not in {"resolved", "dismissed"}],
             *[self._review_summary_item("case_analysis", item) for item in review.get("case_analysis", []) if item.get("status") == "needs_review"],
         ]
@@ -3323,6 +3550,7 @@ class LegalLedger:
                 "contradictions": review["contradictions"],
                 "missing_evidence": review["missing_evidence"],
                 "deadlines": review["deadlines"],
+                "obligations": review["obligations"],
                 "open_loops": review["open_loops"],
                 "case_analysis": review.get("case_analysis", []),
             },
@@ -3355,6 +3583,7 @@ class LegalLedger:
             "contradictions": summary["risk_review"]["contradictions"],
             "missing_evidence": summary["risk_review"]["missing_evidence"],
             "deadlines": summary["risk_review"]["deadlines"],
+            "obligations": summary["risk_review"]["obligations"],
             "open_loops": summary["risk_review"]["open_loops"],
             "case_analysis": summary["risk_review"].get("case_analysis", []),
         }
@@ -3429,11 +3658,12 @@ class LegalLedger:
         if open_items:
             lines.extend(review_line(item) for item in open_items[:12])
         else:
-            lines.append("- No open contradiction, evidence-gap, deadline, or loop item is currently queued.")
+            lines.append("- No open contradiction, evidence-gap, deadline, obligation, or loop item is currently queued.")
         lines.append(f"- Contradictions: {len(review.get('contradictions', []))}")
         lines.append(f"- Case-wide observations: {len(review.get('case_analysis', []))}")
         lines.append(f"- Missing evidence warnings: {len(review.get('missing_evidence', []))}")
         lines.append(f"- Open deadlines: {len(review.get('deadlines', []))}")
+        lines.append(f"- Source-linked obligations: {len(review.get('obligations', []))}")
 
         lines.extend(["", "Next actions:"])
         lines.extend(
@@ -3683,6 +3913,7 @@ class LegalLedger:
                 "contradictions": 0,
                 "missing_evidence": 0,
                 "deadlines": 0,
+                "obligations": 0,
                 "high_risk_items": 0,
             },
             "cases": [],
@@ -3692,6 +3923,7 @@ class LegalLedger:
             "contradictions": [],
             "missing_evidence": [],
             "deadlines": [],
+            "obligations": [],
             "urgent_deadlines": [],
             "awaiting_lawyer_response": [],
             "high_risk_items": [],
@@ -3727,6 +3959,7 @@ class LegalLedger:
         approvals: List[Dict[str, Any]],
         contradictions: List[Dict[str, Any]],
         missing_evidence: List[Dict[str, Any]],
+        obligations: List[Dict[str, Any]],
         open_loops: List[Dict[str, Any]],
         urgent_deadlines: List[Dict[str, Any]],
     ) -> List[Dict[str, Any]]:
@@ -3761,6 +3994,16 @@ class LegalLedger:
                     "detail": warning.get("suggested_action") or warning.get("description") or "Evidence gap needs review.",
                     "source": warning,
                 })
+        for obligation in obligations:
+            if obligation.get("risk_level") == "high":
+                items.append({
+                    "item_type": "obligation",
+                    "case_id": obligation.get("case_id"),
+                    "priority": "high",
+                    "label": obligation.get("title") or "High-risk obligation",
+                    "detail": obligation.get("description") or obligation.get("source_quote") or "A source-linked duty needs confirmation.",
+                    "source": obligation,
+                })
         for loop in open_loops:
             if loop.get("risk_level") == "high":
                 items.append({
@@ -3787,6 +4030,7 @@ class LegalLedger:
         self,
         cases: List[Dict[str, Any]],
         approvals: List[Dict[str, Any]],
+        obligations: List[Dict[str, Any]],
         open_loops: List[Dict[str, Any]],
         contradictions: List[Dict[str, Any]],
         missing_evidence: List[Dict[str, Any]],
@@ -3812,6 +4056,17 @@ class LegalLedger:
                 "target": "deadlines",
                 "queue_type": "deadline",
                 "item_id": deadline.get("id"),
+            })
+        for item in obligations[:3]:
+            due = f" Due {item.get('due_date')}." if item.get("due_date") else ""
+            actions.append({
+                "priority": item.get("risk_level", "medium"),
+                "label": f"Confirm obligation: {item.get('title', 'Source-linked duty')}",
+                "detail": (item.get("description") or item.get("source_quote") or "Confirm who must do what before relying on this obligation.") + due,
+                "case_id": item.get("case_id"),
+                "target": "obligations",
+                "queue_type": "obligation",
+                "item_id": item.get("id"),
             })
         for contradiction in contradictions[:2]:
             actions.append({
@@ -4258,6 +4513,10 @@ class LegalLedger:
         data["missing_evidence_count"] = session.query(MissingEvidenceWarning).filter(
             MissingEvidenceWarning.case_id == case.id,
             MissingEvidenceWarning.status != "resolved",
+        ).count()
+        data["obligations_count"] = session.query(Obligation).filter(
+            Obligation.case_id == case.id,
+            Obligation.status.notin_(["resolved", "dismissed"]),
         ).count()
         data["open_loops_count"] = session.query(OpenLoop).filter_by(case_id=case.id, status="open").count()
         data["pending_approvals_count"] = session.query(Approval).filter_by(case_id=case.id, status="pending").count()
@@ -4802,6 +5061,26 @@ class LegalLedger:
 
     def _serialize_deadline(self, item: Deadline) -> Dict[str, Any]:
         return {"id": item.id, "case_id": item.case_id, "due_date": item.due_date, "title": item.title, "description": item.description, "deadline_type": item.deadline_type, "status": item.status, "source_document_id": item.source_document_id, "requires_approval": item.requires_approval, "created_at": _iso(item.created_at), "updated_at": _iso(item.updated_at)}
+
+    def _serialize_obligation(self, item: Obligation) -> Dict[str, Any]:
+        return {
+            "id": item.id,
+            "case_id": item.case_id,
+            "title": item.title,
+            "description": item.description,
+            "responsible_party": item.responsible_party,
+            "beneficiary_party": item.beneficiary_party,
+            "obligation_type": item.obligation_type,
+            "due_date": item.due_date,
+            "status": item.status,
+            "risk_level": item.risk_level,
+            "source_document_id": item.source_document_id,
+            "source_quote": item.source_quote,
+            "source_confidence": item.source_confidence,
+            "user_confirmed": item.user_confirmed,
+            "created_at": _iso(item.created_at),
+            "updated_at": _iso(item.updated_at),
+        }
 
     def _serialize_open_loop(self, item: OpenLoop) -> Dict[str, Any]:
         return {"id": item.id, "case_id": item.case_id, "title": item.title, "description": item.description, "owner": item.owner, "status": item.status, "next_action": item.next_action, "risk_level": item.risk_level, "created_at": _iso(item.created_at), "updated_at": _iso(item.updated_at)}

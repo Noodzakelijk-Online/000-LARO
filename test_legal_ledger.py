@@ -108,6 +108,93 @@ class TestLegalLedgerService(unittest.TestCase):
         self.assertIn("resolved", audit_actions)
         self.assertGreaterEqual(len(audit_actions), 9)
 
+    def test_source_linked_obligations_are_reviewed_audited_and_exported(self):
+        case = self.ledger.create_case({
+            "user_id": "robert",
+            "title": "Vivare repair obligation",
+            "description": "A repair duty needs source review.",
+            "parties": [{"name": "Vivare", "role": "housing provider"}],
+        }, actor="robert")
+        document = self.ledger.add_document(case["case_id"], {
+            "title": "Repair agreement",
+            "extracted_text": "Vivare must repair the heating before 2026-08-01.",
+        }, actor="robert")
+        obligation = self.ledger.add_obligation(case["case_id"], {
+            "title": "Repair the heating",
+            "description": "Vivare must repair the heating.",
+            "responsible_party": "Vivare",
+            "beneficiary_party": "Robert",
+            "due_date": "2026-08-01",
+            "source_document_id": document["document_id"],
+            "source_quote": "Vivare must repair the heating before 2026-08-01.",
+            "source_confidence": 0.9,
+            "status": "needs_review",
+        }, actor="system")
+        self.ledger.add_evidence_link(case["case_id"], {
+            "document_id": document["document_id"],
+            "target_type": "obligation",
+            "target_id": obligation["id"],
+            "snippet": obligation["source_quote"],
+            "relationship": "states_obligation",
+        }, actor="system")
+
+        self.assertEqual(self.ledger.list_obligations(case["case_id"])[0]["responsible_party"], "Vivare")
+        queue = self.ledger.case_review_queue(case["case_id"])
+        self.assertTrue(any(item["queue_type"] == "obligation" and item["item_id"] == obligation["id"] for item in queue["items"]))
+        command_center = self.ledger.command_center("robert")
+        self.assertEqual(command_center["counts"]["obligations"], 1)
+
+        graph = self.ledger.papertrail_graph(case["case_id"])
+        self.assertTrue(any(node["id"] == f"obligation:{obligation['id']}" for node in graph["nodes"]))
+        self.assertEqual(sum(edge["to"] == f"obligation:{obligation['id']}" and edge["type"] == "states_obligation" for edge in graph["edges"]), 1)
+        self.assertTrue(any(edge["to"] == f"obligation:{obligation['id']}" and edge["type"] == "responsible_for" for edge in graph["edges"]))
+
+        summary = self.ledger.case_summary(case["case_id"])
+        self.assertEqual(summary["risk_review"]["obligations"][0]["source_document_id"], document["document_id"])
+        bundle = self.ledger.case_bundle(case["case_id"])
+        self.assertEqual(bundle["review_items"]["obligations"][0]["source_quote"], obligation["source_quote"])
+        search = self.ledger.search_ledger("repair the heating", "robert")
+        self.assertTrue(any(item["result_type"] == "obligation" and item["entity_id"] == obligation["id"] for item in search["results"]))
+
+        confirmed = self.ledger.update_obligation(case["case_id"], obligation["id"], {
+            "action": "confirm",
+            "responsible_party": "Vivare",
+        }, actor="robert")
+        self.assertEqual(confirmed["status"], "confirmed")
+        self.assertTrue(confirmed["user_confirmed"])
+        confirmed_links = [
+            item for item in self.ledger.list_evidence_links(case["case_id"])
+            if item["target_type"] == "obligation" and item["target_id"] == obligation["id"]
+        ]
+        self.assertTrue(confirmed_links)
+        self.assertTrue(all(item["user_confirmed"] for item in confirmed_links))
+        confirmed_queue = self.ledger.case_review_queue(case["case_id"])["items"]
+        self.assertFalse(any(item["queue_type"] == "obligation" for item in confirmed_queue))
+        self.assertFalse(any(item["queue_type"] == "evidence" and item["source"].get("target_type") == "obligation" for item in confirmed_queue))
+
+        resolved = self.ledger.update_obligation(case["case_id"], obligation["id"], {"action": "resolve"}, actor="robert")
+        self.assertEqual(resolved["status"], "resolved")
+        self.assertEqual(self.ledger.command_center("robert")["counts"]["obligations"], 0)
+        audit_actions = [
+            item["action"]
+            for item in self.ledger.list_audit_events(case["case_id"])
+            if item["entity_type"] == "Obligation"
+        ]
+        self.assertEqual(audit_actions, ["resolved", "confirmed", "created"])
+        with self.assertRaisesRegex(ValueError, "source_quote"):
+            self.ledger.add_obligation(case["case_id"], {
+                "title": "Unquoted obligation",
+                "source_document_id": document["document_id"],
+            }, actor="robert")
+
+        other_case = self.ledger.create_case({"user_id": "robert", "title": "Other case"}, actor="robert")
+        other_document = self.ledger.add_document(other_case["case_id"], {"title": "Other source"}, actor="robert")
+        with self.assertRaisesRegex(ValueError, "same case"):
+            self.ledger.update_obligation(case["case_id"], obligation["id"], {
+                "action": "update",
+                "source_document_id": other_document["document_id"],
+            }, actor="robert")
+
     def test_case_operating_state_derives_primary_action_and_depth(self):
         case = self.ledger.create_case({
             "user_id": "robert",
@@ -1071,6 +1158,113 @@ class TestLegalLedgerApi(unittest.TestCase):
         self.assertEqual(bundle.get_json()["share_status"], "internal_only_until_approved")
         self.assertEqual(bundle.get_json()["drafts"][0]["id"], draft_payload["id"])
 
+    def test_obligation_api_links_source_and_requires_explicit_review(self):
+        created = self.client.post("/api/cases", json={
+            "title": "API obligation case",
+            "description": "A source-linked duty needs review.",
+            "parties": [{"name": "CAK", "role": "decision maker"}],
+        }, headers=self.headers)
+        self.assertEqual(created.status_code, 201)
+        case_id = created.get_json()["case_id"]
+        document = self.client.post(f"/api/cases/{case_id}/documents", json={
+            "title": "CAK information request",
+            "extracted_text": "Robert must provide the bank statement by 2026-08-14.",
+        }, headers=self.headers)
+        self.assertEqual(document.status_code, 201)
+        document_id = document.get_json()["document_id"]
+
+        missing_quote = self.client.post(f"/api/cases/{case_id}/obligations", json={
+            "title": "Unquoted duty",
+            "description": "A paraphrase must not be stored as a source quote.",
+            "source_document_id": document_id,
+        }, headers=self.headers)
+        self.assertEqual(missing_quote.status_code, 400)
+        self.assertIn("source_quote", missing_quote.get_json()["error"])
+
+        response = self.client.post(f"/api/cases/{case_id}/obligations", json={
+            "title": "Provide bank statement",
+            "description": "Robert must provide the bank statement.",
+            "responsible_party": "Robert",
+            "beneficiary_party": "CAK",
+            "due_date": "2026-08-14",
+            "source_document_id": document_id,
+            "source_quote": "Robert must provide the bank statement by 2026-08-14.",
+            "status": "needs_review",
+        }, headers=self.headers)
+        self.assertEqual(response.status_code, 201)
+        payload = response.get_json()
+        obligation_id = payload["id"]
+        self.assertEqual(payload["status"], "needs_review")
+        self.assertFalse(payload["user_confirmed"])
+        self.assertEqual(payload["evidence_link"]["target_type"], "obligation")
+
+        listed = self.client.get(f"/api/cases/{case_id}/obligations", headers=self.headers)
+        self.assertEqual(listed.status_code, 200)
+        self.assertEqual(listed.get_json()["obligations"][0]["source_document_id"], document_id)
+
+        queue = self.client.get(f"/api/cases/{case_id}/review-queue", headers=self.headers).get_json()
+        self.assertTrue(any(item["queue_type"] == "obligation" and item["item_id"] == obligation_id for item in queue["items"]))
+        graph = self.client.get(f"/api/cases/{case_id}/papertrail", headers=self.headers).get_json()
+        self.assertTrue(any(node["id"] == f"obligation:{obligation_id}" for node in graph["nodes"]))
+        self.assertEqual(sum(edge["to"] == f"obligation:{obligation_id}" and edge["type"] == "states_obligation" for edge in graph["edges"]), 1)
+
+        confirmed = self.client.patch(f"/api/cases/{case_id}/obligations/{obligation_id}", json={
+            "action": "confirm",
+            "responsible_party": "Robert",
+        }, headers=self.headers)
+        self.assertEqual(confirmed.status_code, 200)
+        self.assertTrue(confirmed.get_json()["user_confirmed"])
+        self.assertEqual(confirmed.get_json()["status"], "confirmed")
+        confirmed_evidence = self.client.get(f"/api/cases/{case_id}/evidence", headers=self.headers).get_json()["evidence_links"]
+        obligation_link = next(item for item in confirmed_evidence if item["target_type"] == "obligation" and item["target_id"] == obligation_id)
+        self.assertTrue(obligation_link["user_confirmed"])
+
+        reopened = self.client.patch(f"/api/cases/{case_id}/obligations/{obligation_id}", json={"action": "reopen"}, headers=self.headers)
+        self.assertEqual(reopened.status_code, 200)
+        self.assertEqual(reopened.get_json()["status"], "needs_review")
+        reopened_evidence = self.client.get(f"/api/cases/{case_id}/evidence", headers=self.headers).get_json()["evidence_links"]
+        reopened_link = next(item for item in reopened_evidence if item["target_type"] == "obligation" and item["target_id"] == obligation_id)
+        self.assertFalse(reopened_link["user_confirmed"])
+        self.assertEqual(reopened_link["relationship"], "states_obligation")
+        dismissed = self.client.patch(f"/api/cases/{case_id}/obligations/{obligation_id}", json={"action": "dismiss"}, headers=self.headers)
+        self.assertEqual(dismissed.status_code, 200)
+        self.assertEqual(dismissed.get_json()["status"], "dismissed")
+        dismissed_evidence = self.client.get(f"/api/cases/{case_id}/evidence", headers=self.headers).get_json()["evidence_links"]
+        dismissed_link = next(item for item in dismissed_evidence if item["target_type"] == "obligation" and item["target_id"] == obligation_id)
+        self.assertEqual(dismissed_link["relationship"], "rejected_suggestion")
+
+        audit = self.client.get(f"/api/audit?case_id={case_id}", headers=self.headers).get_json()["audit_events"]
+        obligation_actions = [item["action"] for item in audit if item["entity_type"] == "Obligation"]
+        self.assertEqual(obligation_actions, ["dismissed", "reopened", "confirmed", "created"])
+
+    def test_extracted_obligation_prefers_explicit_due_marker_over_document_date(self):
+        created = self.client.post("/api/cases", json={
+            "title": "Obligation date inference",
+            "description": "Document date and duty date must stay distinct.",
+        }, headers=self.headers)
+        self.assertEqual(created.status_code, 201)
+        case_id = created.get_json()["case_id"]
+        source_text = "In its decision dated 2026-07-10, CAK stated Robert must provide the bank statement by 2026-08-14."
+        document = self.client.post(f"/api/cases/{case_id}/documents", json={
+            "title": "CAK dated request",
+            "extracted_text": source_text,
+            "analyze": True,
+        }, headers=self.headers)
+        self.assertEqual(document.status_code, 201)
+        obligations = document.get_json()["obligation_suggestions"]
+        self.assertEqual(len(obligations), 1)
+        self.assertEqual(obligations[0]["due_date"], "2026-08-14")
+        self.assertEqual(obligations[0]["source_quote"], source_text)
+
+        ambiguous = self.app_module._obligation_due_date(
+            "The letter dated 2026-07-10 discusses a meeting on 2026-08-14.",
+            {"dates": [
+                {"raw": "2026-07-10", "normalized": "2026-07-10", "context": "The letter dated 2026-07-10 discusses a meeting on 2026-08-14."},
+                {"raw": "2026-08-14", "normalized": "2026-08-14", "context": "The letter dated 2026-07-10 discusses a meeting on 2026-08-14."},
+            ]},
+        )
+        self.assertEqual(ambiguous, "")
+
     def test_local_session_bootstrap_is_limited_to_loopback_owner(self):
         original_owner = self.app_module.app.config.get("LARO_LOCAL_ACCOUNT_EMAIL")
         self.app_module.app.config["LARO_LOCAL_ACCOUNT_EMAIL"] = "owner@laro.test"
@@ -2012,6 +2206,10 @@ class TestLegalLedgerApi(unittest.TestCase):
             headers=self.headers,
         )
         self.assertEqual(first_upload.status_code, 201)
+        first_payload = first_upload.get_json()
+        self.assertTrue(first_payload["obligation_suggestions"])
+        self.assertEqual(first_payload["obligation_suggestions"][0]["responsible_party"], "Robert")
+        self.assertFalse(first_payload["obligation_suggestions"][0]["user_confirmed"])
 
         second_upload = self.client.post(
             f"/api/cases/{case_id}/documents/upload",
@@ -2052,8 +2250,14 @@ class TestLegalLedgerApi(unittest.TestCase):
         graph_edges = {edge["type"] for edge in graph.get_json()["edges"]}
         self.assertIn("contradiction", graph_nodes)
         self.assertIn("missing_evidence", graph_nodes)
+        self.assertIn("obligation", graph_nodes)
         self.assertIn("conflicts_with", graph_edges)
         self.assertIn("indicates_gap", graph_edges)
+        self.assertIn("states_obligation", graph_edges)
+
+        obligations = self.client.get(f"/api/cases/{case_id}/obligations", headers=self.headers)
+        self.assertEqual(obligations.status_code, 200)
+        self.assertTrue(any(item["responsible_party"] == "Robert" for item in obligations.get_json()["obligations"]))
 
         contradiction_id = contradictions.get_json()["contradictions"][0]["id"]
         resolved_contradiction = self.client.patch(

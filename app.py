@@ -457,6 +457,73 @@ def _open_loop_title_from_context(context):
     return 'Review extracted obligation'
 
 
+def _obligation_title_from_context(context):
+    lowered = (context or '').lower()
+    if any(term in lowered for term in ('pay', 'payment', 'betaling', 'betalen', 'factuur', 'invoice')):
+        return 'Review payment obligation'
+    if any(term in lowered for term in ('submit', 'provide', 'indienen', 'aanleveren', 'verstrekken')):
+        return 'Review submission obligation'
+    if any(term in lowered for term in ('respond', 'reply', 'reageren', 'antwoord')):
+        return 'Review response obligation'
+    if any(term in lowered for term in ('repair', 'herstel', 'repareren')):
+        return 'Review repair obligation'
+    return 'Review extracted obligation'
+
+
+def _obligation_responsible_party(case_id, context):
+    lowered = f" {(context or '').lower()} "
+    robert_markers = (
+        ' robert must ', ' robert shall ', ' robert moet ', ' robert dient ',
+        ' you must ', ' you shall ', ' you are required ', ' u moet ', ' u dient ',
+    )
+    if any(marker in lowered for marker in robert_markers):
+        return 'Robert'
+
+    case = legal_ledger.get_case(case_id) or {}
+    named_matches = [
+        party.get('name')
+        for party in case.get('parties') or []
+        if party.get('name') and party.get('name').lower() in lowered
+    ]
+    unique_matches = list(dict.fromkeys(named_matches))
+    return unique_matches[0] if len(unique_matches) == 1 else 'unassigned'
+
+
+def _obligation_due_date(context, facts):
+    context_lower = (context or '').lower()
+    context_words = set(re.findall(r'\b[a-zA-Z][a-zA-Z]{3,}\b', context_lower))
+    candidates = []
+    for item in (facts.get('dates') or []):
+        normalized = str(item.get('normalized') or item.get('raw') or '').strip()
+        raw = str(item.get('raw') or '').strip()
+        date_context = str(item.get('context') or '').strip()
+        if not normalized:
+            continue
+        token = raw if raw and raw.lower() in context_lower else normalized
+        position = context_lower.find(token.lower())
+        marker_score = 0
+        if position >= 0:
+            prefix = context_lower[max(0, position - 48):position]
+            if re.search(r'(?:\bby|\bbefore|\bno later than|\buiterlijk|\bvo{1,2}r)\s+(?:on\s+)?$', prefix):
+                marker_score = 4
+            elif re.search(r'(?:\bdeadline|\bdue|\btermijn|\bvervaldatum)\D{0,24}$', prefix):
+                marker_score = 3
+        date_words = set(re.findall(r'\b[a-zA-Z][a-zA-Z]{3,}\b', date_context.lower()))
+        union = context_words | date_words
+        overlap = len(context_words & date_words) / len(union) if union else 0.0
+        candidates.append((normalized, marker_score, overlap))
+
+    if not candidates:
+        return ''
+    marked = sorted((item for item in candidates if item[1]), key=lambda item: (-item[1], -item[2], item[0]))
+    if marked:
+        return marked[0][0]
+    unique_dates = list(dict.fromkeys(item[0] for item in candidates))
+    if len(unique_dates) == 1 and max(item[2] for item in candidates) >= 0.35:
+        return unique_dates[0]
+    return ''
+
+
 def _context_looks_like_claim(context):
     lowered = f" {(context or '').lower()} "
     claim_terms = (
@@ -804,6 +871,7 @@ def _add_analysis_evidence_link(case_id, document, target_type, target_id, conte
 def _review_items_from_analysis(case_id, document, analysis, actor):
     facts = analysis.get('facts') or {}
     deadlines = []
+    obligations = []
     open_loops = []
     evidence_links = []
     seen_deadlines = set()
@@ -841,6 +909,49 @@ def _review_items_from_analysis(case_id, document, analysis, actor):
             )
             if link:
                 evidence_links.append(link)
+
+    existing_obligation_keys = {
+        (item.get('source_document_id'), (item.get('source_quote') or '').lower())
+        for item in legal_ledger.list_obligations(case_id)
+    }
+    for raw_context in (facts.get('obligations') or [])[:10]:
+        context = _context_preview(raw_context, 320)
+        if not context:
+            continue
+        key = (document['document_id'], context.lower())
+        if key in existing_obligation_keys:
+            continue
+        lowered = context.lower()
+        risk_level = 'high' if any(term in lowered for term in ('deadline', 'termijn', 'failure', 'waive', 'urgent', 'spoed', 'court', 'rechtbank')) else 'medium'
+        item = legal_ledger.add_obligation(case_id, {
+            'title': _obligation_title_from_context(context),
+            'description': f"Extracted from {document_label}: {context}",
+            'responsible_party': _obligation_responsible_party(case_id, context),
+            'obligation_type': 'extracted_from_document',
+            'due_date': _obligation_due_date(context, facts),
+            'status': 'needs_review',
+            'risk_level': risk_level,
+            'source_document_id': document['document_id'],
+            'source_quote': context,
+            'source_confidence': source_confidence,
+            'user_confirmed': False,
+        }, actor=actor)
+        if not item:
+            continue
+        obligations.append(item)
+        existing_obligation_keys.add(key)
+        link = _add_analysis_evidence_link(
+            case_id,
+            document,
+            'obligation',
+            item['id'],
+            context,
+            'states_obligation',
+            source_confidence,
+            actor,
+        )
+        if link:
+            evidence_links.append(link)
 
     loop_sources = []
     loop_sources.extend(facts.get('obligations') or [])
@@ -880,6 +991,7 @@ def _review_items_from_analysis(case_id, document, analysis, actor):
 
     return {
         'deadline_suggestions': deadlines,
+        'obligation_suggestions': obligations,
         'open_loop_suggestions': open_loops,
         'evidence_links': evidence_links,
     }
@@ -897,7 +1009,7 @@ def _analysis_artifacts_for_document(case_id, document, analysis, actor, options
     if _enabled_flag(options, 'create_timeline_suggestions', True):
         suggested_events = _timeline_suggestions_from_analysis(case_id, document, analysis, actor)
 
-    review_items = {'deadline_suggestions': [], 'open_loop_suggestions': []}
+    review_items = {'deadline_suggestions': [], 'obligation_suggestions': [], 'open_loop_suggestions': []}
     if _enabled_flag(options, 'create_review_items', True):
         review_items = _review_items_from_analysis(case_id, document, analysis, actor)
 
@@ -914,6 +1026,7 @@ def _analysis_artifacts_for_document(case_id, document, analysis, actor, options
     created_target_keys = {
         *{('event', item['id']) for item in suggested_events if item.get('id')},
         *{('deadline', item['id']) for item in review_items.get('deadline_suggestions', []) if item.get('id')},
+        *{('obligation', item['id']) for item in review_items.get('obligation_suggestions', []) if item.get('id')},
         *{('open_loop', item['id']) for item in review_items.get('open_loop_suggestions', []) if item.get('id')},
         *{('claim', item['id']) for item in claim_items.get('claim_suggestions', []) if item.get('id')},
         *{('contradiction', item['id']) for item in contradiction_items.get('contradiction_suggestions', []) if item.get('id')},
@@ -1050,6 +1163,7 @@ def _import_source_records(case_id, data, records, *, source_type, meta_tag, act
     artifact_counts = {
         'timeline_suggestions': 0,
         'deadline_suggestions': 0,
+        'obligation_suggestions': 0,
         'open_loop_suggestions': 0,
         'claim_suggestions': 0,
         'contradiction_suggestions': 0,
@@ -1124,6 +1238,7 @@ def _run_google_pull_job(job_id, case_id, job_data, actor):
     artifacts = {
         'timeline_suggestions': 0,
         'deadline_suggestions': 0,
+        'obligation_suggestions': 0,
         'open_loop_suggestions': 0,
         'claim_suggestions': 0,
         'contradiction_suggestions': 0,
@@ -2262,6 +2377,58 @@ def update_ledger_deadline(case_id, deadline_id):
     return jsonify(deadline), 200
 
 
+@app.route('/api/cases/<int:case_id>/obligations', methods=['GET'])
+@auth_system._require_auth
+def list_ledger_obligations(case_id):
+    if not legal_ledger.get_case(case_id):
+        return jsonify({'error': 'Case not found'}), 404
+    return jsonify({'case_id': case_id, 'obligations': legal_ledger.list_obligations(case_id)}), 200
+
+
+@app.route('/api/cases/<int:case_id>/obligations', methods=['POST'])
+@auth_system._require_auth
+def create_ledger_obligation(case_id):
+    payload = request.json or {}
+    source_document_id = payload.get('source_document_id')
+    if source_document_id and not str(payload.get('source_quote') or '').strip():
+        return jsonify({'error': 'An exact source_quote is required when linking an obligation to a document'}), 400
+    try:
+        item = legal_ledger.add_obligation(case_id, payload, actor=_ledger_actor())
+    except (TypeError, ValueError) as exc:
+        return jsonify({'error': str(exc)}), 400
+    if not item:
+        return jsonify({'error': 'Case not found'}), 404
+    if source_document_id:
+        try:
+            link = legal_ledger.add_evidence_link(case_id, {
+                'document_id': source_document_id,
+                'target_type': 'obligation',
+                'target_id': item['id'],
+                'snippet': payload.get('source_quote') or '',
+                'relationship': 'states_obligation',
+                'strength': 'medium',
+                'source_confidence': payload.get('source_confidence') or 0.0,
+                'user_confirmed': False,
+            }, actor=_ledger_actor())
+            if link:
+                item['evidence_link'] = link
+        except (KeyError, TypeError, ValueError):
+            pass
+    return jsonify(item), 201
+
+
+@app.route('/api/cases/<int:case_id>/obligations/<int:obligation_id>', methods=['PATCH'])
+@auth_system._require_auth
+def update_ledger_obligation(case_id, obligation_id):
+    try:
+        item = legal_ledger.update_obligation(case_id, obligation_id, request.json or {}, actor=_ledger_actor())
+    except (TypeError, ValueError) as exc:
+        return jsonify({'error': str(exc)}), 400
+    if not item:
+        return jsonify({'error': 'Obligation not found'}), 404
+    return jsonify(item), 200
+
+
 @app.route('/api/cases/<int:case_id>/open-loops', methods=['GET'])
 @auth_system._require_auth
 def list_ledger_open_loops(case_id):
@@ -2918,6 +3085,7 @@ def aggregate_documents():
     persisted_evidence_links = []
     persisted_claims = []
     persisted_deadlines = []
+    persisted_obligations = []
     persisted_open_loops = []
     persisted_contradictions = []
     persisted_missing_evidence = []
@@ -2947,6 +3115,7 @@ def aggregate_documents():
             persisted_evidence_links.extend(artifacts.get('evidence_links', []))
             persisted_claims.extend(artifacts.get('claim_suggestions', []))
             persisted_deadlines.extend(artifacts.get('deadline_suggestions', []))
+            persisted_obligations.extend(artifacts.get('obligation_suggestions', []))
             persisted_open_loops.extend(artifacts.get('open_loop_suggestions', []))
             persisted_contradictions.extend(artifacts.get('contradiction_suggestions', []))
             persisted_missing_evidence.extend(artifacts.get('missing_evidence_suggestions', []))
@@ -2995,6 +3164,7 @@ def aggregate_documents():
         'persisted_evidence_links': persisted_evidence_links,
         'persisted_claims': persisted_claims,
         'persisted_deadlines': persisted_deadlines,
+        'persisted_obligations': persisted_obligations,
         'persisted_open_loops': persisted_open_loops,
         'persisted_contradictions': persisted_contradictions,
         'persisted_missing_evidence': persisted_missing_evidence,
