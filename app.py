@@ -3403,6 +3403,87 @@ def discover_outreach_directory_targets():
     }), 201
 
 
+@app.route('/api/outreach/directory/discover-case', methods=['POST'])
+@auth_system._require_auth
+def discover_case_outreach_directory_targets():
+    """Build a sourced review queue from privacy-safe case-area queries."""
+    data = request.get_json(silent=True) or {}
+    if not data.get('confirm_external_search'):
+        return jsonify({'error': 'Confirm the derived external queries before searching public sources'}), 400
+    try:
+        case_id = int(data.get('case_id'))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Case ID must be a number'}), 400
+    if not _ledger_case_access_allowed(case_id):
+        return jsonify({'error': 'Case not found'}), 404
+
+    ledger_case, legacy_case = _case_for_legacy_endpoint(case_id)
+    if not legacy_case:
+        return jsonify({'error': 'Case not found'}), 404
+    case_data = _case_matching_payload(ledger_case, legacy_case, data)
+    target_type = data.get('target_type') or data.get('category')
+    try:
+        discovery = OutreachTargetDiscovery().discover_for_case(
+            target_type=target_type,
+            legal_fields=case_data.get('legal_fields') or [],
+            limit=data.get('limit') or data.get('max_results') or 40,
+            max_queries=data.get('max_queries') or 6,
+        )
+        targets = legal_ledger.import_outreach_directory_targets(
+            discovery['candidates'],
+            actor=_ledger_actor(),
+            audit_source='case_web_search',
+            audit_action='case_discovered_for_review',
+        ) if discovery['candidates'] else []
+    except (OutreachDiscoveryError, ValueError) as exc:
+        legal_ledger.record_case_activity(
+            case_id,
+            'outreach_directory_case_discovery_failed',
+            actor=_ledger_actor(),
+            source='case_web_search',
+            details={
+                'target_type': str(target_type or '').strip().lower(),
+                'legal_fields': case_data.get('legal_fields') or [],
+                'error': str(exc),
+                'raw_case_text_shared': False,
+            },
+            risk_level='low',
+        )
+        return jsonify({'error': str(exc)}), 400
+
+    coverage = discovery.get('coverage') or {}
+    legal_ledger.record_case_activity(
+        case_id,
+        'outreach_directory_case_discovery',
+        actor=_ledger_actor(),
+        source='case_web_search',
+        details={
+            'target_type': str(target_type or '').strip().lower(),
+            'provider': discovery.get('provider'),
+            'planned_query_count': coverage.get('planned_query_count', 0),
+            'completed_query_count': coverage.get('completed_query_count', 0),
+            'failed_query_count': coverage.get('failed_query_count', 0),
+            'candidate_count': len(targets),
+            'legal_fields': coverage.get('legal_fields') or [],
+            'raw_case_text_shared': False,
+        },
+        risk_level='low',
+    )
+    return jsonify({
+        **{key: value for key, value in discovery.items() if key != 'candidates'},
+        'targets': targets,
+        'count': len(targets),
+        'status': 'needs_review',
+        'case_id': case_id,
+        'case_profile': {
+            'selected_legal_fields': case_data.get('legal_fields') or [],
+            'source_coverage': case_data.get('case_source_coverage') or {},
+            'raw_case_text_shared': False,
+        },
+        'message': 'Case-aware public candidates were added for review. Only approved records can be matched.',
+    }), 201
+
+
 @app.route('/api/outreach/directory/targets/<int:target_id>', methods=['PATCH'])
 @auth_system._require_auth
 def update_outreach_directory_target(target_id):

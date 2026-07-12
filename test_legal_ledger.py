@@ -1909,6 +1909,110 @@ class TestLegalLedgerApi(unittest.TestCase):
         self.assertEqual(len(discovery_audit), 1)
         self.assertEqual(discovery_audit[0]["source"], "web_search")
 
+    def test_case_aware_outreach_discovery_uses_derived_fields_and_audits_coverage(self):
+        created = self.client.post("/api/cases", json={
+            "title": "Private tenancy dispute",
+            "description": "Confidential narrative must remain inside LARO.",
+            "legal_domain": "PROPERTY_LAW",
+        }, headers=self.headers)
+        self.assertEqual(created.status_code, 201)
+        case_id = created.get_json()["case_id"]
+
+        missing_confirmation = self.client.post("/api/outreach/directory/discover-case", json={
+            "case_id": case_id,
+            "target_type": "organization",
+        }, headers=self.headers)
+        self.assertEqual(missing_confirmation.status_code, 400)
+
+        discovery_payload = {
+            "provider": "duckduckgo_html_multi_query",
+            "provider_label": "DuckDuckGo public web search",
+            "retrieved_at": "2026-07-13T10:00:00+00:00",
+            "candidates": [{
+                "target_type": "organization",
+                "name": "Tenant support candidate",
+                "subtype": "advocacy candidate",
+                "description": "Tenant advocacy source",
+                "topics": ["Huurrecht"],
+                "legal_fields": ["PROPERTY_LAW"],
+                "channels": ["web"],
+                "source_url": "https://example.test/case-tenant-support",
+                "url": "https://example.test/case-tenant-support",
+                "source_label": "DuckDuckGo public web search",
+                "source_retrieved_at": "2026-07-13T10:00:00+00:00",
+                "confidence": "discovery_candidate",
+                "metadata": {"safe_query_only": True, "raw_case_text_shared": False},
+            }],
+            "result_count": 1,
+            "query_plan": [{
+                "query": "Nederland Huurrecht belangenorganisatie vereniging",
+                "pillar": "advocacy",
+                "legal_field": "PROPERTY_LAW",
+                "legal_area": "Huurrecht",
+                "raw_case_text_shared": False,
+            }],
+            "coverage": {
+                "planned_query_count": 1,
+                "completed_query_count": 1,
+                "failed_query_count": 0,
+                "returned_candidate_count": 1,
+                "unique_domain_count": 1,
+                "legal_fields": ["PROPERTY_LAW"],
+                "external_values_sent": ["Nederland Huurrecht belangenorganisatie vereniging"],
+                "raw_case_text_shared": False,
+                "completeness": "bounded_public_web_discovery_not_exhaustive",
+            },
+        }
+        with mock.patch.object(
+            self.app_module.OutreachTargetDiscovery,
+            "discover_for_case",
+            return_value=discovery_payload,
+        ) as discover:
+            response = self.client.post("/api/outreach/directory/discover-case", json={
+                "case_id": case_id,
+                "target_type": "organization",
+                "limit": 40,
+                "confirm_external_search": True,
+            }, headers=self.headers)
+
+        self.assertEqual(response.status_code, 201)
+        payload = response.get_json()
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["targets"][0]["status"], "needs_review")
+        self.assertFalse(payload["case_profile"]["raw_case_text_shared"])
+        self.assertIn("PROPERTY_LAW", discover.call_args.kwargs["legal_fields"])
+        self.assertNotIn("Confidential narrative", str(discover.call_args))
+        audit_items = self.ledger.list_audit_events()
+        self.assertTrue(any(
+            item["action"] == "case_discovered_for_review" and item["source"] == "case_web_search"
+            for item in audit_items
+        ))
+        case_audit = self.ledger.list_audit_events(case_id)
+        self.assertTrue(any(
+            item["action"] == "outreach_directory_case_discovery"
+            and item["after_state"].get("raw_case_text_shared") is False
+            for item in case_audit
+        ))
+
+        with mock.patch.object(
+            self.app_module.OutreachTargetDiscovery,
+            "discover_for_case",
+            side_effect=self.app_module.OutreachDiscoveryError("Public provider requested human verification"),
+        ):
+            blocked = self.client.post("/api/outreach/directory/discover-case", json={
+                "case_id": case_id,
+                "target_type": "media",
+                "confirm_external_search": True,
+            }, headers=self.headers)
+        self.assertEqual(blocked.status_code, 400)
+        self.assertIn("human verification", blocked.get_json()["error"])
+        case_audit = self.ledger.list_audit_events(case_id)
+        self.assertTrue(any(
+            item["action"] == "outreach_directory_case_discovery_failed"
+            and item["after_state"].get("raw_case_text_shared") is False
+            for item in case_audit
+        ))
+
     def test_upload_document_persists_extraction_and_timeline_suggestions(self):
         created = self.client.post("/api/cases", json={
             "title": "Upload evidence case",
