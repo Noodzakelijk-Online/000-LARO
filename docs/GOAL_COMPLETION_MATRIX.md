@@ -99,6 +99,16 @@ Last updated: 2026-07-06 (after phases 000–070).
 | 078 | Red-team loop 1 — isolation & erasure | **Implemented** | GDPR erasure now purges caseId-scoped children (`server/gdpr.ts`); test proves outreach rows gone. Residual: storage-blob sweep (D3). |
 | 079 | Red-team loop 2 — info disclosure | **Implemented** | `system.providerChecklist` made `protectedProcedure`; test asserts UNAUTHORIZED for anon. `docs/RED_TEAM.md`. |
 | 080 | Red-team loop 3 — abuse/DoS/supply-chain | **Partial** | Confirmed guards hold (adversarial/fileSafety/state-machine tests); residual findings (token crypto D4, CSRF/CORS D5, npm audit D7) tracked. |
+| 081 | Non-technical user simulation | **Implemented** | `tests/sim/nonTechnicalUser.test.ts` (7/7) — full journey via help-guided steps, safety boundary, export/erase, honest NOT_IMPLEMENTED. |
+| 082 | Autonomy-first product review | **Implemented** | `docs/AUTONOMY_REVIEW.md` — per-step autonomy scorecard; send deliberately human-gated. |
+| 083 | Value review | **Implemented** | `docs/VALUE_REVIEW.md` — value delivered now (triage/match/prepare) vs not (send/follow-up). |
+| 084 | Product realism review | **Implemented** | `docs/PRODUCT_REALISM.md` — claims vs reality; realism gap is renderer (D1). |
+| 085 | Requirements traceability | **Implemented** | `scripts/traceability.mjs` (runnable, 0 broken refs) + generated `docs/TRACEABILITY.md`; wired into gate. |
+| 086 | Task graph & dependency map | **Implemented** | `docs/TASK_GRAPH.md` — critical-path spine + dependency rules. |
+| 087 | Codex worklog & checkpoints | **Implemented** | `docs/CODEX_WORKLOG.md` + `docs/CODEX_CHECKPOINTS.md` maintained every batch (Checkpoint 11); `docs/PROCESS_RULES.md`. |
+| 088 | Context-loss resume safety | **Implemented** | `docs/RESUME_SAFETY.md` — read checkpoints→worklog→matrix→`npm run gate`→traceability; commit-per-batch. |
+| 089 | Progressive stabilization gates | **Implemented** | `scripts/stabilization-gate.mjs` + `npm run gate/verify` — fail-fast tsc→traceability→tests; renderer tsc non-blocking. |
+| 090 | No vanity work rule | **Implemented** | `docs/PROCESS_RULES.md` — adherence via task graph + honest matrix + gate; gaps surfaced (D1/D3) not faked. |
 
 Note: phases 000–006/008/009 mark their **own deliverable** complete. 007 and 010
 are honestly **Partial** — real improvements landed, but named residual items
@@ -114,7 +124,7 @@ remain and are tracked in `docs/SECURITY.md` §5 and `docs/FRONTEND_ARCHITECTURE
 | 076–099 | Debt register, bug log, red-team loops, user sims, value/realism reviews, traceability, task graph, worklog, resume-safety, stabilization gates, DoD, fresh-clone, manual evidence, no-excuses search, completion matrix, final report, final response, maintenance, roadmap | Missing → Partial (worklog/checkpoints/matrix now started) |
 | 100–115 | Provider cleanup, debug bundle, retention, prod migration, emergency stop, onboarding, roles, confidence display, decision minimization, exception dashboard, safe retries, ambiguous-action, versioning, regression baseline, maintenance review, operator-readiness | mostly Missing |
 
-**Approximate tally across all 116 phases:** Implemented ~68 · Partial ~48 · Missing ~6 · Blocked 0 · N/A ~2.
-(Through phase 080: + user guide, troubleshooting/error catalog, UI-action audit, endpoint-usage audit, doc-truthfulness audit, tech-debt register, bug-hunt log, and 3 red-team loops — 2 real bugs fixed: GDPR-erasure orphans + providerChecklist auth.)
+**Approximate tally across all 116 phases:** Implemented ~78 · Partial ~46 · Missing ~4 · Blocked 0 · N/A ~2.
+(Through phase 090: + non-technical user simulation test, autonomy/value/realism reviews, runnable traceability generator, task graph, resume-safety protocol, stabilization-gate command, and worklog/no-vanity process rules.)
 
-_Last updated: 2026-07-06 (phases 071–080)._
+_Last updated: 2026-07-06 (phases 081–090)._

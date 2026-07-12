@@ -408,3 +408,18 @@ TECH_DEBT (14 ranked), BUG_HUNT_LOG (7 bugs), RED_TEAM (3 loops).
 
 Verified: server tsc clean; targeted vitest 4/4. Honest residuals: 080 loop-3
 findings (token crypto, CSRF/CORS, npm audit) documented+tracked, not fixed.
+
+## Batch: Phases 081–090 — user sim, reviews, traceability & stabilization gate (2026-07-06)
+
+Real code:
+- **081** `tests/sim/nonTechnicalUser.test.ts` (+ `tests/sim` added to vitest include).
+- **085** `scripts/traceability.mjs` (+ `npm run traceability`) → `docs/TRACEABILITY.md`.
+- **089** `scripts/stabilization-gate.mjs` (+ `npm run gate` / `verify`).
+
+Grounded reviews/process docs: AUTONOMY_REVIEW (082), VALUE_REVIEW (083),
+PRODUCT_REALISM (084), TASK_GRAPH (086), RESUME_SAFETY (088), PROCESS_RULES (087/090).
+
+Verified: `npm run gate` green (server+main tsc, traceability 0 broken, vitest 24
+files / 154 passed / 9 todo). Honest note: renderer tsc still carries known debt
+(D2) and the gate reports it as a non-blocking warning — which surfaces the D1
+dead-router references (unifiedInbox, billing.createCheckoutSession, …).

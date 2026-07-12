@@ -205,3 +205,30 @@ tracked in TECH_DEBT, not fixed here.)
 
 **Next safe action:** remediate D1 (hide/implement the 14 dead-router UI screens)
 and the real outreach **send** (still scaffolded + flag-gated), then 081+.
+
+---
+
+## Checkpoint 11 — 2026-07-06 — Phases 081–090
+
+**Branch:** `Phase-Imp`.
+
+**Done (real code + grounded reviews):**
+- **081** `tests/sim/nonTechnicalUser.test.ts` (7/7) — first-time user completes the
+  whole journey using only in-app help; safety boundary + export/erase verified;
+  an unbuilt action (OCR) rejects with NOT_IMPLEMENTED (no fake success).
+- **085** `scripts/traceability.mjs` — runnable generator that parses the matrix,
+  verifies every cited artifact exists (0 broken across 91 rows), writes
+  `docs/TRACEABILITY.md`; fixed a multi-dot path-regex false-positive.
+- **089** `scripts/stabilization-gate.mjs` + `npm run gate/verify` — fail-fast
+  server-tsc → main-tsc → traceability → tests; renderer tsc reported as
+  non-blocking debt (surfaces the D1 dead routers).
+- **082/083/084/086/088** grounded reviews: `AUTONOMY_REVIEW`, `VALUE_REVIEW`,
+  `PRODUCT_REALISM`, `TASK_GRAPH`, `RESUME_SAFETY`.
+- **087/090** `PROCESS_RULES.md` — worklog/checkpoints confirmed; no-vanity rule.
+
+**Verified:** `npm run gate` → all blocking gates green; `npx vitest run` → 24
+files, 154 passed, 9 todo. Server+main tsc clean; traceability 0 broken.
+
+**Next safe action:** 091+ (feature-level DoD, fresh-clone dry run, manual
+verification evidence). Highest-leverage product work remains D1 (hide/implement
+the 14 dead-router UI screens) and D3 (real outreach send, still flag-gated).

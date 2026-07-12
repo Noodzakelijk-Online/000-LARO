@@ -28,6 +28,7 @@ export default defineConfig({
       'tests/frontend/**/*.test.ts',
       'tests/a11y/**/*.test.ts',
       'tests/acceptance/**/*.test.ts',
+      'tests/sim/**/*.test.ts',
     ],
     testTimeout: 30_000,
   },
