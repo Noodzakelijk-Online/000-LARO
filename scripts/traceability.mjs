@@ -32,7 +32,7 @@ function main() {
     console.error(`traceability: matrix not found at ${MATRIX}`);
     process.exit(2);
   }
-  const lines = readFileSync(MATRIX, 'utf8').split('\n');
+  const lines = readFileSync(MATRIX, 'utf8').split(/\r?\n/);
   const rows = [];
   for (const line of lines) {
     const m = ROW_RE.exec(line);

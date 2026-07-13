@@ -41,7 +41,7 @@ function walk(dir, acc) {
   try { entries = readdirSync(join(ROOT, dir)); } catch { return acc; }
   for (const name of entries) {
     if (SKIP.has(name)) continue;
-    const rel = join(dir, name);
+    const rel = join(dir, name).replaceAll('\\', '/');
     let st;
     try { st = statSync(join(ROOT, rel)); } catch { continue; }
     if (st.isDirectory()) walk(rel, acc);
@@ -56,7 +56,7 @@ function add(severity, check, detail) { findings.push({ severity, check, detail 
 // 1 + 3: git-tracked env files / gitignore
 let tracked = '';
 try { tracked = execSync('git ls-files', { cwd: ROOT }).toString(); } catch { /* not a repo */ }
-const trackedEnv = tracked.split('\n').filter((f) => /^\.env($|\.)/.test(f) && f !== '.env.example');
+const trackedEnv = tracked.split(/\r?\n/).filter((f) => /^\.env($|\.)/.test(f) && f !== '.env.example');
 if (trackedEnv.length > 0) add('HIGH', 'env not tracked', `Tracked secret files: ${trackedEnv.join(', ')}`);
 else add('OK', 'env not tracked', 'No real .env variants are tracked (only .env.example).');
 

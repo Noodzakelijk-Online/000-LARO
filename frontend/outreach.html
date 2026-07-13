@@ -1,0 +1,2319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LARO | Outreach</title>
+    <link rel="stylesheet" href="css/dark-theme.css">
+    <style>
+        :root {
+            --outreach-bg: #07101f;
+            --outreach-panel: #0b1528;
+            --outreach-panel-strong: #101d34;
+            --outreach-border: #22314c;
+            --outreach-muted: #99a7bd;
+            --outreach-orange: #ff6b00;
+            --outreach-green: #5fb7ad;
+            --outreach-soft-orange: rgba(255, 107, 0, 0.15);
+        }
+
+        body {
+            background: var(--outreach-bg);
+            color: var(--dark-text-primary);
+        }
+
+        .navbar {
+            background: #080d18;
+            border-bottom: 1px solid var(--outreach-border);
+            box-shadow: none;
+        }
+
+        .navbar-logo h1 {
+            -webkit-text-fill-color: var(--dark-text-primary);
+            background: none;
+            color: var(--dark-text-primary);
+            font-size: 1.35rem;
+            letter-spacing: 0;
+        }
+
+        .outreach-shell {
+            margin-left: 250px;
+            min-height: calc(100vh - 70px);
+            padding: 2rem;
+        }
+
+        .case-bar,
+        .filter-panel,
+        .target-card,
+        .metric-card,
+        .analytics-section {
+            background: var(--outreach-panel);
+            border: 1px solid var(--outreach-border);
+            border-radius: 8px;
+        }
+
+        .case-bar {
+            align-items: center;
+            display: flex;
+            gap: 1.25rem;
+            justify-content: space-between;
+            margin-bottom: 1.5rem;
+            padding: 1.25rem 1.5rem;
+        }
+
+        .case-title {
+            align-items: center;
+            display: flex;
+            gap: 0.9rem;
+            margin: 0;
+            min-width: 0;
+        }
+
+        #outreachCaseTitle {
+            min-width: 0;
+            overflow-wrap: anywhere;
+        }
+
+        .case-icon,
+        .target-avatar {
+            align-items: center;
+            background: var(--outreach-soft-orange);
+            border: 1px solid rgba(255, 107, 0, 0.45);
+            border-radius: 8px;
+            color: var(--outreach-orange);
+            display: inline-flex;
+            font-weight: 800;
+            justify-content: center;
+        }
+
+        .case-icon {
+            border-radius: 12px;
+            height: 52px;
+            width: 52px;
+        }
+
+        .case-kicker,
+        .muted {
+            color: var(--outreach-muted);
+        }
+
+        .case-kicker {
+            font-size: 0.95rem;
+            margin: 0.15rem 0 0;
+        }
+
+        .case-actions,
+        .tabs,
+        .chips,
+        .subnav {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+
+        .case-picker {
+            display: grid;
+            gap: 0.35rem;
+            min-width: 240px;
+        }
+
+        .case-picker label {
+            color: var(--outreach-muted);
+            font-size: 0.72rem;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+
+        .case-picker select {
+            background: var(--outreach-panel-strong);
+            border: 1px solid var(--outreach-border);
+            border-radius: 6px;
+            color: var(--dark-text-primary);
+            min-height: 40px;
+            padding: 0.5rem 0.65rem;
+        }
+
+        .subnav {
+            margin: 0.45rem 0 0 2.35rem;
+        }
+
+        .subnav a {
+            color: var(--outreach-muted);
+            font-size: 0.88rem;
+            font-weight: 700;
+            text-decoration: none;
+        }
+
+        .subnav a.is-active,
+        .subnav a:hover {
+            color: var(--outreach-orange);
+        }
+
+        .page-heading {
+            align-items: center;
+            display: flex;
+            gap: 0.8rem;
+            justify-content: space-between;
+            margin: 2rem 0 1.25rem;
+        }
+
+        .page-heading h2 {
+            font-size: 1.45rem;
+            margin: 0;
+        }
+
+        .tab-button {
+            background: var(--outreach-panel);
+            border: 1px solid var(--outreach-border);
+            border-radius: 6px;
+            color: var(--dark-text-primary);
+            cursor: pointer;
+            font-weight: 800;
+            padding: 0.65rem 0.9rem;
+        }
+
+        .tab-button.is-active {
+            background: var(--outreach-soft-orange);
+            border-color: rgba(255, 107, 0, 0.55);
+            color: var(--outreach-orange);
+        }
+
+        .outreach-depth {
+            display: grid;
+            gap: 0.45rem;
+            min-width: min(420px, 100%);
+        }
+
+        .depth-switcher {
+            background: var(--outreach-panel-strong);
+            border: 1px solid var(--outreach-border);
+            border-radius: 8px;
+            display: grid;
+            gap: 0.35rem;
+            grid-template-columns: repeat(3, 1fr);
+            padding: 0.35rem;
+        }
+
+        .depth-button {
+            background: transparent;
+            border: 1px solid transparent;
+            border-radius: 6px;
+            color: var(--outreach-muted);
+            cursor: pointer;
+            font-weight: 800;
+            min-height: 38px;
+            padding: 0.45rem 0.7rem;
+        }
+
+        .depth-button.is-active {
+            background: var(--outreach-soft-orange);
+            border-color: rgba(255, 107, 0, 0.55);
+            color: var(--outreach-orange);
+        }
+
+        .depth-note {
+            color: var(--outreach-muted);
+            font-size: 0.86rem;
+            margin: 0;
+        }
+
+        .focus-command-panel {
+            background: var(--outreach-panel);
+            border: 1px solid var(--outreach-border);
+            border-radius: 8px;
+            display: grid;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            padding: 1.25rem;
+        }
+
+        .focus-command-head {
+            align-items: start;
+            display: flex;
+            gap: 1rem;
+            justify-content: space-between;
+        }
+
+        .focus-command-head h2 {
+            font-size: 1.35rem;
+            margin: 0 0 0.25rem;
+        }
+
+        .focus-command-head p {
+            margin: 0;
+        }
+
+        .focus-progress-strip {
+            display: grid;
+            gap: 0.75rem;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        .focus-stat {
+            background: var(--outreach-panel-strong);
+            border: 1px solid var(--outreach-border);
+            border-radius: 8px;
+            padding: 0.85rem;
+        }
+
+        .focus-stat strong {
+            display: block;
+            font-size: 1.35rem;
+            margin-bottom: 0.2rem;
+        }
+
+        .focus-stat span {
+            color: var(--outreach-muted);
+            font-size: 0.82rem;
+        }
+
+        .focus-command-grid {
+            display: grid;
+            gap: 0.9rem;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .focus-command-card {
+            background: var(--outreach-panel-strong);
+            border: 1px solid var(--outreach-border);
+            border-radius: 8px;
+            color: var(--dark-text-primary);
+            cursor: pointer;
+            display: grid;
+            gap: 0.45rem;
+            min-height: 122px;
+            padding: 1rem;
+            text-align: left;
+        }
+
+        .focus-command-card:hover {
+            border-color: rgba(255, 107, 0, 0.55);
+        }
+
+        .focus-command-card strong {
+            font-size: 1rem;
+        }
+
+        .focus-command-card span {
+            color: var(--outreach-muted);
+            font-size: 0.88rem;
+            line-height: 1.45;
+        }
+
+        .focus-command-card i {
+            color: var(--outreach-orange);
+            font-style: normal;
+            font-weight: 900;
+        }
+
+        body[data-outreach-depth="focus"] .guided-depth,
+        body[data-outreach-depth="focus"] .expert-depth,
+        body[data-outreach-depth="guided"] .expert-depth {
+            display: none !important;
+        }
+
+        body[data-outreach-depth="guided"] .focus-command-panel,
+        body[data-outreach-depth="expert"] .focus-command-panel {
+            display: none;
+        }
+
+        body[data-outreach-depth="focus"] .subnav a:not([data-subnav="overview"]) {
+            display: none;
+        }
+
+        .filter-panel {
+            display: grid;
+            gap: 1rem;
+            grid-template-columns: 1fr 210px 210px auto;
+            margin-bottom: 1.75rem;
+            padding: 1.25rem;
+        }
+
+        .field-label {
+            color: var(--outreach-muted);
+            display: block;
+            font-size: 0.82rem;
+            font-weight: 700;
+            margin-bottom: 0.45rem;
+            text-transform: uppercase;
+        }
+
+        .field-input,
+        .field-select {
+            background: var(--outreach-panel-strong);
+            border: 1px solid var(--outreach-border);
+            border-radius: 6px;
+            color: var(--dark-text-primary);
+            min-height: 42px;
+            padding: 0.65rem 0.85rem;
+            width: 100%;
+        }
+
+        .refresh-wrap {
+            align-items: end;
+            display: flex;
+        }
+
+        .expert-controls {
+            border-top: 1px solid var(--outreach-border);
+            display: grid;
+            gap: 1rem;
+            grid-column: 1 / -1;
+            grid-template-columns: 150px minmax(180px, 1fr) repeat(3, minmax(0, 1fr));
+            padding-top: 1rem;
+        }
+
+        .expert-controls[hidden] {
+            display: none;
+        }
+
+        .toggle-field {
+            align-items: center;
+            background: var(--outreach-panel-strong);
+            border: 1px solid var(--outreach-border);
+            border-radius: 6px;
+            color: var(--outreach-muted);
+            display: flex;
+            font-weight: 700;
+            gap: 0.6rem;
+            min-height: 42px;
+            padding: 0.65rem 0.85rem;
+        }
+
+        .official-area-picker {
+            border-top: 1px solid var(--outreach-border);
+            color: var(--outreach-muted);
+            grid-column: 1 / -1;
+            padding-top: 0.85rem;
+        }
+
+        .official-area-picker summary {
+            align-items: center;
+            color: var(--dark-text-primary);
+            cursor: pointer;
+            display: flex;
+            font-weight: 800;
+            gap: 0.7rem;
+            justify-content: space-between;
+        }
+
+        .official-area-picker summary span {
+            color: var(--outreach-green);
+            font-size: 0.78rem;
+        }
+
+        .legal-area-options {
+            display: grid;
+            gap: 0.4rem 0.85rem;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            max-height: 260px;
+            overflow: auto;
+            padding-right: 0.3rem;
+        }
+
+        .legal-area-option {
+            align-items: flex-start;
+            display: flex;
+            font-size: 0.82rem;
+            gap: 0.5rem;
+            line-height: 1.35;
+            min-width: 0;
+            padding: 0.35rem 0;
+        }
+
+        .legal-area-option input {
+            flex: 0 0 auto;
+            margin-top: 0.15rem;
+        }
+
+        .results-header {
+            align-items: center;
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .results-header h3 {
+            color: var(--outreach-muted);
+            font-size: 1.05rem;
+            margin: 0;
+        }
+
+        .source-panel {
+            border-bottom: 1px solid var(--outreach-border);
+            border-top: 1px solid var(--outreach-border);
+            display: grid;
+            gap: 0.85rem;
+            margin-bottom: 1.25rem;
+            padding: 1rem 0;
+        }
+
+        .source-panel[hidden] {
+            display: none;
+        }
+
+        .source-panel-main {
+            align-items: center;
+            display: flex;
+            gap: 1rem;
+            justify-content: space-between;
+        }
+
+        .source-panel-copy {
+            min-width: 0;
+        }
+
+        .source-panel-copy strong {
+            display: block;
+            font-size: 0.98rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .source-panel-copy p {
+            color: var(--outreach-muted);
+            font-size: 0.86rem;
+            line-height: 1.45;
+            margin: 0;
+        }
+
+        .source-filter-strip {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.45rem;
+        }
+
+        .source-filter-chip {
+            border: 1px solid var(--outreach-border);
+            border-radius: 999px;
+            color: var(--outreach-muted);
+            font-size: 0.78rem;
+            font-weight: 800;
+            padding: 0.3rem 0.6rem;
+        }
+
+        .source-filter-chip.is-applied {
+            border-color: rgba(95, 183, 173, 0.55);
+            color: var(--outreach-green);
+        }
+
+        .source-filter-chip.is-unresolved {
+            border-color: rgba(255, 107, 0, 0.55);
+            color: var(--outreach-orange);
+        }
+
+        .source-details {
+            color: var(--outreach-muted);
+            font-size: 0.84rem;
+        }
+
+        .source-details summary {
+            color: var(--dark-text-primary);
+            cursor: pointer;
+            font-weight: 800;
+        }
+
+        .source-detail-grid {
+            display: grid;
+            gap: 0.65rem;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            margin-top: 0.8rem;
+        }
+
+        .source-detail-row {
+            border-left: 2px solid var(--outreach-border);
+            line-height: 1.45;
+            padding-left: 0.7rem;
+        }
+
+        .source-detail-row strong {
+            color: var(--dark-text-primary);
+            display: block;
+            font-size: 0.76rem;
+            margin-bottom: 0.2rem;
+            text-transform: uppercase;
+        }
+
+        .result-list {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .view-panel[hidden] {
+            display: none;
+        }
+
+        .analytics-grid {
+            display: grid;
+            gap: 1rem;
+            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+            margin-bottom: 1.5rem;
+        }
+
+        .metric-card {
+            min-height: 132px;
+            padding: 1.15rem;
+        }
+
+        .metric-title {
+            align-items: center;
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1.3rem;
+        }
+
+        .metric-title h3 {
+            font-size: 0.98rem;
+            margin: 0;
+        }
+
+        .metric-icon {
+            color: var(--dark-text-primary);
+            font-weight: 900;
+        }
+
+        .metric-value {
+            font-size: 2rem;
+            font-weight: 900;
+            line-height: 1;
+            margin-bottom: 0.45rem;
+        }
+
+        .metric-detail {
+            color: var(--outreach-muted);
+            font-size: 0.88rem;
+        }
+
+        .metric-detail.good {
+            color: var(--outreach-green);
+        }
+
+        .metric-detail.warn {
+            color: var(--outreach-orange);
+        }
+
+        .analytics-section {
+            margin-bottom: 1.5rem;
+            padding: 1.25rem;
+        }
+
+        .directory-import {
+            display: grid;
+            gap: 0.9rem;
+        }
+
+        .directory-import textarea {
+            min-height: 180px;
+            resize: vertical;
+        }
+
+        .directory-discovery {
+            border-bottom: 1px solid var(--outreach-border);
+            display: grid;
+            gap: 0.9rem;
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+        }
+
+        .directory-discovery-row {
+            align-items: end;
+            display: grid;
+            gap: 0.75rem;
+            grid-template-columns: minmax(0, 1fr) 160px auto;
+        }
+
+        .directory-case-discovery {
+            align-items: end;
+            display: grid;
+            gap: 0.75rem;
+            grid-template-columns: minmax(0, 1fr) 160px auto;
+        }
+
+        .directory-case-discovery strong,
+        .directory-case-discovery span {
+            display: block;
+        }
+
+        .directory-case-discovery span {
+            color: var(--outreach-muted);
+            font-size: 0.82rem;
+            margin-top: 0.25rem;
+        }
+
+        .directory-coverage {
+            border-block: 1px solid var(--outreach-border);
+            display: grid;
+            gap: 0.65rem;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            padding-block: 0.8rem;
+        }
+
+        .directory-coverage[hidden] {
+            display: none;
+        }
+
+        .directory-coverage-stat strong,
+        .directory-coverage-stat span {
+            display: block;
+        }
+
+        .directory-coverage-stat span,
+        .directory-query-proof summary,
+        .directory-query-proof li {
+            color: var(--outreach-muted);
+            font-size: 0.78rem;
+        }
+
+        .directory-query-proof {
+            grid-column: 1 / -1;
+        }
+
+        .directory-query-proof summary {
+            cursor: pointer;
+            font-weight: 800;
+        }
+
+        .directory-query-proof ul {
+            margin: 0.6rem 0 0;
+            padding-left: 1.2rem;
+        }
+
+        .directory-discovery-note {
+            color: var(--outreach-muted);
+            font-size: 0.82rem;
+            margin: 0;
+        }
+
+        .directory-review-list {
+            display: grid;
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+
+        .directory-review-item {
+            align-items: center;
+            background: var(--outreach-panel-strong);
+            border: 1px solid var(--outreach-border);
+            border-radius: 6px;
+            display: flex;
+            gap: 0.8rem;
+            justify-content: space-between;
+            padding: 0.85rem;
+        }
+
+        .directory-review-item h4,
+        .directory-review-item p {
+            margin: 0;
+        }
+
+        .section-title {
+            align-items: center;
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .section-title h3 {
+            font-size: 1.15rem;
+            margin: 0;
+        }
+
+        .progress-list,
+        .history-list,
+        .insight-list {
+            display: grid;
+            gap: 0.85rem;
+        }
+
+        .progress-row {
+            display: grid;
+            gap: 1rem;
+            grid-template-columns: 170px minmax(0, 1fr) 280px;
+            padding: 0.75rem 0;
+        }
+
+        .progress-row + .progress-row {
+            border-top: 1px solid var(--outreach-border);
+        }
+
+        .progress-name {
+            font-weight: 900;
+        }
+
+        .progress-track {
+            background: #172542;
+            border-radius: 999px;
+            height: 9px;
+            margin-top: 0.35rem;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            background: linear-gradient(90deg, var(--outreach-orange), var(--outreach-green));
+            display: block;
+            height: 100%;
+        }
+
+        .progress-stats {
+            color: var(--outreach-muted);
+            display: flex;
+            flex-wrap: wrap;
+            font-size: 0.86rem;
+            gap: 0.7rem;
+            justify-content: flex-end;
+        }
+
+        .history-item,
+        .insight-card {
+            background: var(--outreach-panel-strong);
+            border: 1px solid var(--outreach-border);
+            border-radius: 8px;
+            padding: 0.95rem 1rem;
+        }
+
+        .history-item {
+            align-items: center;
+            display: grid;
+            gap: 1rem;
+            grid-template-columns: minmax(0, 1fr) auto;
+        }
+
+        .history-item h4,
+        .insight-card h4 {
+            font-size: 0.98rem;
+            margin: 0 0 0.25rem;
+        }
+
+        .insight-list {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .insight-card[data-tone="success"] {
+            border-color: rgba(95, 183, 173, 0.45);
+        }
+
+        .insight-card[data-tone="warning"] {
+            border-color: rgba(255, 107, 0, 0.45);
+        }
+
+        .target-card {
+            display: grid;
+            gap: 1rem;
+            grid-template-columns: minmax(0, 1fr) 220px;
+            padding: 1.2rem;
+        }
+
+        .target-topline {
+            align-items: flex-start;
+            display: flex;
+            gap: 0.9rem;
+        }
+
+        .target-avatar {
+            flex: 0 0 auto;
+            height: 48px;
+            width: 48px;
+        }
+
+        .target-name {
+            font-size: 1.15rem;
+            font-weight: 800;
+            margin: 0 0 0.25rem;
+        }
+
+        .target-meta,
+        .reasons {
+            color: var(--outreach-muted);
+            font-size: 0.9rem;
+            line-height: 1.45;
+            margin: 0;
+        }
+
+        .chip {
+            border: 1px solid var(--outreach-border);
+            border-radius: 999px;
+            color: var(--dark-text-primary);
+            font-size: 0.78rem;
+            padding: 0.2rem 0.55rem;
+        }
+
+        .chip.positive {
+            border-color: rgba(95, 183, 173, 0.55);
+            color: var(--outreach-green);
+        }
+
+        .score-wrap {
+            align-items: center;
+            display: flex;
+            gap: 0.75rem;
+            justify-content: flex-end;
+            margin-bottom: 0.75rem;
+        }
+
+        .score-number {
+            color: var(--outreach-orange);
+            font-size: 1.65rem;
+            font-weight: 900;
+            line-height: 1;
+        }
+
+        .score-label {
+            color: var(--outreach-muted);
+            font-size: 0.76rem;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+
+        .score-bars {
+            display: grid;
+            gap: 0.45rem;
+        }
+
+        .score-row {
+            display: grid;
+            gap: 0.35rem;
+            grid-template-columns: 94px 1fr;
+        }
+
+        .score-row span {
+            color: var(--outreach-muted);
+            font-size: 0.76rem;
+        }
+
+        .bar {
+            background: #172542;
+            border-radius: 999px;
+            height: 7px;
+            overflow: hidden;
+        }
+
+        .bar > i {
+            background: linear-gradient(90deg, var(--outreach-orange), var(--outreach-green));
+            display: block;
+            height: 100%;
+        }
+
+        .source-link {
+            border: 1px solid var(--outreach-border);
+            border-radius: 6px;
+            color: var(--dark-text-primary);
+            display: inline-flex;
+            font-size: 0.82rem;
+            font-weight: 800;
+            padding: 0.4rem 0.65rem;
+            text-decoration: none;
+        }
+
+        .source-link:hover {
+            border-color: var(--outreach-orange);
+            color: var(--outreach-orange);
+        }
+
+        .source-link-button {
+            background: transparent;
+            cursor: pointer;
+            font: inherit;
+        }
+
+        .empty-state {
+            align-items: center;
+            background: var(--outreach-panel);
+            border: 1px solid var(--outreach-border);
+            border-radius: 8px;
+            color: var(--outreach-muted);
+            display: none;
+            justify-content: center;
+            min-height: 180px;
+            text-align: center;
+        }
+
+        .empty-state.is-visible {
+            display: flex;
+        }
+
+        .toast-note {
+            background: var(--outreach-orange);
+            border-radius: 8px;
+            bottom: 1rem;
+            color: #fff;
+            font-weight: 700;
+            opacity: 0;
+            padding: 0.75rem 1rem;
+            pointer-events: none;
+            position: fixed;
+            right: 1rem;
+            transform: translateY(10px);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+            z-index: 20;
+        }
+
+        .toast-note.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        @media (max-width: 992px) {
+            .sidebar {
+                transform: none;
+            }
+
+            .outreach-shell {
+                margin-left: 250px;
+            }
+        }
+
+        @media (max-width: 860px) {
+            .d-flex {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                height: auto;
+                overflow-x: auto;
+                padding: 0.45rem 0;
+                position: static;
+                width: 100%;
+            }
+
+            .sidebar-menu {
+                align-items: center;
+                display: flex;
+                gap: 0.2rem;
+                margin: 0;
+                min-width: max-content;
+                padding: 0 0.65rem;
+            }
+
+            .sidebar-item {
+                display: none;
+                flex: 0 0 auto;
+                margin: 0;
+            }
+
+            .sidebar-item:nth-child(2),
+            .sidebar-item.outreach-nav-group {
+                display: flex;
+            }
+
+            .sidebar-link {
+                border-bottom: 2px solid transparent;
+                border-left: 0;
+                padding: 0.65rem 0.7rem;
+                white-space: nowrap;
+            }
+
+            .sidebar-link.active {
+                border-bottom-color: var(--outreach-orange);
+            }
+
+            .sidebar-icon {
+                display: none;
+            }
+
+            .outreach-nav-group {
+                align-items: center;
+                display: flex;
+            }
+
+            .outreach-nav-group > .sidebar-link {
+                display: none;
+            }
+
+            .outreach-nav-group .subnav {
+                flex-wrap: nowrap;
+                margin: 0;
+                padding-right: 0.65rem;
+                white-space: nowrap;
+            }
+
+            .outreach-shell {
+                margin-left: 0;
+                padding: 1rem;
+            }
+
+            .case-bar,
+            .page-heading,
+            .results-header,
+            .source-panel-main {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
+            .case-picker {
+                min-width: min(100%, 360px);
+                width: 100%;
+            }
+
+            .filter-panel,
+            .target-card,
+            .analytics-grid,
+            .focus-progress-strip,
+            .focus-command-grid,
+            .expert-controls,
+            .directory-discovery-row,
+            .directory-case-discovery,
+            .directory-coverage,
+            .progress-row,
+            .history-item,
+            .insight-list,
+            .source-detail-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .legal-area-options {
+                grid-template-columns: 1fr;
+                max-height: 320px;
+            }
+
+            .score-wrap,
+            .refresh-wrap,
+            .progress-stats {
+                justify-content: flex-start;
+            }
+        }
+    </style>
+</head>
+<body data-outreach-depth="focus">
+    <nav class="navbar">
+        <div class="container-fluid px-4 d-flex justify-content-between align-items-center">
+            <a class="navbar-logo" href="dashboard_dark.html"><h1>LARO</h1></a>
+            <div class="case-actions">
+                <a class="btn btn-outline" href="dashboard_dark.html">Dashboard</a>
+                <a class="btn btn-outline" href="evidence_timeline.html">Evidence Timeline</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="d-flex">
+        <aside class="sidebar">
+            <ul class="sidebar-menu">
+                <li class="sidebar-item"><a href="dashboard_dark.html" class="sidebar-link"><span class="sidebar-icon">[]</span> Overview</a></li>
+                <li class="sidebar-item"><a href="case_command_center.html" class="sidebar-link" id="commandCenterLink"><span class="sidebar-icon">C</span> Command Center</a></li>
+                <li class="sidebar-item"><a href="dashboard_dark.html#documents" class="sidebar-link"><span class="sidebar-icon">E</span> Evidence</a></li>
+                <li class="sidebar-item"><a href="evidence_timeline.html" class="sidebar-link"><span class="sidebar-icon">T</span> Evidence Timeline</a></li>
+                <li class="sidebar-item"><a href="#" class="sidebar-link"><span class="sidebar-icon">G</span> Gap Analysis</a></li>
+                <li class="sidebar-item outreach-nav-group">
+                    <a href="outreach.html" class="sidebar-link active"><span class="sidebar-icon">O</span> Outreach</a>
+                    <div class="subnav" aria-label="Outreach sections">
+                        <a href="#overview" data-subnav="overview">Overview</a>
+                        <a href="#lawyers" data-subnav="lawyers">Lawyers</a>
+                        <a href="#media" data-subnav="media">Media</a>
+                        <a href="#organizations" data-subnav="organizations">Organizations</a>
+                    </div>
+                </li>
+            </ul>
+        </aside>
+
+        <main class="outreach-shell">
+            <section class="case-bar">
+                <div>
+                    <h1 class="case-title"><span class="case-icon">O</span> <span id="outreachCaseTitle">Loading case ledger</span></h1>
+                    <p class="case-kicker" id="outreachCaseMeta">Loading the persisted case context for outreach.</p>
+                </div>
+                <div class="case-actions">
+                    <div class="case-picker">
+                        <label for="outreachCaseSelect">Active case</label>
+                        <select id="outreachCaseSelect" aria-label="Active outreach case" disabled>
+                            <option>Loading cases...</option>
+                        </select>
+                    </div>
+                    <span class="badge badge-warning" id="outreachCaseStatus">Loading</span>
+                    <span class="badge" id="outreachCasePriority">Local ledger</span>
+                </div>
+                <div class="outreach-depth" aria-label="Outreach detail level">
+                    <div class="depth-switcher">
+                        <button class="depth-button is-active" type="button" data-depth="focus">Focus</button>
+                        <button class="depth-button" type="button" data-depth="guided">Guided</button>
+                        <button class="depth-button" type="button" data-depth="expert">Expert</button>
+                    </div>
+                    <p class="depth-note" id="outreachDepthNote">Start with outcomes and the next useful action.</p>
+                </div>
+            </section>
+
+            <section class="focus-command-panel" id="outreachFocusPanel">
+                <div class="focus-command-head">
+                    <div>
+                        <h2>Outreach control room</h2>
+                        <p class="muted">Track progress first. Open matching detail only when a decision is needed.</p>
+                    </div>
+                    <span class="badge badge-warning" id="focusSourceMode">no live data</span>
+                </div>
+                <div class="focus-progress-strip" id="focusProgressStrip"></div>
+                <div class="focus-command-grid">
+                    <button class="focus-command-card" type="button" data-focus-action="overview">
+                        <i>1</i>
+                        <strong>Review progress</strong>
+                        <span>See contacted, response, acceptance, and pending outreach work in one place.</span>
+                    </button>
+                    <button class="focus-command-card" type="button" data-focus-action="lawyers">
+                        <i>2</i>
+                        <strong>Match lawyers</strong>
+                        <span>Open lawyer matching and run the current case against legal-field filters.</span>
+                    </button>
+                    <button class="focus-command-card" type="button" data-focus-action="media">
+                        <i>3</i>
+                        <strong>Widen outreach</strong>
+                        <span>Review media and organizations when legal outreach needs outside pressure or support.</span>
+                    </button>
+                </div>
+            </section>
+
+            <div class="page-heading guided-depth">
+                <h2 id="pageTitle">Outreach</h2>
+                <div class="tabs" aria-label="Outreach category tabs">
+                    <button class="tab-button" data-tab="overview">Overview</button>
+                    <button class="tab-button" data-tab="lawyers">Lawyers</button>
+                    <button class="tab-button" data-tab="media">Media</button>
+                    <button class="tab-button" data-tab="organizations">Organizations</button>
+                </div>
+            </div>
+
+            <section class="view-panel guided-depth" id="analyticsView" aria-label="Outreach analytics">
+                <div class="analytics-grid guided-depth" id="analyticsMetrics"></div>
+
+                <section class="analytics-section">
+                    <div class="section-title">
+                        <h3>Category Progress</h3>
+                        <span class="muted" id="analyticsSource">no live data</span>
+                    </div>
+                    <div class="progress-list" id="categoryProgress"></div>
+                </section>
+
+                <section class="analytics-section guided-depth">
+                    <div class="section-title">
+                        <h3>Outreach History</h3>
+                        <span class="muted">latest activity</span>
+                    </div>
+                    <div class="history-list" id="outreachHistory"></div>
+                </section>
+
+                <section class="analytics-section guided-depth">
+                    <div class="section-title">
+                        <h3>Performance Insights</h3>
+                    </div>
+                    <div class="insight-list" id="performanceInsights"></div>
+                </section>
+            </section>
+
+            <section class="view-panel" id="matchingView" hidden>
+                <section class="filter-panel" aria-label="Outreach filters">
+                    <label>
+                        <span class="field-label" id="primaryLabel">Case location</span>
+                        <input class="field-input" id="primaryInput" placeholder="City or postcode">
+                    </label>
+                    <label>
+                        <span class="field-label" id="fieldLabel">Legal field</span>
+                        <select class="field-select" id="legalField">
+                            <option value="">Use complete case analysis</option>
+                        </select>
+                    </label>
+                    <label>
+                        <span class="field-label">Results</span>
+                        <select class="field-select" id="maxResults">
+                            <option value="10">Top 10</option>
+                            <option value="20">Top 20</option>
+                            <option value="30" selected>Top 30</option>
+                            <option value="60">Top 60</option>
+                            <option value="100">Top 100</option>
+                        </select>
+                    </label>
+                    <div class="refresh-wrap">
+                        <button class="btn btn-primary" id="refreshMatches">Refresh</button>
+                    </div>
+                    <div class="expert-controls expert-depth" aria-label="Advanced outreach matching controls">
+                        <label class="lawyer-only">
+                            <span class="field-label">Radius</span>
+                            <select class="field-select" id="radiusKm">
+                                <option value="5">5 km</option>
+                                <option value="10">10 km</option>
+                                <option value="25">25 km</option>
+                                <option value="50" selected>50 km</option>
+                                <option value="56">National</option>
+                            </select>
+                        </label>
+                        <label class="lawyer-only">
+                            <span class="field-label">Lawyer or firm name</span>
+                            <input class="field-input" id="lawyerName" placeholder="Optional exact name">
+                        </label>
+                        <label class="toggle-field lawyer-only">
+                            <input type="checkbox" id="legalAidOnly">
+                            Require financed legal aid
+                        </label>
+                        <label class="toggle-field lawyer-only">
+                            <input type="checkbox" id="preferAssociation" checked>
+                            Prefer specialization association
+                        </label>
+                        <label class="toggle-field lawyer-only">
+                            <input type="checkbox" id="requireAssociation">
+                            Require relevant association
+                        </label>
+                        <details class="official-area-picker lawyer-only">
+                            <summary>Official legal areas (expert override) <span id="legalAreaSelectionSummary">automatic</span></summary>
+                            <div class="legal-area-options" id="legalAreaOptions" aria-label="Additional official NOvA legal areas"></div>
+                        </details>
+                    </div>
+                </section>
+
+                <section class="results-header">
+                    <h3 id="resultCount">Matched targets (0)</h3>
+                    <span class="muted" id="sourceMode">no live data</span>
+                </section>
+
+                <section class="source-panel" id="sourcePanel" aria-label="Matching source" hidden>
+                    <div class="source-panel-main">
+                        <div class="source-panel-copy">
+                            <strong id="sourceTitle">Matching source</strong>
+                            <p id="sourceSummary"></p>
+                        </div>
+                        <a class="source-link" id="sourceSearchLink" href="#" target="_blank" rel="noopener">Open source search</a>
+                    </div>
+                    <div class="source-filter-strip" id="sourceFilterStrip"></div>
+                    <details class="source-details expert-depth">
+                        <summary>Source and ranking details</summary>
+                        <div class="source-detail-grid" id="sourceDetailGrid"></div>
+                    </details>
+                </section>
+
+                <section>
+                    <div class="result-list" id="resultList"></div>
+                    <div class="empty-state" id="emptyState">
+                        <div><strong>No matches found.</strong><br>Broaden the category or reduce strict filters.</div>
+                    </div>
+                </section>
+
+                <section class="analytics-section expert-depth" aria-label="Outreach directory review">
+                    <div class="section-title">
+                        <h3>Reviewed Target Directory</h3>
+                        <span class="muted" id="directoryStatus">review before matching</span>
+                    </div>
+                    <div class="directory-discovery">
+                        <div class="directory-case-discovery">
+                            <div>
+                                <strong>Case-aware discovery</strong>
+                                <span id="caseDiscoveryStatus">Uses the active case's official legal areas</span>
+                            </div>
+                            <label>
+                                <span class="field-label">Coverage</span>
+                                <select class="field-select" id="caseDiscoveryLimit">
+                                    <option value="20">20 candidates</option>
+                                    <option value="40" selected>40 candidates</option>
+                                    <option value="60">60 candidates</option>
+                                </select>
+                            </label>
+                            <button class="btn btn-primary" type="button" id="discoverCaseDirectory">Discover for this case</button>
+                        </div>
+                        <div class="directory-coverage" id="caseDiscoveryCoverage" hidden></div>
+                        <div class="directory-discovery-row">
+                            <label>
+                                <span class="field-label">External search query</span>
+                                <input class="field-input" id="directoryDiscoveryQuery" placeholder="e.g. Dutch tenant advocacy organisations">
+                            </label>
+                            <label>
+                                <span class="field-label">Candidates</span>
+                                <select class="field-select" id="directoryDiscoveryLimit">
+                                    <option value="5">5 results</option>
+                                    <option value="10" selected>10 results</option>
+                                    <option value="20">20 results</option>
+                                </select>
+                            </label>
+                            <button class="btn btn-primary" type="button" id="discoverDirectory">Discover</button>
+                        </div>
+                        <label class="toggle-field">
+                            <input type="checkbox" id="confirmExternalSearch">
+                            Allow public search for entered or case-derived queries
+                        </label>
+                        <p class="directory-discovery-note">Manual search sends only the entered query. Case discovery sends only derived official legal-area queries. Results remain unapproved.</p>
+                    </div>
+                    <div class="directory-import">
+                        <label>
+                            <span class="field-label">Source records (JSON)</span>
+                            <textarea class="field-input" id="directoryImport" placeholder='[{"name":"...","target_type":"media","source_url":"https://..."}]'></textarea>
+                        </label>
+                        <div class="case-actions">
+                            <button class="btn btn-primary" type="button" id="importDirectory">Import for review</button>
+                            <button class="btn btn-secondary" type="button" id="refreshDirectory">Refresh directory</button>
+                        </div>
+                    </div>
+                    <div class="directory-review-list" id="directoryReviewList"></div>
+                </section>
+            </section>
+        </main>
+    </div>
+
+    <div class="toast-note" id="toastNote">Matches refreshed</div>
+
+    <script>
+        const AUTH_KEY = "laroAuthToken";
+        const AUTH_EMAIL_KEY = "laroAuthEmail";
+        const DEFAULT_ACCOUNT_EMAIL = "robert.local@laro";
+
+        const EMPTY_OUTREACH_ANALYTICS = {
+            case_id: null,
+            total_outreaches: 0,
+            matched_targets: 0,
+            contacted_targets: 0,
+            responses_received: 0,
+            accepted_targets: 0,
+            response_rate: 0,
+            acceptance_rate: 0,
+            avg_response_time_hours: null,
+            categories: {
+                lawyers: { label: "lawyers", matched: 0, contacted: 0, responded: 0, accepted: 0, ready: 0, progress_percent: 0 },
+                media: { label: "media", matched: 0, contacted: 0, responded: 0, accepted: 0, ready: 0, progress_percent: 0 },
+                organizations: { label: "organizations", matched: 0, contacted: 0, responded: 0, accepted: 0, ready: 0, progress_percent: 0 }
+            },
+            history: [],
+            insights: []
+        };
+
+        const DEPTH_MODES = ["focus", "guided", "expert"];
+        const DEPTH_NOTES = {
+            focus: "Start with outcomes and the next useful action.",
+            guided: "Show category tabs and matching workflow without advanced tuning.",
+            expert: "Expose granular filters and score breakdowns for deep review."
+        };
+        const state = {
+            activeTab: "overview",
+            caseId: null,
+            cases: [],
+            matches: [],
+            analytics: EMPTY_OUTREACH_ANALYTICS,
+            depth: "focus",
+            sourceDetails: {},
+            sourceUrl: "",
+            searchCriteria: {},
+            caseProfile: {},
+            legalTaxonomy: [],
+            directoryTargets: [],
+            directoryDiscoveryCoverage: null,
+            matchRequestId: 0,
+            matchInFlight: false,
+            matchQueued: false,
+            filterDrafts: {}
+        };
+        let matchRefreshTimer = null;
+
+        function targetAccountEmail() {
+            const params = new URLSearchParams(window.location.search);
+            return (params.get("user") || params.get("account") || params.get("email") || "").trim() || DEFAULT_ACCOUNT_EMAIL;
+        }
+
+        function currentCaseId() {
+            return state.caseId;
+        }
+
+        function legalAreaLabel(key) {
+            const area = state.legalTaxonomy.find((item) => item.key === key);
+            return area?.name_nl || String(key || "").replace(/_/g, " ").toLowerCase();
+        }
+
+        function checkedLegalFields() {
+            return Array.from(document.querySelectorAll("#legalAreaOptions input:checked"))
+                .map((input) => input.value)
+                .filter(Boolean);
+        }
+
+        function updateLegalAreaSelectionSummary() {
+            const selected = Array.from(new Set([
+                document.getElementById("legalField")?.value,
+                ...checkedLegalFields()
+            ].filter(Boolean)));
+            const summary = document.getElementById("legalAreaSelectionSummary");
+            if (summary) summary.textContent = selected.length ? `${selected.length} selected` : "automatic";
+        }
+
+        async function loadLawyerTaxonomy() {
+            const select = document.getElementById("legalField");
+            const options = document.getElementById("legalAreaOptions");
+            try {
+                const payload = await apiFetch("/api/lawyers/taxonomy");
+                state.legalTaxonomy = (payload.areas || []).slice().sort((left, right) =>
+                    String(left.name_nl || "").localeCompare(String(right.name_nl || ""), "nl")
+                );
+            } catch (error) {
+                state.legalTaxonomy = [];
+            }
+            select.innerHTML = `<option value="">Use complete case analysis</option>${state.legalTaxonomy.map((area) => `
+                <option value="${escapeHtml(area.key)}">${escapeHtml(area.name_nl)} - ${escapeHtml(area.label_en)}</option>
+            `).join("")}`;
+            options.innerHTML = state.legalTaxonomy.length ? state.legalTaxonomy.map((area) => `
+                <label class="legal-area-option">
+                    <input type="checkbox" value="${escapeHtml(area.key)}">
+                    <span>${escapeHtml(area.name_nl)}</span>
+                </label>
+            `).join("") : `<span class="muted">Official legal areas could not be loaded. Automatic case analysis remains available.</span>`;
+            options.querySelectorAll("input").forEach((input) => input.addEventListener("change", () => {
+                updateLegalAreaSelectionSummary();
+                scheduleMatchRefresh();
+            }));
+            updateLegalAreaSelectionSummary();
+        }
+
+        function saveFilterDraft(tab = state.activeTab) {
+            if (tab === "overview") return;
+            state.filterDrafts[tab] = {
+                primary: document.getElementById("primaryInput").value,
+                legalField: document.getElementById("legalField").value,
+                legalFields: checkedLegalFields(),
+                lawyerName: document.getElementById("lawyerName").value
+            };
+        }
+
+        function restoreFilterDraft(tab) {
+            const draft = state.filterDrafts[tab] || {};
+            const caseItem = activeCase() || {};
+            const field = draft.legalField ?? "";
+            const legalField = document.getElementById("legalField");
+            if (Array.from(legalField.options).some((option) => option.value === field)) {
+                legalField.value = field;
+            }
+            const additional = new Set(draft.legalFields || []);
+            document.querySelectorAll("#legalAreaOptions input").forEach((input) => {
+                input.checked = additional.has(input.value);
+            });
+            const caseLocation = caseItem.postcode_or_city || caseItem.location || caseItem.city || "";
+            document.getElementById("primaryInput").value = draft.primary ?? (tab === "lawyers" ? caseLocation : "");
+            document.getElementById("lawyerName").value = draft.lawyerName ?? "";
+            updateLegalAreaSelectionSummary();
+        }
+
+        function isDevelopmentQaCase(caseItem = {}) {
+            return String(caseItem.title || "").trim().toLowerCase().startsWith("qa ");
+        }
+
+        function activeCase() {
+            return state.cases.find((item) => Number(item.case_id) === Number(state.caseId)) || null;
+        }
+
+        function caseHref(path) {
+            return state.caseId ? `${path}?case_id=${encodeURIComponent(state.caseId)}` : path;
+        }
+
+        function renderActiveCase() {
+            const caseItem = activeCase();
+            const title = document.getElementById("outreachCaseTitle");
+            const meta = document.getElementById("outreachCaseMeta");
+            const status = document.getElementById("outreachCaseStatus");
+            const priority = document.getElementById("outreachCasePriority");
+            const commandCenterLink = document.getElementById("commandCenterLink");
+            if (!caseItem) {
+                title.textContent = "Select a real case";
+                meta.textContent = "Create a case in the command center before matching lawyers, media, or organizations.";
+                status.textContent = "Case required";
+                priority.textContent = "No placeholder data";
+                commandCenterLink.href = "case_command_center.html";
+                return;
+            }
+            title.textContent = caseItem.title || `Case ${caseItem.case_id}`;
+            const context = [caseItem.legal_domain, caseItem.court_or_institution, caseItem.desired_outcome]
+                .filter(Boolean)
+                .join(" - ");
+            meta.textContent = context || "Persisted local case ledger ready for outreach preparation.";
+            status.textContent = String(caseItem.status || "active").replace(/_/g, " ");
+            priority.textContent = String(caseItem.priority || caseItem.risk_level || "normal").replace(/_/g, " ");
+            commandCenterLink.href = caseHref("case_command_center.html");
+        }
+
+        function syncCaseUrl() {
+            const url = new URL(window.location.href);
+            if (state.caseId) url.searchParams.set("case_id", String(state.caseId));
+            else url.searchParams.delete("case_id");
+            history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+        }
+
+        async function loadCases() {
+            const payload = await apiFetch("/api/cases");
+            state.cases = (payload.cases || []).filter((item) => !isDevelopmentQaCase(item));
+            const requested = Number(new URLSearchParams(window.location.search).get("case_id"));
+            const selected = state.cases.find((item) => Number(item.case_id) === requested) || state.cases[0] || null;
+            state.caseId = selected ? Number(selected.case_id) : null;
+            const select = document.getElementById("outreachCaseSelect");
+            select.innerHTML = state.cases.length
+                ? state.cases.map((item) => `<option value="${escapeHtml(item.case_id)}">${escapeHtml(item.title || `Case ${item.case_id}`)}</option>`).join("")
+                : `<option value="">No persisted cases</option>`;
+            select.disabled = !state.cases.length;
+            if (state.caseId) select.value = String(state.caseId);
+            renderActiveCase();
+            syncCaseUrl();
+        }
+
+        async function changeActiveCase(caseId) {
+            state.caseId = Number(caseId) || null;
+            state.matches = [];
+            state.sourceDetails = {};
+            state.sourceUrl = "";
+            state.searchCriteria = {};
+            state.caseProfile = {};
+            state.directoryTargets = [];
+            state.directoryDiscoveryCoverage = null;
+            state.filterDrafts = {};
+            renderActiveCase();
+            renderCaseDiscoveryCoverage();
+            if (state.activeTab !== "overview") restoreFilterDraft(state.activeTab);
+            syncCaseUrl();
+            await refreshAnalytics();
+            if (state.activeTab !== "overview") {
+                await Promise.all([refreshMatches({ quiet: true }), refreshDirectoryTargets()]);
+            }
+        }
+
+        async function ensureAuth(force = false) {
+            const email = targetAccountEmail();
+            const existing = localStorage.getItem(AUTH_KEY);
+            if (existing && localStorage.getItem(AUTH_EMAIL_KEY) === email && !force) return existing;
+            const response = await fetch("/api/auth/session-login", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email })
+            });
+            if (!response.ok) throw new Error("Unable to create local LARO session");
+            const data = await response.json();
+            localStorage.setItem(AUTH_KEY, data.token);
+            localStorage.setItem(AUTH_EMAIL_KEY, data.email || email);
+            return data.token;
+        }
+
+        async function apiFetch(url, options = {}, retry = true) {
+            const token = await ensureAuth();
+            const response = await fetch(url, {
+                ...options,
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...(options.headers || {}) }
+            });
+            if (response.status === 401 && retry) {
+                await ensureAuth(true);
+                return apiFetch(url, options, false);
+            }
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || `Request failed: ${response.status}`);
+            return data;
+        }
+
+        function directoryTargetType() {
+            return state.activeTab === "organizations" ? "organization" : state.activeTab === "media" ? "media" : "";
+        }
+
+        async function refreshDirectoryTargets() {
+            const targetType = directoryTargetType();
+            if (!targetType) return;
+            try {
+                const payload = await apiFetch(`/api/outreach/directory/targets?target_type=${encodeURIComponent(targetType)}`);
+                state.directoryTargets = payload.targets || [];
+                renderDirectoryTargets();
+            } catch (error) {
+                state.directoryTargets = [];
+                renderDirectoryTargets(error.message || "Directory unavailable");
+            }
+        }
+
+        function renderDirectoryTargets(errorMessage = "") {
+            const list = document.getElementById("directoryReviewList");
+            const status = document.getElementById("directoryStatus");
+            const targetType = directoryTargetType();
+            if (!targetType) {
+                list.innerHTML = "";
+                return;
+            }
+            const pending = state.directoryTargets.filter((item) => item.status === "needs_review");
+            const approved = state.directoryTargets.filter((item) => item.status === "approved");
+            status.textContent = errorMessage || `${approved.length} approved, ${pending.length} awaiting review`;
+            list.innerHTML = state.directoryTargets.length ? state.directoryTargets.map((target) => `
+                <article class="directory-review-item">
+                    <div>
+                        <h4>${escapeHtml(target.name)}</h4>
+                        <p class="muted">${escapeHtml(target.subtype || target.target_type)} - ${escapeHtml(target.status)} - ${escapeHtml(target.source_label || target.source_url)}</p>
+                    </div>
+                    <div class="case-actions">
+                        ${safeExternalUrl(target.source_url) ? `<a class="source-link" href="${escapeHtml(safeExternalUrl(target.source_url))}" target="_blank" rel="noopener">Source</a>` : `<span class="muted">No source URL</span>`}
+                        ${target.status === "needs_review" ? `<button class="btn btn-secondary" type="button" data-directory-action="approve" data-directory-id="${target.id}">Approve</button>` : ""}
+                        ${target.status !== "archived" ? `<button class="btn btn-secondary" type="button" data-directory-action="archive" data-directory-id="${target.id}">Archive</button>` : ""}
+                    </div>
+                </article>
+            `).join("") : `<div class="empty-state is-visible"><div><strong>No ${targetType} records yet.</strong><br>Import sourced records for review; only approved records can appear in matches.</div></div>`;
+
+            list.querySelectorAll("[data-directory-action]").forEach((button) => {
+                button.addEventListener("click", async () => {
+                    await apiFetch(`/api/outreach/directory/targets/${button.dataset.directoryId}`, {
+                        method: "PATCH",
+                        body: JSON.stringify({ action: button.dataset.directoryAction })
+                    });
+                    await refreshDirectoryTargets();
+                    await refreshMatches();
+                });
+            });
+        }
+
+        function renderCaseDiscoveryCoverage(payload = state.directoryDiscoveryCoverage) {
+            const panel = document.getElementById("caseDiscoveryCoverage");
+            const status = document.getElementById("caseDiscoveryStatus");
+            const coverage = payload?.coverage || null;
+            if (!coverage) {
+                panel.hidden = true;
+                panel.innerHTML = "";
+                if (status) status.textContent = "Uses the active case's official legal areas";
+                return;
+            }
+            const queries = coverage.external_values_sent || [];
+            const completed = Number(coverage.completed_query_count || 0);
+            const planned = Number(coverage.planned_query_count || queries.length || 0);
+            const failed = Number(coverage.failed_query_count || 0);
+            if (status) status.textContent = `${completed}/${planned} queries completed${failed ? `; ${failed} blocked` : ""}; raw case text stayed local`;
+            panel.hidden = false;
+            panel.innerHTML = `
+                <div class="directory-coverage-stat"><strong>${escapeHtml(coverage.returned_candidate_count || 0)}</strong><span>review candidates</span></div>
+                <div class="directory-coverage-stat"><strong>${escapeHtml(coverage.unique_domain_count || 0)}</strong><span>unique domains</span></div>
+                <div class="directory-coverage-stat"><strong>${escapeHtml(completed)}/${escapeHtml(planned)}</strong><span>queries completed</span></div>
+                <div class="directory-coverage-stat"><strong>${coverage.raw_case_text_shared === false ? "Local" : "Review"}</strong><span>case-text boundary</span></div>
+                <details class="directory-query-proof">
+                    <summary>Exact public queries (${escapeHtml(queries.length)})</summary>
+                    <ul>${queries.map((query) => `<li>${escapeHtml(query)}</li>`).join("")}</ul>
+                </details>
+            `;
+        }
+
+        async function importDirectoryTargets() {
+            const targetType = directoryTargetType();
+            const input = document.getElementById("directoryImport");
+            if (!targetType) return;
+            let records;
+            try {
+                records = JSON.parse(input.value || "[]");
+            } catch (error) {
+                showToast("Directory JSON is invalid");
+                return;
+            }
+            if (!Array.isArray(records) || !records.length) {
+                showToast("Add at least one sourced record before importing");
+                return;
+            }
+            records = records.map((record) => ({ ...record, target_type: record.target_type || targetType }));
+            const payload = await apiFetch("/api/outreach/directory/import", {
+                method: "POST",
+                body: JSON.stringify({ targets: records })
+            });
+            input.value = "";
+            showToast(`${payload.count} target${payload.count === 1 ? "" : "s"} imported for review`);
+            await refreshDirectoryTargets();
+        }
+
+        async function discoverDirectoryTargets() {
+            const targetType = directoryTargetType();
+            const query = document.getElementById("directoryDiscoveryQuery").value.trim();
+            const confirmed = document.getElementById("confirmExternalSearch").checked;
+            const limit = Number(document.getElementById("directoryDiscoveryLimit").value || 10);
+            if (!targetType) return;
+            if (!query) {
+                showToast("Enter a search query first");
+                return;
+            }
+            if (!confirmed) {
+                showToast("Confirm the external query before searching");
+                return;
+            }
+            const button = document.getElementById("discoverDirectory");
+            button.disabled = true;
+            button.textContent = "Searching...";
+            try {
+                const payload = await apiFetch("/api/outreach/directory/discover", {
+                    method: "POST",
+                    body: JSON.stringify({ target_type: targetType, query, limit, confirm_external_search: true })
+                });
+                showToast(`${payload.count} candidate${payload.count === 1 ? "" : "s"} added for review`);
+                await refreshDirectoryTargets();
+            } finally {
+                button.disabled = false;
+                button.textContent = "Discover";
+            }
+        }
+
+        async function discoverCaseDirectoryTargets() {
+            const targetType = directoryTargetType();
+            const confirmed = document.getElementById("confirmExternalSearch").checked;
+            const limit = Number(document.getElementById("caseDiscoveryLimit").value || 40);
+            const selectedLegalField = document.getElementById("legalField").value;
+            if (!targetType || !currentCaseId()) {
+                showToast("Select a persisted case first");
+                return;
+            }
+            if (!confirmed) {
+                showToast("Confirm public search before case discovery");
+                return;
+            }
+            const button = document.getElementById("discoverCaseDirectory");
+            button.disabled = true;
+            button.textContent = "Searching...";
+            try {
+                const payload = await apiFetch("/api/outreach/directory/discover-case", {
+                    method: "POST",
+                    body: JSON.stringify({
+                        case_id: currentCaseId(),
+                        target_type: targetType,
+                        legal_fields: selectedLegalField ? [selectedLegalField] : [],
+                        limit,
+                        max_queries: 8,
+                        confirm_external_search: true
+                    })
+                });
+                state.directoryDiscoveryCoverage = payload;
+                renderCaseDiscoveryCoverage();
+                showToast(`${payload.count} case-aware candidate${payload.count === 1 ? "" : "s"} added for review`);
+                await refreshDirectoryTargets();
+            } finally {
+                button.disabled = false;
+                button.textContent = "Discover for this case";
+            }
+        }
+
+        function labelForTab(tab) {
+            if (tab === "overview") return "Outreach";
+            return tab === "organizations" ? "Organizations" : tab.charAt(0).toUpperCase() + tab.slice(1);
+        }
+
+        function initials(name) {
+            return String(name || "").split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? "").replace(/[&<>"']/g, (character) => ({
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                "\"": "&quot;",
+                "'": "&#39;"
+            }[character]));
+        }
+
+        function safeExternalUrl(value) {
+            if (!value) return "";
+            try {
+                const parsed = new URL(String(value), window.location.origin);
+                return ["http:", "https:"].includes(parsed.protocol) ? parsed.href : "";
+            } catch (error) {
+                return "";
+            }
+        }
+
+        function barWidth(value, max) {
+            return `${Math.max(4, Math.min(100, Math.round((Number(value || 0) / max) * 100)))}%`;
+        }
+
+        function setOutreachDepth(depth, options = {}) {
+            const nextDepth = DEPTH_MODES.includes(depth) ? depth : "focus";
+            state.depth = nextDepth;
+            document.body.dataset.outreachDepth = nextDepth;
+            try {
+                localStorage.setItem("laroOutreachDepth", nextDepth);
+            } catch (error) {
+                // Local storage may be unavailable in locked-down browser contexts.
+            }
+            document.querySelectorAll("[data-depth]").forEach((button) => {
+                const active = button.dataset.depth === nextDepth;
+                button.classList.toggle("is-active", active);
+                button.setAttribute("aria-pressed", String(active));
+            });
+            const note = document.getElementById("outreachDepthNote");
+            if (note) note.textContent = DEPTH_NOTES[nextDepth];
+            if (nextDepth === "focus" && state.activeTab !== "overview" && !options.keepTab) {
+                setActiveTab("overview");
+            }
+        }
+
+        function setActiveTab(tab) {
+            saveFilterDraft();
+            if (tab !== "overview" && state.depth === "focus") {
+                setOutreachDepth(tab === "organizations" ? "expert" : "guided", { keepTab: true });
+            }
+            state.activeTab = tab;
+            state.directoryDiscoveryCoverage = null;
+            renderCaseDiscoveryCoverage();
+            document.getElementById("pageTitle").textContent = tab === "overview" ? "Outreach Analytics" : `${labelForTab(tab)} Outreach`;
+            document.querySelectorAll(".tab-button").forEach((button) => button.classList.toggle("is-active", button.dataset.tab === tab));
+            document.querySelectorAll("[data-subnav]").forEach((link) => link.classList.toggle("is-active", link.dataset.subnav === tab));
+            history.replaceState(null, "", `#${tab}`);
+            document.getElementById("analyticsView").hidden = tab !== "overview";
+            document.getElementById("matchingView").hidden = tab === "overview";
+
+            if (tab === "overview") {
+                state.matchRequestId += 1;
+                state.matchQueued = false;
+                refreshAnalytics();
+                return;
+            }
+
+            document.getElementById("primaryLabel").textContent = tab === "lawyers" ? "Case location" : "Case angle";
+            document.getElementById("primaryInput").placeholder = tab === "lawyers" ? "City or postcode" : "Issue, audience, or angle";
+            document.getElementById("fieldLabel").textContent = tab === "lawyers" ? "Legal field" : "Primary issue";
+            document.querySelector(".expert-controls").hidden = tab !== "lawyers";
+            restoreFilterDraft(tab);
+            refreshMatches({ quiet: true });
+            refreshDirectoryTargets();
+        }
+
+        function payloadFromControls() {
+            const targetType = state.activeTab === "organizations" ? "organization" : state.activeTab === "media" ? "media" : "lawyer";
+            const selectedLegalField = document.getElementById("legalField").value;
+            const legalFields = Array.from(new Set([
+                selectedLegalField,
+                ...(targetType === "lawyer" ? checkedLegalFields() : [])
+            ].filter(Boolean)));
+            const primaryValue = document.getElementById("primaryInput").value.trim();
+            return {
+                case_id: currentCaseId(),
+                target_type: targetType,
+                legal_fields: legalFields,
+                evidence_topics: targetType === "lawyer" ? [] : primaryValue.split(/\s+/).filter(Boolean),
+                postcode_or_city: targetType === "lawyer" ? primaryValue : "",
+                radius_km: Number(document.getElementById("radiusKm")?.value || 50),
+                requires_financed_legal_aid: Boolean(document.getElementById("legalAidOnly")?.checked),
+                prefer_specialization_association: Boolean(document.getElementById("preferAssociation")?.checked),
+                require_specialization_association: Boolean(document.getElementById("requireAssociation")?.checked),
+                lawyer_name: document.getElementById("lawyerName")?.value.trim() || "",
+                max_results: Number(document.getElementById("maxResults").value)
+            };
+        }
+
+        function scheduleMatchRefresh() {
+            clearTimeout(matchRefreshTimer);
+            matchRefreshTimer = window.setTimeout(() => {
+                refreshMatches({ quiet: true }).catch(() => {});
+            }, 650);
+        }
+
+        async function refreshMatches(options = {}) {
+            clearTimeout(matchRefreshTimer);
+            matchRefreshTimer = null;
+            const payload = payloadFromControls();
+            const caseId = currentCaseId();
+            if (!caseId) {
+                state.matches = [];
+                state.sourceDetails = { reason: "Select or create a persisted case before running outreach matching." };
+                state.sourceUrl = "";
+                state.searchCriteria = {};
+                state.caseProfile = {};
+                renderMatches("case required");
+                return;
+            }
+
+            if (state.matchInFlight) {
+                state.matchQueued = true;
+                state.matchRequestId += 1;
+                document.getElementById("sourceMode").textContent = "updating filters";
+                return;
+            }
+
+            state.matchInFlight = true;
+            const requestId = ++state.matchRequestId;
+            const refreshButton = document.getElementById("refreshMatches");
+            refreshButton.disabled = true;
+            refreshButton.textContent = "Matching...";
+            document.getElementById("matchingView").setAttribute("aria-busy", "true");
+            document.getElementById("sourceMode").textContent = "checking live source";
+            const endpoint = state.activeTab === "lawyers" ? "/api/lawyers/match" : "/api/outreach/targets/match";
+            try {
+                const body = await apiFetch(endpoint, {
+                    method: "POST",
+                    body: JSON.stringify(payload)
+                });
+                if (requestId !== state.matchRequestId) return;
+                state.matches = state.activeTab === "lawyers" ? body.matched_lawyers || [] : body.matched_targets || [];
+                state.sourceDetails = body.source_details || {};
+                state.sourceUrl = state.sourceDetails.search_url || body.nova_search_url || "";
+                state.searchCriteria = body.search_criteria || {};
+                state.caseProfile = body.case_profile || {};
+                renderMatches(body.source_mode || "api");
+                if (!options.quiet) {
+                    showToast(state.matches.length ? `${labelForTab(state.activeTab)} matches refreshed` : (state.sourceDetails.reason || "No live matches available"));
+                }
+                await refreshAnalytics();
+            } catch (error) {
+                if (requestId !== state.matchRequestId) return;
+                state.matches = [];
+                state.sourceDetails = { reason: "The matching source could not be reached. No fallback data is shown." };
+                state.sourceUrl = "";
+                state.searchCriteria = {};
+                state.caseProfile = {};
+                renderMatches("no live data");
+                await refreshAnalytics();
+                if (!options.quiet) showToast("No live outreach matches available");
+            } finally {
+                state.matchInFlight = false;
+                if (state.matchQueued) {
+                    state.matchQueued = false;
+                    window.setTimeout(() => refreshMatches({ quiet: true }).catch(() => {}), 0);
+                } else {
+                    refreshButton.disabled = false;
+                    refreshButton.textContent = "Refresh";
+                    document.getElementById("matchingView").removeAttribute("aria-busy");
+                }
+            }
+        }
+
+        async function refreshAnalytics() {
+            const caseId = currentCaseId();
+            if (!caseId) {
+                state.analytics = EMPTY_OUTREACH_ANALYTICS;
+                renderAnalytics("case required");
+                return;
+            }
+
+            try {
+                state.analytics = await apiFetch(`/api/outreach/${caseId}/analytics`);
+                renderAnalytics("api");
+            } catch (error) {
+                state.analytics = EMPTY_OUTREACH_ANALYTICS;
+                renderAnalytics("no live data");
+            }
+        }
+
+        function formatRate(value) {
+            return `${Number(value || 0).toFixed(1)}%`;
+        }
+
+        function categoryLabel(key) {
+            if (key === "lawyers") return "Lawyers";
+            if (key === "media") return "Media";
+            return "Organizations";
+        }
+
+        function renderAnalytics(sourceMode) {
+            const analytics = state.analytics || EMPTY_OUTREACH_ANALYTICS;
+            const metrics = [
+                { title: "Total Outreaches", value: analytics.total_outreaches || 0, detail: `${analytics.matched_targets || 0} matched targets available`, icon: "O" },
+                { title: "Contacted", value: analytics.contacted_targets || 0, detail: "unique targets contacted", icon: "C" },
+                { title: "Response Rate", value: formatRate(analytics.response_rate), detail: analytics.responses_received ? `${analytics.responses_received} responses received` : "waiting for first response", icon: "R", tone: analytics.responses_received ? "good" : "warn" },
+                { title: "Acceptance Rate", value: formatRate(analytics.acceptance_rate), detail: analytics.accepted_targets ? `${analytics.accepted_targets} accepted or interested` : "no acceptances yet", icon: "A", tone: analytics.accepted_targets ? "good" : "warn" },
+                { title: "Avg Response Time", value: analytics.avg_response_time_hours == null ? "N/A" : `${analytics.avg_response_time_hours}h`, detail: "from sent message to reply", icon: "T" }
+            ];
+
+            document.getElementById("analyticsSource").textContent = sourceMode;
+            document.getElementById("analyticsMetrics").innerHTML = metrics.map((metric) => `
+                <article class="metric-card">
+                    <div class="metric-title"><h3>${escapeHtml(metric.title)}</h3><span class="metric-icon">${escapeHtml(metric.icon)}</span></div>
+                    <div class="metric-value">${escapeHtml(metric.value)}</div>
+                    <div class="metric-detail ${metric.tone || ""}">${escapeHtml(metric.detail)}</div>
+                </article>
+            `).join("");
+
+            const categories = analytics.categories || {};
+            document.getElementById("categoryProgress").innerHTML = ["lawyers", "media", "organizations"].map((key) => {
+                const item = categories[key] || { matched: 0, contacted: 0, responded: 0, accepted: 0, ready: 0, progress_percent: 0 };
+                return `
+                    <article class="progress-row">
+                        <div>
+                            <div class="progress-name">${categoryLabel(key)}</div>
+                            <div class="muted">${escapeHtml(item.ready || 0)} ready</div>
+                        </div>
+                        <div>
+                            <div class="progress-track"><i class="progress-fill" style="width:${Math.min(100, Math.max(0, Number(item.progress_percent || 0)))}%"></i></div>
+                        </div>
+                        <div class="progress-stats">
+                            <span>${escapeHtml(item.matched || 0)} matched</span>
+                            <span>${escapeHtml(item.contacted || 0)} contacted</span>
+                            <span>${escapeHtml(item.responded || 0)} responses</span>
+                            <span>${escapeHtml(item.accepted || 0)} accepted</span>
+                        </div>
+                    </article>
+                `;
+            }).join("");
+
+            const history = analytics.history || [];
+            document.getElementById("outreachHistory").innerHTML = history.length ? history.map((item) => `
+                <article class="history-item">
+                    <div>
+                        <h4>${escapeHtml(item.title)}</h4>
+                        <p class="muted">${escapeHtml(categoryLabel(item.category || "lawyers"))} - ${escapeHtml(item.detail || item.status || "Activity recorded")}</p>
+                    </div>
+                    <span class="chip positive">${escapeHtml(item.status || "ready")}</span>
+                </article>
+            `).join("") : `<div class="empty-state is-visible"><div><strong>No outreach activity yet.</strong><br>Start matching to populate this overview.</div></div>`;
+
+            const insights = analytics.insights || [];
+            document.getElementById("performanceInsights").innerHTML = insights.map((item) => {
+                const tone = ["success", "warning", "info"].includes(item.tone) ? item.tone : "info";
+                return `
+                    <article class="insight-card" data-tone="${tone}">
+                        <h4>${escapeHtml(item.title)}</h4>
+                        <p class="muted">${escapeHtml(item.detail)}</p>
+                    </article>
+                `;
+            }).join("");
+            renderFocusSummary(sourceMode);
+        }
+
+        function renderFocusSummary(sourceMode) {
+            const analytics = state.analytics || EMPTY_OUTREACH_ANALYTICS;
+            const progressStrip = document.getElementById("focusProgressStrip");
+            const sourceBadge = document.getElementById("focusSourceMode");
+            if (sourceBadge) sourceBadge.textContent = sourceMode || "no live data";
+            if (!progressStrip) return;
+            const stats = [
+                { label: "Matched targets", value: analytics.matched_targets || 0 },
+                { label: "Contacted", value: analytics.contacted_targets || 0 },
+                { label: "Responses", value: analytics.responses_received || 0 },
+                { label: "Acceptance", value: formatRate(analytics.acceptance_rate) }
+            ];
+            progressStrip.innerHTML = stats.map((stat) => `
+                <article class="focus-stat">
+                    <strong>${escapeHtml(stat.value)}</strong>
+                    <span>${escapeHtml(stat.label)}</span>
+                </article>
+            `).join("");
+        }
+
+        function formatSourceTimestamp(value) {
+            if (!value) return "Not reported";
+            const parsed = new Date(value);
+            if (Number.isNaN(parsed.getTime())) return String(value);
+            return new Intl.DateTimeFormat("en-GB", {
+                dateStyle: "medium",
+                timeStyle: "short"
+            }).format(parsed);
+        }
+
+        function renderSourcePanel(sourceMode) {
+            const panel = document.getElementById("sourcePanel");
+            const details = state.sourceDetails || {};
+            const isNova = String(sourceMode || "").startsWith("nova_") || String(details.source || "").includes("NOvA");
+            const hasSourceState = Boolean(details.source || details.reason || isNova);
+            panel.hidden = !hasSourceState;
+            if (!hasSourceState) return;
+
+            const reportedTotal = Number(details.reported_total);
+            const hasReportedTotal = details.reported_total !== null && details.reported_total !== undefined && Number.isFinite(reportedTotal);
+            const inspected = Number(details.unique_candidate_count || state.matches.length || 0);
+            const pages = Number(details.pages_fetched || 0);
+            const sourceTitle = isNova ? "Official NOvA lawyer directory" : (details.source || labelForTab(state.activeTab));
+            let summary = details.reason || "Live source records ranked against the active case.";
+            if (isNova && hasReportedTotal) {
+                summary = details.reported_total_is_sum_across_areas
+                    ? `${reportedTotal} reported listings across ${(details.area_queries || []).length} official area queries; LARO inspected ${inspected} unique profiles across ${pages} pages before local case ranking.`
+                    : `${reportedTotal} official result${reportedTotal === 1 ? "" : "s"}; LARO inspected ${inspected} across ${pages} page${pages === 1 ? "" : "s"} before local case ranking.`;
+                if (details.partial_results) summary += " The official result set is larger than the inspected ranking window.";
+            }
+            document.getElementById("sourceTitle").textContent = sourceTitle;
+            document.getElementById("sourceSummary").textContent = summary;
+
+            const sourceLink = document.getElementById("sourceSearchLink");
+            const sourceUrl = safeExternalUrl(state.sourceUrl || details.search_url || details.source_home_url || "");
+            sourceLink.hidden = !sourceUrl;
+            if (sourceUrl) sourceLink.href = sourceUrl;
+
+            const requested = details.filters_requested || {};
+            const applied = details.filters_applied || {};
+            const chips = [];
+            const addChip = (label, status) => chips.push({ label, status });
+            if (isNova) {
+                const selectedAreas = state.caseProfile.selected_legal_fields || requested.legal_fields || state.searchCriteria.legal_fields || [];
+                if (selectedAreas.length) {
+                    selectedAreas.forEach((field) => addChip(legalAreaLabel(field), applied.legal_area ? "applied" : "unresolved"));
+                } else {
+                    addChip("Legal area", applied.legal_area ? "applied" : "unresolved");
+                }
+                if (requested.lawyer_name) addChip(`Name: ${requested.lawyer_name}`, applied.lawyer_name ? "applied" : "unresolved");
+                if (requested.location) {
+                    addChip(`Location: ${requested.location}`, applied.location ? "applied" : "unresolved");
+                    addChip(requested.radius_km >= 56 ? "National radius" : `${requested.radius_km} km radius`, applied.radius ? "applied" : "unresolved");
+                }
+                if (requested.financed_legal_aid) addChip("Financed legal aid", applied.financed_legal_aid ? "applied" : "unresolved");
+                if (requested.require_specialization_association) {
+                    addChip("Required association", applied.specialization_association ? "applied" : "unresolved");
+                } else if (requested.prefer_specialization_association) {
+                    addChip("Association ranked", applied.specialization_ranking_preference ? "applied" : "neutral");
+                }
+            }
+            document.getElementById("sourceFilterStrip").innerHTML = chips.map((chip) => `
+                <span class="source-filter-chip ${chip.status === "applied" ? "is-applied" : chip.status === "unresolved" ? "is-unresolved" : ""}">${escapeHtml(chip.label)}</span>
+            `).join("");
+
+            const coverage = state.caseProfile.source_coverage || details.case_source_coverage || {};
+            const coverageText = Object.entries(coverage)
+                .filter(([, count]) => Number(count || 0) > 0)
+                .map(([key, count]) => `${count} ${String(key).replace(/_/g, " ")}`)
+                .join(", ");
+            const inferredAreas = state.caseProfile.inferred_legal_fields || requested.inferred_legal_fields || [];
+            const rows = [
+                ["Authority", details.source_authority || details.source || sourceMode],
+                ["Retrieved", formatSourceTimestamp(details.retrieved_at)],
+                ["Case sources", coverageText || "Persisted case context"],
+                ["Local inference", inferredAreas.length ? inferredAreas.map(legalAreaLabel).join(", ") : "No additional area inferred"],
+                ["Location", details.location_filter_note],
+                ["Specialization", details.specialization_filter_note],
+                ["Method", details.ranking_method],
+                ["Privacy", details.raw_case_text_shared_with_directory === false ? "Raw case text stayed local; only official filters were sent." : "Review external query scope."],
+                ["Source limitation", details.source_notice]
+            ].filter(([, value]) => value);
+            document.getElementById("sourceDetailGrid").innerHTML = rows.map(([label, value]) => `
+                <div class="source-detail-row"><strong>${escapeHtml(label)}</strong>${escapeHtml(value)}</div>
+            `).join("");
+        }
+
+        function renderMatches(sourceMode) {
+            const list = document.getElementById("resultList");
+            const empty = document.getElementById("emptyState");
+            const count = document.getElementById("resultCount");
+            const source = document.getElementById("sourceMode");
+            list.innerHTML = "";
+            count.textContent = `Matched ${labelForTab(state.activeTab)} (${state.matches.length})`;
+            source.textContent = sourceMode;
+            renderSourcePanel(sourceMode);
+            const emptyCopy = empty.querySelector("div");
+            emptyCopy.innerHTML = state.sourceDetails.reason
+                ? `<strong>No matching records available.</strong><br>${escapeHtml(state.sourceDetails.reason)}`
+                : `<strong>No matches found.</strong><br>Broaden the category or reduce strict filters.`;
+            empty.classList.toggle("is-visible", state.matches.length === 0);
+
+            state.matches.forEach((target) => {
+                const breakdown = target.score_breakdown || {};
+                const channels = target.channels || target.nova_rechtsgebieden || target.legal_fields || [];
+                const associations = target.specialization_associations || [];
+                const targetType = target.subtype || (state.activeTab === "lawyers" ? "lawyer" : "outreach target");
+                const affiliation = target.parent_org || target.firm_name || "";
+                const sourceUrl = safeExternalUrl(target.contact_url || target.profile_url || target.url || "");
+                const sourceAction = sourceUrl
+                    ? `<a class="source-link" href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener">Open</a>`
+                    : `<button type="button" class="source-link source-link-button" data-missing-source>Open</button>`;
+                const card = document.createElement("article");
+                card.className = "target-card";
+                card.innerHTML = `
+                    <div>
+                        <div class="target-topline">
+                            <div class="target-avatar">${escapeHtml(initials(target.name))}</div>
+                            <div>
+                                <h4 class="target-name">${escapeHtml(target.name)}</h4>
+                                <p class="target-meta">${escapeHtml(targetType)}${affiliation ? ` - ${escapeHtml(affiliation)}` : ""}${target.city ? ` - ${escapeHtml(target.city)}` : ""}</p>
+                            </div>
+                        </div>
+                        <div class="chips">
+                            ${channels.slice(0, 5).map((item) => `<span class="chip">${escapeHtml(String(item).replace(/_/g, " ").toLowerCase())}</span>`).join("")}
+                            ${associations.slice(0, 2).map((item) => `<span class="chip positive">${escapeHtml(item)}</span>`).join("")}
+                            ${(target.topics || []).slice(0, 2).map((item) => `<span class="chip positive">${escapeHtml(item)}</span>`).join("")}
+                        </div>
+                        <p class="reasons">${escapeHtml((target.match_reasons || []).slice(0, 3).join(" - "))}</p>
+                    </div>
+                    <div>
+                        <div class="score-wrap">
+                            <div class="score-label">Match<br>score</div>
+                            <div class="score-number">${Math.round(target.match_score || 0)}</div>
+                        </div>
+                        <div class="score-bars expert-depth">
+                            <div class="score-row"><span>Topics</span><div class="bar"><i style="width:${barWidth(breakdown.topics || breakdown.case_terms || 0, 35)}"></i></div></div>
+                            <div class="score-row"><span>Legal</span><div class="bar"><i style="width:${barWidth(breakdown.legal_field || breakdown.legal_area || 0, 20)}"></i></div></div>
+                            <div class="score-row"><span>Impact</span><div class="bar"><i style="width:${barWidth(breakdown.impact || breakdown.location || 0, 15)}"></i></div></div>
+                            <div class="score-row"><span>Action</span><div class="bar"><i style="width:${barWidth(breakdown.actionability || breakdown.specialization || 0, 15)}"></i></div></div>
+                        </div>
+                        <div class="case-actions" style="justify-content:flex-end; margin-top:1rem;">
+                            ${sourceAction}
+                        </div>
+                    </div>
+                `;
+                list.appendChild(card);
+            });
+
+            list.querySelectorAll("[data-missing-source]").forEach((button) => {
+                button.addEventListener("click", () => showToast("No source URL is available for this target yet"));
+            });
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById("toastNote");
+            toast.textContent = message;
+            toast.classList.add("show");
+            clearTimeout(window.outreachToastTimer);
+            window.outreachToastTimer = setTimeout(() => toast.classList.remove("show"), 5000);
+        }
+
+        document.querySelectorAll(".tab-button").forEach((button) => {
+            button.addEventListener("click", () => setActiveTab(button.dataset.tab));
+        });
+        document.querySelectorAll("[data-depth]").forEach((button) => {
+            button.addEventListener("click", () => setOutreachDepth(button.dataset.depth));
+        });
+        document.querySelectorAll("[data-focus-action]").forEach((button) => {
+            button.addEventListener("click", () => {
+                const action = button.dataset.focusAction;
+                if (action === "overview") {
+                    setOutreachDepth("guided", { keepTab: true });
+                    setActiveTab("overview");
+                    return;
+                }
+                setOutreachDepth(action === "organizations" ? "expert" : "guided", { keepTab: true });
+                setActiveTab(action);
+            });
+        });
+        document.querySelectorAll("[data-subnav]").forEach((link) => {
+            link.addEventListener("click", (event) => {
+                event.preventDefault();
+                setActiveTab(link.dataset.subnav);
+            });
+        });
+        document.querySelectorAll('.sidebar-link[href="#"], [data-action-message]').forEach((link) => {
+            link.addEventListener("click", (event) => {
+                event.preventDefault();
+                showToast(link.dataset.actionMessage || "Gap Analysis will appear after live evidence is classified.");
+            });
+        });
+        document.getElementById("refreshMatches").addEventListener("click", () => refreshMatches());
+        document.getElementById("outreachCaseSelect").addEventListener("change", (event) => {
+            changeActiveCase(event.target.value).catch((error) => showToast(error.message || "Unable to switch outreach case"));
+        });
+        document.getElementById("maxResults").addEventListener("change", scheduleMatchRefresh);
+        document.getElementById("legalField").addEventListener("change", () => {
+            updateLegalAreaSelectionSummary();
+            scheduleMatchRefresh();
+        });
+        document.getElementById("primaryInput").addEventListener("input", scheduleMatchRefresh);
+        document.getElementById("radiusKm").addEventListener("change", scheduleMatchRefresh);
+        document.getElementById("lawyerName").addEventListener("input", scheduleMatchRefresh);
+        document.getElementById("legalAidOnly").addEventListener("change", scheduleMatchRefresh);
+        document.getElementById("preferAssociation").addEventListener("change", scheduleMatchRefresh);
+        document.getElementById("requireAssociation").addEventListener("change", (event) => {
+            if (event.target.checked) document.getElementById("preferAssociation").checked = true;
+            scheduleMatchRefresh();
+        });
+        document.getElementById("importDirectory").addEventListener("click", () => {
+            importDirectoryTargets().catch((error) => showToast(error.message || "Unable to import directory records"));
+        });
+        document.getElementById("refreshDirectory").addEventListener("click", () => {
+            refreshDirectoryTargets().catch((error) => showToast(error.message || "Unable to refresh directory"));
+        });
+        document.getElementById("discoverDirectory").addEventListener("click", () => {
+            discoverDirectoryTargets().catch((error) => showToast(error.message || "Unable to search public sources"));
+        });
+        document.getElementById("discoverCaseDirectory").addEventListener("click", () => {
+            discoverCaseDirectoryTargets().catch((error) => showToast(error.message || "Unable to discover from this case"));
+        });
+
+        async function initializeOutreach() {
+            const initialHash = window.location.hash.replace("#", "");
+            let storedDepth = "focus";
+            try {
+                storedDepth = localStorage.getItem("laroOutreachDepth") || "focus";
+            } catch (error) {
+                storedDepth = "focus";
+            }
+            setOutreachDepth(["lawyers", "media", "organizations"].includes(initialHash) && storedDepth === "focus" ? "guided" : storedDepth, { keepTab: true });
+            try {
+                await Promise.all([loadLawyerTaxonomy(), loadCases()]);
+            } catch (error) {
+                state.cases = [];
+                state.caseId = null;
+                renderActiveCase();
+                showToast(error.message || "Unable to load persisted cases");
+            }
+            setActiveTab(["overview", "lawyers", "media", "organizations"].includes(initialHash) ? initialHash : "overview");
+        }
+
+        function refreshVisibleOutreachData() {
+            if (document.hidden || !currentCaseId()) return;
+            refreshAnalytics().catch(() => {});
+            if (state.activeTab !== "overview") refreshDirectoryTargets().catch(() => {});
+        }
+
+        window.setInterval(refreshVisibleOutreachData, 20000);
+        document.addEventListener("visibilitychange", refreshVisibleOutreachData);
+        initializeOutreach();
+    </script>
+    <script src="js/click-actions.js"></script>
+</body>
+</html>
+
+
+

@@ -31,5 +31,11 @@ export default defineConfig({
       'tests/sim/**/*.test.ts',
     ],
     testTimeout: 30_000,
+    hookTimeout: 30_000,
+    // Database-backed suites perform migrations in setup hooks. Bound worker
+    // concurrency so Windows and lower-resource CI hosts do not time out from
+    // disk contention while many temporary SQLite databases initialize.
+    maxWorkers: 4,
+    minWorkers: 1,
   },
 });

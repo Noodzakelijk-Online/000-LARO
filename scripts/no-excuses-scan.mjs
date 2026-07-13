@@ -48,7 +48,7 @@ function walk(dir, acc) {
   try { entries = readdirSync(join(ROOT, dir)); } catch { return acc; }
   for (const name of entries) {
     if (SKIP.has(name)) continue;
-    const rel = join(dir, name);
+    const rel = join(dir, name).replaceAll('\\', '/');
     const abs = join(ROOT, rel);
     let st;
     try { st = statSync(abs); } catch { continue; }
@@ -59,7 +59,7 @@ function walk(dir, acc) {
 }
 
 function scanFile(rel, kind) {
-  const lines = readFileSync(join(ROOT, rel), 'utf8').split('\n');
+  const lines = readFileSync(join(ROOT, rel), 'utf8').split(/\r?\n/);
   const hits = [];
   lines.forEach((line, i) => {
     if (HONEST_RE.test(line)) return;

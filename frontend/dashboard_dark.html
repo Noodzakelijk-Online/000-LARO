@@ -1,0 +1,4476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Legal AI Reach Out | Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="css/dark-theme.css">
+    <style>
+        /* Additional styles specific to dashboard */
+        .dashboard-header {
+            padding: 1.5rem 0;
+            margin-bottom: 1rem;
+            background: #08111f;
+            border: 1px solid #22314c;
+            border-radius: 8px;
+        }
+        
+        .dashboard-title {
+            font-size: 1.75rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+        
+        .dashboard-subtitle {
+            color: var(--dark-text-secondary);
+            margin-bottom: 0.25rem;
+        }
+
+        .dashboard-header .container-fluid {
+            align-items: center;
+            display: flex;
+            gap: 1rem;
+            justify-content: space-between;
+        }
+
+        .dashboard-depth-note {
+            color: var(--dark-text-tertiary);
+            font-size: 0.84rem;
+            margin: 0;
+        }
+
+        .depth-switcher {
+            align-items: center;
+            background: rgba(7, 16, 31, 0.82);
+            border: 1px solid #22314c;
+            border-radius: 8px;
+            display: grid;
+            gap: 0.35rem;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            padding: 0.25rem;
+        }
+
+        .depth-button {
+            align-items: flex-start;
+            background: transparent;
+            border: 0;
+            border-radius: 6px;
+            color: var(--dark-text-secondary);
+            display: inline-flex;
+            cursor: pointer;
+            font-size: 0.82rem;
+            font-weight: 800;
+            gap: 0.2rem;
+            justify-content: center;
+            line-height: 1.1;
+            padding: 0.48rem 0.72rem;
+            text-align: left;
+            width: 100%;
+        }
+
+        .depth-button.is-active {
+            background: var(--orange-primary);
+            color: #fff;
+        }
+
+        .depth-button span {
+            display: inline-block;
+            margin-top: 0.02rem;
+        }
+
+        .depth-button small {
+            color: inherit;
+            display: block;
+            font-size: 0.68rem;
+            font-weight: 600;
+            margin-top: 0.2rem;
+            opacity: 0.92;
+            white-space: normal;
+        }
+
+        .depth-button:focus-visible,
+        .source-toggle input:focus-visible,
+        .control-input:focus-visible {
+            outline: 2px solid rgba(255, 107, 0, 0.65);
+            outline-offset: 2px;
+        }
+
+        .command-center {
+            background: #08111f;
+            border: 1px solid #22314c;
+            border-radius: 8px;
+            box-shadow: var(--shadow-sm);
+            display: grid;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+        }
+
+        .command-topbar {
+            align-items: center;
+            background: #0b1528;
+            border: 1px solid #22314c;
+            border-radius: 8px;
+            display: grid;
+            gap: 0.85rem;
+            grid-template-columns: minmax(220px, 0.8fr) minmax(260px, 1fr) minmax(220px, 0.7fr);
+            padding: 0.85rem;
+        }
+
+        .case-selector,
+        .case-search {
+            display: grid;
+            gap: 0.28rem;
+        }
+
+        .case-selector label,
+        .case-search label {
+            color: var(--dark-text-tertiary);
+            font-size: 0.7rem;
+            font-weight: 850;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        .case-selector select,
+        .case-search input {
+            background: #07101f;
+            border: 1px solid #22314c;
+            border-radius: 8px;
+            color: var(--dark-text-primary);
+            min-height: 40px;
+            padding: 0.55rem 0.7rem;
+            width: 100%;
+        }
+
+        .command-status-stack {
+            align-items: center;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            justify-content: flex-end;
+        }
+
+        .control-density {
+            background: #07101f;
+            border: 1px solid #22314c;
+            border-radius: 8px;
+            color: var(--dark-text-secondary);
+            display: grid;
+            gap: 0.18rem;
+            min-height: 40px;
+            min-width: 136px;
+            padding: 0.42rem 0.65rem;
+        }
+
+        .control-density strong {
+            color: var(--dark-text-primary);
+            font-size: 0.82rem;
+            line-height: 1.1;
+        }
+
+        .control-density span {
+            color: var(--dark-text-tertiary);
+            font-size: 0.68rem;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .command-grid {
+            display: grid;
+            gap: 1rem;
+            grid-template-columns: minmax(380px, 1.25fr) minmax(300px, 0.75fr);
+        }
+
+        .command-grid.is-focus-first {
+            align-items: stretch;
+        }
+
+        .command-primary,
+        .command-panel,
+        .command-inspector {
+            background: #0b1528;
+            border: 1px solid #22314c;
+            border-radius: 8px;
+            min-width: 0;
+        }
+
+        .command-primary {
+            display: grid;
+            gap: 1rem;
+            padding: 1.1rem;
+        }
+
+        body[data-depth-mode="simple"] .command-grid {
+            grid-template-columns: minmax(0, 1fr);
+        }
+
+        body[data-depth-mode="simple"] .command-primary {
+            min-height: 0;
+        }
+
+        .command-panel,
+        .command-inspector {
+            padding: 1rem;
+        }
+
+        .command-inspector {
+            align-self: start;
+        }
+
+        .command-kicker,
+        .command-section-label {
+            color: var(--dark-text-tertiary);
+            display: block;
+            font-size: 0.74rem;
+            font-weight: 850;
+            letter-spacing: 0.04em;
+            margin-bottom: 0.45rem;
+            text-transform: uppercase;
+        }
+
+        .command-title-row {
+            align-items: flex-start;
+            display: flex;
+            gap: 1rem;
+            justify-content: space-between;
+        }
+
+        .command-title-row h3 {
+            font-size: 1.35rem;
+            line-height: 1.2;
+            margin: 0 0 0.45rem;
+        }
+
+        .command-title-row p,
+        .command-panel p,
+        .command-inspector p {
+            color: var(--dark-text-secondary);
+            font-size: 0.88rem;
+            line-height: 1.45;
+            margin: 0;
+        }
+
+        .command-badge {
+            align-items: center;
+            background: rgba(255, 107, 0, 0.12);
+            border: 1px solid rgba(255, 107, 0, 0.28);
+            border-radius: 999px;
+            color: var(--orange-primary);
+            display: inline-flex;
+            flex: 0 0 auto;
+            font-size: 0.72rem;
+            font-weight: 850;
+            gap: 0.38rem;
+            padding: 0.35rem 0.65rem;
+            text-transform: uppercase;
+        }
+
+        .command-actions {
+            align-items: center;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.65rem;
+        }
+
+        .command-actions .btn {
+            min-height: 42px;
+        }
+
+        .command-microcopy {
+            color: var(--dark-text-tertiary);
+            font-size: 0.8rem;
+            margin: 0;
+        }
+
+        .case-health-grid {
+            display: grid;
+            gap: 0.65rem;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        .case-health-item {
+            background: #101d34;
+            border: 1px solid #22314c;
+            border-radius: 8px;
+            min-height: 78px;
+            padding: 0.75rem;
+        }
+
+        .case-health-item strong {
+            color: var(--dark-text-primary);
+            display: block;
+            font-size: 1.25rem;
+            line-height: 1;
+            margin-bottom: 0.25rem;
+        }
+
+        .case-health-item span {
+            color: var(--dark-text-tertiary);
+            display: block;
+            font-size: 0.72rem;
+            font-weight: 800;
+            line-height: 1.25;
+            text-transform: uppercase;
+        }
+
+        .case-health-item.is-risk {
+            border-color: rgba(255, 104, 77, 0.36);
+        }
+
+        .case-health-item.is-ready {
+            border-color: rgba(76, 175, 80, 0.36);
+        }
+
+        .case-health-item.is-risk strong {
+            color: #ff684d;
+        }
+
+        .case-health-item.is-ready strong {
+            color: var(--success);
+        }
+
+        .decision-board {
+            display: grid;
+            gap: 0.65rem;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        .decision-lane {
+            background: #07101f;
+            border: 1px solid #22314c;
+            border-radius: 8px;
+            color: inherit;
+            display: grid;
+            gap: 0.45rem;
+            min-height: 106px;
+            padding: 0.75rem;
+            text-decoration: none;
+            transition: border-color 0.2s ease, transform 0.2s ease;
+        }
+
+        .decision-lane:hover,
+        .decision-lane:focus {
+            border-color: var(--orange-primary);
+            color: inherit;
+            transform: translateY(-1px);
+        }
+
+        .decision-lane-top {
+            align-items: center;
+            display: flex;
+            justify-content: space-between;
+            gap: 0.55rem;
+        }
+
+        .decision-lane-icon {
+            align-items: center;
+            background: rgba(255, 107, 0, 0.12);
+            border-radius: 8px;
+            color: var(--orange-primary);
+            display: inline-flex;
+            flex: 0 0 auto;
+            height: 30px;
+            justify-content: center;
+            width: 30px;
+        }
+
+        .decision-lane strong {
+            color: var(--dark-text-primary);
+            font-size: 1.35rem;
+            line-height: 1;
+        }
+
+        .decision-lane-label {
+            color: var(--dark-text-primary);
+            display: block;
+            font-size: 0.82rem;
+            font-weight: 850;
+            line-height: 1.2;
+        }
+
+        .decision-lane-detail {
+            color: var(--dark-text-tertiary);
+            display: block;
+            font-size: 0.74rem;
+            font-weight: 700;
+            line-height: 1.32;
+        }
+
+        .decision-lane.is-danger {
+            border-color: rgba(255, 104, 77, 0.32);
+        }
+
+        .decision-lane.is-danger .decision-lane-icon,
+        .decision-lane.is-danger strong {
+            color: #ff684d;
+        }
+
+        .decision-lane.is-ready {
+            border-color: rgba(76, 175, 80, 0.3);
+        }
+
+        .decision-lane.is-ready .decision-lane-icon,
+        .decision-lane.is-ready strong {
+            color: var(--success);
+        }
+
+        .review-queue-board {
+            display: grid;
+            gap: 0.65rem;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .review-queue-card {
+            background: #101d34;
+            border: 1px solid #22314c;
+            border-radius: 8px;
+            min-width: 0;
+            padding: 0.75rem;
+        }
+
+        .review-queue-card h6 {
+            color: var(--dark-text-primary);
+            font-size: 0.82rem;
+            font-weight: 850;
+            margin: 0 0 0.45rem;
+        }
+
+        .review-queue-card ol {
+            color: var(--dark-text-secondary);
+            display: grid;
+            gap: 0.45rem;
+            font-size: 0.78rem;
+            line-height: 1.35;
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .review-queue-card li {
+            align-items: start;
+            display: grid;
+            gap: 0.45rem;
+            grid-template-columns: minmax(0, 1fr) auto;
+        }
+
+        .review-queue-card a {
+            color: var(--orange-primary);
+            font-weight: 850;
+            text-decoration: none;
+        }
+
+        .review-queue-empty {
+            color: var(--dark-text-tertiary);
+            font-size: 0.78rem;
+            margin: 0;
+        }
+
+        .depth-ladder {
+            display: grid;
+            gap: 0.55rem;
+        }
+
+        .depth-ladder-step {
+            align-items: flex-start;
+            background: #101d34;
+            border: 1px solid #22314c;
+            border-radius: 8px;
+            display: grid;
+            gap: 0.4rem;
+            grid-template-columns: 30px minmax(0, 1fr);
+            padding: 0.75rem;
+        }
+
+        .depth-ladder-step i {
+            align-items: center;
+            background: rgba(255, 107, 0, 0.12);
+            border-radius: 8px;
+            color: var(--orange-primary);
+            display: inline-flex;
+            height: 30px;
+            justify-content: center;
+            width: 30px;
+        }
+
+        .depth-ladder-step strong {
+            color: var(--dark-text-primary);
+            display: block;
+            font-size: 0.9rem;
+            margin-bottom: 0.16rem;
+        }
+
+        .depth-ladder-step span {
+            color: var(--dark-text-secondary);
+            display: block;
+            font-size: 0.78rem;
+            line-height: 1.35;
+        }
+
+        .depth-ladder-step.is-current {
+            border-color: rgba(255, 107, 0, 0.5);
+            background: #14233b;
+        }
+
+        .operator-stack {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .command-strip {
+            display: grid;
+            gap: 0.75rem;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .command-strip .quick-action {
+            min-height: 86px;
+        }
+
+        .guided-operator-grid {
+            display: grid;
+            gap: 1rem;
+            grid-template-columns: minmax(0, 1.15fr) minmax(300px, 0.85fr);
+        }
+
+        .timeline-preview-header {
+            align-items: center;
+            display: flex;
+            gap: 0.75rem;
+            justify-content: space-between;
+            margin-bottom: 0.75rem;
+        }
+
+        .timeline-preview-header h5 {
+            font-size: 1rem;
+            margin: 0;
+        }
+
+        .timeline-preview-header .btn {
+            flex: 0 0 auto;
+        }
+
+        .command-inspector details {
+            background: #101d34;
+            border: 1px solid #22314c;
+            border-radius: 8px;
+            padding: 0.75rem;
+        }
+
+        body[data-depth-mode="expert"] .command-inspector {
+            position: sticky;
+            top: 86px;
+        }
+
+        .command-inspector details + details {
+            margin-top: 0.65rem;
+        }
+
+        .command-inspector summary {
+            color: var(--dark-text-primary);
+            cursor: pointer;
+            font-size: 0.84rem;
+            font-weight: 850;
+            list-style: none;
+        }
+
+        .command-inspector summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .command-inspector summary::before {
+            color: var(--orange-primary);
+            content: "\25B6";
+            margin-right: 0.45rem;
+        }
+
+        .command-inspector details[open] summary::before {
+            content: "\25BC";
+        }
+
+        .inspector-grid {
+            display: grid;
+            gap: 0.65rem;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            margin-top: 0.75rem;
+        }
+
+        .inspector-field {
+            background: #07101f;
+            border: 1px solid #22314c;
+            border-radius: 8px;
+            color: inherit;
+            display: block;
+            padding: 0.65rem;
+            text-decoration: none;
+            transition: border-color 0.2s ease, transform 0.2s ease;
+        }
+
+        .inspector-field:hover,
+        .inspector-field:focus {
+            border-color: var(--orange-primary);
+            color: inherit;
+            transform: translateY(-1px);
+        }
+
+        .inspector-field strong {
+            color: var(--dark-text-primary);
+            display: block;
+            font-size: 0.92rem;
+            margin-bottom: 0.2rem;
+        }
+
+        .inspector-field span {
+            color: var(--dark-text-tertiary);
+            font-size: 0.74rem;
+            font-weight: 750;
+            text-transform: uppercase;
+        }
+
+        .workbench-rail {
+            display: grid;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .workbench-core {
+            display: grid;
+            gap: 1rem;
+            grid-template-columns: minmax(280px, 1fr) minmax(340px, 1fr);
+        }
+
+        .workbench-card {
+            background: #0b1528;
+            border: 1px solid #22314c;
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .workbench-card-title {
+            color: var(--dark-text-primary);
+            font-size: 0.86rem;
+            font-weight: 850;
+            letter-spacing: 0.04em;
+            margin-bottom: 0.7rem;
+            text-transform: uppercase;
+        }
+
+        .workbench-card-body {
+            color: var(--dark-text-secondary);
+            display: grid;
+            font-size: 0.9rem;
+            gap: 0.55rem;
+            line-height: 1.45;
+        }
+
+        .depth-guidance {
+            background: #0b1528;
+            border: 1px solid #22314c;
+            border-radius: 8px;
+            display: grid;
+            gap: 1rem;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            margin-bottom: 1rem;
+            padding: 1rem;
+        }
+
+        .depth-guidance h6 {
+            font-size: 0.86rem;
+            margin: 0 0 0.35rem;
+            text-transform: uppercase;
+            color: var(--dark-text-tertiary);
+            letter-spacing: 0.05em;
+        }
+
+        .depth-rail {
+            display: grid;
+            gap: 0.6rem;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .depth-rail-item {
+            align-items: center;
+            background: #101d34;
+            border: 1px solid #22314c;
+            border-radius: 8px;
+            display: grid;
+            gap: 0.35rem;
+            min-height: 74px;
+            padding: 0.75rem;
+        }
+
+        .depth-rail-item strong {
+            color: var(--dark-text-primary);
+            font-size: 0.93rem;
+            line-height: 1.15;
+            margin: 0;
+        }
+
+        .depth-rail-item p {
+            color: var(--dark-text-secondary);
+            font-size: 0.8rem;
+            margin: 0;
+            line-height: 1.35;
+        }
+
+        .depth-rail-item.is-primary {
+            border-color: rgba(255, 107, 0, 0.45);
+            color: var(--orange-primary);
+        }
+
+        .depth-rail-item .fa-icon {
+            color: var(--orange-primary);
+            font-size: 0.8rem;
+            margin-left: 0.25rem;
+        }
+
+        .workbench-stat-grid {
+            display: grid;
+            gap: 0.6rem;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .workbench-stat {
+            background: #101d34;
+            border: 1px solid #22314c;
+            border-radius: 8px;
+            padding: 0.75rem;
+        }
+
+        .workbench-stat strong {
+            display: block;
+            font-size: 1.28rem;
+            line-height: 1;
+            margin-bottom: 0.2rem;
+        }
+
+        .workbench-stat span {
+            color: var(--dark-text-tertiary);
+            font-size: 0.74rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .quick-start {
+            display: grid;
+            gap: 1rem;
+            grid-template-columns: minmax(280px, 0.9fr) minmax(360px, 1.4fr);
+            margin-bottom: 1.5rem;
+        }
+
+        .quick-action-stack {
+            display: grid;
+            gap: 0.75rem;
+        }
+
+        .next-action,
+        .quick-actions {
+            background: #0b1528;
+            border: 1px solid #22314c;
+            border-radius: 8px;
+            box-shadow: var(--shadow-sm);
+            padding: 1rem;
+        }
+
+        .next-action {
+            align-content: space-between;
+            display: grid;
+            gap: 1rem;
+        }
+
+        .next-action-label,
+        .quick-action-label {
+            color: var(--dark-text-tertiary);
+            display: block;
+            font-size: 0.76rem;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            margin-bottom: 0.35rem;
+            text-transform: uppercase;
+        }
+
+        .next-action h3 {
+            font-size: 1.2rem;
+            margin: 0 0 0.35rem;
+        }
+
+        .next-action p,
+        .quick-action-meta {
+            color: var(--dark-text-secondary);
+            font-size: 0.88rem;
+            line-height: 1.45;
+            margin: 0;
+        }
+
+        .quick-action-grid {
+            display: grid;
+            gap: 0.75rem;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .quick-action {
+            align-items: flex-start;
+            background: #101d34;
+            border: 1px solid #22314c;
+            border-radius: 8px;
+            color: var(--dark-text-primary);
+            display: grid;
+            gap: 0.35rem;
+            min-height: 96px;
+            padding: 0.85rem;
+            text-align: left;
+            text-decoration: none;
+            transition: border-color 0.2s ease, transform 0.2s ease;
+        }
+
+        .quick-action:hover,
+        .quick-action:focus {
+            border-color: var(--orange-primary);
+            color: var(--dark-text-primary);
+            transform: translateY(-2px);
+        }
+
+        button.quick-action {
+            cursor: pointer;
+            font: inherit;
+            width: 100%;
+        }
+
+        button.quick-action:disabled {
+            cursor: not-allowed;
+            filter: grayscale(0.25);
+            opacity: 0.55;
+            transform: none;
+        }
+
+        .quick-action-title {
+            align-items: center;
+            display: flex;
+            font-weight: 850;
+            gap: 0.45rem;
+        }
+
+        .quick-action-title i {
+            color: var(--orange-primary);
+        }
+
+        .quick-stat-strip {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+        }
+
+        .quick-stat {
+            background: rgba(255, 107, 0, 0.1);
+            border: 1px solid rgba(255, 107, 0, 0.24);
+            border-radius: 999px;
+            color: var(--dark-text-secondary);
+            font-size: 0.78rem;
+            font-weight: 750;
+            padding: 0.3rem 0.65rem;
+        }
+
+        .expert-controls {
+            background: #0b1528;
+            border: 1px solid #22314c;
+            border-radius: 8px;
+            box-shadow: var(--shadow-sm);
+            display: grid;
+            gap: 1rem;
+            grid-template-columns: 1fr 1.4fr;
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+        }
+
+        .expert-controls h3 {
+            font-size: 1rem;
+            margin: 0 0 0.4rem;
+        }
+
+        .expert-controls p {
+            color: var(--dark-text-secondary);
+            font-size: 0.86rem;
+            line-height: 1.45;
+            margin: 0;
+        }
+
+        .expert-control-grid {
+            display: grid;
+            gap: 0.75rem;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .expert-control-details {
+            border: 1px solid #22314c;
+            border-radius: 8px;
+            padding: 0.7rem 0.8rem 0.8rem;
+        }
+
+        .expert-control-details + .expert-control-details {
+            margin-top: 0.7rem;
+        }
+
+        .expert-control-details summary {
+            align-items: center;
+            color: var(--dark-text-primary);
+            cursor: pointer;
+            display: inline-flex;
+            font-size: 0.84rem;
+            font-weight: 820;
+            gap: 0.45rem;
+            list-style: none;
+            margin-bottom: 0.65rem;
+        }
+
+        .expert-control-details summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .expert-control-details summary::before {
+            content: "\25B6";
+            color: var(--orange-primary);
+        }
+
+        .expert-control-details[open] summary::before {
+            content: "\25BC";
+        }
+
+        .expert-control-details > .expert-control-grid {
+            margin-top: 0;
+        }
+
+        .expert-control-details[open] {
+            border-color: rgba(255, 107, 0, 0.34);
+            background: #0f1b32;
+        }
+
+        .timeline-view-toolbar {
+            align-items: center;
+            display: flex;
+            gap: 0.5rem;
+            justify-content: flex-end;
+            margin: 0 0 0.65rem;
+        }
+
+        .timeline-view-toolbar .btn {
+            border-radius: 999px;
+            min-height: 30px;
+            padding: 0.26rem 0.74rem;
+        }
+
+        .timeline-view-toolbar .btn.is-active {
+            background: var(--orange-primary);
+            border-color: var(--orange-primary);
+        }
+
+        .timeline-panel.is-hidden {
+            display: none !important;
+        }
+
+        .control-field {
+            display: grid;
+            gap: 0.35rem;
+        }
+
+        .control-field span,
+        .source-group-label {
+            color: var(--dark-text-tertiary);
+            font-size: 0.74rem;
+            font-weight: 850;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .control-input {
+            background: #07101f;
+            border: 1px solid #22314c;
+            border-radius: 8px;
+            color: var(--dark-text-primary);
+            min-height: 42px;
+            padding: 0.6rem 0.75rem;
+            width: 100%;
+        }
+
+        .source-toggle-row {
+            align-items: center;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.55rem;
+        }
+
+        .source-toggle {
+            align-items: center;
+            background: #101d34;
+            border: 1px solid #22314c;
+            border-radius: 999px;
+            color: var(--dark-text-secondary);
+            display: inline-flex;
+            font-size: 0.82rem;
+            font-weight: 800;
+            gap: 0.4rem;
+            padding: 0.42rem 0.72rem;
+        }
+
+        .source-toggle input {
+            accent-color: var(--orange-primary);
+        }
+
+        body[data-depth-mode="simple"] .guided-depth,
+        body[data-depth-mode="simple"] .expert-depth,
+        body[data-depth-mode="guided"] .expert-depth {
+            display: none !important;
+        }
+
+        body:not([data-control-tier="expert"]) .expert-only {
+            display: none !important;
+        }
+
+        body[data-control-tier="expert"] .depth-ladder-step.expert-only,
+        body[data-control-tier="expert"] .inspector-grid.expert-only {
+            display: grid;
+        }
+
+        body[data-control-tier="expert"] details.expert-only {
+            display: block;
+        }
+
+        body[data-depth-mode="simple"] .command-side-panel,
+        body[data-depth-mode="simple"] .decision-board {
+            display: none !important;
+        }
+
+        body[data-depth-mode="simple"] .evidence-details,
+        body[data-depth-mode="simple"] .activity-shell,
+        body[data-depth-mode="simple"] .depth-guidance {
+            display: none !important;
+        }
+
+        body[data-depth-mode="simple"] .quick-start {
+            grid-template-columns: minmax(320px, 0.95fr) minmax(360px, 1.05fr);
+        }
+
+        body[data-depth-mode="simple"] .quick-action-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        body[data-depth-mode="simple"] .case-health-grid {
+            grid-template-columns: repeat(4, minmax(110px, 1fr));
+        }
+
+        body[data-depth-mode="simple"] .decision-lane-detail {
+            display: none;
+        }
+
+        body[data-depth-mode="guided"] .guided-operator-grid .command-strip {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        body[data-depth-mode="expert"] .expert-controls {
+            display: grid;
+        }
+
+        body[data-control-tier="deep"] .expert-controls {
+            grid-template-columns: minmax(0, 1fr);
+        }
+
+        body[data-control-tier="deep"] .expert-controls .expert-control-grid {
+            display: none;
+        }
+        
+        .case-summary-card {
+            border-left: 4px solid var(--orange-primary);
+            transition: all 0.3s ease;
+        }
+        
+        .case-summary-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+        }
+        
+        .status-badge {
+            padding: 0.35rem 0.65rem;
+            border-radius: 50rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
+        .status-pending {
+            background-color: rgba(255, 152, 0, 0.2);
+            color: var(--warning);
+        }
+        
+        .status-matched {
+            background-color: rgba(33, 150, 243, 0.2);
+            color: var(--info);
+        }
+        
+        .status-accepted {
+            background-color: rgba(76, 175, 80, 0.2);
+            color: var(--success);
+        }
+        
+        .status-closed {
+            background-color: rgba(158, 158, 158, 0.2);
+            color: var(--dark-text-tertiary);
+        }
+        
+        .document-card {
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            background-color: var(--dark-bg-tertiary);
+            transition: all 0.3s ease;
+        }
+        
+        .document-card:hover {
+            transform: translateX(5px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+        
+        .document-icon {
+            font-size: 2rem;
+            margin-right: 1rem;
+        }
+        
+        .document-pdf {
+            color: #f44336;
+        }
+        
+        .document-doc {
+            color: #2196f3;
+        }
+        
+        .document-email {
+            color: #4caf50;
+        }
+        
+        .document-image {
+            color: #9c27b0;
+        }
+        
+        .document-text {
+            color: var(--dark-text-secondary);
+        }
+        
+        .lawyer-card {
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            background-color: var(--dark-bg-tertiary);
+            transition: all 0.3s ease;
+            border-left: 4px solid transparent;
+        }
+        
+        .lawyer-card:hover {
+            transform: translateX(5px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+        
+        .lawyer-card.accepted {
+            border-left-color: var(--success);
+        }
+        
+        .lawyer-card.declined {
+            border-left-color: var(--error);
+        }
+        
+        .lawyer-card.more-info {
+            border-left-color: var(--info);
+        }
+        
+        .lawyer-card.pending {
+            border-left-color: var(--warning);
+        }
+        
+        .lawyer-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--orange-primary) 0%, var(--orange-secondary) 100%);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 1.25rem;
+            margin-right: 1rem;
+        }
+        
+        .response-badge {
+            padding: 0.35rem 0.65rem;
+            border-radius: 50rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
+        .response-accepted {
+            background-color: rgba(76, 175, 80, 0.2);
+            color: var(--success);
+        }
+        
+        .response-declined {
+            background-color: rgba(244, 67, 54, 0.2);
+            color: var(--error);
+        }
+        
+        .response-more-info {
+            background-color: rgba(33, 150, 243, 0.2);
+            color: var(--info);
+        }
+        
+        .response-pending {
+            background-color: rgba(255, 152, 0, 0.2);
+            color: var(--warning);
+        }
+        
+        .step-indicator {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 2rem;
+            position: relative;
+        }
+        
+        .step-indicator::before {
+            content: '';
+            position: absolute;
+            top: 15px;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background-color: var(--element-border);
+            z-index: 0;
+        }
+        
+        .step {
+            flex: 1;
+            text-align: center;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .step-number {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background-color: var(--element-active);
+            color: var(--dark-text-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 0.5rem;
+            font-weight: 600;
+            position: relative;
+            z-index: 1;
+            transition: all 0.3s ease;
+        }
+        
+        .step.active .step-number {
+            background-color: var(--orange-primary);
+            transform: scale(1.2);
+            box-shadow: 0 0 15px rgba(255, 107, 0, 0.5);
+        }
+        
+        .step.completed .step-number {
+            background-color: var(--success);
+        }
+        
+        .step-label {
+            font-size: 0.85rem;
+            color: var(--dark-text-secondary);
+            transition: all 0.3s ease;
+        }
+        
+        .step.active .step-label {
+            color: var(--orange-primary);
+            font-weight: 600;
+        }
+        
+        .step.completed .step-label {
+            color: var(--success);
+            font-weight: 600;
+        }
+        
+        .resource-usage {
+            background-color: var(--dark-bg-secondary);
+            border-radius: 12px;
+            box-shadow: var(--shadow-sm);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            transition: all 0.3s ease;
+        }
+        
+        .resource-usage:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-md);
+        }
+        
+        .resource-title {
+            font-weight: 600;
+            color: var(--dark-text-primary);
+            margin-bottom: 1.5rem;
+            font-size: 1.25rem;
+        }
+        
+        .resource-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--element-border);
+        }
+        
+        .resource-label {
+            color: var(--dark-text-secondary);
+            display: flex;
+            align-items: center;
+        }
+        
+        .resource-icon {
+            margin-right: 0.75rem;
+            color: var(--orange-primary);
+            font-size: 1.1rem;
+        }
+        
+        .resource-value {
+            font-weight: 600;
+            color: var(--dark-text-primary);
+        }
+        
+        .resource-total {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 1.5rem;
+            padding-top: 1rem;
+            border-top: 2px solid var(--element-border);
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+        
+        .resource-total-value {
+            color: var(--orange-primary);
+        }
+        
+        .analysis-card {
+            background-color: var(--dark-bg-secondary);
+            border-radius: 12px;
+            box-shadow: var(--shadow-sm);
+            transition: all 0.3s ease;
+        }
+        
+        .analysis-card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-md);
+        }
+        
+        .analysis-header {
+            padding: 1.25rem;
+            border-bottom: 1px solid var(--element-border);
+        }
+        
+        .analysis-body {
+            padding: 1.25rem;
+        }
+        
+        .analysis-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 0;
+        }
+        
+        .field-progress {
+            margin-bottom: 1.5rem;
+        }
+        
+        .field-progress-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+        }
+        
+        .field-name {
+            font-weight: 500;
+        }
+        
+        .field-percentage {
+            font-weight: 600;
+        }
+        
+        .progress {
+            height: 8px;
+            background-color: var(--dark-bg-tertiary);
+        }
+        
+        .progress-bar-primary {
+            background: linear-gradient(90deg, var(--orange-primary), var(--orange-secondary));
+        }
+        
+        .complexity-meter {
+            display: flex;
+            align-items: center;
+            margin-top: 1.5rem;
+        }
+        
+        .complexity-progress {
+            flex-grow: 1;
+            margin-right: 1rem;
+        }
+        
+        .complexity-label {
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        
+        .user-dropdown {
+            position: relative;
+        }
+        
+        .user-dropdown-toggle {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
+            transition: all 0.3s ease;
+        }
+        
+        .user-dropdown-toggle:hover {
+            background-color: var(--element-hover);
+        }
+        
+        .user-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--orange-primary) 0%, var(--orange-secondary) 100%);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            margin-right: 0.75rem;
+        }
+        
+        .user-name {
+            font-weight: 500;
+            margin-right: 0.5rem;
+        }
+        
+        .notification-dot {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--orange-primary);
+        }
+
+        .evidence-toolbar {
+            align-items: center;
+            border-bottom: 1px solid #22314c;
+            display: flex;
+            gap: 1rem;
+            justify-content: space-between;
+            padding: 1rem 1.25rem;
+        }
+
+        .evidence-toolbar h5 {
+            font-size: 1.15rem;
+            margin: 0;
+        }
+
+        .connection-strip {
+            align-items: center;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.65rem;
+        }
+
+        .connection-strip .btn:disabled {
+            cursor: not-allowed;
+            filter: grayscale(0.35);
+            opacity: 0.5;
+        }
+
+        .connection-pill {
+            align-items: center;
+            background: #101d34;
+            border: 1px solid #22314c;
+            border-radius: 999px;
+            color: var(--dark-text-secondary);
+            display: inline-flex;
+            font-size: 0.82rem;
+            font-weight: 700;
+            gap: 0.45rem;
+            padding: 0.35rem 0.75rem;
+        }
+
+        .connection-pill.connected {
+            border-color: rgba(76, 175, 80, 0.55);
+            color: var(--success);
+        }
+
+        .connection-dot {
+            background: var(--warning);
+            border-radius: 50%;
+            display: inline-block;
+            height: 8px;
+            width: 8px;
+        }
+
+        .connection-pill.connected .connection-dot {
+            background: var(--success);
+        }
+
+        .evidence-mode-note {
+            background: rgba(255, 107, 0, 0.08);
+            border: 1px solid rgba(255, 107, 0, 0.22);
+            border-radius: 8px;
+            color: var(--dark-text-secondary);
+            font-size: 0.86rem;
+            line-height: 1.45;
+            margin: 0 0 1rem;
+            padding: 0.75rem 1rem;
+        }
+
+        .evidence-mode-note.live {
+            background: rgba(76, 175, 80, 0.08);
+            border-color: rgba(76, 175, 80, 0.28);
+        }
+
+        .empty-state {
+            align-items: center;
+            color: var(--dark-text-secondary);
+            display: flex;
+            flex-direction: column;
+            gap: 0.55rem;
+            justify-content: center;
+            min-height: 150px;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .empty-state i {
+            color: var(--dark-text-tertiary);
+            font-size: 2rem;
+        }
+
+        .empty-state h5 {
+            color: var(--dark-text-primary);
+            margin: 0;
+        }
+
+        .empty-state p {
+            margin: 0;
+            max-width: 520px;
+        }
+
+        .evidence-grid {
+            display: grid;
+            gap: 1.25rem;
+            grid-template-columns: 360px minmax(0, 1fr);
+            padding: 1.25rem;
+        }
+
+        .evidence-details {
+            display: grid;
+            gap: 1.25rem;
+        }
+
+        body[data-depth-mode="simple"] .evidence-details {
+            display: none;
+        }
+
+        .evidence-panel {
+            background: #07101f;
+            border: 1px solid #22314c;
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .pull-progress {
+            margin-top: 1rem;
+        }
+
+        .pull-progress .progress {
+            height: 10px;
+            margin-bottom: 0.45rem;
+        }
+
+        .pull-status {
+            color: var(--dark-text-secondary);
+            font-size: 0.88rem;
+            margin: 0;
+        }
+
+        .evidence-stats {
+            display: grid;
+            gap: 0.75rem;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            margin-bottom: 1rem;
+        }
+
+        .evidence-workspace {
+            background: #0b1528;
+            border: 1px solid #22314c;
+            border-radius: 8px;
+            box-shadow: var(--shadow-sm);
+            display: grid;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            overflow: hidden;
+        }
+
+        .evidence-detail-toggle {
+            margin-top: 0.75rem;
+            width: 100%;
+        }
+
+        body[data-depth-mode="expert"] .evidence-detail-toggle {
+            display: none;
+        }
+
+        .evidence-panel > .row {
+            display: grid;
+            gap: 1.1rem;
+            grid-template-columns: 1fr;
+            margin: 0;
+        }
+
+        .evidence-panel > .row > [class*="col-md-"] {
+            max-width: none;
+            padding: 0;
+            width: 100%;
+        }
+
+        .evidence-stat {
+            background: #101d34;
+            border: 1px solid #22314c;
+            border-radius: 8px;
+            padding: 0.85rem;
+        }
+
+        .evidence-stat strong {
+            display: block;
+            font-size: 1.4rem;
+            line-height: 1;
+            margin-bottom: 0.35rem;
+        }
+
+        .evidence-stat span {
+            color: var(--dark-text-secondary);
+            font-size: 0.78rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .evidence-document-list,
+        .story-timeline {
+            display: grid;
+            gap: 0.8rem;
+        }
+
+        .timeline-strip {
+            display: flex;
+            gap: 0.65rem;
+            margin-bottom: 0.7rem;
+            overflow-x: auto;
+            padding: 1.25rem 0 0.2rem;
+            position: relative;
+            scrollbar-width: thin;
+        }
+
+        .timeline-strip::before {
+            background: linear-gradient(90deg, rgba(112, 197, 190, 0.1), rgba(112, 197, 190, 0.78), rgba(255, 107, 0, 0.72), rgba(112, 197, 190, 0.14));
+            content: "";
+            height: 2px;
+            left: 0;
+            position: absolute;
+            right: 0;
+            top: 0.48rem;
+        }
+
+        .timeline-strip::-webkit-scrollbar {
+            height: 7px;
+        }
+
+        .timeline-strip::-webkit-scrollbar-thumb {
+            background: #22314c;
+            border-radius: 999px;
+        }
+
+        .timeline-strip-item {
+            align-items: flex-start;
+            background: #07101f;
+            border: 1px solid #22314c;
+            border-radius: 8px;
+            display: grid;
+            gap: 0.42rem;
+            flex: 0 0 min(280px, 78vw);
+            grid-template-columns: minmax(0, 1fr) auto;
+            padding: 0.65rem 0.75rem;
+            min-height: 134px;
+            position: relative;
+        }
+
+        .timeline-strip-item::before {
+            background: #70c5be;
+            border: 3px solid #07101f;
+            border-radius: 50%;
+            box-shadow: 0 0 0 1px rgba(112, 197, 190, 0.5);
+            content: "";
+            height: 14px;
+            left: 0.9rem;
+            position: absolute;
+            top: -1.08rem;
+            width: 14px;
+        }
+
+        .timeline-strip-item .story-date {
+            color: #ff684d;
+            font-size: 0.72rem;
+            font-weight: 900;
+            grid-column: 1 / -1;
+        }
+
+        .timeline-strip-item h6 {
+            font-size: 0.82rem;
+            grid-column: 1 / -1;
+            margin: 0;
+            color: var(--dark-text-primary);
+        }
+
+        .timeline-strip-item p {
+            color: var(--dark-text-secondary);
+            font-size: 0.74rem;
+            grid-column: 1 / -1;
+            line-height: 1.35;
+            margin: 0;
+        }
+
+        .evidence-document-row {
+            align-items: center;
+            background: #101d34;
+            border: 1px solid #22314c;
+            border-radius: 8px;
+            display: grid;
+            gap: 0.75rem;
+            grid-template-columns: 34px minmax(0, 1fr);
+            padding: 0.85rem;
+        }
+
+        .evidence-document-row .btn {
+            grid-column: 2;
+            justify-self: start;
+        }
+
+        .document-source-icon {
+            align-items: center;
+            background: rgba(255, 107, 0, 0.15);
+            border-radius: 8px;
+            color: var(--orange-primary);
+            display: inline-flex;
+            font-weight: 900;
+            height: 34px;
+            justify-content: center;
+            width: 34px;
+        }
+
+        .evidence-document-row h6,
+        .story-event h6 {
+            font-size: 0.95rem;
+            margin: 0 0 0.2rem;
+        }
+
+        .evidence-document-row p,
+        .story-event p {
+            color: var(--dark-text-secondary);
+            font-size: 0.84rem;
+            line-height: 1.4;
+            margin: 0;
+        }
+
+        .story-event {
+            background: #101d34;
+            border: 1px solid #22314c;
+            border-radius: 8px;
+            display: grid;
+            gap: 0.85rem;
+            grid-template-columns: 112px minmax(0, 1fr) 38px;
+            padding: 0.95rem;
+            position: relative;
+        }
+
+        .story-event::before {
+            background: rgba(112, 197, 190, 0.75);
+            border-radius: 999px;
+            content: "";
+            height: calc(100% - 1.9rem);
+            left: 96px;
+            position: absolute;
+            top: 0.95rem;
+            width: 2px;
+        }
+
+        .story-event > * {
+            position: relative;
+            z-index: 1;
+        }
+
+        .story-date {
+            color: #ff684d;
+            font-weight: 900;
+            line-height: 1.1;
+        }
+
+        .source-jump-mini {
+            align-items: center;
+            background: rgba(255, 107, 0, 0.14);
+            border: 1px solid rgba(255, 107, 0, 0.32);
+            border-radius: 50%;
+            color: var(--orange-primary);
+            display: inline-flex;
+            flex: 0 0 auto;
+            font-weight: 900;
+            height: 34px;
+            justify-content: center;
+            text-decoration: none;
+            width: 34px;
+        }
+
+        .timeline-strip-item .source-jump-mini {
+            align-self: end;
+            grid-column: 2;
+            justify-self: end;
+        }
+
+        .source-jump-mini:hover {
+            background: var(--orange-primary);
+            color: #fff;
+        }
+
+        .sync-note {
+            color: var(--dark-text-tertiary);
+            font-size: 0.82rem;
+            margin-top: 0.8rem;
+        }
+
+        .google-modal {
+            align-items: center;
+            background: rgba(0, 0, 0, 0.65);
+            bottom: 0;
+            display: none;
+            justify-content: center;
+            left: 0;
+            padding: 1rem;
+            position: fixed;
+            right: 0;
+            top: 0;
+            z-index: 2000;
+        }
+
+        .google-modal.show {
+            display: flex;
+        }
+
+        .google-modal-card {
+            background: #0b1528;
+            border: 1px solid #22314c;
+            border-radius: 8px;
+            box-shadow: var(--shadow-lg);
+            max-width: 500px;
+            width: 100%;
+        }
+
+        .google-modal-header,
+        .google-modal-footer {
+            align-items: center;
+            display: flex;
+            justify-content: space-between;
+            padding: 1rem 1.25rem;
+        }
+
+        .google-modal-header {
+            border-bottom: 1px solid #22314c;
+        }
+
+        .google-modal-body {
+            padding: 1.25rem;
+        }
+
+        .modal-x {
+            background: transparent;
+            border: 0;
+            color: var(--dark-text-secondary);
+            cursor: pointer;
+            font-size: 1.4rem;
+            line-height: 1;
+        }
+
+        .toast-note {
+            background: #12213a;
+            border: 1px solid rgba(255, 112, 17, 0.45);
+            border-radius: 8px;
+            bottom: 1.5rem;
+            box-shadow: var(--shadow-lg);
+            color: var(--dark-text-primary);
+            font-weight: 700;
+            max-width: min(420px, calc(100vw - 2rem));
+            opacity: 0;
+            padding: 0.85rem 1rem;
+            pointer-events: none;
+            position: fixed;
+            right: 1.5rem;
+            transform: translateY(12px);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+            z-index: 2100;
+        }
+
+        .toast-note.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .activity-shell {
+            display: grid;
+            gap: 1rem;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            margin-bottom: 1rem;
+        }
+
+        .activity-card {
+            background: #0b1528;
+            border: 1px solid #22314c;
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .activity-card h6 {
+            color: var(--dark-text-tertiary);
+            font-size: 0.78rem;
+            margin: 0 0 0.45rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .activity-list {
+            color: var(--dark-text-secondary);
+            display: grid;
+            gap: 0.55rem;
+            margin: 0;
+            padding: 0;
+            list-style: none;
+            font-size: 0.84rem;
+            line-height: 1.35;
+        }
+
+        .activity-list li {
+            border-left: 2px solid var(--orange-primary);
+            padding-left: 0.65rem;
+        }
+
+        /* Progressive disclosure layout pass: Focus -> Review -> Deep */
+        .main-content {
+            background:
+                linear-gradient(180deg, rgba(8, 17, 31, 0.96) 0%, rgba(5, 10, 20, 0.99) 56%, rgba(5, 10, 20, 1) 100%);
+            min-height: 100vh;
+        }
+
+        .dashboard-header {
+            background: transparent;
+            border: 0;
+            box-shadow: none;
+            margin-bottom: 0.65rem;
+            padding: 0.35rem 0 0.75rem;
+        }
+
+        .dashboard-header .container-fluid {
+            display: grid;
+            gap: 0.9rem;
+            grid-template-columns: minmax(0, 1fr) minmax(340px, 620px);
+        }
+
+        .dashboard-header .container-fluid > div:first-child {
+            min-width: 0;
+        }
+
+        .dashboard-title {
+            font-size: clamp(1.35rem, 2vw, 1.85rem);
+            letter-spacing: 0;
+        }
+
+        .dashboard-subtitle {
+            max-width: 720px;
+        }
+
+        .depth-switcher {
+            justify-self: end;
+            max-width: 620px;
+            min-width: 0;
+            position: relative;
+            width: 100%;
+        }
+
+        .depth-switcher::before {
+            background: #263854;
+            content: "";
+            height: 1px;
+            left: 8%;
+            position: absolute;
+            right: 8%;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 0;
+        }
+
+        .depth-button {
+            align-items: center;
+            background: #07101f;
+            border: 1px solid #263854;
+            min-width: 0;
+            overflow: hidden;
+            padding: 0.48rem 0.58rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .depth-button i {
+            align-items: center;
+            background: rgba(255, 107, 0, 0.12);
+            border-radius: 8px;
+            display: inline-flex;
+            flex: 0 0 auto;
+            height: 28px;
+            justify-content: center;
+            width: 28px;
+        }
+
+        .depth-button.is-active i {
+            background: rgba(255, 255, 255, 0.18);
+        }
+
+        .depth-button small {
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .command-center {
+            background: rgba(8, 17, 31, 0.96);
+            border-color: #263854;
+            box-shadow: 0 18px 60px rgba(0, 0, 0, 0.28);
+            gap: 0.85rem;
+            grid-template-columns: minmax(0, 1fr);
+            padding: 0.85rem;
+        }
+
+        body[data-depth-mode="expert"] .command-center {
+            grid-template-columns: minmax(0, 1fr) minmax(310px, 360px);
+        }
+
+        .command-topbar {
+            background: rgba(12, 23, 41, 0.96);
+            grid-column: 1 / -1;
+            grid-template-columns: minmax(220px, 0.75fr) minmax(280px, 1fr) auto;
+            position: sticky;
+            top: 70px;
+            z-index: 10;
+        }
+
+        .command-grid {
+            grid-column: 1;
+            grid-template-columns: minmax(0, 1.55fr) minmax(285px, 0.75fr);
+        }
+
+        .command-primary {
+            background:
+                linear-gradient(145deg, rgba(15, 27, 50, 0.98), rgba(8, 17, 31, 0.98)),
+                #0b1528;
+            border-color: rgba(255, 107, 0, 0.22);
+            box-shadow: inset 3px 0 0 rgba(255, 107, 0, 0.78);
+            gap: 0.85rem;
+        }
+
+        body[data-depth-mode="simple"] .command-primary {
+            align-content: center;
+            grid-template-rows: auto auto auto auto;
+        }
+
+        .command-title-row h3 {
+            font-size: clamp(1.25rem, 2vw, 1.6rem);
+        }
+
+        .command-actions {
+            align-items: center;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.65rem;
+        }
+
+        .command-actions .btn {
+            min-height: 40px;
+        }
+
+        .command-microcopy {
+            color: var(--dark-text-tertiary);
+            flex: 1 1 260px;
+            font-size: 0.82rem;
+            margin: 0;
+        }
+
+        .case-health-grid {
+            display: grid;
+            gap: 0.65rem;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        .case-health-item {
+            background: #101d34;
+            border: 1px solid #263854;
+            border-radius: 8px;
+            min-height: 76px;
+            padding: 0.78rem;
+        }
+
+        .case-health-item strong {
+            color: var(--dark-text-primary);
+            display: block;
+            font-size: 1.2rem;
+            line-height: 1.05;
+            margin-bottom: 0.28rem;
+        }
+
+        .case-health-item span {
+            color: var(--dark-text-tertiary);
+            display: block;
+            font-size: 0.72rem;
+            font-weight: 850;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        body[data-depth-mode="simple"] .case-health-item {
+            background: rgba(16, 29, 52, 0.72);
+        }
+
+        .case-health-item.is-risk {
+            border-color: rgba(255, 107, 0, 0.32);
+        }
+
+        .quick-stat-strip {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.45rem;
+            margin-top: 0.25rem;
+        }
+
+        .quick-stat {
+            background: rgba(244, 247, 251, 0.055);
+            border: 1px solid #263854;
+            border-radius: 999px;
+            color: var(--dark-text-secondary);
+            font-size: 0.78rem;
+            font-weight: 760;
+            line-height: 1.1;
+            padding: 0.32rem 0.64rem;
+        }
+
+        .decision-board {
+            display: grid;
+            gap: 0.65rem;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        .decision-lane,
+        .quick-action,
+        .inspector-field {
+            text-decoration: none;
+        }
+
+        .decision-lane {
+            background: #101d34;
+            border: 1px solid #263854;
+            border-radius: 8px;
+            color: var(--dark-text-secondary);
+            display: grid;
+            gap: 0.45rem;
+            min-height: 132px;
+            padding: 0.82rem;
+            position: relative;
+        }
+
+        .decision-lane::after {
+            background: linear-gradient(90deg, rgba(255, 107, 0, 0.52), transparent);
+            bottom: 0;
+            content: "";
+            height: 2px;
+            left: 0.82rem;
+            position: absolute;
+            right: 0.82rem;
+        }
+
+        .decision-lane:hover,
+        .quick-action:hover,
+        .inspector-field:hover {
+            border-color: rgba(255, 107, 0, 0.48);
+            color: var(--dark-text-primary);
+            transform: translateY(-1px);
+        }
+
+        .decision-lane-top {
+            align-items: center;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .decision-lane-icon {
+            align-items: center;
+            background: rgba(255, 107, 0, 0.12);
+            border-radius: 8px;
+            color: var(--orange-primary);
+            display: inline-flex;
+            height: 34px;
+            justify-content: center;
+            width: 34px;
+        }
+
+        .decision-lane strong {
+            color: var(--dark-text-primary);
+            font-size: 1.25rem;
+        }
+
+        .decision-lane-label {
+            color: var(--dark-text-primary);
+            font-size: 0.84rem;
+            font-weight: 850;
+        }
+
+        .decision-lane-detail {
+            font-size: 0.76rem;
+            line-height: 1.35;
+        }
+
+        .guided-operator-grid {
+            display: grid;
+            gap: 0.85rem;
+            grid-column: 1;
+            grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
+        }
+
+        .command-inspector {
+            grid-column: 1;
+            max-height: calc(100vh - 180px);
+            overflow: auto;
+        }
+
+        body[data-depth-mode="expert"] .command-inspector {
+            align-self: start;
+            grid-column: 2;
+            grid-row: 2 / span 2;
+            position: sticky;
+            top: 150px;
+        }
+
+        .depth-ladder {
+            display: grid;
+            gap: 0.55rem;
+        }
+
+        .depth-ladder-step {
+            align-items: flex-start;
+            background: #101d34;
+            border: 1px solid #263854;
+            border-radius: 8px;
+            display: grid;
+            gap: 0.65rem;
+            grid-template-columns: 34px minmax(0, 1fr);
+            padding: 0.75rem;
+        }
+
+        .depth-ladder-step i {
+            align-items: center;
+            background: rgba(255, 107, 0, 0.12);
+            border-radius: 8px;
+            color: var(--orange-primary);
+            display: inline-flex;
+            height: 34px;
+            justify-content: center;
+            width: 34px;
+        }
+
+        .depth-ladder-step strong,
+        .quick-action-title {
+            color: var(--dark-text-primary);
+            display: block;
+            font-size: 0.88rem;
+        }
+
+        .depth-ladder-step span,
+        .quick-action-meta {
+            color: var(--dark-text-secondary);
+            display: block;
+            font-size: 0.78rem;
+            line-height: 1.35;
+        }
+
+        .depth-ladder-step.is-current {
+            border-color: rgba(255, 107, 0, 0.5);
+            box-shadow: inset 3px 0 0 var(--orange-primary);
+        }
+
+        .command-strip {
+            display: grid;
+            gap: 0.6rem;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .quick-action {
+            background: #101d34;
+            border: 1px solid #263854;
+            border-radius: 8px;
+            color: var(--dark-text-secondary);
+            display: grid;
+            gap: 0.32rem;
+            min-height: 76px;
+            padding: 0.72rem;
+            text-align: left;
+            transition: border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+            width: 100%;
+        }
+
+        .quick-action-title {
+            align-items: center;
+            display: inline-flex;
+            gap: 0.42rem;
+        }
+
+        .quick-action:disabled {
+            cursor: not-allowed;
+            opacity: 0.55;
+        }
+
+        .operator-stack {
+            display: grid;
+            gap: 0.85rem;
+        }
+
+        .review-queue-board {
+            display: grid;
+            gap: 0.65rem;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .review-queue-card {
+            background: #101d34;
+            border: 1px solid #263854;
+            border-radius: 8px;
+            min-height: 88px;
+            padding: 0.75rem;
+        }
+
+        .review-queue-card h6 {
+            color: var(--dark-text-primary);
+            font-size: 0.84rem;
+            margin: 0 0 0.35rem;
+        }
+
+        .review-queue-empty {
+            color: var(--dark-text-tertiary);
+            font-size: 0.78rem;
+            margin: 0;
+        }
+
+        .command-inspector details {
+            border-top: 1px solid #263854;
+            padding: 0.75rem 0;
+        }
+
+        .command-inspector details:first-of-type {
+            border-top: 0;
+        }
+
+        .command-inspector summary {
+            color: var(--dark-text-primary);
+            cursor: pointer;
+            font-size: 0.86rem;
+            font-weight: 850;
+        }
+
+        .inspector-grid {
+            display: grid;
+            gap: 0.6rem;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            margin-top: 0.75rem;
+        }
+
+        .inspector-field {
+            background: #101d34;
+            border: 1px solid #263854;
+            border-radius: 8px;
+            color: var(--dark-text-secondary);
+            display: grid;
+            gap: 0.2rem;
+            padding: 0.72rem;
+        }
+
+        .inspector-field strong {
+            color: var(--dark-text-primary);
+            font-size: 0.84rem;
+        }
+
+        .inspector-field span {
+            font-size: 0.76rem;
+        }
+
+        body[data-depth-mode="simple"] .command-primary {
+            min-height: clamp(330px, 48vh, 480px);
+        }
+
+        body[data-depth-mode="simple"] .evidence-workspace {
+            margin-top: 0.85rem;
+        }
+
+        body[data-depth-mode="simple"] .evidence-grid {
+            grid-template-columns: minmax(0, 1fr);
+        }
+
+        @media (max-width: 992px) {
+            .sidebar {
+                transform: none;
+            }
+
+            .main-content {
+                margin-left: 250px;
+            }
+        }
+
+        @media (max-width: 1100px) {
+            .workbench-core {
+                grid-template-columns: 1fr;
+            }
+
+            .decision-board,
+            .review-queue-board {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .command-grid,
+            .guided-operator-grid,
+            .command-topbar {
+                grid-template-columns: 1fr;
+            }
+
+            body[data-depth-mode="expert"] .command-center {
+                grid-template-columns: 1fr;
+            }
+
+            body[data-depth-mode="expert"] .command-inspector {
+                grid-column: 1;
+                grid-row: auto;
+                position: static;
+            }
+
+            .quick-start,
+            .expert-controls,
+            .evidence-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 820px) {
+            .dashboard-header .container-fluid {
+                align-items: flex-start;
+                flex-direction: column;
+                grid-template-columns: 1fr;
+            }
+
+            .depth-switcher {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                justify-self: stretch;
+                max-width: none;
+                width: 100%;
+            }
+
+            .depth-switcher::before {
+                display: none;
+            }
+
+            .depth-button {
+                flex: 1;
+                justify-content: flex-start;
+            }
+
+            .depth-button small {
+                display: none;
+            }
+
+            .d-flex {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                height: auto;
+                overflow-x: auto;
+                position: sticky;
+                top: 0;
+                width: 100%;
+                z-index: 30;
+            }
+
+            .sidebar-menu {
+                display: flex;
+                gap: 0.25rem;
+                margin: 0;
+                padding: 0.35rem;
+                white-space: nowrap;
+            }
+
+            .sidebar-item {
+                flex: 0 0 auto;
+            }
+
+            .sidebar-link {
+                border-radius: 8px;
+                padding: 0.58rem 0.72rem;
+            }
+
+            .sidebar-icon {
+                margin-right: 0.35rem;
+            }
+
+            .main-content {
+                margin-left: 0;
+                width: 100%;
+            }
+
+            .evidence-toolbar,
+            .story-event {
+                align-items: flex-start;
+                grid-template-columns: 1fr;
+            }
+
+            .evidence-toolbar {
+                flex-direction: column;
+            }
+
+            .evidence-stats {
+                grid-template-columns: 1fr;
+            }
+
+            .quick-action-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .command-strip,
+            .case-health-grid,
+            .decision-board,
+            .inspector-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .review-queue-board {
+                grid-template-columns: 1fr;
+            }
+
+            .command-title-row {
+                display: grid;
+            }
+
+            .command-actions {
+                align-items: stretch;
+                flex-direction: column;
+            }
+
+            .command-actions .btn {
+                width: 100%;
+            }
+
+            .expert-control-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .depth-guidance {
+                grid-template-columns: 1fr;
+            }
+
+            .depth-rail {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .activity-shell {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
+        <div class="container-fluid px-4">
+            <a class="navbar-logo" href="index_dark.html">
+                <h1>Legal AI Reach Out</h1>
+            </a>
+            <div class="d-flex align-items-center">
+                <div class="position-relative me-3">
+                    <i class="fas fa-bell fa-lg cursor-pointer text-secondary"></i>
+                    <span class="notification-dot"></span>
+                </div>
+                <div class="user-dropdown">
+                    <div class="user-dropdown-toggle" id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                        <div class="user-avatar">U</div>
+                        <span class="user-name d-none d-md-block">Signed-in user</span>
+                        <i class="fas fa-chevron-down text-secondary"></i>
+                    </div>
+                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                        <li><a class="dropdown-item" href="#dashboard" data-action-message="Profile details load after backend authentication is connected."><i class="fas fa-user me-2"></i> Profile</a></li>
+                        <li><a class="dropdown-item" href="#settings" data-action-message="Settings are not available in this local session yet."><i class="fas fa-cog me-2"></i> Settings</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="index_dark.html"><i class="fas fa-sign-out-alt me-2"></i> Logout</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="d-flex">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <ul class="sidebar-menu">
+                <li class="sidebar-item">
+                    <a href="#dashboard" class="sidebar-link active">
+                        <i class="fas fa-tachometer-alt sidebar-icon"></i> Dashboard
+                    </a>
+                </li>
+                <li class="sidebar-item">
+                    <a href="case_command_center.html" class="sidebar-link">
+                        <i class="fas fa-scale-balanced sidebar-icon"></i> Command Center
+                    </a>
+                </li>
+                <li class="sidebar-item">
+                    <a href="#cases" class="sidebar-link">
+                        <i class="fas fa-briefcase sidebar-icon"></i> My Cases
+                    </a>
+                </li>
+                <li class="sidebar-item">
+                    <a href="#cases" class="sidebar-link" data-action-message="Case creation opens once the intake backend is connected.">
+                        <i class="fas fa-plus-circle sidebar-icon"></i> New Case
+                    </a>
+                </li>
+                <li class="sidebar-item">
+                    <a href="#documents" class="sidebar-link">
+                        <i class="fas fa-file-alt sidebar-icon"></i> Documents
+                    </a>
+                </li>
+                <li class="sidebar-item">
+                    <a href="evidence_timeline.html" class="sidebar-link">
+                        <i class="fas fa-project-diagram sidebar-icon"></i> Evidence Timeline
+                    </a>
+                </li>
+                <li class="sidebar-item">
+                    <a href="outreach.html" class="sidebar-link">
+                        <i class="fas fa-paper-plane sidebar-icon"></i> Outreach
+                    </a>
+                </li>
+                <li class="sidebar-item">
+                    <a href="#dashboard" class="sidebar-link" data-action-message="Billing opens after a paid case workspace is loaded.">
+                        <i class="fas fa-credit-card sidebar-icon"></i> Billing
+                    </a>
+                </li>
+                <li class="sidebar-item">
+                    <a href="#dashboard" class="sidebar-link" data-action-message="Settings are not available in this local session yet.">
+                        <i class="fas fa-cog sidebar-icon"></i> Settings
+                    </a>
+                </li>
+                <li class="sidebar-item">
+                    <a href="#documents" class="sidebar-link" data-action-message="Help: connect Google, then pull evidence to populate the document workspace and timeline.">
+                        <i class="fas fa-question-circle sidebar-icon"></i> Help
+                    </a>
+                </li>
+            </ul>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content" id="dashboard">
+            <div class="dashboard-header slide-in-up">
+                <div class="container-fluid">
+                    <div>
+                        <h2 class="dashboard-title">LARO Command Workspace</h2>
+                        <p class="dashboard-subtitle">Minimal by default, granular when the case needs depth.</p>
+                        <p class="dashboard-depth-note" id="dashboardDepthNote">Minimal shows the single safest next action and live status.</p>
+                    </div>
+                    <div class="depth-switcher" role="group" aria-label="Dashboard depth">
+                        <button class="depth-button" type="button" data-depth-mode="minimal" aria-pressed="false">
+                            <i class="fas fa-compass"></i>
+                            <span>Minimal</span>
+                            <small>One action, live status, no noise.</small>
+                        </button>
+                        <button class="depth-button" type="button" data-depth-mode="review" aria-pressed="false">
+                            <i class="fas fa-route"></i>
+                            <span>Review</span>
+                            <small>Timeline, case, and outreach context.</small>
+                        </button>
+                        <button class="depth-button" type="button" data-depth-mode="deep" aria-pressed="false">
+                            <i class="fas fa-crosshairs"></i>
+                            <span>Deep</span>
+                            <small>Source links, queues, and inspector detail.</small>
+                        </button>
+                        <button class="depth-button" type="button" data-depth-mode="expert" aria-pressed="false">
+                            <i class="fas fa-sliders-h"></i>
+                            <span>Expert</span>
+                            <small>Filters, audit, scoring, and approvals.</small>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <section class="command-center slide-in-up" id="quickStart" aria-label="Progressive case command center">
+                <div class="command-topbar" aria-label="Case command bar">
+                    <div class="case-selector">
+                        <label for="activeCaseSelector">Active case</label>
+                        <select id="activeCaseSelector" aria-label="Select active case">
+                            <option>No active case selected</option>
+                        </select>
+                    </div>
+                    <div class="case-search">
+                        <label for="workspaceSearch">Find evidence, people, dates</label>
+                        <input id="workspaceSearch" type="search" placeholder="Search live workspace" aria-label="Search live workspace">
+                    </div>
+                    <div class="command-status-stack">
+                        <span class="connection-pill" id="topbarConnectionPill"><span class="connection-dot"></span><span id="topbarConnectionText">Google not connected</span></span>
+                        <span class="control-density"><strong id="topbarDepthLabel">Minimal</strong><span>control depth</span></span>
+                    </div>
+                </div>
+                <div class="command-grid is-focus-first">
+                    <article class="command-primary" aria-labelledby="nextActionTitle">
+                        <div class="command-title-row">
+                            <div>
+                                <span class="command-kicker">Case operating lane</span>
+                                <h3 id="nextActionTitle">Connect Google</h3>
+                                <p id="nextActionDetail">Connect Gmail and Drive once, then evidence intake and timeline generation can run from this dashboard.</p>
+                            </div>
+                            <span class="command-badge" id="nextActionBadge"><i class="fas fa-bolt"></i> Minimal</span>
+                        </div>
+                        <div class="command-actions">
+                            <button class="btn btn-primary" id="smartNextAction" type="button" data-next-action="connect">Connect Google</button>
+                            <button class="btn btn-outline" type="button" id="workbenchOpenCase">Open case center</button>
+                            <p class="command-microcopy" id="nextActionMicrocopy">Everything else stays hidden until this first lane is ready.</p>
+                        </div>
+                        <div class="case-health-grid" aria-label="Workspace totals">
+                            <div class="case-health-item">
+                                <strong id="workbenchDocCount">0</strong>
+                                <span>documents</span>
+                            </div>
+                            <div class="case-health-item">
+                                <strong id="workbenchEventCount">0</strong>
+                                <span>timeline events</span>
+                            </div>
+                            <div class="case-health-item">
+                                <strong id="workbenchWordCount">0</strong>
+                                <span>words read</span>
+                            </div>
+                            <div class="case-health-item is-risk">
+                                <strong id="caseHealthStatus">Open</strong>
+                                <span>next risk</span>
+                            </div>
+                        </div>
+                        <div class="quick-stat-strip" aria-label="Compact workspace totals">
+                            <span class="quick-stat" id="quickStatDocuments">0 documents</span>
+                            <span class="quick-stat" id="quickStatEvents">0 events</span>
+                            <span class="quick-stat" id="quickStatConnection">Google offline</span>
+                        </div>
+                        <div class="decision-board guided-depth" aria-label="Case decision lanes">
+                            <a class="decision-lane is-danger" id="decisionUrgentLane" href="case_command_center.html#deadlines">
+                                <span class="decision-lane-top">
+                                    <span class="decision-lane-icon"><i class="fas fa-clock"></i></span>
+                                    <strong id="decisionUrgentCount">0</strong>
+                                </span>
+                                <span class="decision-lane-label">Urgent deadlines</span>
+                                <span class="decision-lane-detail" id="decisionUrgentDetail">No urgent deadline in the ledger.</span>
+                            </a>
+                            <a class="decision-lane" id="decisionEvidenceLane" href="case_command_center.html#evidence">
+                                <span class="decision-lane-top">
+                                    <span class="decision-lane-icon"><i class="fas fa-folder-open"></i></span>
+                                    <strong id="decisionEvidenceCount">0</strong>
+                                </span>
+                                <span class="decision-lane-label">Evidence gaps</span>
+                                <span class="decision-lane-detail" id="decisionEvidenceDetail">No case is waiting for source material.</span>
+                            </a>
+                            <a class="decision-lane" id="decisionOutreachLane" href="outreach.html">
+                                <span class="decision-lane-top">
+                                    <span class="decision-lane-icon"><i class="fas fa-paper-plane"></i></span>
+                                    <strong id="decisionOutreachCount">0</strong>
+                                </span>
+                                <span class="decision-lane-label">Outreach approvals</span>
+                                <span class="decision-lane-detail" id="decisionOutreachDetail">No outreach draft is waiting.</span>
+                            </a>
+                            <a class="decision-lane" id="decisionRiskLane" href="case_command_center.html#risk">
+                                <span class="decision-lane-top">
+                                    <span class="decision-lane-icon"><i class="fas fa-triangle-exclamation"></i></span>
+                                    <strong id="decisionRiskCount">0</strong>
+                                </span>
+                                <span class="decision-lane-label">High-risk review</span>
+                                <span class="decision-lane-detail" id="decisionRiskDetail">No high-risk queue item.</span>
+                            </a>
+                        </div>
+                    </article>
+
+                    <aside class="command-panel command-side-panel" aria-label="Depth controls and one-click actions">
+                        <span class="command-section-label">Depth ladder</span>
+                        <div class="depth-ladder">
+                            <div class="depth-ladder-step is-current" id="depthStepSimple">
+                                <i class="fas fa-compass"></i>
+                                <div>
+                                    <strong>Minimal</strong>
+                                    <span>One next action, live totals, and safe source connection.</span>
+                                </div>
+                            </div>
+                            <div class="depth-ladder-step guided-depth" id="depthStepGuided">
+                                <i class="fas fa-route"></i>
+                                <div>
+                                    <strong>Review</strong>
+                                    <span>Timeline, case health, and outreach routes appear in context.</span>
+                                </div>
+                            </div>
+                            <div class="depth-ladder-step expert-depth" id="depthStepDeep">
+                                <i class="fas fa-crosshairs"></i>
+                                <div>
+                                    <strong>Deep</strong>
+                                    <span>Source-linked timeline, queues, audit summaries, and case inspector unlock.</span>
+                                </div>
+                            </div>
+                            <div class="depth-ladder-step expert-depth expert-only" id="depthStepExpert">
+                                <i class="fas fa-sliders-h"></i>
+                                <div>
+                                    <strong>Expert</strong>
+                                    <span>Granular source filters, provenance scoring, audit checks, and approval gates stay visible.</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="command-strip mt-3">
+                            <button class="quick-action" id="quickConnectGoogle" type="button">
+                                <span class="quick-action-title"><i class="fas fa-link"></i> Google</span>
+                                <span class="quick-action-meta">Connect or manage Gmail and Drive.</span>
+                            </button>
+                            <button class="quick-action" id="quickPullEvidence" type="button" disabled>
+                                <span class="quick-action-title"><i class="fas fa-cloud-download-alt"></i> Pull evidence</span>
+                                <span class="quick-action-meta">Start Gmail and Drive intake now.</span>
+                            </button>
+                            <a class="quick-action" href="case_command_center.html">
+                                <span class="quick-action-title"><i class="fas fa-scale-balanced"></i> Ledger</span>
+                                <span class="quick-action-meta">Open the persisted legal ledger.</span>
+                            </a>
+                        </div>
+                    </aside>
+                </div>
+
+                <div class="guided-operator-grid guided-depth">
+                    <article class="command-panel">
+                        <div class="timeline-preview-header">
+                            <div>
+                                <span class="command-section-label">Evidence story</span>
+                                <h5>Timeline preview</h5>
+                            </div>
+                            <a href="evidence_timeline.html" class="btn btn-sm btn-outline">Open full timeline</a>
+                        </div>
+                        <p class="pull-status mb-2" id="timelinePreviewHint">Pull evidence to build a legal chronology with source jumps.</p>
+                        <div class="timeline-strip" id="commandTimelineStrip"></div>
+                    </article>
+
+                    <article class="command-panel">
+                        <span class="command-section-label">Guided workbench</span>
+                        <div class="operator-stack">
+                            <div>
+                                <p id="workbenchCaseText">No case loaded in this session yet.</p>
+                            </div>
+                            <ul class="activity-list" id="healthChecks">
+                                <li>Google connection and evidence pipeline status update here.</li>
+                                <li>Case progression and follow-up requirements update here.</li>
+                            </ul>
+                            <div class="review-queue-board" id="ledgerQueueBoard" aria-label="Ledger review queues">
+                                <article class="review-queue-card">
+                                    <h6>Robert queue</h6>
+                                    <p class="review-queue-empty">No case needs manual review.</p>
+                                </article>
+                                <article class="review-queue-card">
+                                    <h6>Evidence queue</h6>
+                                    <p class="review-queue-empty">No evidence gap is open.</p>
+                                </article>
+                            </div>
+                            <div class="command-strip">
+                                <a class="quick-action" href="evidence_timeline.html">
+                                    <span class="quick-action-title"><i class="fas fa-project-diagram"></i> Timeline</span>
+                                    <span class="quick-action-meta">Review source-linked chronology.</span>
+                                </a>
+                                <a class="quick-action" href="outreach.html#lawyers">
+                                    <span class="quick-action-title"><i class="fas fa-user-tie"></i> Lawyers</span>
+                                    <span class="quick-action-meta">Match lawyers inside Outreach.</span>
+                                </a>
+                                <a class="quick-action expert-depth" href="outreach.html#media">
+                                    <span class="quick-action-title"><i class="fas fa-broadcast-tower"></i> Media</span>
+                                    <span class="quick-action-meta">Find journalists and programs.</span>
+                                </a>
+                            </div>
+                        </div>
+                    </article>
+                </div>
+
+                <aside class="command-inspector expert-depth" aria-label="Granular case inspector">
+                    <span class="command-section-label">Deep inspector</span>
+                    <details open>
+                        <summary>Recent case activity</summary>
+                        <ul class="activity-list mt-3" id="activityRecentList">
+                            <li>No live evidence activity yet.</li>
+                        </ul>
+                    </details>
+                    <details open>
+                        <summary>Upcoming actions</summary>
+                        <ul class="activity-list mt-3" id="activityUpcomingList">
+                            <li>Connect Google and run the first evidence pull.</li>
+                        </ul>
+                    </details>
+                    <details open>
+                        <summary>Risk queues</summary>
+                        <ul class="activity-list mt-3" id="riskQueueList">
+                            <li>No high-risk ledger items yet.</li>
+                        </ul>
+                    </details>
+                    <details>
+                        <summary>Outreach routing</summary>
+                        <div class="inspector-grid">
+                            <a class="inspector-field" href="outreach.html#lawyers">
+                                <strong>Lawyers</strong>
+                                <span>case-fit matching</span>
+                            </a>
+                            <a class="inspector-field" href="outreach.html#organizations">
+                                <strong>Organizations</strong>
+                                <span>advocacy support</span>
+                            </a>
+                        </div>
+                    </details>
+                    <details class="expert-only" open>
+                        <summary>Provenance and approvals</summary>
+                        <div class="inspector-grid">
+                            <a class="inspector-field" href="case_command_center.html#audit">
+                                <strong>Audit trail</strong>
+                                <span>who changed what</span>
+                            </a>
+                            <a class="inspector-field" href="case_command_center.html#approvals">
+                                <strong>Approval gates</strong>
+                                <span>external actions held</span>
+                            </a>
+                            <a class="inspector-field" href="evidence_timeline.html?view=claims">
+                                <strong>Claims</strong>
+                                <span>source-linked assertions</span>
+                            </a>
+                            <a class="inspector-field" href="evidence_timeline.html?view=contradictions">
+                                <strong>Contradictions</strong>
+                                <span>conflict review</span>
+                            </a>
+                        </div>
+                    </details>
+                </aside>
+            </section>
+
+            <section class="expert-controls expert-depth" id="expertControls" aria-label="Expert evidence controls">
+                <div>
+                    <span class="quick-action-label">Granular evidence pull</span>
+                    <h3>Control exactly what gets read</h3>
+                    <p>Deep shows where evidence came from. Expert keeps the precise Gmail, Drive, date, sorting, and approval controls open.</p>
+                </div>
+                <div class="expert-control-grid">
+                    <details class="expert-control-details" id="expertControlSources">
+                        <summary><i class="fas fa-filter"></i> Source boundaries</summary>
+                        <div class="expert-control-grid">
+                            <div class="control-field">
+                                <span class="source-group-label">Sources</span>
+                                <div class="source-toggle-row">
+                                    <label class="source-toggle"><input type="checkbox" id="sourceGmail" checked> Gmail</label>
+                                    <label class="source-toggle"><input type="checkbox" id="sourceDrive" checked> Drive</label>
+                                </div>
+                            </div>
+                            <label class="control-field">
+                                <span>Case id</span>
+                                <input class="control-input" id="expertCaseId" inputmode="numeric" placeholder="1">
+                            </label>
+                            <label class="control-field">
+                                <span>Drive search</span>
+                                <input class="control-input" id="expertDriveFolder" placeholder="Uses the active case title when empty">
+                            </label>
+                            <label class="control-field">
+                                <span>Gmail query</span>
+                                <input class="control-input" id="expertGmailQuery" value="legal OR CAK OR bezwaar OR factuur">
+                            </label>
+                        </div>
+                    </details>
+                    <details class="expert-control-details" id="expertControlFilters">
+                        <summary><i class="fas fa-sliders-h"></i> Precision filters</summary>
+                        <div class="expert-control-grid">
+                            <label class="control-field">
+                                <span>Max items per source</span>
+                                <input class="control-input" id="expertMaxItems" inputmode="numeric" min="1" max="100" type="number" value="80" />
+                            </label>
+                            <label class="control-field">
+                                <span>Date window (days)</span>
+                                <input class="control-input" id="expertDaysBack" inputmode="numeric" min="1" max="3650" type="number" placeholder="14">
+                            </label>
+                            <label class="control-field">
+                                <span>Drive/Email order</span>
+                                <select class="control-input" id="expertSourceOrder">
+                                    <option value="newest">Newest first</option>
+                                    <option value="oldest">Oldest first</option>
+                                </select>
+                            </label>
+                        </div>
+                    </details>
+                </div>
+            </section>
+
+            <!-- Case Summary -->
+            <div class="row mb-4 fade-in expert-depth" id="cases">
+                <div class="col-md-6">
+                    <div class="card case-summary-card h-100">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <span>Active Case</span>
+                            <span class="status-badge status-pending">No case loaded</span>
+                        </div>
+                        <div class="card-body">
+                            <h5 class="card-title">No active case selected</h5>
+                            <p class="card-text">Case details will appear here after a case is created, selected, or loaded from the backend.</p>
+                            <div class="d-flex justify-content-between align-items-center mt-3">
+                                <small class="text-tertiary">Waiting for case data</small>
+                                <a href="#cases" class="btn btn-primary btn-sm">Select Case</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">Case Progress</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="step-indicator">
+                                <div class="step">
+                                    <div class="step-number">1</div>
+                                    <div class="step-label">Case Submitted</div>
+                                </div>
+                                <div class="step">
+                                    <div class="step-number">2</div>
+                                    <div class="step-label">Documents Collected</div>
+                                </div>
+                                <div class="step">
+                                    <div class="step-number">3</div>
+                                    <div class="step-label">Lawyers Matched</div>
+                                </div>
+                                <div class="step">
+                                    <div class="step-number">4</div>
+                                    <div class="step-label">Case Accepted</div>
+                                </div>
+                            </div>
+                            <p class="mb-0">Progress will update automatically after a live case is loaded.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Lawyer Responses -->
+            <div class="card mb-4 slide-in-up expert-depth" style="animation-delay: 0.1s;">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Lawyer Responses</h5>
+                </div>
+                <div class="card-body">
+                    <div class="empty-state">
+                        <i class="fas fa-inbox"></i>
+                        <h5>No lawyer responses yet</h5>
+                        <p>Responses will appear after a live outreach campaign starts for the selected case.</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Evidence Workspace -->
+            <section class="evidence-workspace slide-in-up" id="documents" style="animation-delay: 0.2s;">
+                <div class="evidence-toolbar">
+                    <div>
+                        <h5>Evidence Intake</h5>
+                        <p class="pull-status" id="syncStatus">Auto-updates when Google connects or documents are pulled.</p>
+                    </div>
+                    <div class="connection-strip">
+                        <span class="connection-pill" id="googleConnectionPill"><span class="connection-dot"></span><span id="googleConnectionText">Google not connected</span></span>
+                        <button class="btn btn-outline" id="openGoogleConnect">Connect Google</button>
+                        <button class="btn btn-primary" id="pullEvidence" aria-describedby="pullProgressText evidenceModeNote" disabled>Pull Evidence</button>
+                    </div>
+                </div>
+
+                <div class="evidence-grid">
+                    <aside class="evidence-panel">
+                        <h5>Pulling Progress</h5>
+                        <p class="pull-status">Progress is calculated per processed word across Gmail and Drive evidence.</p>
+                        <div class="pull-progress">
+                            <div class="progress">
+                                <div class="progress-bar progress-bar-primary" id="pullProgressBar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                            </div>
+                            <p class="pull-status" id="pullProgressText">Waiting to start.</p>
+                        </div>
+                        <div class="evidence-stats" id="evidenceSummaryStats">
+                            <div class="evidence-stat"><strong id="statDocuments">0</strong><span>documents</span></div>
+                            <div class="evidence-stat"><strong id="statEvents">0</strong><span>timeline events</span></div>
+                            <div class="evidence-stat"><strong id="statWords">0</strong><span>words read</span></div>
+                        </div>
+                        <button class="btn btn-outline evidence-detail-toggle" id="expandEvidenceDetails" type="button">Show evidence details</button>
+                        <p class="sync-note" id="lastSyncNote">No Google sync has run in this browser session.</p>
+                    </aside>
+
+                    <section class="evidence-panel evidence-details guided-depth">
+                        <p class="evidence-mode-note" id="evidenceModeNote">No evidence loaded yet. Connect Google to pull live Gmail and Drive documents for this case.</p>
+                        <div class="timeline-view-toolbar">
+                            <button class="btn btn-outline timeline-view-btn is-active" type="button" id="timelineViewStrip" aria-pressed="true">Strip</button>
+                            <button class="btn btn-outline timeline-view-btn" type="button" id="timelineViewTimeline" aria-pressed="false">List</button>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-5">
+                                <h5>Collated Documents</h5>
+                                <div class="evidence-document-list" id="evidenceDocumentList"></div>
+                            </div>
+                            <div class="col-md-7">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <h5 class="mb-0">Evidence Timeline</h5>
+                                    <a href="evidence_timeline.html" class="btn btn-sm btn-outline">Open full timeline</a>
+                                </div>
+                                <div class="timeline-strip" id="dashboardTimelineStrip"></div>
+                                <div class="story-timeline" id="dashboardTimeline"></div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </section>
+
+    <div class="google-modal" id="googleConnectionModal" role="dialog" aria-modal="true" aria-labelledby="googleConnectionTitle">
+        <div class="google-modal-card">
+            <div class="google-modal-header">
+                <h5 id="googleConnectionTitle" class="mb-0">Connect Google</h5>
+                <button class="modal-x" id="closeGoogleModal" aria-label="Close Google connection dialog">&times;</button>
+            </div>
+            <div class="google-modal-body">
+                <p id="googleConnectionMessage">Connect Gmail and Google Drive so LARO can collate evidence automatically.</p>
+                <div class="connection-pill" id="modalConnectionPill"><span class="connection-dot"></span><span id="modalConnectionText">Waiting for connection</span></div>
+            </div>
+            <div class="google-modal-footer">
+                <button class="btn btn-outline" id="cancelGoogleModal">Close</button>
+                <button class="btn btn-primary" id="confirmGoogleConnect">Connect Gmail & Drive</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-note" id="dashboardToast" role="status" aria-live="polite">Action unavailable</div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Add animation classes on load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add hover effect to sidebar links
+            const sidebarLinks = document.querySelectorAll('.sidebar-link');
+            sidebarLinks.forEach(link => {
+                link.addEventListener('mouseenter', function() {
+                    this.style.transition = 'all 0.3s ease';
+                    this.style.transform = 'translateX(5px)';
+                });
+                
+                link.addEventListener('mouseleave', function() {
+                    this.style.transition = 'all 0.3s ease';
+                    this.style.transform = 'translateX(0)';
+                });
+            });
+            
+            // Add pulse animation to notification dot
+            const notificationDot = document.querySelector('.notification-dot');
+            if (notificationDot) {
+                setInterval(() => {
+                    notificationDot.style.animation = 'none';
+                    setTimeout(() => {
+                        notificationDot.style.animation = 'pulse 1.5s infinite';
+                    }, 10);
+                }, 3000);
+            }
+        });
+        
+        // Add pulse animation
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes pulse {
+                0% {
+                    transform: scale(1);
+                    opacity: 1;
+                }
+                50% {
+                    transform: scale(1.5);
+                    opacity: 0.7;
+                }
+                100% {
+                    transform: scale(1);
+                    opacity: 1;
+                }
+            }
+            
+            .notification-dot {
+                animation: pulse 1.5s infinite;
+            }
+        `;
+        document.head.appendChild(style);
+
+        const EMPTY_EVIDENCE_DATA = { documents: [], timeline: [], totalWords: 0 };
+        const EVIDENCE_STATE_KEY = "laroEvidenceWorkspace";
+        const TIMELINE_STATE_KEY = "laroEvidenceTimeline";
+        const DASHBOARD_DEPTH_KEY = "laroDashboardDepthMode";
+        const TIMELINE_VIEW_KEY = "laroEvidenceTimelineView";
+        const GOOGLE_STATUS_URL = "/api/google/oauth/status";
+        const GOOGLE_AUTHORIZE_URL = "/api/google/oauth/start";
+        const COMMAND_CENTER_URL = "/api/dashboard/command-center";
+        const GOOGLE_PULL_JOBS_URL = (caseId) => `/api/cases/${encodeURIComponent(caseId)}/documents/pull-google/jobs`;
+        let pullTimer = null;
+        let activeGooglePullJobs = [];
+        let googleConnected = false;
+        let googleOAuthPopup = null;
+        let googleOAuthPollTimer = null;
+        let currentEvidenceData = { documents: [], timeline: [], totalWords: 0 };
+        let currentCommandCenterData = null;
+        let workspaceSearchTerm = "";
+        let dashboardToastTimer = null;
+
+        function showDashboardToast(message) {
+            const toast = document.getElementById("dashboardToast");
+            if (!toast) return;
+            toast.textContent = message;
+            toast.className = "toast-note show";
+            window.clearTimeout(dashboardToastTimer);
+            dashboardToastTimer = window.setTimeout(() => {
+                toast.className = "toast-note";
+            }, 5000);
+        }
+
+        function activateDashboardLinks() {
+            document.querySelectorAll("[data-action-message]").forEach((link) => {
+                link.addEventListener("click", () => showDashboardToast(link.dataset.actionMessage));
+            });
+
+            document.querySelectorAll('a[href^="#"]').forEach((link) => {
+                link.addEventListener("click", (event) => {
+                    const targetId = link.getAttribute("href").slice(1);
+                    if (!targetId) {
+                        event.preventDefault();
+                        showDashboardToast("This action is not available yet.");
+                        return;
+                    }
+
+                    if (!document.getElementById(targetId)) {
+                        event.preventDefault();
+                        showDashboardToast("That section is not available in this local session yet.");
+                    }
+                });
+            });
+        }
+
+        function readJson(key, fallback) {
+            try {
+                const value = localStorage.getItem(key);
+                return value ? JSON.parse(value) : fallback;
+            } catch (error) {
+                return fallback;
+            }
+        }
+
+        function writeJson(key, value) {
+            localStorage.setItem(key, JSON.stringify(value));
+        }
+
+        function setTimelineView(viewMode, announce = false) {
+            const normalized = viewMode === "timeline" ? "timeline" : "strip";
+            const strip = document.getElementById("dashboardTimelineStrip");
+            const list = document.getElementById("dashboardTimeline");
+            const stripButton = document.getElementById("timelineViewStrip");
+            const timelineButton = document.getElementById("timelineViewTimeline");
+            if (!strip || !list || !stripButton || !timelineButton) return;
+
+            strip.classList.toggle("is-hidden", normalized !== "strip");
+            list.classList.toggle("is-hidden", normalized !== "timeline");
+            stripButton.classList.toggle("is-active", normalized === "strip");
+            timelineButton.classList.toggle("is-active", normalized === "timeline");
+            stripButton.setAttribute("aria-pressed", String(normalized === "strip"));
+            timelineButton.setAttribute("aria-pressed", String(normalized === "timeline"));
+            writeJson(TIMELINE_VIEW_KEY, normalized);
+            if (announce) {
+                showDashboardToast(normalized === "strip" ? "Timeline compact strip view active." : "Timeline full list view active.");
+            }
+        }
+
+        function initializeTimelineViewControls() {
+            const requestedView = new URLSearchParams(window.location.search).get("timeline_view");
+            const storedView = readJson(TIMELINE_VIEW_KEY, null);
+            const defaultView = requestedView === "timeline" ? "timeline" : "strip";
+            const view = ["strip", "timeline"].includes(storedView) ? storedView : defaultView;
+
+            setTimelineView(view);
+            document.getElementById("timelineViewStrip")?.addEventListener("click", () => setTimelineView("strip"));
+            document.getElementById("timelineViewTimeline")?.addEventListener("click", () => setTimelineView("timeline"));
+        }
+
+        function initializeCommandBar() {
+            const caseSelector = document.getElementById("activeCaseSelector");
+            const caseId = defaultCaseIdFromUrl();
+            if (caseSelector) {
+                caseSelector.innerHTML = `<option value="${caseId}">Case ${caseId}</option>`;
+                caseSelector.addEventListener("change", () => {
+                    const value = Number(caseSelector.value);
+                    if (Number.isFinite(value) && value > 0) {
+                        const expertCase = document.getElementById("expertCaseId");
+                        if (expertCase) expertCase.value = String(value);
+                        resumeGoogleEvidencePull(value);
+                    }
+                    showDashboardToast("Case context updated.");
+                });
+            }
+
+            const searchInput = document.getElementById("workspaceSearch");
+            if (searchInput) {
+                searchInput.addEventListener("input", () => {
+                    workspaceSearchTerm = searchInput.value.trim().toLowerCase();
+                    renderEvidenceWorkspace(currentEvidenceData);
+                });
+                searchInput.addEventListener("keydown", (event) => {
+                    if (event.key === "Enter") {
+                        setDepthMode("guided", true);
+                        document.getElementById("documents")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    }
+                });
+            }
+        }
+
+        function wordCount(text) {
+            return String(text || "").trim().split(/\s+/).filter(Boolean).length;
+        }
+
+        function formatDate(value) {
+            const parsed = new Date(value);
+            return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+        }
+
+        function sourceLabel(source) {
+            return String(source || "unknown").replace(/_/g, " ");
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                "\"": "&quot;",
+                "'": "&#39;"
+            }[char]));
+        }
+
+        function matchesWorkspaceSearch(item) {
+            if (!workspaceSearchTerm) return true;
+            return [
+                item.name,
+                item.document_name,
+                item.type,
+                item.source,
+                item.summary,
+                item.content,
+                item.actor,
+                item.action,
+                item.event_label,
+                item.evidence_quote,
+                item.source_document_name
+            ].some((value) => String(value || "").toLowerCase().includes(workspaceSearchTerm));
+        }
+
+        function safeHref(value, fallback = "#") {
+            const raw = String(value || "").trim();
+            if (!raw) return fallback;
+            if (/^#[A-Za-z0-9_.:-]+$/i.test(raw)) {
+                return raw;
+            }
+            if (/^https?:\/\//i.test(raw) || /^mailto:/i.test(raw)) {
+                return raw.replace(/"/g, "%22");
+            }
+            if (/^[A-Za-z0-9_./-]+(?:\?[A-Za-z0-9_./?&=%:+-]*)?(?:#[A-Za-z0-9_.:-]+)?$/i.test(raw)) {
+                return raw.replace(/"/g, "%22");
+            }
+            return fallback;
+        }
+
+        function defaultCaseIdFromUrl() {
+            const params = new URLSearchParams(window.location.search);
+            const parsed = Number(params.get("case_id") || params.get("case") || 1);
+            return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+        }
+
+        function normalizeControlTier(mode) {
+            const aliases = {
+                simple: "minimal",
+                guided: "review",
+                review: "review",
+                deep: "deep",
+                expert: "expert",
+                minimal: "minimal"
+            };
+            return aliases[mode] || "minimal";
+        }
+
+        function legacyDepthForTier(tier) {
+            if (tier === "minimal") return "simple";
+            if (tier === "review") return "guided";
+            return "expert";
+        }
+
+        function setDepthMode(mode, announce = false) {
+            const tier = normalizeControlTier(mode);
+            const normalized = legacyDepthForTier(tier);
+            document.body.dataset.depthMode = normalized;
+            document.body.dataset.controlTier = tier;
+            writeJson(DASHBOARD_DEPTH_KEY, tier);
+            const labels = {
+                minimal: "Minimal shows the single safest next action and live status.",
+                review: "Review adds timeline, case health, and outreach routing.",
+                deep: "Deep exposes source links, queues, and the case inspector.",
+                expert: "Expert keeps granular filters, provenance, audit, scoring, and approval controls open."
+            };
+            const visibleLabels = {
+                minimal: "Minimal",
+                review: "Review",
+                deep: "Deep",
+                expert: "Expert"
+            };
+            const note = document.getElementById("dashboardDepthNote");
+            if (note) note.textContent = labels[tier];
+            const topbarDepthLabel = document.getElementById("topbarDepthLabel");
+            if (topbarDepthLabel) topbarDepthLabel.textContent = visibleLabels[tier];
+            document.querySelectorAll(".depth-button[data-depth-mode]").forEach((button) => {
+                const active = button.dataset.depthMode === tier;
+                button.classList.toggle("is-active", active);
+                button.setAttribute("aria-pressed", String(active));
+            });
+            const stepMap = {
+                minimal: "depthStepSimple",
+                review: "depthStepGuided",
+                deep: "depthStepDeep",
+                expert: "depthStepExpert"
+            };
+            Object.entries(stepMap).forEach(([stepTier, id]) => {
+                const step = document.getElementById(id);
+                if (step) step.classList.toggle("is-current", stepTier === tier);
+            });
+            const nextActionBadge = document.getElementById("nextActionBadge");
+            if (nextActionBadge) {
+                const badgeLabels = {
+                    minimal: '<i class="fas fa-bolt"></i> Minimal',
+                    review: '<i class="fas fa-route"></i> Review',
+                    deep: '<i class="fas fa-crosshairs"></i> Deep',
+                    expert: '<i class="fas fa-sliders-h"></i> Expert'
+                };
+                nextActionBadge.innerHTML = badgeLabels[tier];
+            }
+            const detailToggle = document.getElementById("expandEvidenceDetails");
+            if (detailToggle) {
+                const detailText = tier === "minimal"
+                    ? "Open evidence details"
+                    : "Hide evidence details";
+                detailToggle.textContent = detailText;
+                detailToggle.setAttribute("aria-pressed", String(tier !== "minimal"));
+            }
+            const workbenchCaseText = document.getElementById("workbenchCaseText");
+            if (workbenchCaseText) {
+                if (tier === "minimal") {
+                    workbenchCaseText.textContent = "Minimal keeps the dashboard narrow: action first, details next.";
+                } else if (tier === "review") {
+                    workbenchCaseText.textContent = "Review is active: case workflow and outreach routes are visible.";
+                } else if (tier === "deep") {
+                    workbenchCaseText.textContent = "Deep is active: source links, queues, and the case inspector are visible.";
+                } else {
+                    workbenchCaseText.textContent = "Expert is active: granular evidence controls, provenance, audit, and approvals are visible.";
+                }
+            }
+            document.querySelectorAll(".expert-control-details").forEach((details) => {
+                details.open = tier === "expert";
+            });
+            if (announce) {
+                showDashboardToast(labels[tier]);
+            }
+        }
+
+        function initializeDepthControls() {
+            const stored = readJson(DASHBOARD_DEPTH_KEY, null);
+            const requested = new URLSearchParams(window.location.search).get("depth");
+            const hashNeedsGuided = window.location.hash === "#cases";
+            const normalizedRequested = ["minimal", "review", "deep", "expert", "simple", "guided"].includes(requested) ? requested : null;
+            setDepthMode(normalizedRequested || stored || (hashNeedsGuided ? "review" : "minimal"));
+            document.querySelectorAll(".depth-button[data-depth-mode]").forEach((button) => {
+                button.addEventListener("click", () => setDepthMode(button.dataset.depthMode, true));
+            });
+        }
+
+        function expertControlValue(id) {
+            return String(document.getElementById(id)?.value || "").trim();
+        }
+
+        function expertControlNumberValue(id, fallback = null) {
+            const raw = expertControlValue(id);
+            if (!raw) return fallback;
+            const value = Number(raw);
+            return Number.isFinite(value) ? value : fallback;
+        }
+
+        function initializeExpertControls() {
+            const caseInput = document.getElementById("expertCaseId");
+            if (caseInput && !caseInput.value) caseInput.value = String(defaultCaseIdFromUrl());
+            ["sourceGmail", "sourceDrive", "expertCaseId", "expertGmailQuery", "expertDriveFolder", "expertMaxItems", "expertDaysBack", "expertSourceOrder"].forEach((id) => {
+                const control = document.getElementById(id);
+                if (!control) return;
+                const eventName = control.type === "checkbox" ? "change" : "input";
+                control.addEventListener(eventName, () => {
+                    updateQuickActions();
+                    if (document.body.dataset.depthMode === "expert") {
+                        document.getElementById("syncStatus").textContent = "Evidence pull controls updated.";
+                    }
+                });
+            });
+        }
+
+        function selectedEvidenceSources() {
+            const sources = [];
+            if (document.getElementById("sourceGmail")?.checked) sources.push("gmail");
+            if (document.getElementById("sourceDrive")?.checked) sources.push("gdrive");
+            return sources;
+        }
+
+        function selectedSourceLabel() {
+            const sources = selectedEvidenceSources();
+            if (sources.length === 2) return "Gmail and Drive";
+            if (sources[0] === "gmail") return "Gmail";
+            if (sources[0] === "gdrive") return "Drive";
+            return "selected sources";
+        }
+
+        function updateEvidenceMode(data = currentEvidenceData) {
+            const modeNote = document.getElementById("evidenceModeNote");
+            if (!modeNote) return;
+
+            const documents = data.documents || [];
+            modeNote.classList.toggle("live", googleConnected && !data.error);
+            if (data.error) {
+                modeNote.textContent = "No evidence is shown. Live Google aggregation is unavailable for this session.";
+                return;
+            }
+            if (!documents.length) {
+                modeNote.textContent = googleConnected
+                    ? "Google is connected. Start a pull to collate live Gmail and Drive evidence for this case."
+                    : "No evidence loaded yet. Connect Google to pull live Gmail and Drive documents for this case.";
+                return;
+            }
+
+            if (googleConnected) {
+                modeNote.textContent = `Live evidence workspace: ${documents.length} documents are available for review and timeline tracing.`;
+            } else {
+                modeNote.textContent = `Stored evidence workspace: ${documents.length} documents are visible from the last live sync. Connect Google to refresh them.`;
+            }
+        }
+
+        function updateQuickActions(data = currentEvidenceData) {
+            const documents = data?.documents || [];
+            const events = data?.timeline || [];
+            const nextButton = document.getElementById("smartNextAction");
+            const quickConnect = document.getElementById("quickConnectGoogle");
+            const quickPull = document.getElementById("quickPullEvidence");
+            if (!nextButton || !quickConnect || !quickPull) return;
+
+            document.getElementById("quickStatDocuments").textContent = `${documents.length} document${documents.length === 1 ? "" : "s"}`;
+            document.getElementById("quickStatEvents").textContent = `${events.length} event${events.length === 1 ? "" : "s"}`;
+            document.getElementById("quickStatConnection").textContent = googleConnected ? "Google connected" : "Google offline";
+            quickConnect.querySelector(".quick-action-meta").textContent = googleConnected
+                ? "Connection is ready; manage or reconnect."
+                : "Connect Gmail and Drive once.";
+            quickPull.disabled = !googleConnected || Boolean(pullTimer);
+            quickPull.querySelector(".quick-action-meta").textContent = pullTimer
+                ? "Evidence intake is running."
+                : googleConnected
+                    ? "Start Gmail and Drive intake now."
+                    : "Connect Google first.";
+
+            let action = "connect";
+            let title = "Connect Google";
+            let detail = "Connect Gmail and Drive once, then evidence intake and timeline generation can run from this dashboard.";
+            let label = "Connect Google";
+            let microcopy = "Everything else stays hidden until this first lane is ready.";
+
+            if (pullTimer) {
+                action = "wait";
+                title = "Evidence is being pulled";
+                detail = "LARO is processing Gmail and Drive evidence. Progress updates below without a manual refresh.";
+                label = "Pulling...";
+                microcopy = "You can stay here; totals, progress, and timeline preview update automatically.";
+            } else if (googleConnected && documents.length === 0) {
+                action = "pull";
+                title = "Pull evidence";
+                detail = "Google is connected. Start one evidence pull to populate documents, word counts, and the timeline.";
+                label = "Pull Evidence";
+                microcopy = "One click starts Gmail and Drive intake using the current source boundaries.";
+            } else if (events.length > 0) {
+                action = "timeline";
+                title = "Review the timeline";
+                detail = "Evidence has chronology data. Open the full timeline and jump directly to source documents.";
+                label = "Open Timeline";
+                microcopy = "The timeline is now the shortest path to claims, contradictions, and outreach decisions.";
+            } else if (documents.length > 0) {
+                action = "pull";
+                title = "Refresh evidence";
+                detail = "Documents are available. Pull again to refresh Gmail, Drive, and the timeline in one step.";
+                label = "Refresh Evidence";
+                microcopy = "Refresh only when the source material changed or you need a newer chronology.";
+            }
+
+            document.getElementById("nextActionTitle").textContent = title;
+            document.getElementById("nextActionDetail").textContent = detail;
+            document.getElementById("nextActionMicrocopy").textContent = microcopy;
+            nextButton.textContent = label;
+            nextButton.dataset.nextAction = action;
+            nextButton.disabled = action === "wait";
+        }
+
+        function updateWorkspaceDigest(data = currentEvidenceData) {
+            const events = data?.timeline || [];
+            const documents = data?.documents || [];
+            const healthChecks = document.getElementById("healthChecks");
+            const recentActivities = document.getElementById("activityRecentList");
+            const upcomingActions = document.getElementById("activityUpcomingList");
+            if (!healthChecks || !recentActivities || !upcomingActions) return;
+
+            const latestEvents = events.slice(-3).reverse();
+            healthChecks.innerHTML = "";
+            recentActivities.innerHTML = "";
+
+            if (!documents.length && !events.length) {
+                const statusLine = googleConnected
+                    ? "Evidence is ready to pull; start the first intake."
+                    : "Connect Google once, then pull evidence.";
+                healthChecks.innerHTML = `<li>${escapeHtml(statusLine)}</li>`;
+                recentActivities.innerHTML = "<li>No evidence-derived activity yet.</li>";
+            } else {
+                const eventLines = latestEvents.length
+                    ? latestEvents.map((event) =>
+                        `<li>${escapeHtml(formatDate(event.date))}: ${escapeHtml(event.event_label || `${event.actor || "Unknown"} ${event.action || "documented"}`)}</li>`
+                    ).join("")
+                    : "<li>No timeline events are parsed yet.</li>";
+                const docText = documents.length
+                    ? `${documents.length} source document${documents.length === 1 ? "" : "s"} available from the latest pull.`
+                    : "No documents currently indexed.";
+                healthChecks.innerHTML = `${eventLines}<li>${escapeHtml(docText)}</li>`;
+                recentActivities.innerHTML = latestEvents.length
+                    ? latestEvents.map((event) => `<li>${escapeHtml(formatDate(event.date))}: ${escapeHtml(event.summary || event.event_label || "Evidence event recorded.")}</li>`).join("")
+                    : "<li>No timeline updates yet.</li>";
+            }
+
+            const upcoming = [];
+            if (!googleConnected) {
+                upcoming.push("Connect Google.");
+            } else if (pullTimer) {
+                upcoming.push("Watch pull progress and let it finish.");
+            } else if (!events.length && documents.length === 0) {
+                upcoming.push("Run one evidence pull to build a legal chronology.");
+            } else if (!events.length && documents.length > 0) {
+                upcoming.push("Reload evidence pull to regenerate timeline events.");
+            } else {
+                upcoming.push("Run outreach matching for the selected case.");
+                if (documents.length > 0) {
+                    upcoming.push("Open evidence timeline and review source links.");
+                }
+            }
+            if (!upcoming.length) upcoming.push("Continue with the next guided case action.");
+            upcomingActions.innerHTML = upcoming.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+        }
+
+        function commandItemTitle(item, fallback = "Review item") {
+            if (!item || typeof item !== "object") return fallback;
+            return item.title || item.label || item.case_title || item.name || item.subject || item.action || fallback;
+        }
+
+        function commandItemDetail(item, fallback = "") {
+            if (!item || typeof item !== "object") return fallback;
+            const dueDate = item.due_date ? `Due ${formatDate(item.due_date)}` : "";
+            const detail = item.detail || item.description || item.summary || item.target || item.status || "";
+            if (dueDate && detail) return `${dueDate} - ${detail}`;
+            return dueDate || detail || fallback;
+        }
+
+        function commandItemHref(item, fallback = "case_command_center.html") {
+            if (!item || typeof item !== "object") return fallback;
+            if (item.source_url || item.url) return safeHref(item.source_url || item.url, fallback);
+            if (item.entity_type === "LawyerOutreach" || item.action === "send_external_legal_email") {
+                return "outreach.html#lawyers";
+            }
+            const caseId = item.case_id || item.id;
+            return caseId ? `case_command_center.html?case_id=${encodeURIComponent(caseId)}` : fallback;
+        }
+
+        function queueFirst(queue) {
+            return Array.isArray(queue) && queue.length ? queue[0] : null;
+        }
+
+        function renderDecisionLane(config) {
+            const lane = document.getElementById(config.laneId);
+            const countEl = document.getElementById(config.countId);
+            const detailEl = document.getElementById(config.detailId);
+            const count = Number(config.count || 0);
+            const first = queueFirst(config.items || []);
+            if (countEl) countEl.textContent = String(count);
+            if (detailEl) {
+                detailEl.textContent = first
+                    ? commandItemDetail(first, commandItemTitle(first, config.filledText))
+                    : config.emptyText;
+            }
+            if (lane) {
+                lane.href = first ? commandItemHref(first, config.href) : config.href;
+                lane.classList.toggle("is-danger", Boolean(config.danger && count > 0));
+                lane.classList.toggle("is-ready", count === 0);
+                lane.setAttribute("aria-label", `${config.label}: ${count}`);
+            }
+        }
+
+        function renderQueueCard(title, items, emptyText, fallbackHref) {
+            const visible = Array.isArray(items) ? items.slice(0, 3) : [];
+            if (!visible.length) {
+                return `
+                    <article class="review-queue-card">
+                        <h6>${escapeHtml(title)}</h6>
+                        <p class="review-queue-empty">${escapeHtml(emptyText)}</p>
+                    </article>
+                `;
+            }
+            return `
+                <article class="review-queue-card">
+                    <h6>${escapeHtml(title)}</h6>
+                    <ol>
+                        ${visible.map((item) => `
+                            <li>
+                                <span>
+                                    <strong>${escapeHtml(commandItemTitle(item))}</strong><br>
+                                    ${escapeHtml(commandItemDetail(item, "Open for details"))}
+                                </span>
+                                <a href="${commandItemHref(item, fallbackHref)}" aria-label="Open ${escapeHtml(commandItemTitle(item))}">?</a>
+                            </li>
+                        `).join("")}
+                    </ol>
+                </article>
+            `;
+        }
+
+        function renderLedgerQueueBoard(data) {
+            const board = document.getElementById("ledgerQueueBoard");
+            if (!board) return;
+            const queue = data?.review_queues || {};
+            board.innerHTML = [
+                renderQueueCard("Robert queue", queue.cases_needing_robert, "No case needs manual review.", "case_command_center.html"),
+                renderQueueCard("Evidence queue", queue.cases_needing_evidence, "No evidence gap is open.", "case_command_center.html#evidence"),
+                renderQueueCard("Outreach queue", queue.pending_outreach_approval, "No outreach approval is pending.", "outreach.html"),
+                renderQueueCard("Risk queue", queue.high_risk_items, "No high-risk item is open.", "case_command_center.html#risk")
+            ].join("");
+        }
+
+        function renderRiskQueueList(items) {
+            const riskList = document.getElementById("riskQueueList");
+            if (!riskList) return;
+            const visible = Array.isArray(items) ? items.slice(0, 6) : [];
+            riskList.innerHTML = visible.length
+                ? visible.map((item) => `
+                    <li>
+                        ${escapeHtml(commandItemTitle(item))}
+                        ${commandItemDetail(item) ? ` - ${escapeHtml(commandItemDetail(item))}` : ""}
+                    </li>
+                `).join("")
+                : "<li>No high-risk ledger items yet.</li>";
+        }
+
+        function renderCommandCenter(data) {
+            if (!data || typeof data !== "object") return;
+            currentCommandCenterData = data;
+            const cases = data.cases || [];
+            const counts = data.counts || {};
+            const caseSelector = document.getElementById("activeCaseSelector");
+            if (caseSelector && cases.length) {
+                const selected = String(caseSelector.value || currentCaseId());
+                caseSelector.innerHTML = cases.map((item) => {
+                    const id = item.case_id || item.id;
+                    const label = item.title || `Case ${id}`;
+                    return `<option value="${escapeHtml(id)}">${escapeHtml(label)}</option>`;
+                }).join("");
+                if ([...caseSelector.options].some((option) => option.value === selected)) {
+                    caseSelector.value = selected;
+                }
+            }
+
+            const workbenchCaseText = document.getElementById("workbenchCaseText");
+            if (workbenchCaseText) {
+                workbenchCaseText.textContent = `${counts.active_cases || 0} active case${counts.active_cases === 1 ? "" : "s"}; ${counts.cases_needing_robert || 0} need Robert; ${counts.urgent_deadlines || 0} urgent deadline${counts.urgent_deadlines === 1 ? "" : "s"}.`;
+            }
+
+            const healthChecks = document.getElementById("healthChecks");
+            const recentActivities = document.getElementById("activityRecentList");
+            const upcomingActions = document.getElementById("activityUpcomingList");
+            const queue = data.review_queues || {};
+            renderDecisionLane({
+                laneId: "decisionUrgentLane",
+                countId: "decisionUrgentCount",
+                detailId: "decisionUrgentDetail",
+                label: "Urgent deadlines",
+                count: counts.urgent_deadlines,
+                items: queue.urgent_deadlines || data.urgent_deadlines,
+                emptyText: "No urgent deadline in the ledger.",
+                filledText: "Urgent deadline needs review.",
+                href: "case_command_center.html#deadlines",
+                danger: true
+            });
+            renderDecisionLane({
+                laneId: "decisionEvidenceLane",
+                countId: "decisionEvidenceCount",
+                detailId: "decisionEvidenceDetail",
+                label: "Evidence gaps",
+                count: counts.cases_needing_evidence,
+                items: queue.cases_needing_evidence,
+                emptyText: "No case is waiting for source material.",
+                filledText: "Case needs source material.",
+                href: "case_command_center.html#evidence",
+                danger: false
+            });
+            renderDecisionLane({
+                laneId: "decisionOutreachLane",
+                countId: "decisionOutreachCount",
+                detailId: "decisionOutreachDetail",
+                label: "Outreach approvals",
+                count: counts.pending_outreach_approval,
+                items: queue.pending_outreach_approval || data.pending_outreach_approval,
+                emptyText: "No outreach draft is waiting.",
+                filledText: "Outreach approval needs review.",
+                href: "outreach.html",
+                danger: false
+            });
+            renderDecisionLane({
+                laneId: "decisionRiskLane",
+                countId: "decisionRiskCount",
+                detailId: "decisionRiskDetail",
+                label: "High-risk review",
+                count: counts.high_risk_items,
+                items: queue.high_risk_items || data.high_risk_items,
+                emptyText: "No high-risk queue item.",
+                filledText: "High-risk item needs review.",
+                href: "case_command_center.html#risk",
+                danger: true
+            });
+            renderLedgerQueueBoard(data);
+            renderRiskQueueList(queue.high_risk_items || data.high_risk_items);
+            if (healthChecks) {
+                const lines = [
+                    `${counts.cases_needing_evidence || 0} case${counts.cases_needing_evidence === 1 ? "" : "s"} need evidence.`,
+                    `${counts.contradictions || 0} contradiction${counts.contradictions === 1 ? "" : "s"} need review.`,
+                    `${counts.pending_outreach_approval || 0} outreach approval${counts.pending_outreach_approval === 1 ? "" : "s"} pending.`,
+                    `${counts.cases_awaiting_lawyer_response || 0} case${counts.cases_awaiting_lawyer_response === 1 ? "" : "s"} awaiting lawyer response.`,
+                ];
+                healthChecks.innerHTML = lines.map((line) => `<li>${escapeHtml(line)}</li>`).join("");
+            }
+            if (recentActivities) {
+                const recent = data.recent_activity || [];
+                recentActivities.innerHTML = recent.length
+                    ? recent.slice(0, 4).map((item) => `<li>${escapeHtml(formatDate(item.created_at))}: ${escapeHtml(item.action || "ledger activity")} ${escapeHtml(item.entity_type || "")}</li>`).join("")
+                    : "<li>No persisted ledger activity yet.</li>";
+            }
+            if (upcomingActions) {
+                const actions = data.next_actions || [];
+                upcomingActions.innerHTML = actions.length
+                    ? actions.slice(0, 5).map((item) => `<li>${escapeHtml(item.label || "Review case action")} - ${escapeHtml(item.detail || item.target || "")}</li>`).join("")
+                    : "<li>No ledger next actions available.</li>";
+            }
+
+            if ((queue.urgent_deadlines || []).length) {
+                const firstDeadline = queue.urgent_deadlines[0];
+                const caseHealthStatus = document.getElementById("caseHealthStatus");
+                if (caseHealthStatus) {
+                    caseHealthStatus.textContent = "Deadline";
+                    caseHealthStatus.closest(".case-health-item")?.classList.add("is-risk");
+                }
+                const timelineHint = document.getElementById("timelinePreviewHint");
+                if (timelineHint && !currentEvidenceData.timeline?.length) {
+                    timelineHint.textContent = `Urgent ledger deadline: ${firstDeadline.title || "Untitled deadline"} due ${firstDeadline.due_date || "soon"}.`;
+                }
+            }
+        }
+
+        async function refreshCommandCenter() {
+            try {
+                const response = await fetch(COMMAND_CENTER_URL, {
+                    credentials: "same-origin",
+                    headers: authHeaders()
+                });
+                if (!response.ok) return null;
+                const payload = await response.json();
+                renderCommandCenter(payload);
+                return payload;
+            } catch (error) {
+                return null;
+            }
+        }
+
+        function setGoogleConnected(connected, syncMessage, configured = true) {
+            googleConnected = Boolean(connected);
+            const pill = document.getElementById("googleConnectionPill");
+            const topbarPill = document.getElementById("topbarConnectionPill");
+            const modalPill = document.getElementById("modalConnectionPill");
+            const pullButton = document.getElementById("pullEvidence");
+            pill.classList.toggle("connected", googleConnected);
+            topbarPill.classList.toggle("connected", googleConnected);
+            modalPill.classList.toggle("connected", googleConnected);
+            document.getElementById("googleConnectionText").textContent = googleConnected ? "Google connected" : "Google not connected";
+            document.getElementById("topbarConnectionText").textContent = googleConnected ? "Connected" : "Google offline";
+            document.getElementById("modalConnectionText").textContent = googleConnected ? "Connected" : (configured ? "Waiting for connection" : "OAuth setup required");
+            document.getElementById("openGoogleConnect").textContent = googleConnected ? "Manage Google" : "Connect Google";
+            document.getElementById("confirmGoogleConnect").textContent = googleConnected ? "Reconnect Gmail & Drive" : "Connect Gmail & Drive";
+            pullButton.disabled = !googleConnected || Boolean(pullTimer);
+            pullButton.title = googleConnected ? "Pull fresh Gmail and Drive evidence for this case" : "Connect Google before pulling live evidence";
+            document.getElementById("googleConnectionMessage").textContent = googleConnected
+                ? "Google connection established. You can close this screen and start pulling evidence."
+                : configured
+                    ? "Connect Gmail and Google Drive through Google OAuth so LARO can collate evidence automatically."
+                    : "Google OAuth is not configured on this server yet. Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI, then reconnect.";
+            document.getElementById("syncStatus").textContent = syncMessage || (googleConnected ? "Google is connected. Evidence pulling is ready." : "Auto-updates when Google connects or documents are pulled.");
+            updateEvidenceMode();
+            updateQuickActions();
+            updateWorkspaceDigest(currentEvidenceData);
+        }
+
+        function handleGoogleReturnState() {
+            const params = new URLSearchParams(window.location.search);
+            const googleState = params.get("google");
+            if (!googleState) return false;
+
+            if (googleState === "connected") {
+                setGoogleConnected(true, "Google connected. Pulling can start without refreshing.");
+                stopGoogleOAuthPolling();
+                closeGoogleModal();
+            } else if (googleState === "oauth_unconfigured") {
+                const message = params.get("message") || "Google OAuth is not configured on this server.";
+                setGoogleConnected(false, message, false);
+                showGoogleModal();
+            } else if (googleState === "oauth_error") {
+                setGoogleConnected(false, params.get("message") || "Google OAuth did not complete.");
+                showGoogleModal();
+            }
+
+            params.delete("google");
+            params.delete("message");
+            const nextQuery = params.toString();
+            const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ""}${window.location.hash}`;
+            window.history.replaceState({}, document.title, nextUrl);
+            return googleState === "connected";
+        }
+
+        async function refreshGoogleConnectionStatus() {
+            try {
+                const response = await fetch(GOOGLE_STATUS_URL, { credentials: "same-origin" });
+                if (!response.ok) throw new Error(`Google status ${response.status}`);
+                const status = await response.json();
+                setGoogleConnected(Boolean(status.connected), status.message, Boolean(status.configured));
+                return status;
+            } catch (error) {
+                if (googleConnected) {
+                    setGoogleConnected(true, "Google connected. Live status refresh is temporarily unavailable.");
+                    return { connected: true, configured: true, error: error.message };
+                }
+                setGoogleConnected(false, "Google connection status is unavailable.");
+                return { connected: false, configured: false, error: error.message };
+            }
+        }
+
+        function stopGoogleOAuthPolling() {
+            if (googleOAuthPollTimer) {
+                window.clearInterval(googleOAuthPollTimer);
+                googleOAuthPollTimer = null;
+            }
+        }
+
+        function startGoogleOAuthPolling() {
+            stopGoogleOAuthPolling();
+            googleOAuthPollTimer = window.setInterval(async () => {
+                const status = await refreshGoogleConnectionStatus();
+                if (status.connected) {
+                    stopGoogleOAuthPolling();
+                    if (googleOAuthPopup && !googleOAuthPopup.closed) {
+                        googleOAuthPopup.close();
+                    }
+                    closeGoogleModal();
+                    showDashboardToast("Google connected. Evidence pulling is ready.");
+                } else if (googleOAuthPopup && googleOAuthPopup.closed) {
+                    stopGoogleOAuthPolling();
+                    refreshGoogleConnectionStatus();
+                }
+            }, 1200);
+        }
+
+        async function handleGoogleOAuthMessage(event) {
+            if (event.origin !== window.location.origin) return;
+            const data = event.data || {};
+            if (data.type !== "laro-google-oauth") return;
+            if (data.status === "connected") {
+                setGoogleConnected(true, "Google connected. Pulling can start without refreshing.");
+                showDashboardToast("Google connected. Evidence pulling is ready.");
+                stopGoogleOAuthPolling();
+                closeGoogleModal();
+                refreshGoogleConnectionStatus();
+                return;
+            }
+            stopGoogleOAuthPolling();
+            setGoogleConnected(false, data.message || "Google OAuth did not complete.");
+            showGoogleModal();
+        }
+
+        function beginGoogleOAuth() {
+            const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+            document.getElementById("modalConnectionText").textContent = "Opening Google OAuth...";
+            const oauthUrl = `${GOOGLE_AUTHORIZE_URL}?return_to=${encodeURIComponent(returnTo)}&popup=1`;
+            googleOAuthPopup = window.open(oauthUrl, "laro-google-oauth", "popup=yes,width=560,height=760,menubar=no,toolbar=no,location=no,status=no");
+            if (googleOAuthPopup) {
+                document.getElementById("modalConnectionText").textContent = "Complete Google sign-in in the opened window";
+                document.getElementById("googleConnectionMessage").textContent = "This dialog updates automatically after Google confirms access. The connection window can be closed after success.";
+                startGoogleOAuthPolling();
+                return;
+            }
+            window.location.href = `${GOOGLE_AUTHORIZE_URL}?return_to=${encodeURIComponent(returnTo)}`;
+        }
+
+        function showGoogleModal() {
+            document.getElementById("googleConnectionModal").classList.add("show");
+        }
+
+        function closeGoogleModal() {
+            stopGoogleOAuthPolling();
+            if (googleOAuthPopup && !googleOAuthPopup.closed) {
+                googleOAuthPopup.close();
+            }
+            document.getElementById("googleConnectionModal").classList.remove("show");
+        }
+
+        function renderEvidenceWorkspace(data) {
+            data = data && typeof data === "object" ? data : EMPTY_EVIDENCE_DATA;
+            currentEvidenceData = data;
+            const documents = data.documents || [];
+            const events = (data.timeline || []).slice().sort((a, b) => String(a.date).localeCompare(String(b.date)));
+            const visibleDocuments = documents.filter(matchesWorkspaceSearch);
+            const visibleEvents = events.filter(matchesWorkspaceSearch);
+            const stripEvents = visibleEvents.slice(0, 6);
+            const totalWords = data.totalWords || documents.reduce((sum, doc) => sum + wordCount(doc.content), 0);
+            document.getElementById("statDocuments").textContent = documents.length;
+            document.getElementById("statEvents").textContent = events.length;
+            document.getElementById("statWords").textContent = totalWords;
+            document.getElementById("workbenchDocCount").textContent = documents.length;
+            document.getElementById("workbenchEventCount").textContent = events.length;
+            document.getElementById("workbenchWordCount").textContent = totalWords;
+            const caseHealthStatus = document.getElementById("caseHealthStatus");
+            if (caseHealthStatus) {
+                caseHealthStatus.textContent = !googleConnected
+                    ? "Source"
+                    : documents.length === 0
+                        ? "Intake"
+                        : events.length === 0
+                            ? "Chronology"
+                            : "Review";
+                const caseHealthCard = caseHealthStatus.closest(".case-health-item");
+                if (caseHealthCard) {
+                    caseHealthCard.classList.toggle("is-ready", googleConnected && events.length > 0);
+                    caseHealthCard.classList.toggle("is-risk", !googleConnected || events.length === 0);
+                }
+            }
+            const timelinePreviewHint = document.getElementById("timelinePreviewHint");
+            if (timelinePreviewHint) {
+                timelinePreviewHint.textContent = workspaceSearchTerm
+                    ? `${visibleEvents.length} matching timeline event${visibleEvents.length === 1 ? "" : "s"} for "${workspaceSearchTerm}".`
+                    : events.length
+                        ? `${events.length} timeline event${events.length === 1 ? "" : "s"} ready. Each ? opens the source document.`
+                        : documents.length
+                            ? "Documents are loaded; refresh evidence to extract chronology events."
+                            : "Pull evidence to build a legal chronology with source jumps.";
+            }
+            const modeNote = document.getElementById("evidenceModeNote");
+            if (modeNote && workspaceSearchTerm) {
+                modeNote.textContent = `Filtered workspace: ${visibleDocuments.length} document${visibleDocuments.length === 1 ? "" : "s"} and ${visibleEvents.length} event${visibleEvents.length === 1 ? "" : "s"} match "${workspaceSearchTerm}".`;
+                modeNote.classList.toggle("live", true);
+            }
+            document.getElementById("lastSyncNote").textContent = data.completedAt
+                ? `Last automatic sync: ${formatDate(data.completedAt)}`
+                : "No Google sync has run in this browser session.";
+            if (!workspaceSearchTerm) {
+                updateEvidenceMode(data);
+            }
+            updateQuickActions(data);
+            updateWorkspaceDigest(data);
+
+            document.getElementById("evidenceDocumentList").innerHTML = visibleDocuments.length ? visibleDocuments.map((doc) => `
+                <article class="evidence-document-row" id="document-${escapeHtml(doc.id)}">
+                    <span class="document-source-icon">${doc.source === "gmail" ? "M" : "D"}</span>
+                    <div>
+                        <h6>${escapeHtml(doc.name)}</h6>
+                        <p>${escapeHtml(sourceLabel(doc.source))} - ${escapeHtml(doc.type)} - ${wordCount(doc.content)} words</p>
+                    </div>
+                    <a class="btn btn-sm btn-outline" href="${safeHref(doc.url)}" aria-label="Open source document ${escapeHtml(doc.name)}">Open</a>
+                </article>
+            `).join("") : `<p class="pull-status">${workspaceSearchTerm ? "No matching documents in the current workspace." : "No documents collated yet."}</p>`;
+
+            document.getElementById("dashboardTimeline").innerHTML = visibleEvents.length ? visibleEvents.map((event) => `
+                <article class="story-event">
+                    <div class="story-date">${escapeHtml(formatDate(event.date))}</div>
+                    <div>
+                        <h6>${escapeHtml(event.event_label || `${event.actor || "Unknown"} ${event.action || "documented"}`)}</h6>
+                        <p>${escapeHtml(event.summary)}</p>
+                    </div>
+                    <a class="source-jump-mini" href="${safeHref(event.source_url || `evidence_timeline.html#document-${event.source_document_id}`, `evidence_timeline.html#document-${event.source_document_id}`)}" title="Open source document" aria-label="Open source document for ${escapeHtml(event.event_label || event.summary || "timeline event")}">?</a>
+                </article>
+            `).join("") : `<p class="pull-status">${workspaceSearchTerm ? "No matching timeline events in the current workspace." : "Timeline will populate automatically after pulling evidence."}</p>`;
+
+            const stripHtml = stripEvents.length ? stripEvents.map((event) => `
+                <article class="timeline-strip-item">
+                    <div class="story-date">${escapeHtml(formatDate(event.date))}</div>
+                    <h6>${escapeHtml(event.event_label || `${event.actor || "Unknown"} ${event.action || "documented"}`)}</h6>
+                    <p>${escapeHtml(event.summary || "Timeline event recorded.")}</p>
+                    <a class="source-jump-mini" href="${safeHref(event.source_url || `evidence_timeline.html#document-${event.source_document_id}`, `evidence_timeline.html#document-${event.source_document_id}`)}" title="Open source document" aria-label="Open source document for ${escapeHtml(event.event_label || event.summary || "timeline event")}">?</a>
+                </article>
+            `).join("") : `<p class="pull-status">${workspaceSearchTerm ? "No matching timeline events." : "Timeline will populate automatically after pulling evidence."}</p>`;
+            document.getElementById("dashboardTimelineStrip").innerHTML = stripHtml;
+            document.getElementById("commandTimelineStrip").innerHTML = stripHtml;
+            return;
+        }
+
+        function publishEvidence(data) {
+            writeJson(EVIDENCE_STATE_KEY, data);
+            writeJson(TIMELINE_STATE_KEY, data.timeline || []);
+            renderEvidenceWorkspace(data);
+            window.dispatchEvent(new StorageEvent("storage", { key: EVIDENCE_STATE_KEY, newValue: JSON.stringify(data) }));
+        }
+
+        function currentCaseId() {
+            const expertValue = Number(expertControlValue("expertCaseId"));
+            return Number.isFinite(expertValue) && expertValue > 0 ? expertValue : defaultCaseIdFromUrl();
+        }
+
+        function authHeaders() {
+            const token = localStorage.getItem("auth_token") || localStorage.getItem("access_token") || localStorage.getItem("laroAuthToken");
+            return token ? { Authorization: `Bearer ${token}` } : {};
+        }
+
+        function normalizeDocument(doc, index) {
+            const source = doc.source || doc.source_type || "google_drive";
+            const id = String(doc.document_id || doc.id || `api-doc-${index}`);
+            return {
+                id,
+                name: doc.title || doc.document_name || doc.original_filename || doc.name || `Evidence document ${index + 1}`,
+                source,
+                type: doc.document_type || doc.type || "document",
+                url: doc.source_uri || doc.source_url || doc.url || `#document-${id}`,
+                content: doc.extracted_text || doc.ocr_text || doc.content || doc.summary || doc.description || "",
+                summary: doc.summary || doc.legal_summary || doc.extracted_text || doc.content || ""
+            };
+        }
+
+        function normalizeTimelineEvent(event, index) {
+            const sourceDocumentId = String(event.source_document_id || event.created_from_document_id || event.document_id || event.id || `api-doc-${index}`);
+            return {
+                timeline_id: event.timeline_id || `api-event-${index}`,
+                date: event.date || event.event_date || event.created_at || new Date().toISOString().slice(0, 10),
+                actor: event.actor || "Unknown",
+                action: event.action || "documented",
+                event_label: event.event_label || `${event.actor || "Unknown"} ${event.action || "documented"}`,
+                summary: event.summary || event.description || "",
+                evidence_quote: event.evidence_quote || event.quote || "",
+                source_document_id: sourceDocumentId,
+                source_document_name: event.source_document_name || event.document_name || "Source document",
+                source: event.source || "google_drive",
+                document_type: event.document_type || "document",
+                source_url: event.source_url || `#document-${sourceDocumentId}`,
+                relevance_score: event.relevance_score || 0
+            };
+        }
+
+        function googleQueryForSource(source) {
+            const fieldId = source === "gmail" ? "expertGmailQuery" : "expertDriveFolder";
+            const query = expertControlValue(fieldId);
+            if (query) return query;
+            if (source === "gdrive") {
+                const caseId = String(currentCaseId());
+                const activeCase = (currentCommandCenterData?.cases || []).find((item) => String(item.case_id || item.id) === caseId);
+                const title = String(activeCase?.title || "").trim();
+                if (title) return title;
+            }
+            throw new Error(source === "gmail"
+                ? "Enter a Gmail search before pulling evidence."
+                : "Enter a Google Drive search, or select a named active case.");
+        }
+
+        function pullJobMessage(jobs) {
+            const active = jobs.filter((job) => ["queued", "running"].includes(job.status));
+            const totalItems = jobs.reduce((sum, job) => sum + Number(job.total_items || 0), 0);
+            const completedItems = jobs.reduce((sum, job) => sum + Number(job.completed_items || 0), 0);
+            const totalWords = jobs.reduce((sum, job) => sum + Number(job.total_words || 0), 0);
+            const processedWords = jobs.reduce((sum, job) => sum + Number(job.processed_words || 0), 0);
+            const percent = totalWords > 0
+                ? Math.round((processedWords / totalWords) * 100)
+                : Math.round(jobs.reduce((sum, job) => sum + Number(job.progress_percent || 0), 0) / Math.max(jobs.length, 1));
+            const remaining = active
+                .map((job) => job.estimated_remaining_seconds)
+                .filter((value) => Number.isFinite(Number(value)))
+                .reduce((sum, value) => sum + Number(value), 0);
+            const itemText = totalItems ? `${completedItems}/${totalItems} source item${totalItems === 1 ? "" : "s"}` : "checking selected sources";
+            const wordText = totalWords ? `${processedWords.toLocaleString()}/${totalWords.toLocaleString()} extracted words` : "waiting for received text";
+            const etaText = active.length && remaining ? `about ${remaining}s left` : active.length ? "estimating remaining time" : "complete";
+            return { active, totalItems, completedItems, totalWords, processedWords, percent: Math.max(0, Math.min(100, percent)), itemText, wordText, etaText };
+        }
+
+        function renderGooglePullProgress(jobs) {
+            activeGooglePullJobs = Array.isArray(jobs) ? jobs : [];
+            const summary = pullJobMessage(activeGooglePullJobs);
+            const progressBar = document.getElementById("pullProgressBar");
+            progressBar.style.width = `${summary.percent}%`;
+            progressBar.setAttribute("aria-valuenow", String(summary.percent));
+            const current = summary.active.find((job) => job.current_item) || summary.active[0] || activeGooglePullJobs[0];
+            document.getElementById("pullProgressText").textContent = current
+                ? `${current.stage || "Reading evidence"} - ${summary.itemText} - ${summary.wordText} - ${summary.etaText}${current.current_item ? ` - ${current.current_item}` : ""}`
+                : "Waiting to start.";
+            document.getElementById("syncStatus").textContent = summary.active.length
+                ? `Reading ${selectedSourceLabel()} evidence from the local import job.`
+                : activeGooglePullJobs.some((job) => job.status === "failed")
+                    ? "Evidence intake needs attention. Review the import message below."
+                    : "Evidence, document list, and timeline are up to date.";
+            document.getElementById("pullEvidence").disabled = !googleConnected || Boolean(summary.active.length);
+            updateQuickActions();
+        }
+
+        function stopGooglePullPolling() {
+            if (pullTimer) {
+                window.clearInterval(pullTimer);
+                pullTimer = null;
+            }
+        }
+
+        async function loadPersistedEvidence(caseId) {
+            const [documentsResponse, timelineResponse] = await Promise.all([
+                fetch(`/api/cases/${encodeURIComponent(caseId)}/documents`, { credentials: "same-origin", headers: authHeaders() }),
+                fetch(`/api/cases/${encodeURIComponent(caseId)}/timeline`, { credentials: "same-origin", headers: authHeaders() })
+            ]);
+            if (!documentsResponse.ok || !timelineResponse.ok) {
+                throw new Error("The case ledger could not be refreshed after evidence intake.");
+            }
+            const documentsPayload = await documentsResponse.json();
+            const timelinePayload = await timelineResponse.json();
+            const documents = (documentsPayload.documents || []).map(normalizeDocument);
+            const documentById = new Map(documents.map((document) => [String(document.id), document]));
+            const timeline = (timelinePayload.timeline || []).map((event, index) => {
+                const normalized = normalizeTimelineEvent(event, index);
+                const source = documentById.get(String(normalized.source_document_id));
+                if (source && !event.source_url) normalized.source_url = source.url;
+                if (source && !event.source_document_name) normalized.source_document_name = source.name;
+                return normalized;
+            });
+            return {
+                documents,
+                timeline,
+                totalWords: documents.reduce((sum, document) => sum + wordCount(document.content), 0),
+                completedAt: new Date().toISOString()
+            };
+        }
+
+        async function pollGooglePullJobs(caseId, jobIds) {
+            try {
+                const payloads = await Promise.all(jobIds.map(async (jobId) => {
+                    const response = await fetch(`${GOOGLE_PULL_JOBS_URL(caseId)}/${encodeURIComponent(jobId)}`, {
+                        credentials: "same-origin",
+                        headers: authHeaders()
+                    });
+                    if (!response.ok) throw new Error("A Google evidence import job could not be refreshed.");
+                    return response.json();
+                }));
+                const jobs = payloads.map((payload) => payload.job).filter(Boolean);
+                renderGooglePullProgress(jobs);
+                const active = jobs.some((job) => ["queued", "running"].includes(job.status));
+                if (active) return;
+                stopGooglePullPolling();
+                const data = await loadPersistedEvidence(caseId);
+                publishEvidence(data);
+                await refreshCommandCenter();
+                const failed = jobs.find((job) => job.status === "failed");
+                if (failed) {
+                    showDashboardToast(failed.error || "One evidence source needs attention.");
+                } else {
+                    showDashboardToast(`Evidence intake complete. ${data.documents.length} source document${data.documents.length === 1 ? "" : "s"} are in this case ledger.`);
+                }
+            } catch (error) {
+                stopGooglePullPolling();
+                document.getElementById("syncStatus").textContent = error.message || "Evidence intake status could not be refreshed.";
+                document.getElementById("pullEvidence").disabled = !googleConnected;
+                updateQuickActions();
+            }
+        }
+
+        function startGooglePullPolling(caseId, jobIds) {
+            stopGooglePullPolling();
+            pullTimer = window.setInterval(() => pollGooglePullJobs(caseId, jobIds), 700);
+            pollGooglePullJobs(caseId, jobIds);
+            updateQuickActions();
+        }
+
+        async function resumeGoogleEvidencePull(caseId = currentCaseId()) {
+            if (!Number.isFinite(Number(caseId)) || Number(caseId) <= 0) return;
+            try {
+                const response = await fetch(GOOGLE_PULL_JOBS_URL(caseId), { credentials: "same-origin", headers: authHeaders() });
+                if (!response.ok) return;
+                const jobs = (await response.json()).jobs || [];
+                const active = jobs.filter((job) => ["queued", "running"].includes(job.status));
+                if (active.length) {
+                    renderGooglePullProgress(active);
+                    startGooglePullPolling(caseId, active.map((job) => job.job_id));
+                    return;
+                }
+                const data = await loadPersistedEvidence(caseId);
+                publishEvidence(data);
+            } catch (error) {
+                // The dashboard remains usable when no authenticated case ledger is available yet.
+            }
+        }
+
+        async function startEvidencePull() {
+            if (pullTimer) return;
+            if (!googleConnected) {
+                showGoogleModal();
+                refreshGoogleConnectionStatus();
+                return;
+            }
+            const caseId = Number(currentCaseId());
+            const sources = selectedEvidenceSources();
+            if (!Number.isFinite(caseId) || caseId <= 0) {
+                showDashboardToast("Select a persisted case before pulling evidence.");
+                return;
+            }
+            if (!sources.length) {
+                showDashboardToast("Select at least one evidence source before pulling.");
+                return;
+            }
+            try {
+                document.getElementById("pullEvidence").disabled = true;
+                document.getElementById("syncStatus").textContent = `Starting ${selectedSourceLabel()} evidence intake in the local ledger...`;
+                const maxItems = Math.max(1, Math.min(100, Number(expertControlNumberValue("expertMaxItems", 80)) || 80));
+                const requests = sources.map((source) => ({
+                    source,
+                    normalizedSource: source === "gdrive" ? "google_drive" : source,
+                    query: googleQueryForSource(source)
+                }));
+                const daysBack = expertControlNumberValue("expertDaysBack");
+                const sortOrder = expertControlValue("expertSourceOrder") || "newest";
+                const payloads = await Promise.all(requests.map(async ({ source, normalizedSource, query }) => {
+                    const response = await fetch(GOOGLE_PULL_JOBS_URL(caseId), {
+                        method: "POST",
+                        credentials: "same-origin",
+                        headers: { "Content-Type": "application/json", ...authHeaders() },
+                        body: JSON.stringify({ source: normalizedSource, query, max_items: maxItems, days_back: daysBack, sort_order: sortOrder })
+                    });
+                    const payload = await response.json();
+                    if (!response.ok) throw new Error(payload.error || "Google evidence intake could not start.");
+                    return payload;
+                }));
+                const jobs = payloads.map((payload) => payload.job).filter(Boolean);
+                renderGooglePullProgress(jobs);
+                startGooglePullPolling(caseId, jobs.map((job) => job.job_id));
+            } catch (error) {
+                document.getElementById("pullEvidence").disabled = !googleConnected;
+                document.getElementById("syncStatus").textContent = error.message || "Evidence intake could not start.";
+                showDashboardToast(error.message || "Evidence intake could not start.");
+                updateQuickActions();
+            }
+        }
+
+        function isLegacyMockEvidence(data) {
+            const documents = data?.documents || [];
+            const ids = documents.map((doc) => String(doc.id || doc.document_id || ""));
+            return Boolean(data?.fallback)
+                || ids.includes("doc-cak-2022")
+                || ids.includes("doc-unauthorized")
+                || ids.includes("doc-email-response");
+        }
+
+        function refreshEvidenceFromStorage() {
+            const data = readJson(EVIDENCE_STATE_KEY, EMPTY_EVIDENCE_DATA) || EMPTY_EVIDENCE_DATA;
+            if (isLegacyMockEvidence(data)) {
+                localStorage.removeItem(EVIDENCE_STATE_KEY);
+                localStorage.removeItem(TIMELINE_STATE_KEY);
+                renderEvidenceWorkspace(EMPTY_EVIDENCE_DATA);
+                return;
+            }
+            renderEvidenceWorkspace(data);
+        }
+
+        document.getElementById("openGoogleConnect").addEventListener("click", showGoogleModal);
+        document.getElementById("closeGoogleModal").addEventListener("click", closeGoogleModal);
+        document.getElementById("cancelGoogleModal").addEventListener("click", closeGoogleModal);
+        document.getElementById("googleConnectionModal").addEventListener("click", (event) => {
+            if (event.target.id === "googleConnectionModal") closeGoogleModal();
+        });
+        document.getElementById("confirmGoogleConnect").addEventListener("click", beginGoogleOAuth);
+        document.getElementById("pullEvidence").addEventListener("click", startEvidencePull);
+        document.getElementById("quickConnectGoogle").addEventListener("click", showGoogleModal);
+        document.getElementById("quickPullEvidence").addEventListener("click", startEvidencePull);
+        document.getElementById("smartNextAction").addEventListener("click", (event) => {
+            const action = event.currentTarget.dataset.nextAction;
+            if (action === "connect") {
+                showGoogleModal();
+            } else if (action === "pull") {
+                startEvidencePull();
+            } else if (action === "timeline") {
+                window.location.href = "evidence_timeline.html";
+            }
+        });
+        document.getElementById("workbenchOpenCase").addEventListener("click", () => {
+            window.location.href = "case_command_center.html";
+        });
+        document.getElementById("expandEvidenceDetails").addEventListener("click", () => {
+            if (document.body.dataset.depthMode === "simple") {
+                setDepthMode("guided", true);
+            } else {
+                setDepthMode("simple", true);
+            }
+        });
+        window.addEventListener("storage", (event) => {
+            if (event.key === EVIDENCE_STATE_KEY || event.key === TIMELINE_STATE_KEY) refreshEvidenceFromStorage();
+        });
+        document.addEventListener("visibilitychange", () => {
+            if (!document.hidden) {
+                refreshGoogleConnectionStatus();
+                refreshEvidenceFromStorage();
+                refreshCommandCenter();
+            }
+        });
+        window.addEventListener("focus", () => {
+            refreshGoogleConnectionStatus();
+            refreshEvidenceFromStorage();
+            refreshCommandCenter();
+        });
+        window.addEventListener("message", handleGoogleOAuthMessage);
+
+        initializeDepthControls();
+        initializeExpertControls();
+        initializeTimelineViewControls();
+        initializeCommandBar();
+        if (!handleGoogleReturnState()) refreshGoogleConnectionStatus();
+        refreshEvidenceFromStorage();
+        refreshCommandCenter();
+        resumeGoogleEvidencePull();
+        activateDashboardLinks();
+        window.setInterval(refreshGoogleConnectionStatus, 15000);
+    </script>
+    <script src="js/click-actions.js"></script>
+</body>
+</html>
+

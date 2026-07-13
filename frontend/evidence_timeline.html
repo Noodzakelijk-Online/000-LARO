@@ -1,0 +1,1893 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LARO | Evidence Timeline</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="css/dark-theme.css">
+    <style>
+        :root {
+            --timeline-bg: #07101f;
+            --timeline-panel: #0b1528;
+            --timeline-panel-strong: #101d34;
+            --timeline-border: #22314c;
+            --timeline-line: #5fb7ad;
+            --timeline-muted: #99a7bd;
+            --timeline-orange: #ff6b00;
+            --timeline-orange-soft: rgba(255, 107, 0, 0.14);
+            --timeline-text: #f5f7fb;
+        }
+
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--timeline-bg);
+            color: var(--timeline-text);
+            font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            letter-spacing: 0;
+            margin: 0;
+        }
+
+        [hidden] {
+            display: none !important;
+        }
+
+        a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        button,
+        input,
+        select {
+            font: inherit;
+        }
+
+        .app-shell {
+            display: grid;
+            grid-template-columns: 250px minmax(0, 1fr);
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            align-self: start;
+            background: #080d18;
+            border-right: 1px solid var(--timeline-border);
+            height: 100vh;
+            padding: 1.25rem 1rem;
+            position: sticky;
+            top: 0;
+        }
+
+        .brand-row {
+            align-items: center;
+            display: flex;
+            gap: 0.75rem;
+            margin-bottom: 1.4rem;
+        }
+
+        .brand-mark,
+        .nav-glyph,
+        .case-icon {
+            align-items: center;
+            background: #050b14;
+            border: 1px solid var(--timeline-border);
+            border-radius: 8px;
+            color: var(--timeline-orange);
+            display: inline-flex;
+            font-weight: 900;
+            justify-content: center;
+        }
+
+        .brand-mark {
+            height: 42px;
+            width: 42px;
+        }
+
+        .nav-glyph {
+            flex: 0 0 24px;
+            font-size: 0.7rem;
+            height: 24px;
+            width: 24px;
+        }
+
+        .case-icon {
+            height: 50px;
+            width: 50px;
+        }
+
+        .brand-name {
+            font-size: 1.2rem;
+            font-weight: 900;
+            margin: 0;
+        }
+
+        .brand-caption,
+        .muted {
+            color: var(--timeline-muted);
+        }
+
+        .brand-caption {
+            font-size: 0.78rem;
+            margin: 0;
+        }
+
+        .nav-stack {
+            display: grid;
+            gap: 0.35rem;
+        }
+
+        .nav-link {
+            align-items: center;
+            border-radius: 8px;
+            color: var(--timeline-muted);
+            display: flex;
+            font-weight: 760;
+            gap: 0.7rem;
+            min-height: 42px;
+            padding: 0.65rem 0.75rem;
+        }
+
+        .nav-link:hover,
+        .nav-link.active {
+            background: rgba(255, 107, 0, 0.1);
+            color: var(--timeline-orange);
+        }
+
+        .timeline-shell {
+            min-width: 0;
+            padding: 1.35rem;
+        }
+
+        .topbar {
+            align-items: center;
+            display: flex;
+            gap: 1rem;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .topbar h1 {
+            font-size: 1.55rem;
+            margin: 0;
+        }
+
+        .topbar p {
+            color: var(--timeline-muted);
+            margin: 0.2rem 0 0;
+        }
+
+        .topbar-actions,
+        .case-actions {
+            align-items: center;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.55rem;
+            justify-content: flex-end;
+        }
+
+        .btn,
+        .depth-button,
+        .view-button,
+        .open-source {
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.84rem;
+            font-weight: 850;
+            min-height: 38px;
+            padding: 0.48rem 0.7rem;
+        }
+
+        .btn-primary,
+        .depth-button.is-active,
+        .view-button.is-active {
+            background: var(--timeline-orange);
+            border: 1px solid var(--timeline-orange);
+            color: #fff;
+        }
+
+        .btn-outline,
+        .depth-button,
+        .view-button,
+        .open-source {
+            background: transparent;
+            border: 1px solid var(--timeline-border);
+            color: var(--timeline-text);
+        }
+
+        .btn-outline:hover,
+        .depth-button:hover,
+        .view-button:hover,
+        .open-source:hover {
+            border-color: rgba(255, 107, 0, 0.58);
+        }
+
+        .case-select,
+        .timeline-input,
+        .timeline-select {
+            background: var(--timeline-panel-strong);
+            border: 1px solid var(--timeline-border);
+            border-radius: 6px;
+            color: var(--timeline-text);
+            min-height: 40px;
+            padding: 0.55rem 0.7rem;
+        }
+
+        .case-select {
+            min-width: 240px;
+        }
+
+        .case-bar,
+        .timeline-command-panel,
+        .timeline-controls,
+        .timeline-main,
+        .document-panel {
+            background: var(--timeline-panel);
+            border: 1px solid var(--timeline-border);
+            border-radius: 8px;
+        }
+
+        .case-bar {
+            align-items: center;
+            display: grid;
+            gap: 1rem;
+            grid-template-columns: minmax(0, 1fr) auto minmax(260px, 380px);
+            margin-bottom: 1rem;
+            padding: 1rem;
+        }
+
+        .case-title {
+            align-items: center;
+            display: flex;
+            gap: 0.9rem;
+            margin: 0;
+        }
+
+        .case-title span:last-child {
+            overflow-wrap: anywhere;
+        }
+
+        .case-kicker {
+            color: var(--timeline-muted);
+            line-height: 1.4;
+            margin: 0.2rem 0 0;
+        }
+
+        .badge,
+        .timeline-count,
+        .event-pill {
+            background: #172542;
+            border: 1px solid var(--timeline-border);
+            border-radius: 6px;
+            color: var(--timeline-text);
+            font-size: 0.8rem;
+            font-weight: 800;
+            padding: 0.32rem 0.58rem;
+            white-space: nowrap;
+        }
+
+        .badge-warning {
+            background: var(--timeline-orange-soft);
+            border-color: rgba(255, 107, 0, 0.42);
+            color: var(--timeline-orange);
+        }
+
+        .timeline-depth {
+            display: grid;
+            gap: 0.45rem;
+        }
+
+        .depth-switcher {
+            background: var(--timeline-panel-strong);
+            border: 1px solid var(--timeline-border);
+            border-radius: 8px;
+            display: grid;
+            gap: 0.35rem;
+            grid-template-columns: repeat(3, 1fr);
+            padding: 0.35rem;
+        }
+
+        .depth-note {
+            color: var(--timeline-muted);
+            font-size: 0.86rem;
+            margin: 0;
+        }
+
+        body[data-timeline-depth="focus"] .guided-depth,
+        body[data-timeline-depth="focus"] .expert-depth,
+        body[data-timeline-depth="guided"] .expert-depth {
+            display: none !important;
+        }
+
+        .timeline-command-panel {
+            display: grid;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            padding: 1rem;
+        }
+
+        .timeline-command-head {
+            align-items: flex-start;
+            display: flex;
+            gap: 1rem;
+            justify-content: space-between;
+        }
+
+        .timeline-command-head h2,
+        .timeline-heading h2,
+        .document-panel h2 {
+            font-size: 1.1rem;
+            margin: 0 0 0.25rem;
+        }
+
+        .timeline-command-head p {
+            color: var(--timeline-muted);
+            margin: 0;
+        }
+
+        .timeline-stats,
+        .timeline-next-actions {
+            display: grid;
+            gap: 0.75rem;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        .analysis-coverage {
+            align-items: center;
+            background: rgba(95, 183, 173, 0.08);
+            border: 1px solid rgba(95, 183, 173, 0.34);
+            border-radius: 8px;
+            display: grid;
+            gap: 0.8rem;
+            grid-template-columns: minmax(0, 1fr) auto;
+            padding: 0.85rem;
+        }
+
+        .analysis-coverage.is-partial {
+            background: var(--timeline-orange-soft);
+            border-color: rgba(255, 107, 0, 0.46);
+        }
+
+        .analysis-coverage strong,
+        .analysis-coverage p {
+            margin: 0;
+        }
+
+        .analysis-coverage p {
+            color: var(--timeline-muted);
+            font-size: 0.86rem;
+            line-height: 1.45;
+            margin-top: 0.25rem;
+        }
+
+        .coverage-heading {
+            align-items: center;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.55rem;
+        }
+
+        .timeline-next-actions {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .timeline-stat,
+        .timeline-action-card {
+            background: var(--timeline-panel-strong);
+            border: 1px solid var(--timeline-border);
+            border-radius: 8px;
+            color: var(--timeline-text);
+            padding: 0.85rem;
+        }
+
+        .timeline-action-card {
+            display: grid;
+            gap: 0.35rem;
+            min-height: 104px;
+            text-align: left;
+        }
+
+        .timeline-action-card:hover {
+            border-color: rgba(255, 107, 0, 0.58);
+        }
+
+        .timeline-stat strong {
+            display: block;
+            font-size: 1.3rem;
+            line-height: 1;
+            margin-bottom: 0.3rem;
+        }
+
+        .timeline-stat span,
+        .timeline-action-card span {
+            color: var(--timeline-muted);
+            font-size: 0.84rem;
+            line-height: 1.38;
+        }
+
+        .timeline-controls {
+            align-items: center;
+            display: grid;
+            gap: 0.75rem;
+            grid-template-columns: minmax(220px, 1fr) 180px 180px auto auto;
+            margin-bottom: 1rem;
+            padding: 0.85rem;
+        }
+
+        .view-toggle {
+            display: inline-flex;
+            gap: 0.35rem;
+        }
+
+        .timeline-layout {
+            display: grid;
+            gap: 1rem;
+            grid-template-columns: minmax(0, 1fr) 340px;
+        }
+
+        .timeline-main,
+        .document-panel {
+            min-width: 0;
+            padding: 1rem;
+        }
+
+        .document-panel {
+            align-self: start;
+            position: sticky;
+            top: 1rem;
+        }
+
+        .timeline-heading {
+            align-items: center;
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .evidence-timeline {
+            display: grid;
+            gap: 1.25rem 2rem;
+            grid-template-columns: minmax(0, 1fr) 54px minmax(0, 1fr);
+            position: relative;
+        }
+
+        .evidence-timeline::before {
+            background: var(--timeline-line);
+            border-radius: 999px;
+            bottom: 0;
+            content: "";
+            left: 50%;
+            position: absolute;
+            top: 0;
+            transform: translateX(-50%);
+            width: 5px;
+        }
+
+        .timeline-node {
+            align-items: center;
+            display: grid;
+            grid-column: 1 / -1;
+            grid-template-columns: subgrid;
+            min-height: 138px;
+            position: relative;
+        }
+
+        .timeline-card {
+            background: #0a1426;
+            border: 1px solid var(--timeline-border);
+            border-radius: 8px;
+            box-shadow: 0 14px 28px rgba(0, 0, 0, 0.22);
+            padding: 1rem;
+        }
+
+        .timeline-node.is-proposal .timeline-card {
+            border-color: rgba(255, 107, 0, 0.56);
+            box-shadow: inset 3px 0 0 var(--timeline-orange), 0 14px 28px rgba(0, 0, 0, 0.22);
+        }
+
+        .timeline-node.is-confirmed .timeline-card {
+            border-color: rgba(95, 183, 173, 0.42);
+        }
+
+        .timeline-node.is-rejected {
+            opacity: 0.66;
+        }
+
+        .timeline-node.left .timeline-card {
+            grid-column: 1;
+            text-align: right;
+        }
+
+        .timeline-node.right .timeline-card {
+            grid-column: 3;
+        }
+
+        .timeline-spine {
+            align-items: center;
+            display: flex;
+            grid-column: 2;
+            height: 100%;
+            justify-content: center;
+            position: relative;
+        }
+
+        .timeline-spine::before {
+            background: var(--timeline-line);
+            content: "";
+            height: 4px;
+            position: absolute;
+            width: 42px;
+        }
+
+        .timeline-node.left .timeline-spine::before {
+            left: -30px;
+        }
+
+        .timeline-node.right .timeline-spine::before {
+            right: -30px;
+        }
+
+        .source-jump {
+            align-items: center;
+            appearance: none;
+            background: #f4f7fb;
+            border: 3px solid var(--timeline-bg);
+            border-radius: 50%;
+            color: #1c2638;
+            cursor: pointer;
+            display: inline-flex;
+            font-size: 1rem;
+            font-weight: 900;
+            height: 44px;
+            justify-content: center;
+            line-height: 1;
+            position: relative;
+            width: 44px;
+            z-index: 2;
+        }
+
+        .source-jump:hover,
+        .source-jump:focus {
+            background: var(--timeline-orange);
+            color: #fff;
+            outline: 3px solid rgba(255, 107, 0, 0.22);
+        }
+
+        .event-date {
+            color: #ff684d;
+            font-size: 1.55rem;
+            font-weight: 850;
+            line-height: 1;
+            margin-bottom: 0.35rem;
+        }
+
+        .event-status-row {
+            align-items: center;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            justify-content: space-between;
+            margin-bottom: 0.45rem;
+        }
+
+        .event-status-row .event-date {
+            margin-bottom: 0;
+        }
+
+        .timeline-node.left .event-status-row {
+            flex-direction: row-reverse;
+        }
+
+        .event-source {
+            color: var(--timeline-line);
+            font-size: 0.95rem;
+            font-weight: 800;
+            line-height: 1.3;
+            margin-bottom: 0.4rem;
+            overflow-wrap: anywhere;
+        }
+
+        .event-summary,
+        .event-evidence {
+            color: var(--timeline-text);
+            font-size: 0.92rem;
+            line-height: 1.45;
+            margin: 0;
+            overflow-wrap: anywhere;
+        }
+
+        .event-evidence {
+            color: var(--timeline-muted);
+            margin-top: 0.75rem;
+        }
+
+        .event-meta {
+            color: var(--timeline-muted);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.45rem;
+            justify-content: flex-start;
+            margin-top: 0.75rem;
+        }
+
+        .timeline-node.left .event-meta {
+            justify-content: flex-end;
+        }
+
+        .timeline-event-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 0.8rem;
+        }
+
+        .timeline-node.left .timeline-event-actions {
+            justify-content: flex-end;
+        }
+
+        .timeline-event-actions .btn {
+            min-height: 40px;
+        }
+
+        .evidence-timeline.is-horizontal {
+            display: flex;
+            gap: 1.15rem;
+            grid-template-columns: none;
+            overflow-x: auto;
+            padding: 3.25rem 0 0.5rem;
+        }
+
+        .evidence-timeline.is-horizontal::before {
+            height: 5px;
+            left: 0;
+            right: 0;
+            top: 1.6rem;
+            transform: none;
+            width: auto;
+        }
+
+        .evidence-timeline.is-horizontal .timeline-node {
+            display: block;
+            flex: 0 0 320px;
+            min-height: 0;
+        }
+
+        .evidence-timeline.is-horizontal .timeline-card {
+            min-height: 190px;
+            text-align: left;
+        }
+
+        .evidence-timeline.is-horizontal .timeline-node.left .event-status-row {
+            flex-direction: row;
+        }
+
+        .evidence-timeline.is-horizontal .timeline-node.left .event-meta,
+        .evidence-timeline.is-horizontal .timeline-node.left .timeline-event-actions {
+            justify-content: flex-start;
+        }
+
+        .evidence-timeline.is-horizontal .timeline-spine {
+            height: 44px;
+            justify-content: center;
+            left: 0;
+            position: absolute;
+            right: 0;
+            top: -3.25rem;
+        }
+
+        .evidence-timeline.is-horizontal .timeline-spine::before {
+            display: none;
+        }
+
+        .document-list {
+            display: grid;
+            gap: 0.75rem;
+        }
+
+        .document-source-card,
+        .timeline-empty {
+            background: #0a1426;
+            border: 1px solid var(--timeline-border);
+            border-radius: 8px;
+            padding: 0.85rem;
+        }
+
+        .document-source-card.is-active {
+            border-color: var(--timeline-orange);
+            box-shadow: 0 0 0 3px rgba(255, 107, 0, 0.16);
+        }
+
+        .document-name {
+            font-size: 0.92rem;
+            font-weight: 800;
+            line-height: 1.35;
+            margin-bottom: 0.45rem;
+            overflow-wrap: anywhere;
+        }
+
+        .document-summary {
+            color: var(--timeline-muted);
+            font-size: 0.82rem;
+            line-height: 1.4;
+            margin-bottom: 0.7rem;
+            overflow-wrap: anywhere;
+        }
+
+        .document-actions {
+            align-items: center;
+            display: flex;
+            gap: 0.5rem;
+            justify-content: space-between;
+        }
+
+        .source-label {
+            color: var(--timeline-muted);
+            font-size: 0.78rem;
+        }
+
+        .timeline-empty {
+            align-items: center;
+            color: var(--timeline-muted);
+            display: flex;
+            justify-content: center;
+            min-height: 220px;
+            text-align: center;
+        }
+
+        .timeline-empty strong {
+            color: var(--timeline-text);
+        }
+
+        .toast-note {
+            background: var(--timeline-orange);
+            border-radius: 8px;
+            bottom: 1rem;
+            color: #fff;
+            font-weight: 800;
+            opacity: 0;
+            padding: 0.75rem 1rem;
+            pointer-events: none;
+            position: fixed;
+            right: 1rem;
+            transform: translateY(10px);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+            z-index: 1100;
+        }
+
+        .toast-note.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .source-preview-shell {
+            background: rgba(0, 0, 0, 0.54);
+            bottom: 0;
+            display: grid;
+            justify-items: end;
+            left: 0;
+            position: fixed;
+            right: 0;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .source-preview-drawer {
+            background: #07101f;
+            border-left: 1px solid var(--timeline-border);
+            box-shadow: -18px 0 44px rgba(0, 0, 0, 0.36);
+            display: grid;
+            grid-template-rows: auto minmax(0, 1fr) auto;
+            max-width: min(620px, 100vw);
+            min-height: 100vh;
+            width: 46vw;
+        }
+
+        .source-preview-header,
+        .source-preview-footer {
+            border-bottom: 1px solid var(--timeline-border);
+            display: flex;
+            gap: 0.75rem;
+            justify-content: space-between;
+            padding: 1rem;
+        }
+
+        .source-preview-footer {
+            border-bottom: 0;
+            border-top: 1px solid var(--timeline-border);
+        }
+
+        .source-preview-header h2 {
+            font-size: 1.1rem;
+            margin: 0 0 0.2rem;
+        }
+
+        .source-preview-body {
+            display: grid;
+            gap: 0.8rem;
+            overflow: auto;
+            padding: 1rem;
+        }
+
+        .source-preview-grid {
+            display: grid;
+            gap: 0.55rem;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .source-preview-field,
+        .source-preview-text {
+            background: var(--timeline-panel);
+            border: 1px solid var(--timeline-border);
+            border-radius: 8px;
+            padding: 0.75rem;
+        }
+
+        .source-preview-field span,
+        .source-preview-text span {
+            color: var(--timeline-orange);
+            display: block;
+            font-size: 0.68rem;
+            font-weight: 900;
+            margin-bottom: 0.25rem;
+            text-transform: uppercase;
+        }
+
+        .source-preview-field strong,
+        .source-preview-text p {
+            color: var(--timeline-text);
+            overflow-wrap: anywhere;
+        }
+
+        .source-preview-text p {
+            color: var(--timeline-muted);
+            line-height: 1.5;
+            margin: 0;
+            white-space: pre-wrap;
+        }
+
+        .source-passage-highlight {
+            background: rgba(255, 107, 0, 0.28);
+            border-radius: 3px;
+            color: #fff;
+            padding: 0.08rem 0.12rem;
+        }
+
+        @media (max-width: 1100px) {
+            .app-shell,
+            .case-bar,
+            .timeline-layout,
+            .timeline-controls {
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar,
+            .document-panel {
+                position: static;
+            }
+
+            .case-actions,
+            .topbar {
+                align-items: flex-start;
+                justify-content: flex-start;
+            }
+        }
+
+        @media (max-width: 860px) {
+            .timeline-shell {
+                padding: 0.85rem;
+            }
+
+            .sidebar {
+                border-bottom: 1px solid var(--timeline-border);
+                border-right: 0;
+            }
+
+            .timeline-stats,
+            .timeline-next-actions {
+                grid-template-columns: 1fr;
+            }
+
+            .analysis-coverage {
+                align-items: flex-start;
+                grid-template-columns: 1fr;
+            }
+
+            .topbar,
+            .timeline-command-head,
+            .timeline-heading,
+            .source-preview-header,
+            .source-preview-footer {
+                align-items: stretch;
+                flex-direction: column;
+            }
+
+            .case-select,
+            .topbar-actions,
+            .topbar-actions > *,
+            .source-preview-drawer {
+                width: 100%;
+            }
+
+            .evidence-timeline {
+                grid-template-columns: 40px minmax(0, 1fr);
+                gap: 1rem;
+            }
+
+            .evidence-timeline::before {
+                left: 20px;
+            }
+
+            .timeline-node {
+                grid-template-columns: 40px minmax(0, 1fr);
+            }
+
+            .timeline-node.left .timeline-card,
+            .timeline-node.right .timeline-card {
+                grid-column: 2;
+                text-align: left;
+            }
+
+            .timeline-spine {
+                grid-column: 1;
+                grid-row: 1;
+            }
+
+            .timeline-spine::before {
+                left: 20px;
+                right: auto;
+                width: 28px;
+            }
+
+            .timeline-node.left .event-meta {
+                justify-content: flex-start;
+            }
+
+            .timeline-node.left .event-status-row {
+                flex-direction: row;
+            }
+
+            .timeline-node.left .timeline-event-actions {
+                justify-content: flex-start;
+            }
+
+            .source-preview-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body data-timeline-depth="focus">
+    <div class="app-shell">
+        <aside class="sidebar">
+            <div class="brand-row">
+                <span class="brand-mark">L</span>
+                <div>
+                    <p class="brand-name">LARO</p>
+                    <p class="brand-caption">Legal case ledger</p>
+                </div>
+            </div>
+            <nav class="nav-stack" aria-label="LARO workspace">
+                <a class="nav-link" href="dashboard_dark.html"><span class="nav-glyph">D</span> Dashboard</a>
+                <a class="nav-link" href="case_command_center.html"><span class="nav-glyph">C</span> Command Center</a>
+                <a class="nav-link active" href="evidence_timeline.html"><span class="nav-glyph">T</span> Evidence Timeline</a>
+                <a class="nav-link" href="outreach.html"><span class="nav-glyph">O</span> Outreach</a>
+            </nav>
+        </aside>
+
+        <main class="timeline-shell">
+            <header class="topbar">
+                <div>
+                    <h1>Evidence Timeline</h1>
+                    <p>Read the legal story first, then reveal filters, source documents, quotes, and provenance controls only when needed.</p>
+                </div>
+                <div class="topbar-actions">
+                    <select class="case-select" id="caseSelect" aria-label="Select case">
+                        <option value="">Loading cases...</option>
+                    </select>
+                    <a class="btn btn-outline" href="case_command_center.html">Command Center</a>
+                    <button class="btn btn-primary" id="exportTimeline" type="button">Export Timeline</button>
+                </div>
+            </header>
+
+            <section class="case-bar">
+                <div>
+                    <h2 class="case-title">
+                        <span class="case-icon">C</span>
+                        <span id="caseTitle">Loading case ledger</span>
+                    </h2>
+                    <p class="case-kicker" id="caseKicker">Choosing a persisted case and source-linked chronology.</p>
+                </div>
+                <div class="case-actions">
+                    <span class="badge badge-warning" id="caseStatusBadge">Loading</span>
+                    <span class="badge" id="caseRiskBadge">Risk</span>
+                </div>
+                <div class="timeline-depth" aria-label="Timeline detail level">
+                    <div class="depth-switcher">
+                        <button class="depth-button is-active" type="button" data-depth="focus" aria-pressed="true">Focus</button>
+                        <button class="depth-button" type="button" data-depth="guided" aria-pressed="false">Guided</button>
+                        <button class="depth-button" type="button" data-depth="expert" aria-pressed="false">Expert</button>
+                    </div>
+                    <p class="depth-note" id="timelineDepthNote">Show the story first, then reveal controls as needed.</p>
+                </div>
+            </section>
+
+            <section class="timeline-command-panel" id="timelineCommandPanel">
+                <div class="timeline-command-head">
+                    <div>
+                        <h2>Timeline workbench</h2>
+                        <p>Each event should answer who said or did what, when, and which source proves it.</p>
+                    </div>
+                    <span class="timeline-count" id="timelineSourceMode">loading ledger</span>
+                </div>
+                <div class="timeline-stats" id="timelineStats"></div>
+                <section class="analysis-coverage" id="analysisCoverage" aria-live="polite" hidden></section>
+                <div class="timeline-next-actions">
+                    <button class="timeline-action-card" type="button" data-timeline-action="vertical">
+                        <strong>Read vertical story</strong>
+                        <span>Follow the case chronologically with one source button per event.</span>
+                    </button>
+                    <button class="timeline-action-card" type="button" data-timeline-action="horizontal">
+                        <strong>Switch to horizontal</strong>
+                        <span>Scan the evidence like a case chronology board.</span>
+                    </button>
+                    <button class="timeline-action-card" type="button" data-timeline-action="sources">
+                        <strong>Review source documents</strong>
+                        <span>Open the linked document list and verify provenance.</span>
+                    </button>
+                </div>
+            </section>
+
+            <section class="timeline-controls guided-depth" aria-label="Evidence timeline controls">
+                <input class="timeline-input" id="searchEvidence" type="search" placeholder="Search facts, summaries, quotes, or documents">
+                <select class="timeline-select" id="sourceFilter" aria-label="Filter by source">
+                    <option value="all">All Sources</option>
+                </select>
+                <select class="timeline-select" id="typeFilter" aria-label="Filter by type">
+                    <option value="all">All Types</option>
+                </select>
+                <span class="timeline-count" id="timelineCount">0 items</span>
+                <div class="view-toggle" aria-label="Timeline view">
+                    <button class="view-button is-active" type="button" data-view="vertical" aria-pressed="true">Vertical</button>
+                    <button class="view-button" type="button" data-view="horizontal" aria-pressed="false">Horizontal</button>
+                </div>
+            </section>
+
+            <section class="timeline-layout">
+                <div class="timeline-main">
+                    <div class="timeline-heading">
+                        <h2>Evidence Timeline</h2>
+                        <span class="timeline-count" id="timelineRange">Chronological evidence</span>
+                    </div>
+                    <div class="evidence-timeline" id="evidenceTimeline" role="list" aria-label="Source-linked case chronology" aria-live="polite"></div>
+                </div>
+
+                <aside class="document-panel guided-depth" aria-label="Source documents">
+                    <h2>Source Documents</h2>
+                    <div class="document-list" id="documentList"></div>
+                </aside>
+            </section>
+        </main>
+    </div>
+
+    <div class="toast-note" id="toastNote" role="status" aria-live="polite">Document selected</div>
+
+    <div class="source-preview-shell" id="sourcePreviewShell" hidden>
+        <aside class="source-preview-drawer" role="dialog" aria-modal="true" aria-labelledby="sourcePreviewTitle">
+            <div class="source-preview-header">
+                <div>
+                    <span class="case-kicker">Source document</span>
+                    <h2 id="sourcePreviewTitle">Source preview</h2>
+                    <p class="case-kicker" id="sourcePreviewSubtitle">Review the linked document without leaving the timeline.</p>
+                </div>
+                <button class="btn btn-outline" type="button" id="closeSourcePreview">Close</button>
+            </div>
+            <div class="source-preview-body" id="sourcePreviewBody"></div>
+            <div class="source-preview-footer">
+                <button class="btn btn-outline" type="button" id="sourcePreviewLocate">Show in sources</button>
+                <button class="btn btn-primary" type="button" id="sourcePreviewOpenOriginal">Open original</button>
+            </div>
+        </aside>
+    </div>
+
+    <script>
+        const AUTH_KEY = "laroAuthToken";
+        const AUTH_EMAIL_KEY = "laroAuthEmail";
+        const DEFAULT_ACCOUNT_EMAIL = "robert.local@laro";
+        const EMPTY_TIMELINE = [];
+        const DEPTH_MODES = ["focus", "guided", "expert"];
+        const DEPTH_NOTES = {
+            focus: "Show the story first, then reveal controls as needed.",
+            guided: "Show filters and source documents for case preparation.",
+            expert: "Reveal quote-level evidence, confidence, and document metadata."
+        };
+
+        let timelineData = EMPTY_TIMELINE;
+        let timelineView = "vertical";
+        let timelineDepth = "focus";
+        let timelineSourceMode = "loading ledger";
+        let selectedCaseId = null;
+        let caseData = null;
+        let casesData = [];
+        let documentsData = [];
+        let evidenceLinksData = [];
+        let caseAnalysisData = { runs: [], latest: null };
+        let missingEvidenceData = [];
+        let sourcePreviewDocumentId = null;
+        let sourcePreviewSnippet = "";
+        let sourcePreviewReturnFocus = null;
+
+        function escapeHtml(value) {
+            return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                "\"": "&quot;",
+                "'": "&#039;"
+            }[char]));
+        }
+
+        function contextPreview(value, limit = 180) {
+            const text = String(value || "").replace(/\s+/g, " ").trim();
+            return text.length > limit ? `${text.slice(0, limit - 1)}...` : text;
+        }
+
+        function targetAccountEmail() {
+            const params = new URLSearchParams(window.location.search);
+            return (params.get("user") || params.get("account") || params.get("email") || "").trim() || DEFAULT_ACCOUNT_EMAIL;
+        }
+
+        async function ensureAuth(force = false) {
+            const targetEmail = targetAccountEmail();
+            const existing = localStorage.getItem(AUTH_KEY);
+            const existingEmail = localStorage.getItem(AUTH_EMAIL_KEY);
+            if (existing && existingEmail === targetEmail && !force) return existing;
+
+            const response = await fetch("/api/auth/session-login", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email: targetEmail })
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || "Unable to create local LARO session");
+            localStorage.setItem(AUTH_KEY, data.token);
+            localStorage.setItem(AUTH_EMAIL_KEY, data.email || targetEmail);
+            return data.token;
+        }
+
+        async function apiFetch(url, options = {}, retry = true) {
+            const token = await ensureAuth();
+            const response = await fetch(url, {
+                ...options,
+                headers: {
+                    Accept: "application/json",
+                    ...(options.body ? { "Content-Type": "application/json" } : {}),
+                    ...(options.headers || {}),
+                    Authorization: `Bearer ${token}`
+                }
+            });
+            if (response.status === 401 && retry) {
+                await ensureAuth(true);
+                return apiFetch(url, options, false);
+            }
+            const data = await response.json().catch(async () => ({ error: await response.text().catch(() => "") }));
+            if (!response.ok) throw new Error(data.error || `Request failed: ${response.status}`);
+            return data;
+        }
+
+        function formatDate(value) {
+            if (!value) return "undated";
+            const parsed = new Date(value);
+            if (Number.isNaN(parsed.getTime())) return value;
+            return parsed.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+        }
+
+        function sourceLabel(source) {
+            return String(source || "unknown").replace(/_/g, " ");
+        }
+
+        function documentId(doc) {
+            return doc?.document_id ?? doc?.id ?? "";
+        }
+
+        function documentById(documentIdValue) {
+            return documentsData.find((doc) => String(documentId(doc)) === String(documentIdValue));
+        }
+
+        function documentTitle(doc = {}, fallback = "Source document") {
+            return doc.title || doc.original_filename || (documentId(doc) ? `Document ${documentId(doc)}` : fallback);
+        }
+
+        function evidenceLinksFor(targetType, targetId) {
+            return evidenceLinksData.filter((link) => link.target_type === targetType && String(link.target_id) === String(targetId));
+        }
+
+        function primaryEvidenceLink(targetType, targetId) {
+            return evidenceLinksFor(targetType, targetId)[0] || null;
+        }
+
+        function updateTimelineUrlState() {
+            const url = new URL(window.location.href);
+            if (selectedCaseId) url.searchParams.set("case_id", String(selectedCaseId));
+            else url.searchParams.delete("case_id");
+            url.searchParams.set("view", timelineView);
+            url.searchParams.set("depth", timelineDepth);
+            history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+        }
+
+        function setTimelineDepth(depth) {
+            timelineDepth = DEPTH_MODES.includes(depth) ? depth : "focus";
+            document.body.dataset.timelineDepth = timelineDepth;
+            try {
+                localStorage.setItem("laroTimelineDepth", timelineDepth);
+            } catch (error) {
+                // Storage can be disabled in locked-down browser contexts.
+            }
+            document.querySelectorAll("[data-depth]").forEach((button) => {
+                const active = button.dataset.depth === timelineDepth;
+                button.classList.toggle("is-active", active);
+                button.setAttribute("aria-pressed", String(active));
+            });
+            document.getElementById("timelineDepthNote").textContent = DEPTH_NOTES[timelineDepth];
+            updateTimelineUrlState();
+        }
+
+        function setTimelineView(view) {
+            timelineView = view === "horizontal" ? "horizontal" : "vertical";
+            document.querySelectorAll("[data-view]").forEach((button) => {
+                const active = button.dataset.view === timelineView;
+                button.classList.toggle("is-active", active);
+                button.setAttribute("aria-pressed", String(active));
+            });
+            updateTimelineUrlState();
+            applyFilters();
+        }
+
+        function caseIdFromUrl() {
+            const params = new URLSearchParams(window.location.search);
+            const caseId = params.get("case_id");
+            return caseId ? Number(caseId) : null;
+        }
+
+        function updateCaseUrl(caseId) {
+            selectedCaseId = caseId ? Number(caseId) : null;
+            updateTimelineUrlState();
+        }
+
+        function renderCaseSelector() {
+            const select = document.getElementById("caseSelect");
+            const options = [...casesData];
+            if (selectedCaseId && !options.some((item) => String(item.case_id) === String(selectedCaseId))) {
+                options.unshift({
+                    case_id: selectedCaseId,
+                    title: caseData?.title || `Case ${selectedCaseId}`
+                });
+            }
+            select.innerHTML = options.length
+                ? options.map((item) => `<option value="${escapeHtml(item.case_id)}">${escapeHtml(item.title || `Case ${item.case_id}`)}</option>`).join("")
+                : `<option value="">No persisted cases</option>`;
+            select.value = selectedCaseId ? String(selectedCaseId) : "";
+        }
+
+        function renderCaseHeader() {
+            const title = caseData?.title || "No persisted case selected";
+            const subtitle = caseData
+                ? `${caseData.legal_domain || "unknown"} / ${caseData.court_or_institution || "no institution"} / ${documentsData.length} source${documentsData.length === 1 ? "" : "s"}`
+                : "Create a real case in the command center, then return here for the source-linked chronology.";
+            document.getElementById("caseTitle").textContent = title;
+            document.getElementById("caseKicker").textContent = subtitle;
+            document.getElementById("caseStatusBadge").textContent = caseData?.status || "No case";
+            document.getElementById("caseRiskBadge").textContent = caseData?.risk_level || "Risk";
+        }
+
+        function normalizedEvent(event) {
+            const sourceDocumentId = event.created_from_document_id || event.source_document_id || "";
+            const doc = documentById(sourceDocumentId) || {};
+            const link = primaryEvidenceLink("event", event.id);
+            const date = event.event_date || event.date || "";
+            const title = event.title || "Timeline event";
+            const summary = event.description || event.summary || title;
+            const actor = doc.sender || caseData?.court_or_institution || "Unknown party";
+            const relevance = Number(event.source_confidence ?? link?.source_confidence ?? doc.relevance_score ?? 0);
+            return {
+                id: event.id,
+                date,
+                actor,
+                action: event.event_type || "documented",
+                event_label: `${actor} - ${title}`,
+                summary,
+                source_document_id: sourceDocumentId,
+                source_document_name: documentTitle(doc, sourceDocumentId ? `Document ${sourceDocumentId}` : "No source linked"),
+                source: doc.source_type || "ledger",
+                source_url: doc.source_uri || "",
+                document_type: doc.document_type || "document",
+                evidence_quote: link?.snippet || doc.summary || "",
+                relevance_score: Number.isFinite(relevance) ? relevance : 0,
+                source_confidence: Number(event.source_confidence || link?.source_confidence || 0),
+                user_confirmed: Boolean(event.user_confirmed),
+                review_status: event.review_status || (event.user_confirmed ? "confirmed" : "needs_review"),
+                _analysisProposal: false
+            };
+        }
+
+        function caseAnalysisTimelineProposals() {
+            const run = caseAnalysisData?.latest;
+            const suggestions = run?.content?.timeline_suggestions || [];
+            const reviewItems = new Map((run?.review_items || []).map((item) => [item.finding_key, item]));
+            return suggestions.map((suggestion, index) => {
+                const reviewItem = reviewItems.get(`timeline_suggestion:${index}`);
+                if (!reviewItem || reviewItem.status !== "needs_review") return null;
+                const source = (suggestion.sources || [])[0] || {};
+                const sourceDocumentId = source.document_id || "";
+                const doc = documentById(sourceDocumentId) || {};
+                const actor = doc.sender || caseData?.court_or_institution || "Unknown party";
+                return {
+                    id: `analysis-${reviewItem.id}`,
+                    analysis_review_id: reviewItem.id,
+                    analysis_run_id: run.id,
+                    date: suggestion.event_date || "",
+                    actor,
+                    action: "case_analysis_proposal",
+                    event_label: `${actor} - ${suggestion.title || "Cited timeline proposal"}`,
+                    summary: suggestion.description || "Review the cited passage before confirming this event.",
+                    source_document_id: sourceDocumentId,
+                    source_document_name: documentTitle(doc, sourceDocumentId ? `Document ${sourceDocumentId}` : "No source linked"),
+                    source: doc.source_type || "case analysis",
+                    source_url: doc.source_uri || "",
+                    document_type: doc.document_type || "document",
+                    evidence_quote: source.source_quote || "",
+                    relevance_score: 0,
+                    source_confidence: 0,
+                    user_confirmed: false,
+                    review_status: "needs_review",
+                    source_refs: suggestion.sources || [],
+                    _analysisProposal: true
+                };
+            }).filter(Boolean);
+        }
+
+        function sortTimeline(events) {
+            return [...events].sort((a, b) => String(a.date || "9999-12-31").localeCompare(String(b.date || "9999-12-31")));
+        }
+
+        function sourceDocuments(events) {
+            const documentIds = new Set(events.map((event) => event.source_document_id).filter(Boolean).map(String));
+            const sourceDocs = documentsData.filter((doc) => documentIds.has(String(documentId(doc))));
+            const docs = sourceDocs.length ? sourceDocs : documentsData;
+            return docs.map((doc) => ({
+                id: documentId(doc),
+                name: documentTitle(doc),
+                source: doc.source_type,
+                type: doc.document_type,
+                summary: doc.summary || contextPreview(doc.extracted_text || "No summary extracted yet.", 150)
+            }));
+        }
+
+        function renderFilterOptions(events) {
+            const sourceSelect = document.getElementById("sourceFilter");
+            const typeSelect = document.getElementById("typeFilter");
+            const currentSource = sourceSelect.value || "all";
+            const currentType = typeSelect.value || "all";
+            const sources = [...new Set(events.map((event) => event.source).filter(Boolean))].sort();
+            const types = [...new Set(events.map((event) => event.document_type).filter(Boolean))].sort();
+            sourceSelect.innerHTML = [`<option value="all">All Sources</option>`, ...sources.map((source) => `<option value="${escapeHtml(source)}">${escapeHtml(sourceLabel(source))}</option>`)].join("");
+            typeSelect.innerHTML = [`<option value="all">All Types</option>`, ...types.map((type) => `<option value="${escapeHtml(type)}">${escapeHtml(sourceLabel(type))}</option>`)].join("");
+            sourceSelect.value = sources.includes(currentSource) ? currentSource : "all";
+            typeSelect.value = types.includes(currentType) ? currentType : "all";
+        }
+
+        function coverageNumber(value, fallback = 0) {
+            const parsed = Number(value);
+            return Number.isFinite(parsed) ? parsed : fallback;
+        }
+
+        function renderAnalysisCoverage() {
+            const panel = document.getElementById("analysisCoverage");
+            const run = caseAnalysisData?.latest;
+            const content = run?.content || {};
+            const coverage = content.source_coverage || {};
+            if (!run || !Object.keys(coverage).length) {
+                panel.hidden = true;
+                panel.innerHTML = "";
+                return;
+            }
+
+            const sources = run.source_documents || [];
+            const readable = coverageNumber(coverage.sources_readable, sources.length);
+            const represented = coverageNumber(coverage.sources_represented, readable);
+            const fullyRead = coverageNumber(coverage.sources_fully_read, sources.filter((source) => !source.source_was_truncated).length);
+            const partiallyRead = coverageNumber(coverage.sources_partially_read, Math.max(0, represented - fullyRead));
+            const charactersAnalyzed = coverageNumber(coverage.characters_analyzed, content.source_characters_analyzed || 0);
+            const charactersTotal = coverageNumber(coverage.characters_total, sources.reduce((total, source) => total + coverageNumber(source.source_characters_total), 0));
+            const coveragePercent = coverage.coverage_percent ?? (charactersTotal ? Math.round((charactersAnalyzed / charactersTotal) * 1000) / 10 : null);
+            const partialSource = sources.find((source) => source.source_was_truncated);
+            const coverageWarning = missingEvidenceData.find((warning) => warning.warning_type === "analysis_partial_coverage" && !["resolved", "dismissed"].includes(warning.status));
+            const isPartial = Boolean(content.source_was_truncated || partiallyRead || represented < readable || coverageWarning);
+            const detail = charactersTotal
+                ? `${charactersAnalyzed.toLocaleString()} of ${charactersTotal.toLocaleString()} source characters analyzed${coveragePercent !== null ? ` (${coveragePercent}% coverage)` : ""}.`
+                : `${represented} of ${readable} readable sources represented.`;
+            const guidance = coverageWarning?.suggested_action
+                || (isPartial
+                    ? "Review omitted passages in the original source before relying on this synthesis."
+                    : "All readable sources in the latest analysis run were fully represented.");
+
+            panel.hidden = false;
+            panel.classList.toggle("is-partial", isPartial);
+            panel.innerHTML = `
+                <div>
+                    <div class="coverage-heading">
+                        <strong>${isPartial ? "Partial analysis coverage" : "Analysis coverage complete"}</strong>
+                        <span class="event-pill">${escapeHtml(represented)} / ${escapeHtml(readable)} sources</span>
+                        <span class="event-pill">${escapeHtml(fullyRead)} full${partiallyRead ? ` / ${escapeHtml(partiallyRead)} partial` : ""}</span>
+                    </div>
+                    <p>${escapeHtml(detail)} ${escapeHtml(guidance)}</p>
+                </div>
+                ${partialSource?.document_id ? `<button class="source-jump coverage-source-jump" type="button" data-document-id="${escapeHtml(partialSource.document_id)}" aria-label="Open partially analyzed source document" title="Open partial source">?</button>` : ""}
+            `;
+            panel.querySelector(".coverage-source-jump")?.addEventListener("click", (event) => {
+                openSourcePreview(event.currentTarget.dataset.documentId).catch((error) => showToast(error.message));
+            });
+        }
+
+        function timelineReviewControls(event) {
+            if (event._analysisProposal) {
+                return `
+                    <div class="timeline-event-actions">
+                        <button class="btn btn-primary analysis-review-action" type="button" data-analysis-review-id="${escapeHtml(event.analysis_review_id)}" data-analysis-action="confirm_timeline">Confirm event</button>
+                        <button class="btn btn-outline analysis-review-action guided-depth" type="button" data-analysis-review-id="${escapeHtml(event.analysis_review_id)}" data-analysis-action="timeline">Prepare for edit</button>
+                        <button class="btn btn-outline analysis-review-action expert-depth" type="button" data-analysis-review-id="${escapeHtml(event.analysis_review_id)}" data-analysis-action="dismiss">Dismiss</button>
+                    </div>
+                `;
+            }
+            if (event.review_status === "needs_review") {
+                return `
+                    <div class="timeline-event-actions">
+                        <button class="btn btn-primary timeline-review-action" type="button" data-event-id="${escapeHtml(event.id)}" data-event-action="approve">Confirm event</button>
+                        <button class="btn btn-outline timeline-review-action guided-depth" type="button" data-event-id="${escapeHtml(event.id)}" data-event-action="reject">Reject</button>
+                    </div>
+                `;
+            }
+            if (event.review_status === "rejected") {
+                return `
+                    <div class="timeline-event-actions guided-depth">
+                        <button class="btn btn-outline timeline-review-action" type="button" data-event-id="${escapeHtml(event.id)}" data-event-action="approve">Restore event</button>
+                    </div>
+                `;
+            }
+            return "";
+        }
+
+        function renderTimeline(events) {
+            const timeline = document.getElementById("evidenceTimeline");
+            const count = document.getElementById("timelineCount");
+            const range = document.getElementById("timelineRange");
+            timeline.innerHTML = "";
+            timeline.classList.toggle("is-horizontal", timelineView === "horizontal");
+            count.textContent = `${events.length} item${events.length === 1 ? "" : "s"}`;
+            if (!events.length) {
+                range.textContent = "No evidence found";
+                timeline.innerHTML = `<div class="timeline-empty"><div><strong>No timeline events found.</strong><br>Add or import a source document in the command center, then LARO will build a source-linked chronology here.</div></div>`;
+                return;
+            }
+            range.textContent = `${formatDate(events[0].date)} -> ${formatDate(events[events.length - 1].date)}`;
+
+            events.forEach((event, index) => {
+                const side = index % 2 === 0 ? "left" : "right";
+                const statusClass = event._analysisProposal
+                    ? "is-proposal"
+                    : event.review_status === "confirmed"
+                        ? "is-confirmed"
+                        : event.review_status === "rejected"
+                            ? "is-rejected"
+                            : "is-review";
+                const statusLabel = event._analysisProposal ? "cited proposal" : event.review_status || "needs review";
+                const node = document.createElement("article");
+                node.className = `timeline-node ${side} ${statusClass}`;
+                node.dataset.eventId = event.id || "";
+                node.setAttribute("role", "listitem");
+                node.setAttribute("aria-label", `${formatDate(event.date)}: ${event.event_label}. ${statusLabel}.`);
+                node.innerHTML = `
+                    <div class="timeline-card">
+                        <div class="event-status-row">
+                            <div class="event-date">${escapeHtml(formatDate(event.date))}</div>
+                            <span class="event-pill">${escapeHtml(statusLabel)}</span>
+                        </div>
+                        <div class="event-source">${escapeHtml(event.event_label)}</div>
+                        <p class="event-summary">${escapeHtml(event.summary)}</p>
+                        <p class="event-evidence expert-depth"><strong>Evidence:</strong> ${escapeHtml(event.evidence_quote || event.source_document_name)}</p>
+                        <div class="event-meta guided-depth">
+                            <span class="event-pill">${escapeHtml(sourceLabel(event.source))}</span>
+                            <span class="event-pill">${escapeHtml(event.document_type || "document")}</span>
+                            <span class="event-pill">${Math.round((event.relevance_score || event.source_confidence || 0) * 100)}% confidence</span>
+                        </div>
+                        ${timelineReviewControls(event)}
+                    </div>
+                    <div class="timeline-spine">
+                        ${event.source_document_id ? `<button class="source-jump" type="button" data-document-id="${escapeHtml(event.source_document_id)}" data-source-snippet="${escapeHtml(event.evidence_quote || "")}" aria-label="Open cited passage in ${escapeHtml(event.source_document_name)}" title="Open cited source passage">?</button>` : ""}
+                    </div>
+                `;
+                timeline.appendChild(node);
+            });
+
+            timeline.querySelectorAll(".source-jump").forEach((button) => {
+                button.addEventListener("click", () => openSourcePreview(button.dataset.documentId, button.dataset.sourceSnippet || "").catch((error) => showToast(error.message)));
+            });
+            timeline.querySelectorAll(".analysis-review-action").forEach((button) => {
+                button.addEventListener("click", () => updateCaseAnalysisReviewItem(button).catch((error) => showToast(error.message)));
+            });
+            timeline.querySelectorAll(".timeline-review-action").forEach((button) => {
+                button.addEventListener("click", () => updateTimelineEvent(button).catch((error) => showToast(error.message)));
+            });
+        }
+
+        function renderDocuments(events) {
+            const list = document.getElementById("documentList");
+            list.innerHTML = "";
+            const docs = sourceDocuments(events);
+            if (!docs.length) {
+                list.innerHTML = `<div class="timeline-empty"><div><strong>No source documents.</strong><br>Use the command center to add the first document.</div></div>`;
+                return;
+            }
+            docs.forEach((doc) => {
+                const card = document.createElement("div");
+                card.className = "document-source-card";
+                card.id = `document-${doc.id}`;
+                card.dataset.documentId = doc.id;
+                card.innerHTML = `
+                    <div class="document-name">${escapeHtml(doc.name)}</div>
+                    <div class="document-summary">${escapeHtml(doc.summary || "No summary extracted.")}</div>
+                    <div class="document-actions">
+                        <span class="source-label">${escapeHtml(sourceLabel(doc.source))} / ${escapeHtml(doc.type || "document")}</span>
+                        <button class="open-source" type="button" data-document-id="${escapeHtml(doc.id)}">Open source</button>
+                    </div>
+                `;
+                list.appendChild(card);
+            });
+
+            list.querySelectorAll(".open-source").forEach((button) => {
+                button.addEventListener("click", () => openSourcePreview(button.dataset.documentId).catch((error) => showToast(error.message)));
+            });
+        }
+
+        function renderTimelineStats(events) {
+            const stats = document.getElementById("timelineStats");
+            const uniqueDocuments = new Set(events.map((event) => event.source_document_id).filter(Boolean).map(String));
+            const confirmed = events.filter((event) => event.review_status === "confirmed").length;
+            const proposals = events.filter((event) => event._analysisProposal).length;
+            const needsReview = events.filter((event) => event.review_status === "needs_review").length;
+            document.getElementById("timelineSourceMode").textContent = timelineSourceMode;
+            stats.innerHTML = [
+                { label: "Confirmed", value: confirmed },
+                { label: "Cited proposals", value: proposals },
+                { label: "Source documents", value: uniqueDocuments.size },
+                { label: "Needs review", value: needsReview }
+            ].map((item) => `
+                <article class="timeline-stat">
+                    <strong>${escapeHtml(item.value)}</strong>
+                    <span>${escapeHtml(item.label)}</span>
+                </article>
+            `).join("");
+        }
+
+        function focusDocument(documentIdValue, scrollToDocument) {
+            document.querySelectorAll(".document-source-card").forEach((card) => {
+                card.classList.toggle("is-active", String(card.dataset.documentId) === String(documentIdValue));
+            });
+            const target = document.getElementById(`document-${documentIdValue}`);
+            if (target && scrollToDocument) target.scrollIntoView({ behavior: "smooth", block: "center" });
+            if (documentIdValue) history.replaceState(null, "", `#document-${documentIdValue}`);
+        }
+
+        function sourcePreviewFields(doc, detail = {}) {
+            return [
+                ["Type", doc.document_type || "document"],
+                ["Date", doc.date_on_document || "not detected"],
+                ["Source", doc.source_type || "ledger"],
+                ["Confidentiality", doc.confidentiality_level || "normal"],
+                ["Sender", doc.sender || "unknown"],
+                ["Recipient", doc.recipient || "unknown"],
+                ["Hash", doc.content_hash || "not recorded"],
+                ["File", detail.can_open_file ? "local file available" : "no local file"]
+            ];
+        }
+
+        function normalizedSourceSnippet(value = "") {
+            return String(value || "").replace(/\s+/g, " ").replace(/\.\.\.$/, "").trim();
+        }
+
+        function normalizedTextMap(value = "") {
+            const source = String(value || "");
+            let normalized = "";
+            const map = [];
+            let pendingWhitespaceIndex = null;
+            for (let index = 0; index < source.length; index += 1) {
+                const char = source[index];
+                if (/\s/.test(char)) {
+                    if (normalized && !normalized.endsWith(" ") && pendingWhitespaceIndex === null) pendingWhitespaceIndex = index;
+                    continue;
+                }
+                if (pendingWhitespaceIndex !== null) {
+                    normalized += " ";
+                    map.push(pendingWhitespaceIndex);
+                    pendingWhitespaceIndex = null;
+                }
+                normalized += char;
+                map.push(index);
+            }
+            return { normalized, map };
+        }
+
+        function sourcePassageMarkup(text = "", snippet = "") {
+            const source = String(text || "");
+            const needle = normalizedSourceSnippet(snippet);
+            const mapped = normalizedTextMap(source);
+            const index = needle ? mapped.normalized.toLocaleLowerCase().indexOf(needle.toLocaleLowerCase()) : -1;
+            if (index < 0) return escapeHtml(contextPreview(source, 2400));
+            const matchedStart = mapped.map[index] ?? 0;
+            const matchedEndIndex = mapped.map[index + needle.length - 1] ?? matchedStart;
+            const matchedEnd = Math.min(source.length, matchedEndIndex + 1);
+            const start = Math.max(0, matchedStart - 180);
+            const end = Math.min(source.length, matchedEnd + 260);
+            return `${start ? "..." : ""}${escapeHtml(source.slice(start, matchedStart))}<mark class="source-passage-highlight">${escapeHtml(source.slice(matchedStart, matchedEnd))}</mark>${escapeHtml(source.slice(matchedEnd, end))}${end < source.length ? "..." : ""}`;
+        }
+
+        function renderSourcePreview(doc, detail = {}) {
+            document.getElementById("sourcePreviewTitle").textContent = documentTitle(doc);
+            document.getElementById("sourcePreviewSubtitle").textContent = `${doc.source_type || "ledger"} / ${doc.source_uri || "no source URI"} / ${doc.confidentiality_level || "normal"}${sourcePreviewSnippet ? " / cited passage highlighted" : ""}`;
+            const text = doc.extracted_text || doc.ocr_text || doc.summary || "No extracted text is available for this document yet.";
+            document.getElementById("sourcePreviewBody").innerHTML = `
+                <div class="source-preview-grid">
+                    ${sourcePreviewFields(doc, detail).map(([label, value]) => `
+                        <div class="source-preview-field">
+                            <span>${escapeHtml(label)}</span>
+                            <strong>${escapeHtml(value)}</strong>
+                        </div>
+                    `).join("")}
+                </div>
+                ${doc.summary ? `<section class="source-preview-text"><span>Summary</span><p>${escapeHtml(doc.summary)}</p></section>` : ""}
+                ${sourcePreviewSnippet ? `<section class="source-preview-text"><span>Cited passage</span><p>${sourcePassageMarkup(text, sourcePreviewSnippet)}</p></section>` : ""}
+                <section class="source-preview-text"><span>Extracted text</span><p>${escapeHtml(contextPreview(text, 2400))}</p></section>
+                ${doc.source_uri ? `<section class="source-preview-text"><span>Original reference</span><p>${escapeHtml(doc.source_uri)}</p></section>` : ""}
+            `;
+
+            const openOriginal = document.getElementById("sourcePreviewOpenOriginal");
+            const sourceUri = doc.source_uri || "";
+            const canOpenUri = /^https?:\/\//i.test(sourceUri);
+            if (detail.file_url || canOpenUri) {
+                openOriginal.disabled = false;
+                openOriginal.textContent = detail.file_url ? "Open local file" : "Open source URI";
+                openOriginal.dataset.openUrl = detail.file_url || sourceUri;
+            } else {
+                openOriginal.disabled = true;
+                openOriginal.textContent = "No local file";
+                delete openOriginal.dataset.openUrl;
+            }
+        }
+
+        async function openSourcePreview(documentIdValue, snippet = "") {
+            if (!selectedCaseId || !documentIdValue) return;
+            sourcePreviewDocumentId = documentIdValue;
+            sourcePreviewSnippet = normalizedSourceSnippet(snippet);
+            sourcePreviewReturnFocus = document.activeElement;
+            const cached = documentById(documentIdValue);
+            const detail = await apiFetch(`/api/cases/${selectedCaseId}/documents/${documentIdValue}`);
+            renderSourcePreview(detail.document || cached, detail);
+            document.getElementById("sourcePreviewShell").hidden = false;
+            focusDocument(documentIdValue, false);
+            document.getElementById("closeSourcePreview").focus();
+        }
+
+        function closeSourcePreview() {
+            document.getElementById("sourcePreviewShell").hidden = true;
+            sourcePreviewSnippet = "";
+            if (sourcePreviewReturnFocus && typeof sourcePreviewReturnFocus.focus === "function") sourcePreviewReturnFocus.focus();
+            sourcePreviewReturnFocus = null;
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById("toastNote");
+            toast.textContent = message;
+            toast.classList.add("show");
+            clearTimeout(window.timelineToastTimer);
+            window.timelineToastTimer = setTimeout(() => toast.classList.remove("show"), 5000);
+        }
+
+        async function updateCaseAnalysisReviewItem(button) {
+            if (!selectedCaseId) return;
+            const itemId = Number(button.dataset.analysisReviewId);
+            const action = button.dataset.analysisAction;
+            if (!itemId || !action) throw new Error("This cited timeline proposal is unavailable.");
+            const originalLabel = button.textContent;
+            button.disabled = true;
+            button.textContent = action === "confirm_timeline" ? "Confirming..." : "Updating...";
+            try {
+                await apiFetch(`/api/cases/${selectedCaseId}/case-analysis/review-items/${itemId}`, {
+                    method: "PATCH",
+                    body: JSON.stringify({ action })
+                });
+                const message = action === "confirm_timeline"
+                    ? "Cited event confirmed in the legal chronology."
+                    : action === "timeline"
+                        ? "Timeline proposal prepared for editing."
+                        : "Cited proposal dismissed from this analysis run.";
+                showToast(message);
+                await loadCaseLedger(selectedCaseId);
+            } finally {
+                button.disabled = false;
+                button.textContent = originalLabel;
+            }
+        }
+
+        async function updateTimelineEvent(button) {
+            if (!selectedCaseId) return;
+            const eventId = Number(button.dataset.eventId);
+            const action = button.dataset.eventAction;
+            if (!eventId || !action) throw new Error("This timeline event is unavailable.");
+            const originalLabel = button.textContent;
+            button.disabled = true;
+            button.textContent = action === "approve" ? "Confirming..." : "Rejecting...";
+            try {
+                await apiFetch(`/api/cases/${selectedCaseId}/timeline/${eventId}`, {
+                    method: "PATCH",
+                    body: JSON.stringify({ action })
+                });
+                showToast(action === "approve" ? "Timeline event confirmed." : "Timeline event rejected.");
+                await loadCaseLedger(selectedCaseId);
+            } finally {
+                button.disabled = false;
+                button.textContent = originalLabel;
+            }
+        }
+
+        function applyFilters() {
+            const query = document.getElementById("searchEvidence").value.trim().toLowerCase();
+            const source = document.getElementById("sourceFilter").value;
+            const type = document.getElementById("typeFilter").value;
+            const filtered = timelineData.filter((event) => {
+                const matchesQuery = !query || `${event.actor} ${event.event_label} ${event.summary} ${event.source_document_name} ${event.evidence_quote} ${event.review_status}`.toLowerCase().includes(query);
+                const matchesSource = source === "all" || event.source === source;
+                const matchesType = type === "all" || event.document_type === type;
+                return matchesQuery && matchesSource && matchesType;
+            });
+            renderTimelineStats(filtered);
+            renderTimeline(filtered);
+            renderDocuments(filtered);
+        }
+
+        async function loadCases() {
+            const payload = await apiFetch("/api/cases/command-center");
+            casesData = payload.cases || [];
+            selectedCaseId = caseIdFromUrl() || casesData[0]?.case_id || null;
+            renderCaseSelector();
+            if (!selectedCaseId) {
+                timelineData = EMPTY_TIMELINE;
+                documentsData = [];
+                evidenceLinksData = [];
+                caseAnalysisData = { runs: [], latest: null };
+                missingEvidenceData = [];
+                timelineSourceMode = "no persisted case";
+                renderCaseHeader();
+                renderAnalysisCoverage();
+                renderFilterOptions(timelineData);
+                applyFilters();
+                return;
+            }
+            await loadCaseLedger(selectedCaseId);
+        }
+
+        async function loadCaseLedger(caseId) {
+            updateCaseUrl(caseId);
+            timelineSourceMode = "loading ledger";
+            const [casePayload, documentsPayload, timelinePayload, evidencePayload, analysisPayload, missingEvidencePayload] = await Promise.all([
+                apiFetch(`/api/cases/${selectedCaseId}`),
+                apiFetch(`/api/cases/${selectedCaseId}/documents`),
+                apiFetch(`/api/cases/${selectedCaseId}/timeline`),
+                apiFetch(`/api/cases/${selectedCaseId}/evidence`),
+                apiFetch(`/api/cases/${selectedCaseId}/case-analysis`),
+                apiFetch(`/api/cases/${selectedCaseId}/missing-evidence`)
+            ]);
+            caseData = casePayload;
+            documentsData = documentsPayload.documents || [];
+            evidenceLinksData = evidencePayload.evidence_links || [];
+            caseAnalysisData = analysisPayload || { runs: [], latest: null };
+            missingEvidenceData = missingEvidencePayload.missing_evidence || [];
+            const persistedEvents = (timelinePayload.timeline || []).map(normalizedEvent);
+            const citedProposals = caseAnalysisTimelineProposals();
+            timelineData = sortTimeline([...persistedEvents, ...citedProposals]);
+            timelineSourceMode = citedProposals.length
+                ? `legal ledger + ${citedProposals.length} cited proposal${citedProposals.length === 1 ? "" : "s"}`
+                : "legal ledger";
+            renderCaseSelector();
+            renderCaseHeader();
+            renderAnalysisCoverage();
+            renderFilterOptions(timelineData);
+            applyFilters();
+            const hashDocument = (window.location.hash || "").replace("#document-", "");
+            if (hashDocument) focusDocument(hashDocument, true);
+        }
+
+        document.querySelectorAll("[data-depth]").forEach((button) => {
+            button.addEventListener("click", () => setTimelineDepth(button.dataset.depth));
+        });
+        document.querySelectorAll("[data-timeline-action]").forEach((button) => {
+            button.addEventListener("click", () => {
+                const action = button.dataset.timelineAction;
+                if (action === "horizontal") {
+                    setTimelineView("horizontal");
+                    return;
+                }
+                if (action === "vertical") {
+                    setTimelineView("vertical");
+                    return;
+                }
+                setTimelineDepth("guided");
+                document.querySelector(".document-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+            });
+        });
+        document.getElementById("caseSelect").addEventListener("change", (event) => {
+            if (event.target.value) loadCaseLedger(event.target.value).catch((error) => showToast(error.message));
+        });
+        document.getElementById("searchEvidence").addEventListener("input", applyFilters);
+        document.getElementById("sourceFilter").addEventListener("change", applyFilters);
+        document.getElementById("typeFilter").addEventListener("change", applyFilters);
+        document.querySelectorAll("[data-view]").forEach((button) => {
+            button.addEventListener("click", () => setTimelineView(button.dataset.view));
+        });
+        document.getElementById("closeSourcePreview").addEventListener("click", closeSourcePreview);
+        document.getElementById("sourcePreviewShell").addEventListener("click", (event) => {
+            if (event.target.id === "sourcePreviewShell") closeSourcePreview();
+        });
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape" && !document.getElementById("sourcePreviewShell").hidden) closeSourcePreview();
+        });
+        document.getElementById("sourcePreviewLocate").addEventListener("click", () => {
+            closeSourcePreview();
+            setTimelineDepth("guided");
+            focusDocument(sourcePreviewDocumentId, true);
+        });
+        document.getElementById("sourcePreviewOpenOriginal").addEventListener("click", () => {
+            const openUrl = document.getElementById("sourcePreviewOpenOriginal").dataset.openUrl;
+            if (openUrl) window.open(openUrl, "_blank", "noopener");
+        });
+        document.getElementById("exportTimeline").addEventListener("click", () => {
+            const blob = new Blob([JSON.stringify({
+                case: caseData,
+                timeline: timelineData,
+                documents: documentsData,
+                evidence_links: evidenceLinksData,
+                latest_case_analysis: caseAnalysisData.latest,
+                missing_evidence_warnings: missingEvidenceData,
+                exported_at: new Date().toISOString()
+            }, null, 2)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `evidence-timeline-${selectedCaseId || "no-case"}.json`;
+            link.click();
+            URL.revokeObjectURL(url);
+        });
+
+        const initialTimelineParams = new URLSearchParams(window.location.search);
+        let storedDepth = initialTimelineParams.get("depth") || "focus";
+        try {
+            storedDepth = initialTimelineParams.get("depth") || localStorage.getItem("laroTimelineDepth") || "focus";
+        } catch (error) {
+            storedDepth = initialTimelineParams.get("depth") || "focus";
+        }
+        selectedCaseId = caseIdFromUrl();
+        setTimelineDepth(storedDepth);
+        setTimelineView(initialTimelineParams.get("view") || "vertical");
+        loadCases().catch((error) => {
+            timelineSourceMode = "no live data";
+            showToast(error.message || "No live timeline data available");
+            renderTimelineStats([]);
+            renderTimeline([]);
+            renderDocuments([]);
+        });
+    </script>
+</body>
+</html>
