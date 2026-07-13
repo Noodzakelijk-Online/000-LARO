@@ -8,6 +8,7 @@ It organizes and prepares legal material. It is not a lawyer, does not provide d
 
 - Case Command Center: create and operate cases with progressive Focus, Guided, and Expert views.
 - Document intelligence: read local text, PDF, DOCX, HTML, email-shaped, and Drive-shaped records; preserve source metadata and content hashes.
+- Document Inbox: stage a local file or pasted source before its case is known, review deterministic case suggestions, then explicitly link it without deleting or moving the original source record.
 - Evidence timeline and papertrail: connect who said or did what and when back to the underlying document.
 - Review workbench: confirm or reject suggested events, claims, evidence links, contradictions, deadlines, obligations, and open loops.
 - Who-did-what chronology: timeline events persist the actor, action, affected party, and event type beside the exact source passage; story, horizontal, and vertical views can be filtered by person and event type.
@@ -57,6 +58,12 @@ GOOGLE_REDIRECT_URI=http://127.0.0.1:8768/api/google/oauth/callback
 
 LARO stores connection status and a token fingerprint in the ledger, never raw OAuth tokens. Raw credentials are encrypted in the ignored local `tokens/` vault. Once connected, use the Documents tab in a case to run an explicit Gmail search or Drive query; LARO imports only those matching records, including supported Gmail attachments, preserves the original URI, deduplicates them, and records the read in the audit log.
 
+## Case-Neutral Document Inbox
+
+Use **Guided > Document Inbox** to paste legal text or stage a local file before deciding which case owns it. LARO reads the source without case context, compares explicit case references, named parties, institutions, legal topics, and shared terms against only the authenticated user's cases, and presents up to three review-only suggestions with reasons. A score is a deterministic ranking signal, not a probability.
+
+Nothing is assigned automatically. Linking requires a user-selected case, preserves the original source URI, hash, extracted text, and local file, then creates the normal reviewable timeline and evidence artifacts. Dismissal removes an item from the active queue but retains its local record and audit history.
+
 ## Optional Local Deep Reading
 
 The default reader performs a full-source deterministic comparison of every readable case document. It can flag literal differences in payment amounts or deadline dates, shared case references, and deadline wording without a recognizable date. It also proposes a chronological source passage for every unambiguous date it finds; each proposal must be explicitly added to the reviewable timeline. Every result is review-only and opens the cited source document.
@@ -84,7 +91,7 @@ External sharing remains a separate human action. LARO permits a download only w
 Run the legal-ledger verification suite:
 
 ```powershell
-python -m unittest test_legal_ledger test_case_bundle_export test_document_intelligence test_local_semantic_analysis test_google_oauth test_google_evidence test_lawyer_matching test_outreach_discovery test_outreach_targets test_outreach_analytics
+python -m unittest test_legal_ledger test_case_bundle_export test_document_intelligence test_document_case_matching test_local_semantic_analysis test_google_oauth test_google_evidence test_lawyer_matching test_outreach_discovery test_outreach_targets test_outreach_analytics
 ```
 
 The test suite uses temporary SQLite files and does not require a real Google account or contact any external lawyers.

@@ -1352,6 +1352,74 @@
             grid-template-columns: minmax(0, 1.15fr) minmax(240px, 0.85fr);
         }
 
+        .document-inbox-form {
+            border-top: 1px solid var(--ledger-border);
+            display: grid;
+            gap: 0.75rem;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            margin-top: 0.75rem;
+            padding-top: 0.85rem;
+        }
+
+        .document-inbox-form[hidden] {
+            display: none;
+        }
+
+        .document-inbox-form .is-wide {
+            grid-column: 1 / -1;
+        }
+
+        .document-inbox-list {
+            display: grid;
+            gap: 0.7rem;
+            margin-top: 0.85rem;
+        }
+
+        .document-inbox-item {
+            background: rgba(5, 12, 24, 0.58);
+            border: 1px solid var(--ledger-border);
+            border-radius: 8px;
+            display: grid;
+            gap: 0.75rem;
+            grid-template-columns: minmax(0, 1fr) minmax(250px, 0.72fr);
+            padding: 0.82rem;
+        }
+
+        .document-inbox-main,
+        .document-inbox-match {
+            display: grid;
+            gap: 0.48rem;
+            min-width: 0;
+        }
+
+        .document-inbox-meta,
+        .document-inbox-actions {
+            align-items: center;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.45rem;
+        }
+
+        .document-inbox-match {
+            border-left: 1px solid var(--ledger-border);
+            padding-left: 0.8rem;
+        }
+
+        .document-inbox-reasons {
+            color: var(--ledger-muted);
+            font-size: 0.78rem;
+            line-height: 1.4;
+            margin: 0;
+        }
+
+        .document-inbox-preview {
+            color: var(--ledger-muted);
+            font-size: 0.82rem;
+            line-height: 1.45;
+            margin: 0;
+            overflow-wrap: anywhere;
+        }
+
         .intake-primary {
             background: rgba(255, 107, 0, 0.08);
             border: 1px solid rgba(255, 107, 0, 0.28);
@@ -3230,6 +3298,7 @@
             .case-now-workbench,
             .focus-control-deck,
             .evidence-intake-grid,
+            .document-inbox-item,
             body[data-depth="expert"] .detail-workspace,
             .papertrail-toolbar,
             .workflow-rail,
@@ -3241,6 +3310,13 @@
             .topbar {
                 align-items: flex-start;
                 flex-direction: column;
+            }
+
+            .document-inbox-match {
+                border-left: 0;
+                border-top: 1px solid var(--ledger-border);
+                padding-left: 0;
+                padding-top: 0.75rem;
             }
 
             .depth-cluster {
@@ -3295,6 +3371,14 @@
 
             .record-row {
                 grid-template-columns: 1fr;
+            }
+
+            .document-inbox-form {
+                grid-template-columns: 1fr;
+            }
+
+            .document-inbox-form .is-wide {
+                grid-column: auto;
             }
 
             .timeline-story-event {
@@ -3447,7 +3531,7 @@
                 <div class="panel-header">
                     <div>
                         <h2 class="panel-title">Find In Papertrail</h2>
-                        <p class="muted">Search cases, documents, events, claims, gaps, deadlines, obligations, drafts, and outreach.</p>
+                        <p class="muted">Search inbox sources, cases, documents, events, claims, gaps, deadlines, obligations, drafts, and outreach.</p>
                     </div>
                     <span class="tag" id="ledgerSearchCount">Ready</span>
                 </div>
@@ -3480,6 +3564,56 @@
                     </div>
                     <div class="review-list" id="reviewList"></div>
                 </div>
+            </section>
+
+            <section class="panel guided-depth" id="document-inbox" aria-label="Document inbox">
+                <div class="panel-header">
+                    <div>
+                        <h2 class="panel-title">Document Inbox</h2>
+                        <p class="muted">Sources waiting for a confirmed case.</p>
+                    </div>
+                    <div class="button-row">
+                        <span class="tag orange" id="documentInboxCount">0 waiting</span>
+                        <button class="btn-ledger" type="button" id="toggleDocumentInboxForm"><span class="nav-glyph">+</span> Stage Source</button>
+                    </div>
+                </div>
+                <div class="document-inbox-form" id="documentInboxForm" hidden>
+                    <label class="input-field">
+                        <span>Source type</span>
+                        <select class="control" id="documentInboxSourceType">
+                            <option value="manual_text">Pasted text</option>
+                            <option value="manual_upload">Local file</option>
+                            <option value="gmail">Gmail record</option>
+                            <option value="google_drive">Google Drive record</option>
+                            <option value="letter">Letter</option>
+                        </select>
+                    </label>
+                    <label class="input-field">
+                        <span>Confidentiality</span>
+                        <select class="control" id="documentInboxConfidentiality">
+                            <option value="normal">Normal</option>
+                            <option value="sensitive">Sensitive</option>
+                            <option value="highly_sensitive">Highly sensitive</option>
+                        </select>
+                    </label>
+                    <label class="input-field is-wide">
+                        <span>Title</span>
+                        <input class="control" id="documentInboxTitle" placeholder="Decision, letter, email, or evidence note">
+                    </label>
+                    <label class="input-field is-wide">
+                        <span>Local file</span>
+                        <input class="control" id="documentInboxFile" type="file" accept=".txt,.pdf,.docx,.doc,.html,.htm,.eml,.msg,.rtf,.csv,.json">
+                    </label>
+                    <label class="input-field is-wide">
+                        <span>Source text</span>
+                        <textarea class="control" id="documentInboxText" placeholder="Paste the letter, email, decision, or extracted text"></textarea>
+                    </label>
+                    <div class="is-wide">
+                        <button class="btn-ledger" type="button" id="stageDocumentInbox">Analyze &amp; Stage</button>
+                        <div id="documentInboxStageStatus" class="form-note">Kept local until you confirm a case.</div>
+                    </div>
+                </div>
+                <div class="document-inbox-list" id="documentInboxItems"></div>
             </section>
 
             <section class="panel detail-shell guided-depth" id="case-intake">
@@ -3706,6 +3840,7 @@
             const percent = Math.max(0, Math.min(100, Math.round(state.percent || 0)));
             const eta = percent >= 100 ? "done" : `${Math.max(1, Math.ceil(state.remaining || 1))}s left`;
             const words = state.words ? `${state.words.toLocaleString()} words` : "source text";
+            const location = state.location || "kept local in this case ledger";
             status.innerHTML = `
                 <div class="analysis-progress" role="status" aria-live="polite">
                     <div class="analysis-progress-header">
@@ -3713,7 +3848,7 @@
                         <span>${escapeHtml(percent)}% - ${escapeHtml(eta)}</span>
                     </div>
                     <div class="analysis-progress-track" aria-hidden="true"><div class="analysis-progress-fill" style="--analysis-progress: ${escapeHtml(percent)}%;"></div></div>
-                    <p class="analysis-progress-detail">${escapeHtml(state.phase || "Preparing source")} - ${escapeHtml(words)} - kept local in this case ledger.</p>
+                    <p class="analysis-progress-detail">${escapeHtml(state.phase || "Preparing source")} - ${escapeHtml(words)} - ${escapeHtml(location)}.</p>
                 </div>
             `;
         }
@@ -3740,7 +3875,8 @@
                     percent,
                     remaining: Math.max(1, totalSeconds - elapsed),
                     phase: phases[phaseIndex],
-                    words
+                    words,
+                    location: options.location
                 });
             };
             update();
@@ -3754,7 +3890,8 @@
                         percent: 100,
                         remaining: 0,
                         phase: "Ledger updated with real analysis results",
-                        words
+                        words,
+                        location: options.location
                     });
                 },
                 fail(message) {
@@ -4139,6 +4276,7 @@
                 missing_evidence: safeState.missing_evidence || [],
                 deadlines: safeState.deadlines || [],
                 obligations: safeState.obligations || [],
+                document_inbox: safeState.document_inbox || [],
                 recent_activity: safeState.recent_activity || [],
                 next_actions: safeState.next_actions || [],
                 counts: safeState.counts || {}
@@ -4209,6 +4347,7 @@
         function renderMetrics(counts) {
             document.getElementById("metrics").innerHTML = [
                 metric("active cases", counts.active_cases || 0),
+                metric("document inbox", counts.document_inbox || 0),
                 metric("need evidence", counts.cases_needing_evidence || 0),
                 metric("approvals", counts.pending_approvals || 0),
                 metric("open loops", counts.open_loops || 0),
@@ -4238,6 +4377,7 @@
                 papertrail: "papertrail",
                 bundle: "bundle",
                 audit: "audit",
+                "document-inbox": "overview",
                 "case-ledger": "overview",
                 "case-intake": "overview"
             };
@@ -4404,9 +4544,11 @@
             };
             const primaryCaseId = primary.case_id || selectedCaseId || cases[0]?.case_id || "";
             const activeCase = selectedCase || cases.find((item) => String(item.case_id) === String(primaryCaseId)) || cases[0];
-            const actionButton = cases.length
-                ? `<button class="btn-ledger" type="button" data-command-action="open-target" data-case-id="${escapeHtml(primaryCaseId)}" data-target="${escapeHtml(primary.target || "overview")}" ${primary.queue_type ? `data-queue-type="${escapeHtml(primary.queue_type)}"` : ""} ${primary.item_id ? `data-item-id="${escapeHtml(primary.item_id)}"` : ""}>Do this now</button>`
-                : `<button class="btn-ledger" type="button" data-command-action="create-case"><span class="nav-glyph">+</span> Add Case</button>`;
+            const actionButton = primary.target === "document-inbox"
+                ? `<button class="btn-ledger" type="button" data-command-action="open-target" data-target="document-inbox" ${primary.item_id ? `data-item-id="${escapeHtml(primary.item_id)}"` : ""}>Review source</button>`
+                : cases.length
+                    ? `<button class="btn-ledger" type="button" data-command-action="open-target" data-case-id="${escapeHtml(primaryCaseId)}" data-target="${escapeHtml(primary.target || "overview")}" ${primary.queue_type ? `data-queue-type="${escapeHtml(primary.queue_type)}"` : ""} ${primary.item_id ? `data-item-id="${escapeHtml(primary.item_id)}"` : ""}>Do this now</button>`
+                    : `<button class="btn-ledger" type="button" data-command-action="create-case"><span class="nav-glyph">+</span> Add Case</button>`;
             const secondaryButtons = cases.length ? `
                 <button class="btn-secondary-ledger guided-depth" type="button" data-command-action="open-target" data-case-id="${escapeHtml(primaryCaseId)}" data-target="documents">Add evidence</button>
                 <button class="btn-secondary-ledger guided-depth" type="button" data-command-action="open-target" data-case-id="${escapeHtml(primaryCaseId)}" data-target="review">Review queue</button>
@@ -4466,7 +4608,14 @@
                 ...(state.pending_approvals || []).map((item) => ({ title: item.action, body: item.reason || "Approval required before action.", type: "approval" })),
                 ...(state.contradictions || []).map((item) => ({ title: item.title, body: item.description || "Potential contradiction needs review.", type: "contradiction" })),
                 ...(state.missing_evidence || []).map((item) => ({ title: item.title, body: item.suggested_action || item.description || "Evidence is missing for a claim or case fact.", type: "missing evidence" })),
-                ...(state.open_loops || []).map((item) => ({ title: item.title, body: item.next_action || item.description || "Open loop needs attention.", type: "open loop" }))
+                ...(state.open_loops || []).map((item) => ({ title: item.title, body: item.next_action || item.description || "Open loop needs attention.", type: "open loop" })),
+                ...(state.document_inbox || []).map((item) => ({
+                    title: item.title,
+                    body: item.suggested_matches?.[0]?.case_title
+                        ? `Suggested case: ${item.suggested_matches[0].case_title}. Confirm before linking.`
+                        : "Choose the legal case for this source.",
+                    type: "document inbox"
+                }))
             ];
             document.getElementById("reviewCount").textContent = `${items.length} item${items.length === 1 ? "" : "s"}`;
             document.getElementById("reviewList").innerHTML = items.length ? items.slice(0, 8).map((item) => `
@@ -4476,6 +4625,176 @@
                     <p>${escapeHtml(item.body)}</p>
                 </article>
             `).join("") : `<div class="empty-state">Nothing is waiting for review.</div>`;
+        }
+
+        function renderDocumentInbox(items = [], cases = []) {
+            const count = document.getElementById("documentInboxCount");
+            const container = document.getElementById("documentInboxItems");
+            if (!count || !container) return;
+            count.textContent = `${items.length} waiting`;
+            container.innerHTML = items.length ? items.map((item) => {
+                const suggested = item.suggested_matches?.[0] || null;
+                const suggestedId = Number(suggested?.case_id || item.suggested_case_id || 0);
+                const selectedId = cases.some((caseItem) => Number(caseItem.case_id) === suggestedId)
+                    ? suggestedId
+                    : Number(selectedCaseId || cases[0]?.case_id || 0);
+                const caseOptions = cases.map((caseItem) => `
+                    <option value="${escapeHtml(caseItem.case_id)}" ${Number(caseItem.case_id) === selectedId ? "selected" : ""}>${escapeHtml(caseItem.title)}</option>
+                `).join("");
+                const reasons = suggested?.reasons?.length
+                    ? suggested.reasons.join("; ")
+                    : "No reliable case match yet. Choose the case manually.";
+                return `
+                    <article class="document-inbox-item" data-inbox-item-id="${escapeHtml(item.id)}">
+                        <div class="document-inbox-main">
+                            <div class="document-inbox-meta">
+                                <span class="tag">${escapeHtml(item.source_type || "source")}</span>
+                                <span class="tag">${escapeHtml(item.document_type || "unknown")}</span>
+                                <span class="tag">${escapeHtml(item.word_count || 0)} words</span>
+                                ${item.confidentiality_level !== "normal" ? `<span class="tag orange">${escapeHtml(item.confidentiality_level)}</span>` : ""}
+                            </div>
+                            <strong>${escapeHtml(item.title || item.original_filename || "Untitled source")}</strong>
+                            <p class="document-inbox-preview">${escapeHtml(item.summary || item.text_preview || "No readable text was extracted. The original local source is preserved.")}</p>
+                            <div class="document-inbox-meta">
+                                ${item.sender ? `<span>From ${escapeHtml(item.sender)}</span>` : ""}
+                                ${item.date_on_document ? `<span>${escapeHtml(item.date_on_document)}</span>` : ""}
+                                <span>${escapeHtml(String(item.content_hash || "").slice(0, 12))}</span>
+                            </div>
+                        </div>
+                        <div class="document-inbox-match">
+                            <div class="document-inbox-meta">
+                                <span class="tag ${suggested?.confidence === "high" ? "" : "orange"}">${escapeHtml(suggested?.confidence || "unmatched")}</span>
+                                ${suggested ? `<span class="muted">${escapeHtml(Math.round(Number(suggested.score || 0)))}/100 match score</span>` : ""}
+                            </div>
+                            <strong>${escapeHtml(suggested?.case_title || "Choose a case")}</strong>
+                            <p class="document-inbox-reasons">${escapeHtml(reasons)}</p>
+                            ${cases.length ? `
+                                <label class="input-field">
+                                    <span>Confirmed case</span>
+                                    <select class="control document-inbox-case-select" aria-label="Case for ${escapeHtml(item.title || "inbox source")}">${caseOptions}</select>
+                                </label>
+                                <div class="document-inbox-actions">
+                                    <button class="btn-ledger" type="button" data-inbox-link="${escapeHtml(item.id)}">Link to Case</button>
+                                    <button class="btn-secondary-ledger" type="button" data-inbox-dismiss="${escapeHtml(item.id)}">Dismiss</button>
+                                </div>
+                            ` : `
+                                <button class="btn-ledger" type="button" data-command-action="create-case">Create a Case</button>
+                                <button class="btn-secondary-ledger" type="button" data-inbox-dismiss="${escapeHtml(item.id)}">Dismiss</button>
+                            `}
+                        </div>
+                    </article>
+                `;
+            }).join("") : `<div class="empty-state">No unassigned documents.</div>`;
+
+            container.querySelectorAll("[data-inbox-link]").forEach((button) => {
+                button.addEventListener("click", () => linkDocumentInboxSource(button).catch((error) => showToast(error.message)));
+            });
+            container.querySelectorAll("[data-inbox-dismiss]").forEach((button) => {
+                button.addEventListener("click", () => dismissDocumentInboxSource(button).catch((error) => showToast(error.message)));
+            });
+            wireCommandActions();
+        }
+
+        function openDocumentInbox({ focusForm = false } = {}) {
+            setDepth("guided");
+            document.getElementById("document-inbox")?.scrollIntoView({ behavior: "smooth", block: "start" });
+            if (focusForm) {
+                const form = document.getElementById("documentInboxForm");
+                if (form) form.hidden = false;
+                window.setTimeout(() => document.getElementById("documentInboxTitle")?.focus(), 180);
+            }
+        }
+
+        async function stageDocumentInboxSource() {
+            const fileInput = document.getElementById("documentInboxFile");
+            const file = fileInput?.files?.[0];
+            const text = document.getElementById("documentInboxText")?.value.trim() || "";
+            const title = document.getElementById("documentInboxTitle")?.value.trim() || file?.name || "";
+            const selectedSourceType = document.getElementById("documentInboxSourceType")?.value || "manual_text";
+            const sourceType = file && selectedSourceType === "manual_text" ? "manual_upload" : selectedSourceType;
+            const confidentiality = document.getElementById("documentInboxConfidentiality")?.value || "normal";
+            const status = document.getElementById("documentInboxStageStatus");
+            if (!file && !text) return showToast("Choose a local file or paste source text.");
+            const progress = startAnalysisProgress(status, {
+                label: "Reading source and matching cases",
+                words: file ? Math.max(80, Math.round((file.size || 0) / 6)) : wordCount(text),
+                location: "kept local in the Document Inbox until you confirm a case"
+            });
+            let response;
+            if (file) {
+                const formData = new FormData();
+                formData.append("file", file);
+                formData.append("title", title || file.name);
+                formData.append("source_type", sourceType);
+                formData.append("confidentiality_level", confidentiality);
+                response = await apiFetch("/api/document-inbox/upload", { method: "POST", body: formData });
+            } else {
+                response = await apiFetch("/api/document-inbox", {
+                    method: "POST",
+                    body: JSON.stringify({ title, source_type: sourceType, confidentiality_level: confidentiality, extracted_text: text })
+                });
+            }
+            const item = response.item || {};
+            const suggestion = item.suggested_matches?.[0];
+            if (item.status === "linked") {
+                progress.complete("This exact source is already linked in the ledger.");
+                showToast("This exact source is already linked to a case.");
+            } else {
+                progress.complete(suggestion
+                    ? `Source staged. Review the ${Math.round(Number(suggestion.score || 0))}/100 match score for ${suggestion.case_title}.`
+                    : "Source staged. Choose its case before analysis enters a legal ledger.");
+                showToast(suggestion ? `Likely case: ${suggestion.case_title}. Confirm before linking.` : "Source staged for case review.");
+            }
+            if (fileInput) fileInput.value = "";
+            const textInput = document.getElementById("documentInboxText");
+            const titleInput = document.getElementById("documentInboxTitle");
+            if (textInput) textInput.value = "";
+            if (titleInput) titleInput.value = "";
+            await loadCommandCenter();
+            await refreshLedgerSearchIfActive();
+            openDocumentInbox();
+        }
+
+        async function linkDocumentInboxSource(button) {
+            const row = button.closest("[data-inbox-item-id]");
+            const caseId = Number(row?.querySelector(".document-inbox-case-select")?.value || 0);
+            const itemId = Number(button.dataset.inboxLink || row?.dataset.inboxItemId || 0);
+            if (!itemId || !caseId) return showToast("Choose the confirmed case first.");
+            button.disabled = true;
+            button.textContent = "Linking...";
+            try {
+                const response = await apiFetch(`/api/document-inbox/${itemId}/link`, {
+                    method: "POST",
+                    body: JSON.stringify({ case_id: caseId })
+                });
+                const result = analysisResultParts(response);
+                showToast(`Source linked. ${result.timelineCount + result.reviewCount} review item${result.timelineCount + result.reviewCount === 1 ? "" : "s"} prepared.`);
+                await loadCommandCenter();
+                await refreshLedgerSearchIfActive();
+                await loadCaseDetail(caseId);
+                setDepth("guided");
+                activateDetailTab(result.reviewCount ? "review" : result.timelineCount ? "timeline" : "documents");
+                document.getElementById("caseDetailPanel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+            } finally {
+                const refreshed = document.querySelector(`[data-inbox-link="${itemId}"]`);
+                if (refreshed) {
+                    refreshed.disabled = false;
+                    refreshed.textContent = "Link to Case";
+                }
+            }
+        }
+
+        async function dismissDocumentInboxSource(button) {
+            const itemId = Number(button.dataset.inboxDismiss || 0);
+            if (!itemId) return;
+            await apiFetch(`/api/document-inbox/${itemId}`, {
+                method: "PATCH",
+                body: JSON.stringify({ action: "dismiss" })
+            });
+            showToast("Source removed from the review queue; its local record was retained.");
+            await loadCommandCenter();
+            await refreshLedgerSearchIfActive();
+            openDocumentInbox();
         }
 
         function renderEmptyCaseOnboarding() {
@@ -4531,7 +4850,7 @@
                         <strong>${escapeHtml(item.title || "Untitled match")}</strong>
                         <p>${escapeHtml(item.snippet || item.case_title || "Open this ledger item.")}</p>
                         <div class="ledger-search-meta">
-                            <span>Case ${escapeHtml(item.case_id || "")}</span>
+                            <span>${item.case_id ? `Case ${escapeHtml(item.case_id)}` : "Unassigned source"}</span>
                             ${item.case_title ? `<span>${escapeHtml(item.case_title)}</span>` : ""}
                             ${item.target ? `<span>${escapeHtml(searchTypeLabel(item.target))}</span>` : ""}
                         </div>
@@ -4573,6 +4892,11 @@
                 const value = document.getElementById("ledgerSearchInput")?.value.trim() || "";
                 if (value.length >= 3) runLedgerSearch().catch((error) => showToast(error.message));
             }, 420);
+        }
+
+        async function refreshLedgerSearchIfActive() {
+            const query = document.getElementById("ledgerSearchInput")?.value.trim() || "";
+            if (query) await runLedgerSearch();
         }
 
         function documentById(documentId) {
@@ -5374,7 +5698,8 @@
             const items = [
                 { action: "set-depth", kicker: "layout", label: "Focus layout", body: "Return to the minimal case view.", depth: "simple" },
                 { action: "set-depth", kicker: "layout", label: "Guided layout", body: "Open documents, timeline, claims, and review controls.", depth: "guided" },
-                { action: "set-depth", kicker: "layout", label: "Expert layout", body: "Expose papertrail, bundle, approvals, and audit controls.", depth: "expert" }
+                { action: "set-depth", kicker: "layout", label: "Expert layout", body: "Expose papertrail, bundle, approvals, and audit controls.", depth: "expert" },
+                { action: "open-inbox", kicker: "source", label: "Document inbox", body: "Stage or classify sources before they enter a case.", depth: "guided" }
             ];
             if (!cases.length) {
                 items.push({ action: "create-case", kicker: "case", label: "Create ledger case", body: "Start the first persisted legal case record.", depth: "guided" });
@@ -5474,6 +5799,10 @@
                 setDepth("guided");
                 document.getElementById("caseForm").hidden = false;
                 document.getElementById("case-intake")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                return;
+            }
+            if (item.action === "open-inbox") {
+                openDocumentInbox({ focusForm: true });
                 return;
             }
             if (item.caseId) {
@@ -8327,6 +8656,10 @@
 
         async function openCommandTarget(caseId, target, focus = {}) {
             const resolvedCaseId = caseId || selectedCaseId || commandState?.cases?.[0]?.case_id;
+            if (target === "document-inbox") {
+                openDocumentInbox();
+                return;
+            }
             if (target === "case-intake" || !resolvedCaseId) {
                 openCaseIntake();
                 return;
@@ -8846,6 +9179,7 @@
             renderNextActions(commandState.next_actions || []);
             renderReviews(commandState);
             renderCases(commandState.cases || []);
+            renderDocumentInbox(commandState.document_inbox || [], commandState.cases || []);
             if (!selectedCaseId && commandState.cases?.length) {
                 await loadCaseDetail(commandState.cases[0].case_id);
             } else if (!commandState.cases?.length) {
@@ -9003,6 +9337,18 @@
             document.getElementById("createCaseButton").addEventListener("click", () => {
                 document.getElementById("caseForm").hidden = !document.getElementById("caseForm").hidden;
                 if (document.body.dataset.depth === "simple") setDepth("guided");
+            });
+            document.getElementById("toggleDocumentInboxForm").addEventListener("click", () => {
+                const form = document.getElementById("documentInboxForm");
+                form.hidden = !form.hidden;
+                if (!form.hidden) document.getElementById("documentInboxTitle")?.focus();
+            });
+            document.getElementById("stageDocumentInbox").addEventListener("click", () => {
+                stageDocumentInboxSource().catch((error) => {
+                    const status = document.getElementById("documentInboxStageStatus");
+                    if (status) status.textContent = error.message;
+                    showToast(error.message);
+                });
             });
             document.getElementById("submitCase").addEventListener("click", () => createCase().catch((error) => showToast(error.message)));
         }

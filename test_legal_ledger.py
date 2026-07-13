@@ -120,6 +120,97 @@ class TestLegalLedgerService(unittest.TestCase):
         self.assertIn("resolved", audit_actions)
         self.assertGreaterEqual(len(audit_actions), 9)
 
+    def test_document_inbox_preserves_source_and_requires_explicit_case_link(self):
+        case = self.ledger.create_case({
+            "user_id": "robert",
+            "title": "CAK objection",
+            "identifiers": [{"identifier_value": "CAK-2026-4431"}],
+        }, actor="robert")
+        other_case = self.ledger.create_case({
+            "user_id": "robert",
+            "title": "Vivare repairs",
+        }, actor="robert")
+        source_text = "CAK issued decision CAK-2026-4431 on 2026-06-01."
+        staged = self.ledger.stage_document_inbox_item(
+            "robert",
+            {
+                "title": "CAK decision",
+                "source_type": "manual_text",
+                "source_uri": "manual://inbox/cak-decision",
+                "extracted_text": source_text,
+                "analysis": {"topics": ["administrative_law"], "processing": {"word_count": 6}},
+            },
+            suggested_matches=[{
+                "case_id": case["case_id"],
+                "case_title": case["title"],
+                "score": 92,
+                "confidence": "high",
+                "reasons": ["case reference CAK-2026-4431 appears in the source"],
+                "requires_review": True,
+            }],
+            actor="robert",
+        )
+
+        self.assertFalse(staged["duplicate"])
+        self.assertEqual(staged["status"], "needs_review")
+        self.assertEqual(staged["suggested_case_id"], case["case_id"])
+        self.assertNotIn("local_path", staged)
+        self.assertEqual(self.ledger.command_center("robert")["counts"]["document_inbox"], 1)
+        self.assertEqual(
+            self.ledger.command_center("robert")["next_actions"][0]["target"],
+            "document-inbox",
+        )
+
+        linked = self.ledger.link_document_inbox_item(
+            staged["id"], case["case_id"], "robert", actor="robert"
+        )
+        self.assertTrue(linked["created"])
+        self.assertEqual(linked["inbox_item"]["status"], "linked")
+        self.assertEqual(linked["document"]["source_uri"], "manual://inbox/cak-decision")
+        self.assertEqual(linked["document"]["extracted_text"], source_text)
+        self.assertEqual(len(self.ledger.list_document_versions(case["case_id"], linked["document"]["id"])), 1)
+        self.assertEqual(self.ledger.command_center("robert")["counts"]["document_inbox"], 0)
+
+        repeated = self.ledger.link_document_inbox_item(
+            staged["id"], case["case_id"], "robert", actor="robert"
+        )
+        self.assertFalse(repeated["created"])
+        self.assertEqual(repeated["document"]["id"], linked["document"]["id"])
+        with self.assertRaisesRegex(ValueError, "already linked"):
+            self.ledger.link_document_inbox_item(
+                staged["id"], other_case["case_id"], "robert", actor="robert"
+            )
+
+        user_audit = self.ledger.list_audit_events(external_user_id="robert")
+        self.assertTrue(any(item["action"] == "staged_for_case_review" for item in user_audit))
+        self.assertTrue(any(item["action"] == "linked_to_case" for item in user_audit))
+        self.assertNotIn(source_text, json.dumps(user_audit))
+        self.assertEqual(self.ledger.list_document_inbox_items("other-user"), [])
+
+    def test_document_inbox_remains_actionable_and_searchable_before_any_case_exists(self):
+        staged = self.ledger.stage_document_inbox_item(
+            "new-user",
+            {
+                "title": "Unassigned insurance decision",
+                "source_type": "manual_text",
+                "extracted_text": "Insurer Noordlicht rejected reimbursement on 2026-07-02.",
+                "summary": "Reimbursement rejection awaiting case classification.",
+            },
+            suggested_matches=[],
+            actor="new-user",
+        )
+
+        command_center = self.ledger.command_center("new-user")
+        self.assertEqual(command_center["counts"]["active_cases"], 0)
+        self.assertEqual(command_center["counts"]["document_inbox"], 1)
+        self.assertEqual(command_center["next_actions"][0]["target"], "document-inbox")
+
+        search = self.ledger.search_ledger("Noordlicht", "new-user")
+        self.assertEqual(search["count"], 1)
+        self.assertEqual(search["results"][0]["result_type"], "document_inbox")
+        self.assertEqual(search["results"][0]["entity_id"], staged["id"])
+        self.assertIsNone(search["results"][0]["case_id"])
+
     def test_create_all_adds_timeline_and_claim_columns_to_an_existing_database(self):
         legacy_path = os.path.join(self.tmp.name, "legacy-ledger.sqlite3")
         connection = sqlite3.connect(legacy_path)
@@ -136,6 +227,12 @@ class TestLegalLedgerService(unittest.TestCase):
             "claim_type VARCHAR(80), statement TEXT NOT NULL, status VARCHAR(80), confidence FLOAT, "
             "created_at DATETIME, updated_at DATETIME)"
         )
+        connection.execute(
+            "CREATE TABLE audit_events ("
+            "id INTEGER PRIMARY KEY, case_id INTEGER, entity_type VARCHAR(80) NOT NULL, "
+            "entity_id INTEGER, action VARCHAR(120) NOT NULL, actor VARCHAR(120), source VARCHAR(120), "
+            "before_state TEXT, after_state TEXT, risk_level VARCHAR(40), approval_id INTEGER, created_at DATETIME)"
+        )
         connection.commit()
         connection.close()
 
@@ -145,12 +242,14 @@ class TestLegalLedgerService(unittest.TestCase):
             connection = sqlite3.connect(legacy_path)
             event_columns = {row[1] for row in connection.execute("PRAGMA table_info(case_events)")}
             claim_columns = {row[1] for row in connection.execute("PRAGMA table_info(legal_claims)")}
+            audit_columns = {row[1] for row in connection.execute("PRAGMA table_info(audit_events)")}
             connection.close()
         finally:
             legacy.close()
 
         self.assertTrue({"actor", "action", "affected_party", "event_kind"}.issubset(event_columns))
         self.assertTrue({"position_role", "subject_party", "materiality"}.issubset(claim_columns))
+        self.assertIn("user_id", audit_columns)
 
     def test_source_linked_obligations_are_reviewed_audited_and_exported(self):
         case = self.ledger.create_case({
@@ -3230,6 +3329,155 @@ class TestLegalLedgerApi(unittest.TestCase):
             and link["snippet"] == source_quote
         ]
         self.assertEqual(len(matching_links), 1)
+
+    def test_document_inbox_api_suggests_links_and_keeps_users_isolated(self):
+        created = self.client.post("/api/cases", json={
+            "title": "CAK objection 2026",
+            "description": "Administrative objection against a CAK decision.",
+            "legal_domain": "administrative_law",
+            "court_or_institution": "CAK",
+            "case_reference": "CAK-2026-4431",
+            "parties": [{"name": "CAK", "party_type": "government_body"}],
+        }, headers=self.headers)
+        self.assertEqual(created.status_code, 201)
+        case_id = created.get_json()["case_id"]
+
+        staged = self.client.post("/api/document-inbox", json={
+            "title": "Decision CAK-2026-4431",
+            "source_type": "manual_text",
+            "extracted_text": (
+                "On 2026-06-01 CAK issued decision CAK-2026-4431. "
+                "Robert submitted an objection on 2026-06-08."
+            ),
+        }, headers=self.headers)
+        self.assertEqual(staged.status_code, 201)
+        staged_payload = staged.get_json()
+        item = staged_payload["item"]
+        self.assertEqual(item["status"], "needs_review")
+        self.assertEqual(item["suggested_matches"][0]["case_id"], case_id)
+        self.assertTrue(item["suggested_matches"][0]["requires_review"])
+        self.assertFalse(staged_payload["external_action_taken"])
+
+        command_center = self.client.get("/api/cases/command-center", headers=self.headers)
+        self.assertEqual(command_center.status_code, 200)
+        self.assertGreaterEqual(command_center.get_json()["counts"]["document_inbox"], 1)
+        self.assertTrue(any(
+            action["target"] == "document-inbox"
+            for action in command_center.get_json()["next_actions"]
+        ))
+
+        other_token = self.app_module.auth_system._create_session("inbox-other@laro.test", "user")
+        other_headers = {"Authorization": f"Bearer {other_token}"}
+        self.assertEqual(self.client.get("/api/document-inbox", headers=other_headers).get_json()["items"], [])
+        self.assertEqual(
+            self.client.get(f"/api/document-inbox/{item['id']}", headers=other_headers).status_code,
+            404,
+        )
+        self.assertEqual(
+            self.client.post(
+                f"/api/document-inbox/{item['id']}/link",
+                json={"case_id": case_id},
+                headers=other_headers,
+            ).status_code,
+            404,
+        )
+
+        linked = self.client.post(
+            f"/api/document-inbox/{item['id']}/link",
+            json={"case_id": case_id},
+            headers=self.headers,
+        )
+        self.assertEqual(linked.status_code, 201)
+        linked_payload = linked.get_json()
+        self.assertTrue(linked_payload["source_preserved"])
+        self.assertFalse(linked_payload["external_action_taken"])
+        self.assertEqual(linked_payload["inbox_item"]["status"], "linked")
+        self.assertEqual(linked_payload["document"]["case_id"], case_id)
+        self.assertGreaterEqual(len(linked_payload["timeline_suggestions"]), 1)
+
+        documents = self.client.get(f"/api/cases/{case_id}/documents", headers=self.headers).get_json()["documents"]
+        self.assertEqual(len([doc for doc in documents if doc["content_hash"] == item["content_hash"]]), 1)
+        duplicate = self.client.post("/api/document-inbox", json={
+            "title": "Decision CAK-2026-4431",
+            "source_type": "manual_text",
+            "extracted_text": (
+                "On 2026-06-01 CAK issued decision CAK-2026-4431. "
+                "Robert submitted an objection on 2026-06-08."
+            ),
+        }, headers=self.headers)
+        self.assertEqual(duplicate.status_code, 200)
+        self.assertTrue(duplicate.get_json()["item"]["duplicate"])
+        self.assertEqual(duplicate.get_json()["item"]["id"], item["id"])
+
+        audit = self.client.get("/api/audit", headers=self.headers).get_json()["audit_events"]
+        self.assertTrue(any(record["action"] == "staged_for_case_review" for record in audit))
+        self.assertTrue(any(record["action"] == "linked_to_case" for record in audit))
+
+    def test_document_inbox_upload_keeps_the_file_local_without_exposing_its_path(self):
+        source_bytes = b"On 2026-07-02 insurer Noordlicht denied reimbursement under NL-7781."
+        uploaded = self.client.post(
+            "/api/document-inbox/upload",
+            data={
+                "file": (io.BytesIO(source_bytes), "insurance-decision.txt"),
+                "title": "Insurance decision NL-7781",
+                "source_type": "manual_upload",
+                "confidentiality_level": "sensitive",
+            },
+            content_type="multipart/form-data",
+            headers=self.headers,
+        )
+
+        self.assertEqual(uploaded.status_code, 201)
+        payload = uploaded.get_json()
+        item = payload["item"]
+        self.assertTrue(payload["storage"]["kept_local"])
+        self.assertEqual(payload["storage"]["size_bytes"], len(source_bytes))
+        self.assertTrue(item["has_local_file"])
+        self.assertEqual(item["confidentiality_level"], "sensitive")
+        self.assertNotIn("local_path", item)
+        self.assertNotIn("local_path", json.dumps(payload))
+
+        stored_files = []
+        for root, _, filenames in os.walk(os.environ["LARO_UPLOAD_ROOT"]):
+            stored_files.extend(os.path.join(root, name) for name in filenames)
+        matching_files = [
+            path for path in stored_files
+            if item["content_hash"][:20] in os.path.basename(path)
+        ]
+        self.assertEqual(len(matching_files), 1)
+        with open(matching_files[0], "rb") as handle:
+            self.assertEqual(handle.read(), source_bytes)
+
+        duplicate = self.client.post(
+            "/api/document-inbox/upload",
+            data={
+                "file": (io.BytesIO(source_bytes), "renamed-insurance-decision.txt"),
+                "title": "Renamed copy of NL-7781",
+            },
+            content_type="multipart/form-data",
+            headers=self.headers,
+        )
+        self.assertEqual(duplicate.status_code, 200)
+        self.assertTrue(duplicate.get_json()["item"]["duplicate"])
+        self.assertEqual(duplicate.get_json()["item"]["id"], item["id"])
+        stored_files_after_duplicate = []
+        for root, _, filenames in os.walk(os.environ["LARO_UPLOAD_ROOT"]):
+            stored_files_after_duplicate.extend(os.path.join(root, name) for name in filenames)
+        self.assertEqual(set(stored_files_after_duplicate), set(stored_files))
+
+        dismissed = self.client.patch(
+            f"/api/document-inbox/{item['id']}",
+            json={"action": "dismiss"},
+            headers=self.headers,
+        )
+        self.assertEqual(dismissed.status_code, 200)
+        self.assertEqual(dismissed.get_json()["status"], "dismissed")
+        dismissed_items = self.client.get(
+            "/api/document-inbox?status=dismissed",
+            headers=self.headers,
+        ).get_json()["items"]
+        self.assertTrue(any(record["id"] == item["id"] for record in dismissed_items))
+        self.assertTrue(os.path.isfile(matching_files[0]))
 
     def test_case_endpoints_do_not_expose_another_authenticated_users_ledger(self):
         created = self.client.post("/api/cases", json={"title": "Private legal matter"}, headers=self.headers)

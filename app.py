@@ -24,6 +24,7 @@ from werkzeug.utils import secure_filename
 from authentication import EmailAuthenticationSystem
 from case_matching import LegalCaseMatcher
 from document_aggregation import DocumentAggregator
+from document_case_matching import rank_document_cases
 from document_intelligence import DocumentIntelligenceEngine
 from lawyer_outreach import LawyerOutreachSystem
 from outreach_analytics import build_outreach_analytics
@@ -383,16 +384,21 @@ def _safe_upload_name(filename):
     return name or 'uploaded-document'
 
 
-def _store_upload_file(case_id, storage):
+def _store_upload_in_directory(directory, storage, *, stable_name=False):
     original_name = storage.filename or 'uploaded-document'
     safe_name = _safe_upload_name(original_name)
     contents = storage.read()
     digest = hashlib.sha256(contents).hexdigest()
     stem, extension = os.path.splitext(safe_name)
-    stored_name = f"{datetime.datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{digest[:12]}_{stem[:80]}{extension.lower()}"
-    local_path = os.path.join(_case_upload_dir(case_id), stored_name)
-    with open(local_path, 'wb') as handle:
-        handle.write(contents)
+    if stable_name:
+        stored_name = f"{digest[:20]}{extension.lower()}"
+    else:
+        prefix = f"{datetime.datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{digest[:12]}"
+        stored_name = f"{prefix}_{stem[:80]}{extension.lower()}"
+    local_path = os.path.join(directory, stored_name)
+    if not os.path.isfile(local_path):
+        with open(local_path, 'wb') as handle:
+            handle.write(contents)
     return {
         'original_name': original_name,
         'stored_name': stored_name,
@@ -401,6 +407,21 @@ def _store_upload_file(case_id, storage):
         'size_bytes': len(contents),
         'extension': extension.lower().replace('.', '') or 'unknown',
     }
+
+
+def _store_upload_file(case_id, storage):
+    return _store_upload_in_directory(_case_upload_dir(case_id), storage)
+
+
+def _inbox_upload_dir(actor):
+    actor_key = hashlib.sha256(str(actor or 'anonymous').encode('utf-8')).hexdigest()[:16]
+    path = os.path.join(_upload_root(), 'document_inbox', actor_key)
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def _store_inbox_upload_file(actor, storage):
+    return _store_upload_in_directory(_inbox_upload_dir(actor), storage, stable_name=True)
 
 
 def _safe_served_upload_path(local_path):
@@ -1555,6 +1576,76 @@ def _run_case_analysis_job(job_id, case_id, actor):
         }, actor=actor)
 
 
+def _stage_document_inbox_source(data):
+    """Analyze and persist a source before its case is known."""
+    payload = dict(data or {})
+    text = str(payload.get('extracted_text') or payload.get('ocr_text') or payload.get('content') or '')
+    title = (
+        payload.get('title')
+        or payload.get('original_filename')
+        or payload.get('document_name')
+        or 'Untitled inbox document'
+    )
+    if not text.strip() and not payload.get('local_path') and title == 'Untitled inbox document':
+        raise ValueError('Add source text or choose a local file before staging a document')
+
+    analysis = document_intelligence.analyze_text(
+        text,
+        document_name=title,
+        metadata={
+            **(payload.get('metadata') or {}),
+            'source_type': payload.get('source_type') or payload.get('source') or 'manual_text',
+            'source_uri': payload.get('source_uri') or '',
+            'original_filename': payload.get('original_filename') or title,
+            'document_type': payload.get('document_type') or payload.get('type') or 'unknown',
+            'sender': payload.get('sender') or payload.get('from') or '',
+            'recipient': payload.get('recipient') or payload.get('to') or '',
+            'date_on_document': payload.get('date_on_document') or payload.get('document_date') or '',
+        },
+        case_context=None,
+    ) if text.strip() else {
+        'document_type': payload.get('document_type') or payload.get('type') or 'unreadable_source',
+        'summary': '',
+        'topics': [],
+        'facts': {},
+        'processing': {'word_count': 0, 'readable': False, 'analysis_method': 'metadata_only'},
+    }
+    staged_payload = {
+        **payload,
+        'title': title,
+        'source_type': payload.get('source_type') or payload.get('source') or 'manual_text',
+        'document_type': analysis.get('document_type') or payload.get('document_type') or 'unknown',
+        'summary': analysis.get('summary') or payload.get('summary') or '',
+        'extracted_text': text,
+        'analysis': analysis,
+        'metadata': {
+            **(payload.get('metadata') or {}),
+            'document_inbox': True,
+            'case_assignment_requires_review': True,
+        },
+    }
+    matches = rank_document_cases(
+        {**staged_payload, 'analysis': analysis},
+        legal_ledger.list_cases(_ledger_actor()),
+        limit=3,
+    )
+    item = legal_ledger.stage_document_inbox_item(
+        _ledger_actor(),
+        staged_payload,
+        suggested_matches=matches,
+        email=session.get('user_email'),
+        actor=_ledger_actor(),
+    )
+    return {
+        'item': item,
+        'analysis': analysis,
+        'suggested_matches': item.get('suggested_matches') or [],
+        'requires_human_review': True,
+        'external_action_taken': False,
+        'source_preserved': True,
+    }
+
+
 @app.route('/api/health', methods=['GET'])
 def health():
     """Local readiness check for the Flask app and legal ledger."""
@@ -1662,6 +1753,145 @@ def lookup_ledger_case_identifier():
     if not match:
         return jsonify({'error': 'Case identifier not found'}), 404
     return jsonify(match), 200
+
+
+@app.route('/api/document-inbox', methods=['GET'])
+@auth_system._require_auth
+def list_document_inbox():
+    status = request.args.get('status')
+    items = legal_ledger.list_document_inbox_items(
+        _ledger_actor(),
+        status=status,
+        limit=request.args.get('limit', 50),
+    )
+    return jsonify({
+        'items': items,
+        'count': len(items),
+        'needs_review_count': sum(1 for item in items if item.get('status') == 'needs_review'),
+    }), 200
+
+
+@app.route('/api/document-inbox', methods=['POST'])
+@auth_system._require_auth
+def stage_document_inbox():
+    try:
+        result = _stage_document_inbox_source(request.json or {})
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    db_manager.invalidate_cache('documents')
+    return jsonify(result), 200 if result['item'].get('duplicate') else 201
+
+
+@app.route('/api/document-inbox/upload', methods=['POST'])
+@auth_system._require_auth
+def upload_document_inbox():
+    file_item = request.files.get('file')
+    if not file_item or not file_item.filename:
+        return jsonify({'error': 'A file field named file is required'}), 400
+    stored = _store_inbox_upload_file(_ledger_actor(), file_item)
+    extracted_text = document_intelligence.extract_text_from_file(stored['local_path'])
+    try:
+        result = _stage_document_inbox_source({
+            'source_type': request.form.get('source_type') or 'manual_upload',
+            'source_uri': f"local://document-inbox/{stored['content_hash'][:20]}/{stored['stored_name']}",
+            'original_filename': stored['original_name'],
+            'local_path': stored['local_path'],
+            'content_hash': stored['content_hash'],
+            'document_type': stored['extension'],
+            'title': request.form.get('title') or stored['original_name'],
+            'extracted_text': extracted_text,
+            'confidentiality_level': request.form.get('confidentiality_level') or 'normal',
+            'metadata': {
+                'stored_name': stored['stored_name'],
+                'size_bytes': stored['size_bytes'],
+                'upload_mode': 'case_neutral_document_inbox',
+            },
+        })
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    db_manager.invalidate_cache('documents')
+    result['storage'] = {
+        'content_hash': stored['content_hash'],
+        'size_bytes': stored['size_bytes'],
+        'kept_local': True,
+    }
+    return jsonify(result), 200 if result['item'].get('duplicate') else 201
+
+
+@app.route('/api/document-inbox/<int:item_id>', methods=['GET'])
+@auth_system._require_auth
+def get_document_inbox_item(item_id):
+    item = legal_ledger.get_document_inbox_item(item_id, _ledger_actor())
+    if not item:
+        return jsonify({'error': 'Inbox document not found'}), 404
+    return jsonify(item), 200
+
+
+@app.route('/api/document-inbox/<int:item_id>', methods=['PATCH'])
+@auth_system._require_auth
+def review_document_inbox_item(item_id):
+    try:
+        item = legal_ledger.review_document_inbox_item(
+            item_id,
+            _ledger_actor(),
+            (request.json or {}).get('action'),
+            actor=_ledger_actor(),
+        )
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    if not item:
+        return jsonify({'error': 'Inbox document not found'}), 404
+    db_manager.invalidate_cache('documents')
+    return jsonify(item), 200
+
+
+@app.route('/api/document-inbox/<int:item_id>/link', methods=['POST'])
+@auth_system._require_auth
+def link_document_inbox_item(item_id):
+    try:
+        case_id = int((request.json or {}).get('case_id'))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'A valid case_id is required'}), 400
+    if not _ledger_case_access_allowed(case_id):
+        return jsonify({'error': 'Case not found'}), 404
+    try:
+        result = legal_ledger.link_document_inbox_item(
+            item_id,
+            case_id,
+            _ledger_actor(),
+            actor=_ledger_actor(),
+        )
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    if not result or not result.get('document'):
+        return jsonify({'error': 'Inbox document or case not found'}), 404
+
+    artifacts = {
+        'timeline_suggestions': [],
+        'deadline_suggestions': [],
+        'obligation_suggestions': [],
+        'open_loop_suggestions': [],
+        'claim_suggestions': [],
+        'contradiction_suggestions': [],
+        'missing_evidence_suggestions': [],
+        'evidence_links': [],
+        'evidence_links_created': 0,
+    }
+    if result.get('created') and result.get('analysis'):
+        artifacts = _analysis_artifacts_for_document(
+            case_id,
+            result['document'],
+            result['analysis'],
+            _ledger_actor(),
+        )
+    db_manager.invalidate_cache('documents')
+    return jsonify({
+        **result,
+        **artifacts,
+        'source_preserved': True,
+        'requires_human_review': True,
+        'external_action_taken': False,
+    }), 201 if result.get('created') else 200
 
 
 @app.route('/api/cases/<int:case_id>/documents', methods=['GET'])

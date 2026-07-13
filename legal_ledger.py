@@ -74,6 +74,7 @@ class LedgerUser(Base):
 
     cases = relationship("LegalCase", back_populates="user")
     external_connections = relationship("ExternalConnection", back_populates="user", cascade="all, delete-orphan")
+    document_inbox_items = relationship("DocumentInboxItem", back_populates="user", cascade="all, delete-orphan")
 
 
 class ExternalConnection(Base):
@@ -203,6 +204,40 @@ class DocumentVersion(Base):
     created_at = Column(DateTime, default=utcnow, nullable=False)
 
     document = relationship("CaseDocument", back_populates="versions")
+
+
+class DocumentInboxItem(Base):
+    __tablename__ = "document_inbox_items"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("ledger_users.id"), nullable=False, index=True)
+    source_type = Column(String(80), default="manual", index=True)
+    source_uri = Column(Text, default="")
+    original_filename = Column(String(255), default="")
+    local_path = Column(Text, default="")
+    content_hash = Column(String(128), nullable=False, index=True)
+    document_type = Column(String(80), default="unknown", index=True)
+    date_on_document = Column(String(40), default="")
+    sender = Column(String(255), default="")
+    recipient = Column(String(255), default="")
+    title = Column(String(255), default="")
+    ocr_text = Column(Text, default="")
+    extracted_text = Column(Text, default="")
+    summary = Column(Text, default="")
+    confidentiality_level = Column(String(80), default="normal")
+    analysis_json = Column(Text, default="{}")
+    metadata_json = Column(Text, default="{}")
+    suggested_matches_json = Column(Text, default="[]")
+    suggested_case_id = Column(Integer, ForeignKey("legal_cases.id"), index=True)
+    match_score = Column(Float, default=0.0)
+    status = Column(String(40), default="needs_review", nullable=False, index=True)
+    linked_case_id = Column(Integer, ForeignKey("legal_cases.id"), index=True)
+    linked_document_id = Column(Integer, ForeignKey("case_documents.id"), index=True)
+    linked_at = Column(DateTime)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
+
+    user = relationship("LedgerUser", back_populates="document_inbox_items")
 
 
 class CaseEvent(Base):
@@ -543,6 +578,7 @@ class AuditEvent(Base):
     __tablename__ = "audit_events"
 
     id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("ledger_users.id"), index=True)
     case_id = Column(Integer, ForeignKey("legal_cases.id"), index=True)
     entity_type = Column(String(80), nullable=False)
     entity_id = Column(Integer)
@@ -625,6 +661,9 @@ class LegalLedger:
             "approvals": {
                 "context_json": "TEXT NOT NULL DEFAULT '{}'",
             },
+            "audit_events": {
+                "user_id": "INTEGER",
+            },
         }
         known_tables = set(inspector.get_table_names())
         with self.engine.begin() as connection:
@@ -638,6 +677,12 @@ class LegalLedger:
                         continue
                     column_name = self.engine.dialect.identifier_preparer.quote(name)
                     connection.execute(sql_text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {definition}"))
+            if "audit_events" in known_tables and "legal_cases" in known_tables:
+                connection.execute(sql_text(
+                    "UPDATE audit_events SET user_id = ("
+                    "SELECT legal_cases.user_id FROM legal_cases WHERE legal_cases.id = audit_events.case_id"
+                    ") WHERE user_id IS NULL AND case_id IS NOT NULL"
+                ))
 
     def close(self) -> None:
         self.Session.remove()
@@ -830,6 +875,7 @@ class LegalLedger:
 
         with self.session_scope() as session:
             case_query = session.query(LegalCase).order_by(LegalCase.updated_at.desc(), LegalCase.id.desc())
+            user = None
             if external_user_id is not None:
                 user = session.query(LedgerUser).filter_by(external_user_id=str(external_user_id)).one_or_none()
                 if not user:
@@ -841,6 +887,53 @@ class LegalLedger:
             case_ids = [case.id for case in cases_for_search]
             case_by_id = {case.id: case for case in cases_for_search}
             results: List[Dict[str, Any]] = []
+
+            inbox_query = session.query(DocumentInboxItem).filter_by(status="needs_review")
+            if user:
+                inbox_query = inbox_query.filter_by(user_id=user.id)
+            if case_id:
+                inbox_query = inbox_query.filter(DocumentInboxItem.suggested_case_id == case_id)
+            for item in inbox_query.all():
+                if not matches(
+                    item.title,
+                    item.original_filename,
+                    item.summary,
+                    item.extracted_text,
+                    item.ocr_text,
+                    item.sender,
+                    item.recipient,
+                    item.document_type,
+                ):
+                    continue
+                suggested_matches = _json_load(item.suggested_matches_json, []) or []
+                suggested = suggested_matches[0] if suggested_matches else {}
+                result_title = item.title or item.original_filename or "Unassigned source"
+                result_body = snippet(
+                    item.summary,
+                    item.extracted_text,
+                    item.ocr_text,
+                    item.sender,
+                    item.recipient,
+                    item.document_type,
+                )
+                results.append({
+                    "result_type": "document_inbox",
+                    "case_id": item.suggested_case_id,
+                    "case_title": suggested.get("case_title") or "Unassigned",
+                    "entity_id": item.id,
+                    "title": clean(result_title),
+                    "snippet": result_body,
+                    "target": "document-inbox",
+                    "queue_type": "document_inbox",
+                    "item_id": str(item.id),
+                    "score": score(result_title, result_body),
+                    "metadata": {
+                        "status": item.status,
+                        "source_type": item.source_type,
+                        "suggested_confidence": suggested.get("confidence"),
+                        "suggested_match_score": suggested.get("score"),
+                    },
+                })
 
             for case in cases_for_search:
                 if matches(
@@ -860,9 +953,6 @@ class LegalLedger:
                         case.title,
                         snippet(case.description, case.current_summary, case.desired_outcome, case.legal_domain, case.court_or_institution),
                     )
-
-            if not case_ids:
-                return {"query": needle, "count": 0, "results": [], "facets": {}}
 
             for document in session.query(CaseDocument).filter(CaseDocument.case_id.in_(case_ids)).all():
                 if matches(document.title, document.original_filename, document.summary, document.extracted_text, document.ocr_text, document.sender, document.recipient):
@@ -972,8 +1062,13 @@ class LegalLedger:
                 case_query = case_query.filter_by(user_id=user.id)
 
             case_ids = [case.id for case in case_query.all()]
-            if not case_ids:
-                return self._empty_command_center()
+            inbox_query = session.query(DocumentInboxItem).filter_by(status="needs_review")
+            if user:
+                inbox_query = inbox_query.filter_by(user_id=user.id)
+            document_inbox = [
+                self._serialize_document_inbox_item(item)
+                for item in inbox_query.order_by(DocumentInboxItem.updated_at.desc(), DocumentInboxItem.id.desc()).limit(25).all()
+            ]
 
             for case_id in case_ids:
                 self._ensure_missing_evidence_reviews(session, case_id)
@@ -1077,13 +1172,14 @@ class LegalLedger:
                 case for case in cases
                 if case.get("documents_count", 0) == 0 and case.get("status") not in {"closed", "archived"}
             ]
+            activity_query = session.query(AuditEvent)
+            if user:
+                activity_query = activity_query.filter(AuditEvent.user_id == user.id)
+            else:
+                activity_query = activity_query.filter(AuditEvent.case_id.in_(case_ids))
             recent_activity = [
                 self._serialize_audit(item)
-                for item in session.query(AuditEvent)
-                .filter(AuditEvent.case_id.in_(case_ids))
-                .order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc())
-                .limit(12)
-                .all()
+                for item in activity_query.order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc()).limit(12).all()
             ]
             active_cases = [item for item in cases if item.get("status") not in {"closed", "archived"}]
 
@@ -1102,6 +1198,7 @@ class LegalLedger:
                     "missing_evidence": len(missing_evidence),
                     "deadlines": len(deadlines),
                     "obligations": len(obligations),
+                    "document_inbox": len(document_inbox),
                     "high_risk_items": len(high_risk_items),
                 },
                 "cases": cases[:25],
@@ -1112,6 +1209,7 @@ class LegalLedger:
                 "missing_evidence": missing_evidence[:10],
                 "deadlines": deadlines[:10],
                 "obligations": obligations[:10],
+                "document_inbox": document_inbox,
                 "urgent_deadlines": urgent_deadlines[:10],
                 "awaiting_lawyer_response": awaiting_lawyer_response[:10],
                 "high_risk_items": high_risk_items[:12],
@@ -1122,9 +1220,13 @@ class LegalLedger:
                     "pending_outreach_approval": pending_outreach_approval[:10],
                     "urgent_deadlines": urgent_deadlines[:10],
                     "high_risk_items": high_risk_items[:12],
+                    "document_inbox": document_inbox[:10],
                 },
                 "recent_activity": recent_activity,
-                "next_actions": self._next_actions(cases, pending_approvals, obligations, open_loops, contradictions, missing_evidence, urgent_deadlines or deadlines),
+                "next_actions": self._next_actions(
+                    cases, pending_approvals, obligations, open_loops, contradictions,
+                    missing_evidence, urgent_deadlines or deadlines, document_inbox,
+                ),
             }
 
     def case_operating_state(self, case_id: int) -> Optional[Dict[str, Any]]:
@@ -1623,22 +1725,91 @@ class LegalLedger:
                 "case": self._case_detail(session, case) if case else None,
             }
 
+    def _create_document_record(self, session, case_id: int, data: Dict[str, Any]) -> CaseDocument:
+        text = data.get("extracted_text") or data.get("ocr_text") or data.get("content") or ""
+        content_hash = data.get("content_hash") or self._hash("|".join([
+            str(data.get("source_uri") or ""),
+            str(data.get("local_path") or ""),
+            str(data.get("original_filename") or data.get("document_name") or data.get("title") or ""),
+            text,
+        ]))
+        document = CaseDocument(
+            case_id=case_id,
+            source_type=data.get("source_type") or data.get("source") or "manual",
+            source_uri=data.get("source_uri") or data.get("source_url") or "",
+            original_filename=data.get("original_filename") or data.get("document_name") or data.get("name") or "",
+            local_path=data.get("local_path") or data.get("file_path") or "",
+            content_hash=content_hash,
+            document_type=data.get("document_type") or data.get("type") or "unknown",
+            date_on_document=data.get("date_on_document") or data.get("document_date") or "",
+            sender=data.get("sender") or data.get("from") or "",
+            recipient=data.get("recipient") or data.get("to") or "",
+            title=data.get("title") or data.get("document_name") or data.get("name") or "Untitled document",
+            ocr_text=data.get("ocr_text") or "",
+            extracted_text=text,
+            summary=data.get("summary") or data.get("content_summary") or "",
+            relevance_score=float(data.get("relevance_score") or 0.0),
+            confidentiality_level=data.get("confidentiality_level") or "normal",
+            metadata_json=_json_dump(data.get("metadata") or data.get("legal_analysis") or {}),
+        )
+        session.add(document)
+        session.flush()
+        self._add_document_version(session, document, text, data.get("extraction_method") or "initial_import")
+        return document
+
     def add_document(self, case_id: int, data: Dict[str, Any], actor: str = "system") -> Optional[Dict[str, Any]]:
         with self.session_scope() as session:
             case = session.get(LegalCase, case_id)
             if not case:
                 return None
-            text = data.get("extracted_text") or data.get("ocr_text") or data.get("content") or ""
-            content_hash = data.get("content_hash") or self._hash("|".join([
-                str(data.get("source_uri") or ""),
+            document = self._create_document_record(session, case_id, data)
+            self._audit(
+                session, case_id, "CaseDocument", document.id, "created", actor,
+                {}, self._document_creation_audit_state(document), "medium",
+            )
+            return self._serialize_document(document)
+
+    def stage_document_inbox_item(
+        self,
+        external_user_id: Any,
+        data: Dict[str, Any],
+        *,
+        suggested_matches: Optional[List[Dict[str, Any]]] = None,
+        email: Optional[str] = None,
+        actor: str = "system",
+    ) -> Dict[str, Any]:
+        """Persist an unassigned source and its review-only case suggestions."""
+        with self.session_scope() as session:
+            user = self._ensure_user(session, external_user_id, email)
+            text = str(data.get("extracted_text") or data.get("ocr_text") or data.get("content") or "")
+            source_uri = str(data.get("source_uri") or data.get("source_url") or "")
+            content_hash = str(data.get("content_hash") or self._hash("|".join([
+                source_uri,
                 str(data.get("local_path") or ""),
-                str(data.get("original_filename") or data.get("document_name") or data.get("title") or ""),
+                str(data.get("original_filename") or data.get("title") or ""),
                 text,
-            ]))
-            document = CaseDocument(
-                case_id=case_id,
+            ])))
+            existing = session.query(DocumentInboxItem).filter_by(
+                user_id=user.id,
+                content_hash=content_hash,
+            ).order_by(DocumentInboxItem.id.desc()).first()
+            if existing:
+                payload = self._serialize_document_inbox_item(existing)
+                payload["duplicate"] = True
+                return payload
+
+            owned_case_ids = {
+                case_id for (case_id,) in session.query(LegalCase.id).filter_by(user_id=user.id).all()
+            }
+            matches = [
+                dict(item) for item in (suggested_matches or [])
+                if item.get("case_id") in owned_case_ids
+            ][:5]
+            top_match = matches[0] if matches else {}
+            item = DocumentInboxItem(
+                user_id=user.id,
                 source_type=data.get("source_type") or data.get("source") or "manual",
-                source_uri=data.get("source_uri") or data.get("source_url") or "",
+                source_uri=source_uri or f"inbox://document/{content_hash[:20]}",
                 original_filename=data.get("original_filename") or data.get("document_name") or data.get("name") or "",
                 local_path=data.get("local_path") or data.get("file_path") or "",
                 content_hash=content_hash,
@@ -1646,19 +1817,171 @@ class LegalLedger:
                 date_on_document=data.get("date_on_document") or data.get("document_date") or "",
                 sender=data.get("sender") or data.get("from") or "",
                 recipient=data.get("recipient") or data.get("to") or "",
-                title=data.get("title") or data.get("document_name") or data.get("name") or "Untitled document",
+                title=data.get("title") or data.get("document_name") or data.get("name") or "Untitled inbox document",
                 ocr_text=data.get("ocr_text") or "",
                 extracted_text=text,
                 summary=data.get("summary") or data.get("content_summary") or "",
-                relevance_score=float(data.get("relevance_score") or 0.0),
                 confidentiality_level=data.get("confidentiality_level") or "normal",
-                metadata_json=_json_dump(data.get("metadata") or data.get("legal_analysis") or {}),
+                analysis_json=_json_dump(data.get("analysis") or data.get("legal_analysis") or {}),
+                metadata_json=_json_dump(data.get("metadata") or {}),
+                suggested_matches_json=_json_dump(matches),
+                suggested_case_id=top_match.get("case_id"),
+                match_score=float(top_match.get("score") or 0.0),
+                status="needs_review",
             )
-            session.add(document)
+            session.add(item)
             session.flush()
-            self._add_document_version(session, document, text, data.get("extraction_method") or "initial_import")
-            self._audit(session, case_id, "CaseDocument", document.id, "created", actor, {}, self._serialize_document(document), "medium")
-            return self._serialize_document(document)
+            self._audit(
+                session, None, "DocumentInboxItem", item.id, "staged_for_case_review", actor,
+                {}, self._document_inbox_audit_state(item), "medium",
+                source="document_inbox", user_id=user.id,
+            )
+            payload = self._serialize_document_inbox_item(item)
+            payload["duplicate"] = False
+            return payload
+
+    def list_document_inbox_items(
+        self,
+        external_user_id: Any,
+        *,
+        status: Optional[str] = None,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        with self.session_scope() as session:
+            user = session.query(LedgerUser).filter_by(external_user_id=str(external_user_id)).one_or_none()
+            if not user:
+                return []
+            query = session.query(DocumentInboxItem).filter_by(user_id=user.id)
+            if status:
+                query = query.filter_by(status=str(status))
+            return [
+                self._serialize_document_inbox_item(item)
+                for item in query.order_by(DocumentInboxItem.updated_at.desc(), DocumentInboxItem.id.desc())
+                .limit(max(1, min(int(limit or 50), 100))).all()
+            ]
+
+    def get_document_inbox_item(self, item_id: int, external_user_id: Any) -> Optional[Dict[str, Any]]:
+        with self.session_scope() as session:
+            user = session.query(LedgerUser).filter_by(external_user_id=str(external_user_id)).one_or_none()
+            item = session.get(DocumentInboxItem, item_id)
+            if not user or not item or item.user_id != user.id:
+                return None
+            return self._serialize_document_inbox_item(item)
+
+    def review_document_inbox_item(
+        self,
+        item_id: int,
+        external_user_id: Any,
+        action: str,
+        *,
+        actor: str = "system",
+    ) -> Optional[Dict[str, Any]]:
+        normalized_action = str(action or "").strip().lower()
+        if normalized_action not in {"dismiss", "reopen"}:
+            raise ValueError("action must be dismiss or reopen")
+        with self.session_scope() as session:
+            user = session.query(LedgerUser).filter_by(external_user_id=str(external_user_id)).one_or_none()
+            item = session.get(DocumentInboxItem, item_id)
+            if not user or not item or item.user_id != user.id:
+                return None
+            if item.status == "linked":
+                raise ValueError("A linked inbox source cannot be dismissed or reopened")
+            before = self._document_inbox_audit_state(item)
+            item.status = "dismissed" if normalized_action == "dismiss" else "needs_review"
+            item.updated_at = utcnow()
+            self._audit(
+                session, None, "DocumentInboxItem", item.id, f"review_{normalized_action}", actor,
+                before, self._document_inbox_audit_state(item), "medium",
+                source="document_inbox", user_id=user.id,
+            )
+            return self._serialize_document_inbox_item(item)
+
+    def link_document_inbox_item(
+        self,
+        item_id: int,
+        case_id: int,
+        external_user_id: Any,
+        *,
+        actor: str = "system",
+    ) -> Optional[Dict[str, Any]]:
+        """Link a staged source once; never move or delete source evidence implicitly."""
+        with self.session_scope() as session:
+            user = session.query(LedgerUser).filter_by(external_user_id=str(external_user_id)).one_or_none()
+            item = session.get(DocumentInboxItem, item_id)
+            case = session.get(LegalCase, case_id)
+            if not user or not item or item.user_id != user.id or not case or case.user_id != user.id:
+                return None
+            if item.status == "linked":
+                if item.linked_case_id != case_id:
+                    raise ValueError("This inbox source is already linked to another case")
+                document = session.get(CaseDocument, item.linked_document_id) if item.linked_document_id else None
+                return {
+                    "inbox_item": self._serialize_document_inbox_item(item),
+                    "document": self._serialize_document(document) if document else None,
+                    "created": False,
+                    "analysis": _json_load(item.analysis_json, {}),
+                }
+
+            existing_query = session.query(CaseDocument).filter_by(case_id=case_id)
+            existing = None
+            if item.source_uri:
+                existing = existing_query.filter_by(source_uri=item.source_uri).first()
+            if not existing and item.content_hash:
+                existing = existing_query.filter_by(content_hash=item.content_hash).first()
+
+            created = existing is None
+            if created:
+                metadata = _json_load(item.metadata_json, {}) or {}
+                analysis = _json_load(item.analysis_json, {}) or {}
+                metadata.update({
+                    "legal_analysis": analysis,
+                    "document_inbox_item_id": item.id,
+                    "linked_from_document_inbox": True,
+                })
+                document = self._create_document_record(session, case_id, {
+                    "source_type": item.source_type,
+                    "source_uri": item.source_uri,
+                    "original_filename": item.original_filename,
+                    "local_path": item.local_path,
+                    "content_hash": item.content_hash,
+                    "document_type": item.document_type,
+                    "date_on_document": item.date_on_document,
+                    "sender": item.sender,
+                    "recipient": item.recipient,
+                    "title": item.title,
+                    "ocr_text": item.ocr_text,
+                    "extracted_text": item.extracted_text,
+                    "summary": item.summary,
+                    "confidentiality_level": item.confidentiality_level,
+                    "metadata": metadata,
+                    "extraction_method": "document_inbox_link",
+                })
+                self._audit(
+                    session, case_id, "CaseDocument", document.id, "created_from_document_inbox", actor,
+                    {}, self._document_creation_audit_state(document), "medium",
+                    source="document_inbox", user_id=user.id,
+                )
+            else:
+                document = existing
+
+            before = self._document_inbox_audit_state(item)
+            item.status = "linked"
+            item.linked_case_id = case_id
+            item.linked_document_id = document.id
+            item.linked_at = utcnow()
+            item.updated_at = utcnow()
+            self._audit(
+                session, case_id, "DocumentInboxItem", item.id,
+                "linked_to_case" if created else "linked_to_existing_document", actor,
+                before, self._document_inbox_audit_state(item), "medium",
+                source="document_inbox", user_id=user.id,
+            )
+            return {
+                "inbox_item": self._serialize_document_inbox_item(item),
+                "document": self._serialize_document(document),
+                "created": created,
+                "analysis": _json_load(item.analysis_json, {}),
+            }
 
     def list_documents(self, case_id: int) -> List[Dict[str, Any]]:
         with self.session_scope() as session:
@@ -3431,7 +3754,7 @@ class LegalLedger:
                 user = session.query(LedgerUser).filter_by(external_user_id=str(external_user_id)).one_or_none()
                 if not user:
                     return []
-                query = query.join(LegalCase, AuditEvent.case_id == LegalCase.id).filter(LegalCase.user_id == user.id)
+                query = query.filter(AuditEvent.user_id == user.id)
             if case_id is not None:
                 query = query.filter(AuditEvent.case_id == case_id)
             return [self._serialize_audit(item) for item in query.limit(250).all()]
@@ -4334,6 +4657,7 @@ class LegalLedger:
                 "missing_evidence": 0,
                 "deadlines": 0,
                 "obligations": 0,
+                "document_inbox": 0,
                 "high_risk_items": 0,
             },
             "cases": [],
@@ -4344,6 +4668,7 @@ class LegalLedger:
             "missing_evidence": [],
             "deadlines": [],
             "obligations": [],
+            "document_inbox": [],
             "urgent_deadlines": [],
             "awaiting_lawyer_response": [],
             "high_risk_items": [],
@@ -4354,6 +4679,7 @@ class LegalLedger:
                 "pending_outreach_approval": [],
                 "urgent_deadlines": [],
                 "high_risk_items": [],
+                "document_inbox": [],
             },
             "recent_activity": [],
             "next_actions": [{
@@ -4455,8 +4781,21 @@ class LegalLedger:
         contradictions: List[Dict[str, Any]],
         missing_evidence: List[Dict[str, Any]],
         deadlines: List[Dict[str, Any]],
+        document_inbox: Optional[List[Dict[str, Any]]] = None,
     ) -> List[Dict[str, Any]]:
         actions = []
+        for item in (document_inbox or [])[:2]:
+            suggested = (item.get("suggested_matches") or [{}])[0]
+            suggested_label = f" Suggested case: {suggested.get('case_title')}." if suggested.get("case_title") else ""
+            actions.append({
+                "priority": "medium",
+                "label": f"Classify inbox source: {item.get('title') or 'Untitled document'}",
+                "detail": f"Review the source and confirm which legal case it belongs to.{suggested_label}",
+                "case_id": suggested.get("case_id"),
+                "target": "document-inbox",
+                "queue_type": "document_inbox",
+                "item_id": item.get("id"),
+            })
         for approval in approvals[:3]:
             actions.append({
                 "priority": approval.get("risk_level", "high"),
@@ -4821,8 +5160,14 @@ class LegalLedger:
         risk_level: str = "low",
         approval_id: Optional[int] = None,
         source: str = "api",
+        user_id: Optional[int] = None,
     ) -> None:
+        resolved_user_id = user_id
+        if resolved_user_id is None and case_id is not None:
+            case = session.get(LegalCase, case_id)
+            resolved_user_id = case.user_id if case else None
         session.add(AuditEvent(
+            user_id=resolved_user_id,
             case_id=case_id,
             entity_type=entity_type,
             entity_id=entity_id,
@@ -5036,6 +5381,78 @@ class LegalLedger:
             "metadata": _json_load(document.metadata_json, {}),
             "created_at": _iso(document.created_at),
             "updated_at": _iso(document.updated_at),
+        }
+
+    def _serialize_document_inbox_item(self, item: DocumentInboxItem) -> Dict[str, Any]:
+        analysis = _json_load(item.analysis_json, {}) or {}
+        processing = analysis.get("processing") or {}
+        text = str(item.extracted_text or item.ocr_text or "")
+        return {
+            "id": item.id,
+            "inbox_item_id": item.id,
+            "source_type": item.source_type,
+            "source_uri": item.source_uri,
+            "original_filename": item.original_filename,
+            "has_local_file": bool(item.local_path),
+            "content_hash": item.content_hash,
+            "document_type": item.document_type,
+            "date_on_document": item.date_on_document,
+            "sender": item.sender,
+            "recipient": item.recipient,
+            "title": item.title,
+            "summary": item.summary,
+            "text_preview": " ".join(text.split())[:360],
+            "word_count": int(processing.get("word_count") or len(text.split())),
+            "confidentiality_level": item.confidentiality_level,
+            "analysis_topics": analysis.get("topics") or [],
+            "suggested_matches": _json_load(item.suggested_matches_json, []),
+            "suggested_case_id": item.suggested_case_id,
+            "match_score": item.match_score,
+            "status": item.status,
+            "linked_case_id": item.linked_case_id,
+            "linked_document_id": item.linked_document_id,
+            "linked_at": _iso(item.linked_at),
+            "created_at": _iso(item.created_at),
+            "updated_at": _iso(item.updated_at),
+        }
+
+    def _document_creation_audit_state(self, document: CaseDocument) -> Dict[str, Any]:
+        text = str(document.extracted_text or document.ocr_text or "")
+        return {
+            "document_id": document.id,
+            "case_id": document.case_id,
+            "source_type": document.source_type,
+            "source_uri": document.source_uri,
+            "original_filename": document.original_filename,
+            "content_hash": document.content_hash,
+            "document_type": document.document_type,
+            "has_local_file": bool(document.local_path),
+            "has_extracted_text": bool(text.strip()),
+            "extracted_word_count": len(text.split()),
+            "extracted_text_hash": self._hash(text) if text else "",
+            "confidentiality_level": document.confidentiality_level,
+        }
+
+    def _document_inbox_audit_state(self, item: DocumentInboxItem) -> Dict[str, Any]:
+        text = str(item.extracted_text or item.ocr_text or "")
+        matches = _json_load(item.suggested_matches_json, []) or []
+        return {
+            "inbox_item_id": item.id,
+            "source_type": item.source_type,
+            "source_uri": item.source_uri,
+            "original_filename": item.original_filename,
+            "content_hash": item.content_hash,
+            "document_type": item.document_type,
+            "has_local_file": bool(item.local_path),
+            "has_extracted_text": bool(text.strip()),
+            "extracted_word_count": len(text.split()),
+            "extracted_text_hash": self._hash(text) if text else "",
+            "suggested_case_ids": [match.get("case_id") for match in matches if isinstance(match, dict)],
+            "suggested_case_id": item.suggested_case_id,
+            "match_score": item.match_score,
+            "status": item.status,
+            "linked_case_id": item.linked_case_id,
+            "linked_document_id": item.linked_document_id,
         }
 
     def _document_extraction_audit_state(
