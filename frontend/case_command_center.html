@@ -4128,45 +4128,20 @@
             return "intake";
         }
 
-        function isDevelopmentQaCase(item) {
-            const title = String(item?.title || "").trim().toLowerCase();
-            return title.startsWith("qa ");
-        }
-
         function sanitizeCommandCenterState(state) {
-            const rawCases = state?.cases || [];
-            const visibleCases = rawCases.filter((item) => !isDevelopmentQaCase(item));
-            const hiddenIds = new Set(rawCases.filter(isDevelopmentQaCase).map((item) => String(item.case_id)));
-            const belongsToVisibleCase = (item) => !item.case_id || !hiddenIds.has(String(item.case_id));
-            const visibleApprovals = (state?.pending_approvals || []).filter(belongsToVisibleCase);
-            const visibleLoops = (state?.open_loops || []).filter(belongsToVisibleCase);
-            const visibleContradictions = (state?.contradictions || []).filter(belongsToVisibleCase);
-            const visibleMissingEvidence = (state?.missing_evidence || []).filter(belongsToVisibleCase);
-            const visibleDeadlines = (state?.deadlines || []).filter(belongsToVisibleCase);
-            const visibleObligations = (state?.obligations || []).filter(belongsToVisibleCase);
+            const safeState = state || {};
             return {
-                ...(state || {}),
-                hidden_development_case_count: hiddenIds.size,
-                cases: visibleCases,
-                pending_approvals: visibleApprovals,
-                open_loops: visibleLoops,
-                contradictions: visibleContradictions,
-                missing_evidence: visibleMissingEvidence,
-                deadlines: visibleDeadlines,
-                obligations: visibleObligations,
-                recent_activity: (state?.recent_activity || []).filter(belongsToVisibleCase),
-                next_actions: (state?.next_actions || []).filter(belongsToVisibleCase),
-                counts: {
-                    ...(state?.counts || {}),
-                    active_cases: visibleCases.filter((item) => !["closed", "archived"].includes(item.status)).length,
-                    cases_needing_evidence: visibleCases.filter((item) => !Number(item.documents_count || 0)).length,
-                    pending_approvals: visibleApprovals.length,
-                    open_loops: visibleLoops.length,
-                    contradictions: visibleContradictions.length,
-                    missing_evidence: visibleMissingEvidence.length,
-                    deadlines: visibleDeadlines.length,
-                    obligations: visibleObligations.length
-                }
+                ...safeState,
+                cases: safeState.cases || [],
+                pending_approvals: safeState.pending_approvals || [],
+                open_loops: safeState.open_loops || [],
+                contradictions: safeState.contradictions || [],
+                missing_evidence: safeState.missing_evidence || [],
+                deadlines: safeState.deadlines || [],
+                obligations: safeState.obligations || [],
+                recent_activity: safeState.recent_activity || [],
+                next_actions: safeState.next_actions || [],
+                counts: safeState.counts || {}
             };
         }
 
@@ -7558,7 +7533,12 @@
             if (!detailState.case) return `<div class="empty-state">Select or create a case before generating a bundle.</div>`;
             const bundle = detailState.bundle || {};
             const shareApproval = bundle.external_sharing_approval || null;
-            const canRequestApproval = bundle.external_sharing_requires_approval && (!shareApproval || shareApproval.status === "rejected");
+            const canRequestApproval = bundle.external_sharing_requires_approval && (
+                !shareApproval
+                || ["rejected", "superseded"].includes(shareApproval.status)
+                || bundle.approval_stale
+            );
+            const canDownload = Boolean(bundle.external_sharing_allowed && shareApproval?.status === "approved");
             const sourceLinkedTimeline = bundle.source_linked_timeline || bundle.red_line?.sections?.source_linked_chronology || [];
             const nextActions = bundle.next_actions || bundle.red_line?.sections?.next_actions || [];
             return `
@@ -7568,14 +7548,17 @@
                     <p>${bundle.external_sharing_requires_approval ? "External sharing requires explicit approval." : "No approval flag returned."}</p>
                     <div class="button-row">
                         ${canRequestApproval ? `<button class="btn-ledger bundle-share-approval" type="button">Request sharing approval</button>` : ""}
+                        ${canDownload ? `<button class="btn-ledger bundle-download" type="button">Download approved bundle</button>` : ""}
                         ${shareApproval ? `<button class="btn-secondary-ledger" type="button" data-jump-tab="review">${escapeHtml(shareApproval.status === "pending" ? "Review pending approval" : "View approval record")}</button>` : ""}
                     </div>
+                    ${bundle.approval_stale ? `<div class="evidence-snippet"><strong>Approval expired</strong>The case changed after this snapshot was reviewed. Request a fresh approval before export.</div>` : ""}
                     ${shareApproval ? `
                         <div class="evidence-snippet">
                             <strong>Sharing approval</strong>
                             ${escapeHtml(shareApproval.status)} - ${escapeHtml(shareApproval.reason || shareApproval.action || "Case bundle external sharing approval.")}
                         </div>
                     ` : ""}
+                    ${bundle.bundle_snapshot_hash ? `<p class="muted expert-depth">Snapshot ${escapeHtml(String(bundle.bundle_snapshot_hash).slice(0, 16))}</p>` : ""}
                 </section>
                 <section class="detail-section">
                     <h3 class="panel-title">Bundle Index</h3>
@@ -7967,6 +7950,37 @@
             await loadCaseDetail(selectedCaseId);
             await loadCommandCenter();
             activateDetailTab("review");
+        }
+
+        async function downloadApprovedBundle() {
+            if (!selectedCaseId) return showToast("Select a case first.");
+            const token = await ensureAuth();
+            const response = await fetch(`/api/cases/${selectedCaseId}/bundle/download`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (!response.ok) {
+                const payload = await response.json().catch(() => ({}));
+                await loadCaseDetail(selectedCaseId);
+                await loadCommandCenter();
+                activateDetailTab("bundle");
+                throw new Error(payload.error || `Bundle download failed: ${response.status}`);
+            }
+            const blob = await response.blob();
+            const disposition = response.headers.get("Content-Disposition") || "";
+            const filenameMatch = disposition.match(/filename\*?=(?:UTF-8''|\")?([^\";]+)/i);
+            const filename = filenameMatch ? decodeURIComponent(filenameMatch[1]) : `LARO_case_${selectedCaseId}.zip`;
+            const url = URL.createObjectURL(blob);
+            const anchor = document.createElement("a");
+            anchor.href = url;
+            anchor.download = filename;
+            document.body.appendChild(anchor);
+            anchor.click();
+            anchor.remove();
+            window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+            showToast("Approved case bundle downloaded locally.");
+            await loadCaseDetail(selectedCaseId);
+            await loadCommandCenter();
+            activateDetailTab("bundle");
         }
 
         async function saveCaseContext() {
@@ -8557,6 +8571,7 @@
                 button.addEventListener("click", () => generateCaseDraft(button).catch((error) => showToast(error.message)));
             });
             document.querySelector(".bundle-share-approval")?.addEventListener("click", () => requestBundleShareApproval().catch((error) => showToast(error.message)));
+            document.querySelector(".bundle-download")?.addEventListener("click", () => downloadApprovedBundle().catch((error) => showToast(error.message)));
             document.getElementById("saveCaseContext")?.addEventListener("click", () => saveCaseContext().catch((error) => showToast(error.message)));
             document.getElementById("saveCaseIdentifier")?.addEventListener("click", () => saveCaseIdentifier().catch((error) => showToast(error.message)));
             document.getElementById("lookupCaseIdentifier")?.addEventListener("click", () => lookupCaseIdentifier().catch((error) => {

@@ -534,6 +534,7 @@ class Approval(Base):
     requested_by = Column(String(120), default="system")
     resolved_by = Column(String(120), default="")
     reason = Column(Text, default="")
+    context_json = Column(Text, default="{}")
     created_at = Column(DateTime, default=utcnow, nullable=False)
     resolved_at = Column(DateTime)
 
@@ -620,6 +621,9 @@ class LegalLedger:
                 "position_role": "VARCHAR(80) NOT NULL DEFAULT 'unknown'",
                 "subject_party": "VARCHAR(255) NOT NULL DEFAULT ''",
                 "materiality": "VARCHAR(40) NOT NULL DEFAULT 'medium'",
+            },
+            "approvals": {
+                "context_json": "TEXT NOT NULL DEFAULT '{}'",
             },
         }
         known_tables = set(inspector.get_table_names())
@@ -3232,10 +3236,118 @@ class LegalLedger:
                 Approval.id == int(approval_id), LegalCase.user_id == user.id
             ).first() is not None
 
+    def _case_bundle_snapshot_context(self, session, case_id: int) -> Dict[str, Any]:
+        """Fingerprint every persisted record that can materially change a bundle."""
+        case = session.get(LegalCase, case_id)
+        if not case:
+            return {}
+        self._ensure_missing_evidence_reviews(session, case_id)
+        self._ensure_case_analysis_review_items(session, case_id)
+
+        def group_hash(items: Iterable[Any], serializer) -> Dict[str, Any]:
+            rows = list(items)
+            fingerprints = [self._hash(_json_dump(serializer(item))) for item in rows]
+            return {
+                "count": len(rows),
+                "hash": self._hash(_json_dump(fingerprints)),
+            }
+
+        groups = {
+            "identifiers": group_hash(
+                session.query(CaseIdentifier).filter_by(case_id=case_id).order_by(CaseIdentifier.id.asc()).all(),
+                self._serialize_identifier,
+            ),
+            "parties": group_hash(
+                session.query(Party).filter_by(case_id=case_id).order_by(Party.id.asc()).all(),
+                self._serialize_party,
+            ),
+            "documents": group_hash(
+                session.query(CaseDocument).filter_by(case_id=case_id).order_by(CaseDocument.id.asc()).all(),
+                self._serialize_document,
+            ),
+            "document_versions": group_hash(
+                session.query(DocumentVersion)
+                .join(CaseDocument, DocumentVersion.document_id == CaseDocument.id)
+                .filter(CaseDocument.case_id == case_id)
+                .order_by(DocumentVersion.id.asc()).all(),
+                self._serialize_document_version,
+            ),
+            "timeline": group_hash(
+                session.query(CaseEvent).filter_by(case_id=case_id).order_by(CaseEvent.id.asc()).all(),
+                self._serialize_event,
+            ),
+            "evidence_links": group_hash(
+                session.query(EvidenceLink).filter_by(case_id=case_id).order_by(EvidenceLink.id.asc()).all(),
+                self._serialize_evidence_link,
+            ),
+            "claims": group_hash(
+                session.query(LegalClaim).filter_by(case_id=case_id).order_by(LegalClaim.id.asc()).all(),
+                self._serialize_claim,
+            ),
+            "contradictions": group_hash(
+                session.query(Contradiction).filter_by(case_id=case_id).order_by(Contradiction.id.asc()).all(),
+                self._serialize_contradiction,
+            ),
+            "missing_evidence": group_hash(
+                session.query(MissingEvidenceWarning).filter_by(case_id=case_id).order_by(MissingEvidenceWarning.id.asc()).all(),
+                self._serialize_missing_evidence,
+            ),
+            "deadlines": group_hash(
+                session.query(Deadline).filter_by(case_id=case_id).order_by(Deadline.id.asc()).all(),
+                self._serialize_deadline,
+            ),
+            "obligations": group_hash(
+                session.query(Obligation).filter_by(case_id=case_id).order_by(Obligation.id.asc()).all(),
+                self._serialize_obligation,
+            ),
+            "open_loops": group_hash(
+                session.query(OpenLoop).filter_by(case_id=case_id).order_by(OpenLoop.id.asc()).all(),
+                self._serialize_open_loop,
+            ),
+            "outreach": group_hash(
+                session.query(LawyerOutreach).filter_by(case_id=case_id).order_by(LawyerOutreach.id.asc()).all(),
+                self._serialize_outreach,
+            ),
+            "lawyer_responses": group_hash(
+                session.query(LawyerResponse, LawyerOutreach)
+                .join(LawyerOutreach, LawyerResponse.outreach_id == LawyerOutreach.id)
+                .filter(LawyerOutreach.case_id == case_id)
+                .order_by(LawyerResponse.id.asc()).all(),
+                lambda row: self._serialize_lawyer_response(row[0], row[1]),
+            ),
+            "drafts": group_hash(
+                session.query(Draft).filter_by(case_id=case_id).order_by(Draft.id.asc()).all(),
+                self._serialize_draft,
+            ),
+            "analysis_runs": group_hash(
+                session.query(CaseAnalysisRun).filter_by(case_id=case_id).order_by(CaseAnalysisRun.id.asc()).all(),
+                self._serialize_case_analysis_run,
+            ),
+            "analysis_review": group_hash(
+                session.query(CaseAnalysisReviewItem).filter_by(case_id=case_id).order_by(CaseAnalysisReviewItem.id.asc()).all(),
+                self._serialize_case_analysis_review_item,
+            ),
+        }
+        material = {
+            "case_hash": self._hash(_json_dump(self._serialize_case(case))),
+            "groups": groups,
+        }
+        return {
+            "bundle_snapshot_hash": self._hash(_json_dump(material)),
+            "snapshot_counts": {name: value["count"] for name, value in groups.items()},
+            "case_updated_at": _iso(case.updated_at),
+        }
+
+    def case_bundle_snapshot(self, case_id: int) -> Optional[Dict[str, Any]]:
+        with self.session_scope() as session:
+            context = self._case_bundle_snapshot_context(session, case_id)
+            return context or None
+
     def request_case_bundle_share_approval(self, case_id: int, actor: str = "system", reason: str = "") -> Optional[Dict[str, Any]]:
         with self.session_scope() as session:
             if not session.get(LegalCase, case_id):
                 return None
+            context = self._case_bundle_snapshot_context(session, case_id)
             existing = session.query(Approval).filter_by(
                 case_id=case_id,
                 entity_type="CaseBundle",
@@ -3243,8 +3355,17 @@ class LegalLedger:
                 action="share_case_bundle_externally",
                 status="pending",
             ).order_by(Approval.created_at.desc(), Approval.id.desc()).first()
-            if existing:
+            if existing and (_json_load(existing.context_json, {}) or {}).get("bundle_snapshot_hash") == context.get("bundle_snapshot_hash"):
                 return self._serialize_approval(existing)
+            if existing:
+                before = self._serialize_approval(existing)
+                existing.status = "superseded"
+                existing.resolved_by = "system"
+                existing.resolved_at = utcnow()
+                self._audit(
+                    session, case_id, "Approval", existing.id, "superseded_snapshot_changed", actor,
+                    before, self._serialize_approval(existing), "high", existing.id,
+                )
 
             approval = Approval(
                 case_id=case_id,
@@ -3255,6 +3376,7 @@ class LegalLedger:
                 status="pending",
                 requested_by=actor,
                 reason=reason or "External sharing of a legal case bundle requires explicit approval before any documents leave LARO.",
+                context_json=_json_dump(context),
             )
             session.add(approval)
             session.flush()
@@ -3268,6 +3390,15 @@ class LegalLedger:
             approval = session.get(Approval, approval_id)
             if not approval:
                 return None
+            if (
+                status == "approved"
+                and approval.entity_type == "CaseBundle"
+                and approval.case_id
+            ):
+                requested_snapshot = (_json_load(approval.context_json, {}) or {}).get("bundle_snapshot_hash")
+                current_snapshot = self._case_bundle_snapshot_context(session, approval.case_id).get("bundle_snapshot_hash")
+                if not requested_snapshot or requested_snapshot != current_snapshot:
+                    raise ValueError("The case changed after this bundle approval was requested; request a new approval")
             before = self._serialize_approval(approval)
             approval.status = status
             approval.resolved_by = actor
@@ -3314,6 +3445,7 @@ class LegalLedger:
         source: str = "api",
         details: Optional[Dict[str, Any]] = None,
         risk_level: str = "low",
+        approval_id: Optional[int] = None,
     ) -> bool:
         """Audit a security-relevant case operation that does not mutate evidence."""
         with self.session_scope() as session:
@@ -3329,6 +3461,7 @@ class LegalLedger:
                 {},
                 details or {},
                 risk_level,
+                approval_id,
                 source=source,
             )
             return True
@@ -3932,27 +4065,53 @@ class LegalLedger:
             return None
         red_line = self.red_line_thread(case_id)
         with self.session_scope() as session:
+            snapshot_context = self._case_bundle_snapshot_context(session, case_id)
             audit_events = [self._serialize_audit(item) for item in session.query(AuditEvent).filter_by(case_id=case_id).order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc()).limit(100).all()]
             outreach = [self._serialize_outreach(item) for item in session.query(LawyerOutreach).filter_by(case_id=case_id).order_by(LawyerOutreach.created_at.desc()).all()]
+            lawyer_responses = [
+                self._serialize_lawyer_response(response, outreach_item)
+                for response, outreach_item in session.query(LawyerResponse, LawyerOutreach)
+                .join(LawyerOutreach, LawyerResponse.outreach_id == LawyerOutreach.id)
+                .filter(LawyerOutreach.case_id == case_id)
+                .order_by(LawyerResponse.received_at.desc(), LawyerResponse.id.desc()).all()
+            ]
             drafts = [self._serialize_draft(item) for item in session.query(Draft).filter_by(case_id=case_id).order_by(Draft.updated_at.desc(), Draft.id.desc()).all()]
             approvals = [self._serialize_approval(item) for item in session.query(Approval).filter_by(case_id=case_id).order_by(Approval.created_at.desc()).all()]
         bundle_approvals = [item for item in approvals if item.get("entity_type") == "CaseBundle" and item.get("action") == "share_case_bundle_externally"]
-        pending_bundle_approval = next((item for item in bundle_approvals if item.get("status") == "pending"), None)
+        snapshot_hash = snapshot_context.get("bundle_snapshot_hash")
+        current_bundle_approvals = [
+            item for item in bundle_approvals
+            if (item.get("context") or {}).get("bundle_snapshot_hash") == snapshot_hash
+        ]
+        pending_bundle_approval = next((item for item in current_bundle_approvals if item.get("status") == "pending"), None)
+        latest_current_approval = current_bundle_approvals[0] if current_bundle_approvals else None
         latest_bundle_approval = bundle_approvals[0] if bundle_approvals else None
+        approval_stale = bool(
+            latest_bundle_approval
+            and (latest_bundle_approval.get("context") or {}).get("bundle_snapshot_hash") != snapshot_hash
+            and latest_bundle_approval.get("status") in {"pending", "approved"}
+        )
         share_status = "internal_only_until_approved"
         if pending_bundle_approval:
             share_status = "external_share_approval_pending"
-        elif latest_bundle_approval and latest_bundle_approval.get("status") == "approved":
+        elif latest_current_approval and latest_current_approval.get("status") == "approved":
             share_status = "external_share_approved"
-        elif latest_bundle_approval and latest_bundle_approval.get("status") == "rejected":
+        elif latest_current_approval and latest_current_approval.get("status") == "rejected":
             share_status = "external_share_rejected"
+        elif approval_stale:
+            share_status = "external_share_approval_stale"
+        sharing_approval = pending_bundle_approval or latest_current_approval or latest_bundle_approval
         return {
             "case_id": case_id,
             "bundle_type": "internal_case_bundle",
             "share_status": share_status,
             "external_sharing_requires_approval": True,
-            "external_sharing_approval": pending_bundle_approval or latest_bundle_approval,
-            "external_sharing_allowed": bool(latest_bundle_approval and latest_bundle_approval.get("status") == "approved" and not pending_bundle_approval),
+            "external_sharing_approval": sharing_approval,
+            "external_sharing_allowed": bool(latest_current_approval and latest_current_approval.get("status") == "approved" and not pending_bundle_approval),
+            "approval_stale": approval_stale,
+            "bundle_snapshot_hash": snapshot_hash,
+            "approval_snapshot_hash": (sharing_approval.get("context") or {}).get("bundle_snapshot_hash") if sharing_approval else None,
+            "snapshot_counts": snapshot_context.get("snapshot_counts") or {},
             "summary": summary,
             "red_line": red_line,
             "document_index": summary["factual_reconstruction"]["source_documents"],
@@ -3963,6 +4122,7 @@ class LegalLedger:
             "review_items": summary["risk_review"],
             "next_actions": (red_line or {}).get("sections", {}).get("next_actions", []),
             "outreach": outreach,
+            "lawyer_responses": lawyer_responses,
             "drafts": drafts,
             "approvals": approvals,
             "audit_events": audit_events,
@@ -5528,7 +5688,7 @@ class LegalLedger:
         }
 
     def _serialize_approval(self, item: Approval) -> Dict[str, Any]:
-        return {"id": item.id, "case_id": item.case_id, "entity_type": item.entity_type, "entity_id": item.entity_id, "action": item.action, "risk_level": item.risk_level, "status": item.status, "requested_by": item.requested_by, "resolved_by": item.resolved_by, "reason": item.reason, "created_at": _iso(item.created_at), "resolved_at": _iso(item.resolved_at)}
+        return {"id": item.id, "case_id": item.case_id, "entity_type": item.entity_type, "entity_id": item.entity_id, "action": item.action, "risk_level": item.risk_level, "status": item.status, "requested_by": item.requested_by, "resolved_by": item.resolved_by, "reason": item.reason, "context": _json_load(item.context_json, {}), "created_at": _iso(item.created_at), "resolved_at": _iso(item.resolved_at)}
 
     def _serialize_audit(self, item: AuditEvent) -> Dict[str, Any]:
         return {"id": item.id, "case_id": item.case_id, "entity_type": item.entity_type, "entity_id": item.entity_id, "action": item.action, "actor": item.actor, "source": item.source, "before_state": _json_load(item.before_state, {}), "after_state": _json_load(item.after_state, {}), "risk_level": item.risk_level, "approval_id": item.approval_id, "created_at": _iso(item.created_at)}

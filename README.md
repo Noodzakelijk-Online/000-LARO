@@ -13,6 +13,7 @@ It organizes and prepares legal material. It is not a lawyer, does not provide d
 - Who-did-what chronology: timeline events persist the actor, action, affected party, and event type beside the exact source passage; story, horizontal, and vertical views can be filtered by person and event type.
 - Obligation register: track who must do what, for whose benefit, by which date, and from which source; extracted duties remain unconfirmed until reviewed.
 - Generated briefs: create source-linked case summaries, lawyer briefings, and red-line drafts without copying ledger data into a separate tool.
+- Reviewable case bundles: download a source-linked ZIP only after approval of the exact current case snapshot; any later case change expires that approval.
 - Approval-gated outreach: create lawyer/media/organization matches and drafts, but do not send external messages.
 
 Core case data is stored in a local SQLite ledger under `instance/laro_ledger.sqlite3`. Authenticated case, approval, audit, and matching routes are scoped to the owning local user. Runtime databases, uploads, OAuth tokens, and local secrets are ignored by Git.
@@ -72,12 +73,18 @@ LARO refuses non-loopback analysis URLs. Long sources are divided at sentence bo
 
 Case-wide readings run as durable local jobs through `/api/cases/<id>/case-analysis/jobs`. The Case Command Center polls persisted document, source-chunk, word, character, elapsed-time, and ETA progress and refreshes automatically when the cited review run is ready. `LARO_LOCAL_ANALYSIS_MAX_CHARS` controls the maximum source characters in one local-model batch, not the total amount of case evidence that can be read.
 
+## Approved Case Bundles
+
+The Bundle tab can create an in-memory ZIP containing the case record, source-linked timeline and review items, outreach history, approval and audit records, extracted text, and locally stored source files. Each entry is listed with a SHA-256 digest in `manifest.json`; machine-local paths and credential-shaped fields are removed from structured exports.
+
+External sharing remains a separate human action. LARO permits a download only when an approved `CaseBundle` record matches the current persisted case snapshot. Adding or changing evidence, analysis, outreach, drafts, or case details makes that approval stale and requires a new review. `LARO_BUNDLE_MAX_BYTES` limits the archive's total uncompressed size; oversized source files are omitted and identified in the manifest.
+
 ## Tests
 
 Run the legal-ledger verification suite:
 
 ```powershell
-python -m unittest test_legal_ledger test_document_intelligence test_local_semantic_analysis test_google_oauth test_google_evidence test_lawyer_matching test_outreach_discovery test_outreach_targets test_outreach_analytics
+python -m unittest test_legal_ledger test_case_bundle_export test_document_intelligence test_local_semantic_analysis test_google_oauth test_google_evidence test_lawyer_matching test_outreach_discovery test_outreach_targets test_outreach_analytics
 ```
 
 The test suite uses temporary SQLite files and does not require a real Google account or contact any external lawyers.

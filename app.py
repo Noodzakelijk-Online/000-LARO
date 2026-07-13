@@ -9,6 +9,7 @@ import sys
 import logging
 import datetime
 import hashlib
+import io
 import ipaddress
 import json
 import re
@@ -49,6 +50,7 @@ from dutch_legal_taxonomy import (
 )
 from legal_ledger import init_legal_ledger
 from outreach_discovery import OutreachDiscoveryError, OutreachTargetDiscovery
+from case_bundle_export import CaseBundleExporter, CaseBundleExportError, DEFAULT_MAX_BUNDLE_BYTES
 
 # Configure logging
 logging.basicConfig(
@@ -2650,15 +2652,95 @@ def get_ledger_red_line(case_id):
 @app.route('/api/cases/<int:case_id>/bundle', methods=['GET'])
 @auth_system._require_auth
 def get_ledger_bundle(case_id):
+    if not _ledger_case_access_allowed(case_id):
+        return jsonify({'error': 'Case not found'}), 404
     bundle = legal_ledger.case_bundle(case_id)
     if not bundle:
         return jsonify({'error': 'Case not found'}), 404
     return jsonify(bundle), 200
 
 
+@app.route('/api/cases/<int:case_id>/bundle/download', methods=['GET'])
+@auth_system._require_auth
+def download_ledger_bundle(case_id):
+    if not _ledger_case_access_allowed(case_id):
+        return jsonify({'error': 'Case not found'}), 404
+    bundle = legal_ledger.case_bundle(case_id)
+    if not bundle:
+        return jsonify({'error': 'Case not found'}), 404
+    approval = bundle.get('external_sharing_approval') or {}
+    if not bundle.get('external_sharing_allowed'):
+        legal_ledger.record_case_activity(
+            case_id,
+            'case_bundle_export_blocked',
+            actor=_ledger_actor(),
+            source='bundle_export',
+            details={
+                'share_status': bundle.get('share_status'),
+                'approval_stale': bool(bundle.get('approval_stale')),
+                'bundle_snapshot_hash': bundle.get('bundle_snapshot_hash'),
+                'external_file_created': False,
+            },
+            risk_level='high',
+            approval_id=approval.get('id'),
+        )
+        return jsonify({
+            'error': 'A current approved bundle snapshot is required before download',
+            'approval_required': True,
+            'external_sharing_allowed': False,
+            'share_status': bundle.get('share_status'),
+            'approval_stale': bool(bundle.get('approval_stale')),
+        }), 409
+
+    try:
+        max_bytes = int(os.environ.get('LARO_BUNDLE_MAX_BYTES') or DEFAULT_MAX_BUNDLE_BYTES)
+    except (TypeError, ValueError):
+        max_bytes = DEFAULT_MAX_BUNDLE_BYTES
+    exporter = CaseBundleExporter(
+        safe_file_resolver=_safe_served_upload_path,
+        max_uncompressed_bytes=max_bytes,
+    )
+    try:
+        exported = exporter.build(bundle, bundle.get('document_index') or [])
+    except CaseBundleExportError as exc:
+        return jsonify({'error': str(exc)}), 409
+
+    manifest = exported['manifest']
+    legal_ledger.record_case_activity(
+        case_id,
+        'case_bundle_exported',
+        actor=_ledger_actor(),
+        source='bundle_export',
+        details={
+            'bundle_snapshot_hash': bundle.get('bundle_snapshot_hash'),
+            'archive_sha256': exported['archive_sha256'],
+            'archive_size_bytes': exported['archive_size_bytes'],
+            'entry_count': len(manifest.get('entries') or []),
+            'omitted_entry_count': len(manifest.get('omitted_entries') or []),
+            'external_message_sent': False,
+        },
+        risk_level='high',
+        approval_id=approval.get('id'),
+    )
+    response = send_file(
+        io.BytesIO(exported['archive_bytes']),
+        mimetype='application/zip',
+        as_attachment=True,
+        download_name=exported['download_name'],
+        max_age=0,
+    )
+    response.headers['Cache-Control'] = 'no-store, max-age=0'
+    response.headers['X-LARO-Approval-Id'] = str(approval.get('id') or '')
+    response.headers['X-LARO-Bundle-SHA256'] = exported['archive_sha256']
+    response.headers['X-LARO-Snapshot-SHA256'] = str(bundle.get('bundle_snapshot_hash') or '')
+    return response
+
+
 @app.route('/api/cases/<int:case_id>/bundle/share-approval', methods=['POST'])
 @auth_system._require_auth
 def request_ledger_bundle_share_approval(case_id):
+    if not _ledger_case_access_allowed(case_id):
+        return jsonify({'error': 'Case not found'}), 404
     approval = legal_ledger.request_case_bundle_share_approval(
         case_id,
         actor=_ledger_actor(),

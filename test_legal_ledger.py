@@ -1,10 +1,12 @@
 ﻿import io
 import gc
+import json
 import os
 import sqlite3
 import tempfile
 import unittest
 import datetime as dt
+import zipfile
 from unittest import mock
 
 from legal_ledger import LegalLedger, LawyerOutreach
@@ -775,6 +777,32 @@ class TestLegalLedgerService(unittest.TestCase):
         approved_bundle = self.ledger.case_bundle(case["case_id"])
         self.assertEqual(approved_bundle["share_status"], "external_share_approved")
         self.assertTrue(approved_bundle["external_sharing_allowed"])
+        self.assertEqual(approved_bundle["bundle_snapshot_hash"], approval["context"]["bundle_snapshot_hash"])
+
+        self.ledger.update_case(case["case_id"], {"current_summary": "Case changed after approval."}, actor="robert")
+        stale_bundle = self.ledger.case_bundle(case["case_id"])
+        self.assertEqual(stale_bundle["share_status"], "external_share_approval_stale")
+        self.assertTrue(stale_bundle["approval_stale"])
+        self.assertFalse(stale_bundle["external_sharing_allowed"])
+
+        fresh_pending = self.ledger.request_case_bundle_share_approval(case["case_id"], actor="robert")
+        self.assertNotEqual(fresh_pending["id"], approval["id"])
+        self.ledger.add_event(case["case_id"], {
+            "event_date": "2026-07-13",
+            "title": "New event after approval request",
+            "description": "The snapshot changed again.",
+        }, actor="robert")
+        with self.assertRaisesRegex(ValueError, "case changed"):
+            self.ledger.resolve_approval(fresh_pending["id"], "approved", actor="robert")
+
+        replacement = self.ledger.request_case_bundle_share_approval(case["case_id"], actor="robert")
+        self.assertNotEqual(replacement["id"], fresh_pending["id"])
+        superseded = next(item for item in self.ledger.list_approvals(case["case_id"]) if item["id"] == fresh_pending["id"])
+        self.assertEqual(superseded["status"], "superseded")
+        self.ledger.resolve_approval(replacement["id"], "approved", actor="robert")
+        refreshed_bundle = self.ledger.case_bundle(case["case_id"])
+        self.assertTrue(refreshed_bundle["external_sharing_allowed"])
+        self.assertFalse(refreshed_bundle["approval_stale"])
 
     def test_proposed_evidence_is_not_counted_as_confirmed_claim_support(self):
         case = self.ledger.create_case({
@@ -1639,6 +1667,78 @@ class TestLegalLedgerApi(unittest.TestCase):
         approved_bundle = self.client.get(f"/api/cases/{case_id}/bundle", headers=self.headers)
         self.assertEqual(approved_bundle.get_json()["share_status"], "external_share_approved")
         self.assertTrue(approved_bundle.get_json()["external_sharing_allowed"])
+
+    def test_case_bundle_download_requires_current_approval_and_is_audited(self):
+        created = self.client.post("/api/cases", json={
+            "title": "Bundle export case",
+            "description": "A source-linked case bundle must be reviewable before export.",
+            "legal_domain": "administrative_law",
+        }, headers=self.headers)
+        self.assertEqual(created.status_code, 201)
+        case_id = created.get_json()["case_id"]
+        self.ledger.add_document(case_id, {
+            "original_filename": "decision.txt",
+            "mime_type": "text/plain",
+            "extracted_text": "The authority issued its decision on 12 March 2026.",
+            "source_uri": "https://drive.google.com/file/d/source-document/view",
+            "source_provider": "google_drive",
+        }, actor="ledger@example.com")
+
+        blocked = self.client.get(f"/api/cases/{case_id}/bundle/download", headers=self.headers)
+        self.assertEqual(blocked.status_code, 409)
+        self.assertFalse(blocked.get_json()["external_sharing_allowed"])
+
+        requested = self.client.post(
+            f"/api/cases/{case_id}/bundle/share-approval",
+            json={"reason": "Send the reviewed bundle to counsel."},
+            headers=self.headers,
+        )
+        self.assertEqual(requested.status_code, 201)
+        approval_id = requested.get_json()["id"]
+        approved = self.client.patch(
+            f"/api/approvals/{approval_id}",
+            json={"status": "approved"},
+            headers=self.headers,
+        )
+        self.assertEqual(approved.status_code, 200)
+
+        downloaded = self.client.get(f"/api/cases/{case_id}/bundle/download", headers=self.headers)
+        self.assertEqual(downloaded.status_code, 200)
+        self.assertEqual(downloaded.mimetype, "application/zip")
+        self.assertEqual(downloaded.headers["X-LARO-Approval-Id"], str(approval_id))
+        with zipfile.ZipFile(io.BytesIO(downloaded.data)) as archive:
+            archive_names = archive.namelist()
+            self.assertIn("manifest.json", archive_names)
+            extracted_name = next(
+                name for name in archive_names
+                if name.startswith("documents/") and name.endswith("_decision_extracted.txt")
+            )
+            self.assertIn("issued its decision", archive.read(extracted_name).decode("utf-8"))
+            manifest = json.loads(archive.read("manifest.json"))
+        self.assertEqual(manifest["approval_id"], approval_id)
+        self.assertEqual(
+            manifest["bundle_snapshot_hash"],
+            downloaded.headers["X-LARO-Snapshot-SHA256"],
+        )
+
+        audit = self.client.get(f"/api/audit?case_id={case_id}", headers=self.headers)
+        self.assertEqual(audit.status_code, 200)
+        export_records = [
+            item for item in audit.get_json()["audit_events"]
+            if item["action"] == "case_bundle_exported"
+        ]
+        self.assertTrue(export_records)
+        self.assertEqual(export_records[0]["approval_id"], approval_id)
+
+        changed = self.client.patch(
+            f"/api/cases/{case_id}",
+            json={"current_summary": "The source set changed after approval."},
+            headers=self.headers,
+        )
+        self.assertEqual(changed.status_code, 200)
+        stale = self.client.get(f"/api/cases/{case_id}/bundle/download", headers=self.headers)
+        self.assertEqual(stale.status_code, 409)
+        self.assertTrue(stale.get_json()["approval_stale"])
 
     def test_legacy_outreach_start_creates_approval_gated_drafts_without_sending(self):
         created = self.client.post("/api/cases", json={
