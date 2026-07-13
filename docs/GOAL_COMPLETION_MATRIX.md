@@ -29,7 +29,7 @@ Last updated: 2026-07-06 (after phases 000–070).
 | 008 | Authorization & resource ownership | **Implemented** | `assertCaseOwnership` guard; IDOR endpoints protected; `demo-user-123` removed; `tests/smoke/authz.smoke.test.ts` (13 pass). |
 | 009 | API contract & error envelope | **Implemented** | tRPC `errorFormatter` stable envelope; dead `error-handler.ts` removed. |
 | 010 | Frontend architecture & navigation | **Partial** | `docs/FRONTEND_ARCHITECTURE.md`; demo-mode no longer exposes data (via Phase 008). Residual: visible demo label (037), placeholder routes (011/014), renderer tsc debt (041). |
-| 011 | Core workflow vertical slice | **Partial** | Real matching engine wired into `matching` router (no more `Math.random`), protected + ownership. Residual: needs classification (025) to produce areas; outreach send still missing. |
+| 011 | Core workflow vertical slice | **Implemented** | Full slice real: classify (025) → match → prepare → approve → **send** (`server/outreachSend.ts` + `workflow.sendApproved`, flag-gated, tested). |
 | 012 | External provider reality review | **Implemented** | `docs/PROVIDERS.md`; dummy auth URLs replaced with real availability reporting in `enhancedConnections.ts`. |
 | 013 | Compliance & policy boundaries | **Partial** | `LEGAL_DISCLAIMER` appended to generated legal docs; `docs/COMPLIANCE.md`. Residual: UI-wide disclaimer (037), GDPR (028), i18n (057). |
 | 014 | No fake success / no mock production | **Implemented** | Fake OCR, hardcoded dashboard stats, and mocked `outreachProgress` replaced with honest/real behavior; anti-regression guards in `tests/smoke/noFakeSuccess.smoke.test.ts`. |
@@ -39,7 +39,7 @@ Last updated: 2026-07-06 (after phases 000–070).
 | 023 | Import & export | **Implemented** | `cases.export` (JSON) + `cases.exportCsv` + **`cases.exportZip`** (real `archiver` ZIP: manifest + per-item metadata + provenance hashes, `server/evidenceExport.ts`); CSV import existed. Tested. (PDF rendering optional/deferred.) |
 | 024 | Templates, presets, defaults | **Implemented** | `messageTemplates` real per-user CRUD. |
 | 025 | AI/provider abstraction & deterministic fallback | **Implemented** | `server/classification.ts` deterministic classifier wired into `cases.create`/`cases.classify`; unblocks matching. Tested. |
-| 026 | Human review queue & approval gates | **Partial** | `workflow.prepareDrafts`/`reviewQueue`/`approveDraft`/`rejectDraft`; nothing sent (`sent:false`). Real send is a later phase. |
+| 026 | Human review queue & approval gates | **Implemented** | Prepare/review/approve/reject + **real gated send** (`workflow.sendApproved`): emergency-stop + flag + Approved-state + ownership + idempotency. Tested. |
 | 027 | Notifications & reminders | **Implemented** | `createNotification` real; **reminder sweep** (`server/reminders.ts` + `notifications.runReminders` + daily cron) — idempotent per case/kind/day (approval-pending, urgent-no-evidence). Tested. |
 | 028 | Privacy controls & data deletion | **Implemented** | `server/gdpr.ts` real export + erasure; `gdpr.*` no longer stubs. |
 | 029 | Security headers & web security | **Implemented** | CSP/HSTS/frame/referrer/permissions headers in `server/index.ts`. |
@@ -79,16 +79,16 @@ Last updated: 2026-07-06 (after phases 000–070).
 | 063 | Provider credential verification checklist | **Implemented** | `system.providerChecklist` (configured booleans + env names, no secrets). Tested. |
 | 064 | Threat model & security design review | **Implemented** | `docs/THREAT_MODEL.md` (STRIDE + residuals). |
 | 065 | Privacy impact assessment | **Implemented** | `docs/PRIVACY_IMPACT_ASSESSMENT.md` (DPIA). |
-| 066 | Supply chain & dependency review | **Partial** | `docs/SUPPLY_CHAIN.md` + `npm run audit:deps`. 46 advisories to triage (2 critical). |
+| 066 | Supply chain & dependency review | **Implemented** | `docs/SUPPLY_CHAIN.md` — full triage of 21 advisories by runtime exposure (the 1 critical is dev-only vitest; majority are dev/build tooling; 4 runtime deps have a scheduled major-upgrade plan). |
 | 067 | License & third-party service review | **Implemented** | `docs/LICENSES.md` (dependency inventory) + top-level `LICENSE` (proprietary; owner may change). |
 | 068 | CI/CD quality gates | **Implemented** | `.github/workflows/ci.yml` — blocking tsc(server+main)+vitest; lint/renderer non-blocking. |
 | 069 | Release process, canary & rollback | **Implemented** | `docs/RELEASE_PROCESS.md` (flags=canary, backup=rollback, gates). |
 | 070 | Operator runbook | **Implemented** | `docs/OPERATOR_RUNBOOK.md` expanded (health/integrity/backup/flags/rotation/incident). |
 | 016 | Background jobs, schedulers & workers | **Implemented** | `runJob()` error-isolation + retry/backoff + status; honest outreach heartbeat (no fake send); `health.readiness` exposes job status. `docs/OPERATOR_RUNBOOK.md`. |
-| 017 | Idempotency & duplicate-action prevention | **Partial** | UNIQUE `outreach_status(caseId,lawyerId)` + idempotent `initiateOutreach`. Residual: idempotency keys for the real send path (026). |
+| 017 | Idempotency & duplicate-action prevention | **Implemented** | UNIQUE `outreach_status(caseId,lawyerId)` + idempotent prepare; **send path is idempotent** (per-outreach guard + `Sent` state — double-send test passes). |
 | 018 | Rate limits, cooldowns & provider quotas | **Implemented** | `enforceRateLimit` applied to login, case-create, matching, outreach (+ existing search). Residual: distributed store (Redis) documented. |
 | 019 | Audit logging & event history | **Implemented** | Real filtering; wired into case CRUD + outreach + login; user-scoped `audit.list` read path. |
-| 020 | User-facing dashboard & next-action | **Partial** | Real `dashboard.nextActions` derived from case state (evidence/status/urgency). Residual: surface in UI + exception dashboard (109). |
+| 020 | User-facing dashboard & next-action | **Implemented** | `dashboard.stats`/`nextActions`/**`exceptions`** (109) all real + tested, derived from case state; consumed by the dashboard UI. |
 | 071 | User guide & in-app help | **Implemented** | `server/help.ts` + `help.topics/topic` (ordered topics incl. disclaimer); `docs/USER_GUIDE.md`. Tested. |
 | 072 | Troubleshooting & error catalog | **Implemented** | `server/errorCatalog.ts` + `help.errorCatalog` (code→message/cause/remedy); `docs/TROUBLESHOOTING.md`. Tested. |
 | 073 | UI action audit | **Implemented** | `docs/UI_ACTION_AUDIT.md` — found 14 renderer-referenced routers with no backend (broken UI actions) + billing/agent method gaps. |
@@ -124,7 +124,7 @@ Last updated: 2026-07-06 (after phases 000–070).
 | 103 | Prototype → production migration | **Implemented** | `scripts/prod-preflight.mjs` (`npm run preflight`) — blocks go-live on weak secrets/demo/migrations/tracked-.env; `docs/PROD_MIGRATION.md`. |
 | 104 | Operator safety stop / emergency controls | **Implemented** | `server/systemState.ts` + `admin.setEmergencyStop/emergencyStopStatus`; wired into `workflow.prepareDrafts/approveDraft` (halts outreach). Tested. |
 | 105 | Onboarding & first-run | **Implemented** | `server/onboarding.ts` + `onboarding.steps/state/complete`; per-user completion tracked. Tested. |
-| 106 | Role-based settings & permissions | **Partial** | `server/_core/roles.ts` (hierarchy + `requireRole` + `capabilitiesFor`) + `system.capabilities`. Tested. Residual: multi-user teams/tenancy (roadmap 107). |
+| 106 | Role-based settings & permissions | **Implemented** | Roles (`server/_core/roles.ts` + `system.capabilities`) + **real multi-user teams** (`server/teams.ts` + `teams` router): shared case access enforced in `assertCaseOwnership`; stranger still blocked (isolation preserved). Tested. |
 | 107 | Quality scoring & confidence display | **Implemented** | `server/confidence.ts` — honest confidence derived from real match score (no hardcoded 0.98); applied in `matching.findLawyers`. Tested. |
 | 108 | Human decision minimization | **Implemented** | `docs/DECISION_MINIMIZATION.md` — auto vs human decisions; exceptions + clarifications minimize prompts (real endpoints). |
 | 109 | Exception-based workflow dashboard | **Implemented** | `dashboard.exceptions` — surfaces only cases needing attention (missing-contact/unclassified/no-evidence/awaiting-approval). Tested. |
@@ -133,7 +133,7 @@ Last updated: 2026-07-06 (after phases 000–070).
 | 112 | Versioning & changelog discipline | **Implemented** | `CHANGELOG.md` + version bump 1.1.0; preflight checks the version has an entry. |
 | 113 | Regression baseline | **Implemented** | `scripts/regression-baseline.mjs` + `docs/regression-baseline.json` (25 files) — fails if a baselined test file is removed. |
 | 114 | Maintenance & refactoring review | **Implemented** | `docs/MAINTENANCE_REVIEW.md` — completed refactors (shared retry/system-state) + maintainability backlog. |
-| 115 | Final human-operator readiness | **Partial** | `scripts/operator-readiness.mjs` (`npm run readiness`, all green) + `docs/OPERATOR_READINESS.md`. Honest verdict: ready for triage/prepare, NOT end-to-end send (D1/D3). |
+| 115 | Final human-operator readiness | **Implemented** | `scripts/operator-readiness.mjs` (all green) + `docs/OPERATOR_READINESS.md`. D1 (14 routers) + D3 (gated real send) now done; end-to-end path exists behind the safety flag. |
 
 Note: phases 000–006/008/009 mark their **own deliverable** complete. 007 and 010
 are honestly **Partial** — real improvements landed, but named residual items
@@ -149,13 +149,16 @@ remain and are tracked in `docs/SECURITY.md` §5 and `docs/FRONTEND_ARCHITECTURE
 | 076–099 | Debt register, bug log, red-team loops, user sims, value/realism reviews, traceability, task graph, worklog, resume-safety, stabilization gates, DoD, fresh-clone, manual evidence, no-excuses search, completion matrix, final report, final response, maintenance, roadmap | Missing → Partial (worklog/checkpoints/matrix now started) |
 | 100–115 | Provider cleanup, debug bundle, retention, prod migration, emergency stop, onboarding, roles, confidence display, decision minimization, exception dashboard, safe retries, ambiguous-action, versioning, regression baseline, maintenance review, operator-readiness | mostly Missing |
 
-**Exact tally across all 116 phases (verified by grep of this matrix):** Implemented **102** · Partial **14** · Missing **0** · Blocked **0**.
+**Exact tally across all 116 phases (verified by grep of this matrix):** Implemented **109** · Partial **7** · Missing **0** · Blocked **0**.
 
-The 14 remaining Partials are honest — each names a residual that is genuinely NOT
-yet real code. They fall into three groups, all downstream of large efforts:
-- **Renderer/UI** (010, 013, 021, 041, 049, 050, 057): renderer TypeScript debt (~425 errors, D2) + 14 dead-router screens (D1) + i18n string migration. Backend is real; the UI layer needs a dedicated pass.
-- **Real outreach send** (011, 017, 020, 026, 115): everything up to human approval is real; the actual send + reply-tracking loop (D3) is deliberately unbuilt behind the approval gate + `outreach.send.enabled` flag (safety boundary — no lawyer contacted without approval).
-- **External / large features** (066 npm-audit advisory triage — owner/ecosystem; 106 multi-user teams/tenancy).
+The 7 remaining Partials are **all in the renderer/UI layer** — the backend for
+each is real and tested; what remains is frontend work that needs the renderer to
+type-compile cleanly and, in some cases, browser-based test tooling:
+- **010** renderer TypeScript debt (~500 errors across ~40 components, D2).
+- **013** a UI-wide disclaimer banner; **021** wiring the (real, backend-complete) autosave into the form UI; **057** migrating renderer strings to the `t()` catalog.
+- **041** component-render tests (need jsdom + testing-library); **049** per-screen axe a11y audit; **050** responsive/visual-regression QA.
+
+These are honestly Partial (not faked): the backend is done, the UI polish + frontend test tooling is a dedicated frontend pass.
 (Through phase 115 — the full 000–115 program has now been worked. Phases 101–115 added real operator/safety features: emergency stop, data retention, safe retries, onboarding, roles, debug bundle, exception dashboard, real clarifications, honest confidence, plus preflight/readiness/regression scripts and a CHANGELOG. Remaining Partials name honest residuals — chiefly the unbuilt outreach **send** (D3), renderer dead-router screens (D1), token crypto (D4), and multi-user teams — all tracked in docs/TECH_DEBT.md + docs/ROADMAP.md.)
 
 _Last updated: 2026-07-06 (phases 101–115 — program complete through 115)._

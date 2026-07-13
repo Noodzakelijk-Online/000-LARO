@@ -32,6 +32,13 @@ import { notificationsRouter } from "./notifications";
 import { featureFlagsRouter } from "./featureFlags";
 import { helpRouter } from "./help";
 import { onboardingRouter } from "./onboarding";
+import { teamsRouter } from "./teams";
+import {
+  adminAnalyticsRouter, outreachAnalyticsRouter, relevanceScoringRouter,
+  evidenceAggregationRouter, enrichmentRouter, evidenceRouter, evidenceExportRouter,
+  bulkFileOperationsRouter, caseManagementRouter, legalChecklistsRouter,
+  emailMessagesRouter, syncSchedulerRouter, trelloRouter, unifiedInboxRouter,
+} from "./extendedRouters";
 import { adminRouter } from "./admin";
 import { auditRouter } from "./audit";
 import { enforceRateLimit, RATE_LIMITS } from "../rateLimit";
@@ -88,6 +95,22 @@ export const appRouter = router({
   featureFlags: featureFlagsRouter, // Phase 058
   help: helpRouter, // Phase 071/072
   onboarding: onboardingRouter, // Phase 105
+  teams: teamsRouter, // Phase 106
+  // Phase 010 (D1) — routers the renderer referenced but that had no backend.
+  adminAnalytics: adminAnalyticsRouter,
+  outreachAnalytics: outreachAnalyticsRouter,
+  relevanceScoring: relevanceScoringRouter,
+  evidenceAggregation: evidenceAggregationRouter,
+  enrichment: enrichmentRouter,
+  evidence: evidenceRouter,
+  evidenceExport: evidenceExportRouter,
+  bulkFileOperations: bulkFileOperationsRouter,
+  caseManagement: caseManagementRouter,
+  legalChecklists: legalChecklistsRouter,
+  emailMessages: emailMessagesRouter,
+  syncScheduler: syncSchedulerRouter,
+  trello: trelloRouter,
+  unifiedInbox: unifiedInboxRouter,
 
   // Phase 056 — SaaS readiness WITHOUT forced billing. Core features work on the
   // free tier; Stripe is optional and unconfigured by default. This endpoint

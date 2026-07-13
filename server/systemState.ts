@@ -41,6 +41,28 @@ export async function setSystemSwitch(key: string, value: boolean): Promise<void
     });
 }
 
+/** Read an arbitrary string system value (null if unset). */
+export async function getSystemValue(key: string): Promise<string | null> {
+  const db = await getDb();
+  if (!db) return null;
+  try {
+    const row = (await db.select().from(systemConfig).where(eq(systemConfig.configKey, key)).limit(1))[0];
+    return row?.configValue ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Write an arbitrary string system value. */
+export async function setSystemValue(key: string, value: string): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .insert(systemConfig)
+    .values({ configKey: key, configValue: value, updatedAt: new Date() } as any)
+    .onConflictDoUpdate({ target: systemConfig.configKey, set: { configValue: value, updatedAt: new Date() } as any });
+}
+
 /** True when the operator has engaged the emergency stop. */
 export function isEmergencyStopped(): Promise<boolean> {
   return getSystemSwitch(EMERGENCY_STOP_KEY);

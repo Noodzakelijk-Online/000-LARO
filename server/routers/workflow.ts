@@ -175,6 +175,20 @@ export const workflowRouter = router({
     }),
 
   /**
+   * Phase 011/026/017 — the REAL send. Transmits an approved draft to the matched
+   * lawyer, but only when: emergency stop is released, `outreach.send.enabled` is
+   * ON (default OFF), the draft is Approved, the caller owns the case, a provider
+   * is configured, and it has not already been sent (idempotent). Fails honestly
+   * otherwise; nothing is sent implicitly.
+   */
+  sendApproved: protectedProcedure
+    .input(z.object({ outreachId: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const { sendApprovedOutreach } = await import("../outreachSend");
+      return sendApprovedOutreach(ctx.user.id, input.outreachId);
+    }),
+
+  /**
    * Phase 062 — pre-action safety review.
    *
    * Returns everything a human must see and confirm BEFORE any outreach is sent:

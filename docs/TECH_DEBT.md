@@ -4,7 +4,7 @@ Date: 2026-07-06 · Branch `Phase-Imp`
 
 | # | Debt | Impact | Ref / next phase |
 |---|---|---|---|
-| D1 | Renderer references 14 non-existent routers (broken UI actions) | High — buttons error at runtime | UI_ACTION_AUDIT (073); hide/implement (010/014/037) |
+| ~~D1~~ | **RESOLVED** — the 14 routers are implemented (`server/routers/extendedRouters.ts`), typed + mounted; UI actions hit real endpoints | — | closed (010) |
 | D2 | Renderer `tsc` has ~425 pre-existing type errors | Med — no type safety in UI; built via Vite (no gate) | 041 |
 | D3 | Real outreach **send** not implemented | High — critical-path gap | scaffolded + flag-gated (026/058) |
 | ~~D4~~ | **RESOLVED** — OAuth-token crypto now authenticated AES-256-GCM (`server/crypto.ts`) | — | closed (007/030/080) |

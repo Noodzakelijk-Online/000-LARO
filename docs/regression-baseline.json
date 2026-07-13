@@ -10,7 +10,9 @@
     "tests/backend/phase061_070.test.ts",
     "tests/backend/phase071_080.test.ts",
     "tests/backend/phase101_115.test.ts",
+    "tests/backend/realSend.test.ts",
     "tests/backend/stateMachines.test.ts",
+    "tests/backend/teams.test.ts",
     "tests/backend/worker.test.ts",
     "tests/e2e/workflow.e2e.test.ts",
     "tests/frontend/frontendLogic.test.ts",
@@ -28,5 +30,5 @@
     "tests/smoke/phase021_030.smoke.test.ts",
     "tests/smoke/storage.smoke.test.ts"
   ],
-  "count": 26
+  "count": 28
 }

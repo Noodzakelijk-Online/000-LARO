@@ -4,6 +4,26 @@ All notable changes to LARO are documented here. This project follows semantic
 versioning; dates are ISO. Version is sourced from `package.json` and surfaced by
 `system.appInfo` / `admin.debugBundle`.
 
+## [1.3.0] — 2026-07-06
+Closing renderer-independent Partials with real code.
+
+### Added
+- **14 missing routers (010/D1):** `server/routers/extendedRouters.ts` — adminAnalytics,
+  outreachAnalytics, relevanceScoring, evidenceAggregation, enrichment, evidence,
+  evidenceExport, bulkFileOperations, caseManagement, legalChecklists, emailMessages,
+  syncScheduler, trello, unifiedInbox. Real DB-backed data or honest typed results.
+- **Real outreach send (011/026/017):** `server/outreachSend.ts` + `workflow.sendApproved`
+  — gated by emergency stop + `outreach.send.enabled` (default OFF) + Approved state +
+  ownership + idempotency. Fails honestly with no provider. Tested (3/3).
+- **Multi-user teams (106):** `server/teams.ts` + `teams` router; shared case access
+  enforced in `assertCaseOwnership`; isolation preserved. Tested (3/3).
+- **Supply-chain review (066):** `docs/SUPPLY_CHAIN.md` — 21 advisories triaged by
+  runtime exposure (critical is dev-only vitest; 4 runtime deps scheduled).
+
+### Status
+- Matrix: **109 Implemented / 7 Partial / 0 Missing**. Tech-debt D1 RESOLVED.
+- Remaining 7 Partials are all renderer/UI layer (010/013/021/041/049/050/057).
+
 ## [1.2.0] — 2026-07-06
 Closing Partial phases with real code (security & data hardening).
 

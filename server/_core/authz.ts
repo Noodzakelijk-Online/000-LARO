@@ -21,13 +21,23 @@ export async function assertCaseOwnership(caseId: string, userId: string): Promi
     throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
   }
 
+  // Fetch the case owner once; grant access to the owner OR a member of the
+  // owner's team (Phase 106). Strangers are still refused, and we never reveal
+  // whether the id exists.
   const rows = await db
-    .select({ id: cases.id })
+    .select({ id: cases.id, ownerId: cases.userId })
     .from(cases)
-    .where(and(eq(cases.id, caseId), eq(cases.userId, userId)))
+    .where(eq(cases.id, caseId))
     .limit(1);
 
-  if (rows.length === 0) {
+  const ownerId = rows[0]?.ownerId;
+  let allowed = ownerId === userId;
+  if (rows.length > 0 && !allowed) {
+    const { hasCaseAccessViaTeam } = await import("../teams");
+    allowed = await hasCaseAccessViaTeam(ownerId!, userId);
+  }
+
+  if (!allowed) {
     // Do not distinguish "not found" from "not yours" — that itself leaks
     // information about which case ids exist.
     throw new TRPCError({

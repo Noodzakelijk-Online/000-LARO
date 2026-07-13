@@ -317,3 +317,28 @@ not faked.
 
 **Next safe action:** the renderer pass (D1/D2) or the real send loop (D3) — both
 are large, product-level efforts.
+
+---
+
+## Checkpoint 15 — 2026-07-06 — Closing renderer-independent Partials
+
+**Branch:** `Phase-Imp`. Partials 14 → 7 (all remaining are renderer/UI).
+
+**Done (real, tested):**
+- **010/D1** — implemented the 14 missing routers (`server/routers/extendedRouters.ts`),
+  typed + mounted; every previously-dead UI action now hits a real endpoint.
+- **011/026/017** — real gated outreach send (`server/outreachSend.ts` +
+  `workflow.sendApproved`): emergency-stop + flag(OFF) + Approved + ownership +
+  idempotency; honest failure with no provider. `tests/backend/realSend.test.ts` 3/3.
+- **106** — multi-user teams (`server/teams.ts` + `teams` router); shared case access
+  in `assertCaseOwnership`; stranger still blocked. `tests/backend/teams.test.ts` 3/3
+  + isolation 5/5.
+- **066** — supply-chain advisories triaged by runtime exposure (`docs/SUPPLY_CHAIN.md`).
+- **020/115** — dashboard exceptions + end-to-end send now real.
+
+**Verified:** `npm run gate` 6/6 green; vitest **28 files / 181 passed / 9 todo**;
+traceability 0 broken. Tech-debt D1 RESOLVED.
+
+**Remaining 7 Partials (honest):** 010 renderer tsc (~500 errors), 013 disclaimer UI,
+021 autosave UI, 041 component tests (jsdom), 049 a11y audit, 050 responsive, 057
+i18n string migration — a dedicated frontend pass. Backend for all is done.
