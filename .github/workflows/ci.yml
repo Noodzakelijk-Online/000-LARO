@@ -20,8 +20,7 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: npm run rebuild:node
-      - run: node scripts/stabilization-gate.mjs
+      - run: npm run gate
 
   python-quality:
     runs-on: ubuntu-latest
