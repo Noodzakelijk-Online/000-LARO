@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { router, publicProcedure } from "../_core/trpc";
+import { router, protectedProcedure } from "../_core/trpc";
+import { sendSystemEmail } from "../systemEmail";
 function resolveProvider() {
   const from = process.env.EMAIL_FROM || process.env.SMTP_FROM || "noreply@laro.local";
   const missingVars: string[] = [];
@@ -8,15 +9,6 @@ function resolveProvider() {
     return {
       provider: "sendgrid" as const,
       name: "SendGrid",
-      configured: true,
-      from,
-      missingVars: [] as string[],
-    };
-  }
-  if (process.env.AWS_SES_REGION) {
-    return {
-      provider: "ses" as const,
-      name: "AWS SES",
       configured: true,
       from,
       missingVars: [] as string[],
@@ -33,7 +25,6 @@ function resolveProvider() {
   }
 
   if (process.env.EMAIL_PROVIDER === "sendgrid") missingVars.push("SENDGRID_API_KEY");
-  if (process.env.EMAIL_PROVIDER === "ses") missingVars.push("AWS_SES_REGION");
   if (process.env.EMAIL_PROVIDER === "smtp") missingVars.push("SMTP_HOST");
 
   return {
@@ -46,21 +37,28 @@ function resolveProvider() {
 }
 
 export const emailRouter = router({
-  getProviderInfo: publicProcedure.query(() => resolveProvider()),
+  getProviderInfo: protectedProcedure.query(() => resolveProvider()),
 
-  test: publicProcedure
+  test: protectedProcedure
     .input(
       z.object({
         to: z.string().email("Invalid email address"),
         subject: z.string().optional(),
       })
     )
-    .mutation(({ input }) => {
+    .mutation(async ({ input }) => {
       const subject = input.subject ?? "LARO test email";
-      console.log(`[email.test] To: ${input.to} Subject: ${subject}`);
+      const result = await sendSystemEmail({
+        to: input.to,
+        subject,
+        text: "This is a transactional email configuration test from LARO.",
+      });
       return {
-        success: true,
-        message: "Test email logged to console (development mode).",
+        success: result.delivered,
+        provider: result.provider,
+        message: result.delivered
+          ? `Test email sent through ${result.provider}.`
+          : "No transactional email provider is configured; no email was sent.",
       };
     }),
 });

@@ -32,7 +32,6 @@ import { createContext } from './context';
 import { compressionMiddleware } from './compression';
 import { initCronScheduler } from './cronScheduler';
 import oauth2CallbacksRouter from './oauth2Callbacks';
-import { beginOAuthFlow } from './oauth2';
 import { getDb } from './db';
 import { assertSecurityConfig, ENV } from './_core/env';
 
@@ -88,8 +87,8 @@ app.use((req, res, next) => {
 });
 
 app.use(cookieParser());
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.json({ limit: ENV.API_BODY_LIMIT }));
+app.use(express.urlencoded({ extended: true, limit: ENV.API_BODY_LIMIT }));
 app.use(compressionMiddleware);
 
 // ─── Health check ─────────────────────────────────────────────────────────────
@@ -134,33 +133,6 @@ app.get('/api/health', async (_req, res) => {
 
 // ─── OAuth2 routes ────────────────────────────────────────────────────────────
 
-// OAuth2 initiation endpoint (redirects to Google/Outlook)
-app.get('/api/oauth/:provider/connect', (req, res) => {
-  try {
-    const { provider } = req.params;
-    const userId = req.query.userId as string;
-    
-    if (!userId) {
-      return res.status(400).json({ error: 'Missing userId parameter' });
-    }
-    
-    if (provider !== 'gmail' && provider !== 'outlook') {
-      return res.status(400).json({ error: 'Invalid provider. Use gmail or outlook' });
-    }
-    
-    console.log(`[OAuth2] Initiating ${provider} connection for user ${userId}`);
-    
-    // Generate authorization URL and redirect
-    const authUrl = beginOAuthFlow(provider as 'gmail' | 'outlook', userId);
-    res.redirect(authUrl);
-  } catch (error) {
-    console.error('[OAuth2] Connect error:', error);
-    res.status(500).json({ 
-      error: error instanceof Error ? error.message : 'Failed to initiate OAuth flow' 
-    });
-  }
-});
-
 // Mount OAuth2 callback routes
 app.use(oauth2CallbacksRouter);
 
@@ -176,7 +148,7 @@ app.use(
 
 // ─── Static files (Production) ────────────────────────────────────────────────
 
-if (!isDev) {
+if (!isDev && !ENV.SERVER_ONLY) {
   // In a packaged Electron app, we need to find the renderer files relative to this file
   // dist/main/server/index.js -> dist/renderer
   const possiblePaths = [
@@ -206,6 +178,8 @@ if (!isDev) {
   } else {
     console.error(`[Server] Critical: Could not find renderer path in: ${possiblePaths.join(', ')}`);
   }
+} else if (ENV.SERVER_ONLY) {
+  console.log('[Server] API-only mode enabled; renderer static files are intentionally disabled.');
 }
 // ─── Lifecycle ──────────────────────────────────────────────────────────────
 
@@ -221,17 +195,18 @@ export async function startServer(port: number = PORT) {
   // we start accepting requests. The first signup/login otherwise races with
   // migration and can hit "no such table: users".
   try {
-    await getDb();
+    const db = await getDb();
+    if (!db) throw new Error('Database initialization returned no connection');
     console.log('[Server] Database ready.');
   } catch (err) {
     console.error('[Server] Database pre-warm failed:', err);
-    // Continue to listen anyway — getDb() will retry on each request, and
-    // returning here would prevent the UI from loading entirely.
+    if (ENV.isProd) throw err;
+    console.warn('[Server] Development mode will continue without a ready database.');
   }
 
   return new Promise<void>((resolve) => {
-    httpServer.listen(port, () => {
-      console.log(`[Server] Integrated backend listening on port ${port}`);
+    httpServer.listen(port, ENV.HOST, () => {
+      console.log(`[Server] Integrated backend listening on http://${ENV.HOST}:${port}`);
 
       // Initialize background cron jobs
       initCronScheduler();
@@ -243,5 +218,8 @@ export async function startServer(port: number = PORT) {
 
 // Start if run directly (though Electron usually calls startServer)
 if (require.main === module) {
-  startServer().catch(console.error);
+  startServer().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
 }

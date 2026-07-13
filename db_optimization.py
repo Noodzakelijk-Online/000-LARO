@@ -21,7 +21,8 @@ from typing import Dict, List, Any, Optional, Tuple, Callable
 # Configure logging
 logger = logging.getLogger('legal_ai_platform.db_optimization')
 
-# Mock database drivers - in a real implementation, these would be actual database drivers
+# Local compatibility adapters. They keep legacy decorators callable without
+# claiming that an external database or metrics service exists.
 class MockSQLDatabase:
     def __init__(self, config):
         self.config = config
@@ -30,7 +31,7 @@ class MockSQLDatabase:
     
     def connect(self):
         self.connected = True
-        logger.info(f"Connected to SQL database at {self.config.get('host')}:{self.config.get('port')}")
+        logger.info("Local SQL compatibility adapter active; no external SQL connection was opened")
         return self
     
     def disconnect(self):
@@ -39,9 +40,8 @@ class MockSQLDatabase:
     
     def execute(self, query, params=None):
         logger.debug(f"Executing query: {query} with params: {params}")
-        # Simulate query execution
-        time.sleep(0.01)
-        return {"result": "success", "rows": 10}
+        logger.warning("Legacy SQL compatibility adapter cannot execute external queries")
+        return {"result": "unavailable", "rows": []}
 
 class MockTimeSeriesDatabase:
     def __init__(self, config):
@@ -51,7 +51,7 @@ class MockTimeSeriesDatabase:
     
     def connect(self):
         self.connected = True
-        logger.info(f"Connected to time-series database at {self.config.get('host')}:{self.config.get('port')}")
+        logger.info("Local metrics compatibility adapter active; metrics are not externally persisted")
         return self
     
     def disconnect(self):
@@ -60,15 +60,11 @@ class MockTimeSeriesDatabase:
     
     def write_point(self, measurement, tags, fields, timestamp=None):
         logger.debug(f"Writing point to {measurement}: tags={tags}, fields={fields}")
-        # Simulate write operation
-        time.sleep(0.005)
-        return True
+        return False
     
     def query(self, query):
         logger.debug(f"Executing time-series query: {query}")
-        # Simulate query execution
-        time.sleep(0.01)
-        return {"result": "success", "series": [{"name": "metrics", "values": [1, 2, 3]}]}
+        return {"result": "unavailable", "series": []}
 
 class MockCacheDatabase:
     def __init__(self, config):
@@ -79,7 +75,7 @@ class MockCacheDatabase:
     
     def connect(self):
         self.connected = True
-        logger.info(f"Connected to cache database at {self.config.get('host')}:{self.config.get('port')}")
+        logger.info("Local in-memory cache adapter active")
         return self
     
     def disconnect(self):
@@ -157,106 +153,36 @@ class DatabaseOptimizationManager:
         except Exception as e:
             logger.warning(f"Failed to load config from file: {e}")
         
-        # Use default configuration from advanced-database-optimizations.js
-        # In a real implementation, this would be loaded from environment variables
+        # No external database is implied by default. Deployments that need real
+        # replicas, sharding, or metrics must supply DB_CONFIG_PATH explicitly.
         return {
             "primary": {
-                "host": "localhost",
-                "port": 27017,
-                "database": "legal_ai",
-                "user": "dbuser",
-                "password": "dbpassword",
-                "options": {
-                    "useNewUrlParser": True,
-                    "useUnifiedTopology": True,
-                    "connectTimeoutMS": 10000,
-                    "socketTimeoutMS": 45000,
-                    "maxPoolSize": 50,
-                    "minPoolSize": 10
-                }
+                "host": "local-compatibility",
+                "port": 0,
+                "database": "",
+                "user": "",
+                "password": "",
+                "options": {}
             },
-            "replicas": [
-                {
-                    "host": "replica1.example.com",
-                    "port": 27017,
-                    "database": "legal_ai",
-                    "user": "readonly",
-                    "password": "readonlypassword",
-                    "options": {
-                        "useNewUrlParser": True,
-                        "useUnifiedTopology": True,
-                        "connectTimeoutMS": 10000,
-                        "socketTimeoutMS": 45000,
-                        "maxPoolSize": 100,
-                        "minPoolSize": 20,
-                        "readPreference": "secondaryPreferred"
-                    }
-                },
-                {
-                    "host": "replica2.example.com",
-                    "port": 27017,
-                    "database": "legal_ai",
-                    "user": "readonly",
-                    "password": "readonlypassword",
-                    "options": {
-                        "useNewUrlParser": True,
-                        "useUnifiedTopology": True,
-                        "connectTimeoutMS": 10000,
-                        "socketTimeoutMS": 45000,
-                        "maxPoolSize": 100,
-                        "minPoolSize": 20,
-                        "readPreference": "secondaryPreferred"
-                    }
-                }
-            ],
+            "replicas": [],
             "sharding": {
-                "enabled": True,
-                "shardKey": {
-                    "users": {"region": 1},
-                    "cases": {"category": 1, "createdAt": 1},
-                    "documents": {"caseId": 1},
-                    "messages": {"caseId": 1, "sentAt": 1}
-                },
-                "shards": [
-                    {
-                        "id": "shard1",
-                        "host": "shard1.example.com",
-                        "port": 27017,
-                        "database": "legal_ai",
-                        "user": "sharduser",
-                        "password": "shardpassword"
-                    },
-                    {
-                        "id": "shard2",
-                        "host": "shard2.example.com",
-                        "port": 27017,
-                        "database": "legal_ai",
-                        "user": "sharduser",
-                        "password": "shardpassword"
-                    },
-                    {
-                        "id": "shard3",
-                        "host": "shard3.example.com",
-                        "port": 27017,
-                        "database": "legal_ai",
-                        "user": "sharduser",
-                        "password": "shardpassword"
-                    }
-                ]
+                "enabled": False,
+                "shardKey": {},
+                "shards": []
             },
             "timeSeries": {
-                "host": "timeseries.example.com",
-                "port": 8086,
-                "database": "legal_ai_metrics",
-                "user": "tsuser",
-                "password": "tspassword",
+                "host": "local-memory",
+                "port": 0,
+                "database": "",
+                "user": "",
+                "password": "",
                 "retentionPolicy": "30d"
             },
             "cache": {
-                "host": "cache.example.com",
-                "port": 6379,
+                "host": "local-memory",
+                "port": 0,
                 "database": 0,
-                "password": "cachepassword",
+                "password": "",
                 "ttl": 300
             }
         }

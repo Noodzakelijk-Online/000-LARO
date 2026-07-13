@@ -7,6 +7,7 @@ import * as schema from "./schema";
 import { InsertUser, users, lawyers, cases, outreachStatus, emailActivity, systemConfig, evidence } from "./schema";
 import { getTableConfig } from "drizzle-orm/sqlite-core";
 import { ENV } from './_core/env';
+import { createCaseId } from './ids';
 
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 
@@ -326,7 +327,6 @@ export async function getDb() {
       const sqlite = new Database(dbPath);
       _db = drizzle(sqlite);
       applyConnectionPragmas(sqlite); // Phase 005: WAL, foreign_keys, busy_timeout
-      ensureSupportTicketsTable(sqlite);
       console.log("[Database] SQLite initialized at:", dbPath);
 
       const foundFolder = findMigrationsFolder();
@@ -377,6 +377,10 @@ export async function getDb() {
           "[Database] No migrations folder found — DB will not be initialized. Auth and other features will fail until this is resolved."
         );
       }
+
+      // Legacy databases may predate this table, but creating it before the
+      // migrator makes a fresh 0001 migration fail with "table already exists".
+      ensureSupportTicketsTable(sqlite);
 
       // Run column alignment AFTER migrations to backfill any columns that the
       // schema declares but the on-disk DB is missing (e.g. schema.ts was
@@ -502,7 +506,7 @@ export async function createCase(data: {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   
-  const caseId = `CASE${Date.now().toString().slice(-6)}`;
+  const caseId = createCaseId();
   
   await db.insert(cases).values({
     id: caseId,

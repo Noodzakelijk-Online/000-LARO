@@ -24,7 +24,7 @@ export function EmailConnectionDialog({ open, onOpenChange, caseId }: EmailConne
 
   // Mutations
   const getAuthUrl = trpc.emailAccounts.getAuthUrl.useMutation();
-  const disconnect = trpc.emailAccounts.disconnect.useMutation();
+  const disconnect = trpc.emailAccounts.revoke.useMutation();
   const refreshToken = trpc.emailAccounts.refreshToken.useMutation();
 
   const handleConnect = async (provider: 'gmail' | 'outlook') => {
@@ -32,7 +32,7 @@ export function EmailConnectionDialog({ open, onOpenChange, caseId }: EmailConne
     setSelectedProvider(provider);
 
     try {
-      const result = await getAuthUrl.mutateAsync({ provider, caseId });
+      const result = await getAuthUrl.mutateAsync({ provider });
       
       // Open OAuth popup
       const width = 600;
@@ -40,22 +40,30 @@ export function EmailConnectionDialog({ open, onOpenChange, caseId }: EmailConne
       const left = window.screenX + (window.outerWidth - width) / 2;
       const top = window.screenY + (window.outerHeight - height) / 2;
 
-      const popup = window.open(
+      window.open(
         result.authUrl,
         'OAuth',
         `width=${width},height=${height},left=${left},top=${top}`
       );
 
-      // Poll for popup close
-      const pollTimer = setInterval(() => {
-        if (popup?.closed) {
-          clearInterval(pollTimer);
+      const deadline = Date.now() + 5 * 60 * 1000;
+      const pollConnection = async () => {
+        const refreshed = await refetch();
+        if (refreshed.data?.some((account) => account.provider === provider && account.status === 'connected')) {
           setConnecting(false);
           setSelectedProvider(null);
-          refetch(); // Refresh account list
           toast.success(`${provider === 'gmail' ? 'Gmail' : 'Outlook'} account connected successfully!`);
+          return;
         }
-      }, 500);
+        if (Date.now() >= deadline) {
+          setConnecting(false);
+          setSelectedProvider(null);
+          toast.error('Connection was not confirmed. You can try again.');
+          return;
+        }
+        window.setTimeout(() => void pollConnection(), 2000);
+      };
+      window.setTimeout(() => void pollConnection(), 2000);
 
     } catch (error: any) {
       console.error('Error connecting account:', error);
@@ -128,19 +136,19 @@ export function EmailConnectionDialog({ open, onOpenChange, caseId }: EmailConne
                   <CardContent className="space-y-2">
                     <div className="flex items-center justify-between text-xs text-muted-foreground">
                       <span>
-                        Last synced: {account.lastSyncedAt 
-                          ? new Date(account.lastSyncedAt).toLocaleString()
+                        Last updated: {account.updatedAt
+                          ? new Date(account.updatedAt).toLocaleString()
                           : 'Never'}
                       </span>
                       <span>
-                        Connected: {new Date(account.connectedAt).toLocaleDateString()}
+                        Connected: {account.connectedAt ? new Date(account.connectedAt).toLocaleDateString() : 'Unknown'}
                       </span>
                     </div>
                     <div className="flex gap-2">
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => handleRefresh(account.id, account.email)}
+                        onClick={() => handleRefresh(account.id, account.email || 'account')}
                         disabled={refreshToken.isPending}
                       >
                         {refreshToken.isPending ? (
@@ -153,7 +161,7 @@ export function EmailConnectionDialog({ open, onOpenChange, caseId }: EmailConne
                       <Button
                         size="sm"
                         variant="destructive"
-                        onClick={() => handleDisconnect(account.id, account.email)}
+                        onClick={() => handleDisconnect(account.id, account.email || 'account')}
                         disabled={disconnect.isPending}
                       >
                         {disconnect.isPending ? (

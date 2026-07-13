@@ -8,16 +8,10 @@ import {
   exchangeCodeForTokens,
   getAccountInfo,
   refreshAccessToken,
+  consumeOAuthState,
 } from "../oauth2";
 import crypto from "crypto";
-
-function encryptToken(token: string): string {
-  return Buffer.from(token).toString("base64");
-}
-
-function decryptToken(encrypted: string): string {
-  return Buffer.from(encrypted, "base64").toString("utf-8");
-}
+import { encryptToken, decryptToken } from "../emailOAuth";
 
 async function revokeGmailToken(accessToken: string): Promise<void> {
   try {
@@ -43,14 +37,16 @@ export const emailAccountsRouter = router({
       z.object({
         provider: z.enum(["gmail", "outlook"]),
         code: z.string(),
-        state: z.string().optional(),
+        state: z.string(),
       })
     )
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      const tokens = await exchangeCodeForTokens(input.provider, input.code);
+      const state = consumeOAuthState(input.state, input.provider);
+      if (state.userId !== ctx.user.id) throw new Error("OAuth state does not match the current user");
+      const tokens = await exchangeCodeForTokens(input.provider, input.code, state.codeVerifier);
       const accountInfo = await getAccountInfo(input.provider, tokens.accessToken);
 
       const id = crypto.randomBytes(16).toString("hex");

@@ -94,6 +94,23 @@ function getPlatform(): Platform {
   return 'linux';
 }
 
+function isTrustedAppUrl(rawUrl: string): boolean {
+  try {
+    return new URL(rawUrl).origin === new URL(LARO_URL).origin;
+  } catch {
+    return false;
+  }
+}
+
+async function openExternalUrl(rawUrl: string): Promise<void> {
+  const url = new URL(rawUrl);
+  const localHttp = url.protocol === 'http:' && ['localhost', '127.0.0.1', '::1'].includes(url.hostname);
+  if (url.protocol !== 'https:' && url.protocol !== 'mailto:' && !localHttp) {
+    throw new Error(`Blocked external URL protocol: ${url.protocol}`);
+  }
+  await shell.openExternal(url.toString());
+}
+
 async function createMainWindow(): Promise<void> {
   mainWindow = new BrowserWindow({
     width: 1440,
@@ -105,6 +122,7 @@ async function createMainWindow(): Promise<void> {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: true,
       preload: path.join(__dirname, 'preload.js'),
     },
   });
@@ -117,11 +135,11 @@ async function createMainWindow(): Promise<void> {
   mainWindow.webContents.setWindowOpenHandler(({ url }: { url: string }) => {
     // Force OAuth flows to open in external browser to avoid Google's "disallowed_useragent" error
     if (url.includes('/api/oauth/')) {
-      shell.openExternal(url);
+      void openExternalUrl(url).catch((error) => console.error('[Electron] Blocked OAuth URL:', error));
       return { action: 'deny' };
     }
-    if (url.startsWith(LARO_URL)) return { action: 'allow' };
-    shell.openExternal(url);
+    if (isTrustedAppUrl(url)) return { action: 'allow' };
+    void openExternalUrl(url).catch((error) => console.error('[Electron] Blocked external URL:', error));
     return { action: 'deny' };
   });
 
@@ -311,7 +329,7 @@ function setupIPC(): void {
   // Phase 007: hand the renderer the per-install agent token so the scanner UI
   // authenticates with it instead of the well-known "local-default" string.
   ipcMain.handle('agent:token', () => process.env.LOCAL_AGENT_TOKEN || null);
-  ipcMain.handle(IPC_CHANNELS.OPEN_EXTERNAL, (_: any, url: string) => shell.openExternal(url));
+  ipcMain.handle(IPC_CHANNELS.OPEN_EXTERNAL, (_: any, url: string) => openExternalUrl(url));
   ipcMain.handle(IPC_CHANNELS.SCAN_OPEN_PANEL, () => createScanPanel());
   ipcMain.handle(IPC_CHANNELS.FOLDER_SELECT, async () => {
     const parent = scanPanel ?? mainWindow;

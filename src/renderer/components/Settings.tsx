@@ -160,13 +160,9 @@ export default function Settings() {
       });
 
       if (result.success) {
-        const message =
-          providerInfo?.provider === "console"
-            ? "Test email logged to console (check server logs)"
-            : "Test email sent successfully! Check your inbox.";
-        toast.success(message);
+        toast.success(result.message);
       } else {
-        toast.error(`Failed to send test email: ${(result as { error?: string }).error ?? "Unknown"}`);
+        toast.error(result.message);
       }
     } catch (error) {
       toast.error(`Error sending test email: ${error instanceof Error ? error.message : "Unknown error"}`);
@@ -210,8 +206,6 @@ export default function Settings() {
     switch (provider) {
       case "sendgrid":
         return "SendGrid";
-      case "ses":
-        return "AWS SES";
       case "smtp":
         return "SMTP";
       case "console":

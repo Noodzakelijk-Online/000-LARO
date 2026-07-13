@@ -19,8 +19,10 @@ const warn = (m) => results.push(['warn', m]);
 const fail = (m) => results.push(['fail', m]);
 
 // Node
-const major = Number(process.versions.node.split('.')[0]);
-major >= 20 ? ok(`Node ${process.versions.node}`) : fail(`Node ${process.versions.node} (need 20+)`);
+const [major, minor] = process.versions.node.split('.').map(Number);
+major === 22 && minor >= 12
+  ? ok(`Node ${process.versions.node}`)
+  : fail(`Node ${process.versions.node} (need Node 22.12+ in the Node 22 LTS line)`);
 
 // Secrets
 const INSECURE_JWT = 'change-this-secret';
@@ -42,7 +44,7 @@ try {
   require('better-sqlite3');
   ok('better-sqlite3 native binding loads');
 } catch {
-  fail('better-sqlite3 native binding not built (run: npm rebuild better-sqlite3)');
+  fail('better-sqlite3 native binding not built for Node (run: npm run rebuild:node)');
 }
 const dbPath = process.env.DATABASE_URL || 'laro.sqlite';
 fs.existsSync(dbPath) ? ok(`Database file present (${dbPath})`) : warn(`Database file not created yet (${dbPath})`);
@@ -54,9 +56,9 @@ fs.existsSync(path.resolve('drizzle', 'meta', '_journal.json'))
 
 // Optional integrations
 const has = (k) => !!process.env[k];
-(has('OPENAI_API_KEY') || has('ANTHROPIC_API_KEY') || has('GOOGLE_GEMINI_API_KEY'))
-  ? ok('AI provider configured')
-  : warn('No AI provider key — LLM features run in deterministic/mock mode');
+has('FORGE_API_KEY')
+  ? ok('Forge-compatible LLM provider configured')
+  : warn('No FORGE_API_KEY — provider-backed AI actions are unavailable');
 has('AWS_S3_BUCKET') ? ok('S3 storage configured') : warn('S3 not configured — evidence stored on local disk');
 (has('GOOGLE_CLIENT_ID') && has('GOOGLE_CLIENT_SECRET'))
   ? ok('Google OAuth configured')

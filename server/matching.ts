@@ -21,13 +21,25 @@ interface TaxonomyMapping {
 let cachedTaxonomyMapping: TaxonomyMapping | null = null;
 let cachedRechtspraakKeywords: Record<string, string[]> | null = null;
 
+function matchingDataPath(fileName: string): string {
+  const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
+  const candidates = [
+    path.join(process.cwd(), "assets", fileName),
+    path.join(__dirname, "..", "..", "assets", fileName),
+    resourcesPath ? path.join(resourcesPath, "assets", fileName) : "",
+  ].filter(Boolean);
+  const match = candidates.find((candidate) => fs.existsSync(candidate));
+  if (!match) throw new Error(`Required matching dataset not found: ${fileName}`);
+  return match;
+}
+
 /**
  * Load taxonomy mapping and keywords (cached)
  */
 function loadMatchingData() {
   if (!cachedTaxonomyMapping) {
     try {
-      const mappingPath = path.join(__dirname, "legal-taxonomy-mapping.json");
+      const mappingPath = matchingDataPath("legal-taxonomy-mapping.json");
       cachedTaxonomyMapping = JSON.parse(fs.readFileSync(mappingPath, "utf-8"));
     } catch (error) {
       console.error("Error loading taxonomy mapping:", error);
@@ -36,7 +48,7 @@ function loadMatchingData() {
   
   if (!cachedRechtspraakKeywords) {
     try {
-      const keywordsPath = path.join(__dirname, "../docs/rechtspraak-keywords-full.json");
+      const keywordsPath = matchingDataPath("rechtspraak-keywords-analysis.json");
       const data = JSON.parse(fs.readFileSync(keywordsPath, "utf-8"));
       cachedRechtspraakKeywords = {};
       

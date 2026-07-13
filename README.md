@@ -46,7 +46,7 @@ The Electron main process starts the Express/tRPC server and React renderer toge
 ## Prerequisites
 
 - Windows 10/11 for the primary desktop and PowerShell workflow.
-- Node.js 20 LTS and npm. Node 20 matches CI and is the supported baseline for the Electron `better-sqlite3` native module.
+- Node.js 22.12 or newer in the Node 22 LTS line. CI, Electron 43, and the native-module rebuild scripts use this baseline.
 - Python 3.11 or newer for the Flask Case Command Center.
 - C++ build tools may be needed if npm cannot obtain a compatible native binary.
 - Optional: a local [Ollama](https://ollama.com/) installation for deeper local document reading.
@@ -99,10 +99,10 @@ Copy `.env.example` to `.env`; never commit real secrets. The template is groupe
 
 | Area | Important variables |
 | --- | --- |
-| Desktop server | `NODE_ENV`, `PORT`, `JWT_SECRET`, `COOKIE_SECRET`, `LOCAL_AGENT_TOKEN` |
+| Desktop server | `NODE_ENV`, `HOST`, `PORT`, `API_BODY_LIMIT`, `JWT_SECRET`, `COOKIE_SECRET`, `LOCAL_AGENT_TOKEN` |
 | Desktop data | `DATABASE_URL`, `LOCAL_STORAGE_DIR`, `AWS_S3_*` |
-| AI providers | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_GEMINI_API_KEY` |
-| Optional connectors | `MICROSOFT_*`, `TRELLO_API_KEY`, `TELEGRAM_BOT_TOKEN`, `SENDGRID_API_KEY` |
+| Provider-backed desktop AI | `FORGE_API_URL`, `FORGE_API_KEY` |
+| Optional connectors | `MICROSOFT_*`, `TELEGRAM_BOT_TOKEN`, `SENDGRID_API_KEY`, `SMTP_*` |
 | Flask server | `LARO_FLASK_PORT`, `LARO_HOST`, `LARO_DEBUG`, `SECRET_KEY` |
 | Flask ledger | `LARO_LEDGER_DATABASE_URL`, `LARO_UPLOAD_ROOT`, `LARO_MAX_UPLOAD_BYTES`, `LARO_BUNDLE_MAX_BYTES` |
 | Flask local identity and vault | `LARO_LOCAL_ACCOUNT_EMAIL`, `LARO_TOKEN_STORE_DIR`, `LARO_TOKEN_ENCRYPTION_KEY` |
@@ -138,16 +138,19 @@ See [Operator Runbook](docs/OPERATOR_RUNBOOK.md), [Security](docs/SECURITY.md), 
 
 ## Verification
 
-The resolved PR branch was verified on 2026-07-13 with Node 20:
+The production-readiness branch was verified on 2026-07-13 against the Node 22 toolchain:
 
 - `npm run gate`: all blocking gates passed.
 - Server and Electron main-process TypeScript checks passed.
 - Traceability reported 116 rows, 93 cited, and 0 broken references.
 - Runtime no-excuses scan reported 0 suspect findings; account safety reported 0 high-severity findings.
-- Vitest reported 28 passing files, 181 passing tests, and 9 explicit todos.
+- Vitest reported 29 passing files, 190 passing tests, and 9 explicit todos.
 - The affected Python integration suites reported 92 passing tests.
 - Full Python test discovery reported 196 passing tests.
-- Electron 29 loaded the rebuilt `better-sqlite3` native module successfully.
+- The Vite 8 renderer, Electron 43 main process, and standalone server builds completed successfully.
+- `npm audit` reported 0 known vulnerabilities.
+- A clean Node 22 Docker build reached healthy readiness with its persistent SQLite volume.
+- The Electron 43 SQLite native binding smoke test and Windows portable packaging completed successfully.
 
 Run the same checks locally:
 
@@ -162,11 +165,11 @@ For a broader Flask regression run:
 python -m unittest discover -v -p "test_*.py"
 ```
 
-The npm gate deliberately treats renderer TypeScript as a warning, not a blocking gate. A green gate therefore proves the server, main process, traceability, safety scans, and Vitest suite; it does not mean the renderer type debt is resolved.
+The npm gate is fail-fast and blocks on server and Electron main-process TypeScript checks, traceability, safety scans, and Vitest. The dedicated renderer compiler remains a non-blocking diagnostic while its historical API-contract backlog is consolidated.
 
 ## Docker and Packaging
 
-The Docker image runs the standalone Express/tRPC API server only. It does not contain the Electron UI or Flask Case Command Center.
+The Docker image compiles and runs the standalone Express/tRPC API server on Node 22. It does not contain the Electron UI or Flask Case Command Center.
 
 ```powershell
 docker compose up --build
@@ -180,7 +183,7 @@ Windows desktop packaging uses:
 npm run dist:win
 ```
 
-The GitHub build workflow targets Node 20 and publishes Windows artifacts for configured release runs.
+CI runs Node and Python gates for pushes and pull requests to `main`. The release workflow targets Node 22 and publishes a Windows portable artifact without writing provider secrets into the build workspace.
 
 ## Repository Map
 
@@ -206,11 +209,13 @@ The GitHub build workflow targets Node 20 and publishes Windows artifacts for co
 ## Known Limitations
 
 - The Electron and Flask runtimes currently use separate schemas and databases; changes in one do not automatically appear in the other.
-- The React renderer has known TypeScript debt and is non-blocking in `npm run gate`.
-- Several provider integrations are optional or partial and remain unavailable until valid credentials and user OAuth consent are present. The UI must not treat configuration as a successful connection.
+- The dedicated React renderer TypeScript configuration still reports historical API-contract debt and is non-blocking in `npm run gate`; Vite production builds remain blocking.
+- Several provider integrations are optional or partial and remain unavailable until valid credentials and user OAuth consent are present. Trello OAuth is intentionally disabled until server-side token storage is implemented.
 - Outreach target discovery is a review aid, not a complete or continuously verified directory of every lawyer, journalist, program, lobby, or advocacy organization.
 - Real external sending is intentionally disabled by default and should remain disabled until the target environment, provider, approval UI, emergency stop, and audit trail have been reviewed.
-- The dependency audit contains unresolved advisories. Run `npm run audit:deps` and review [Supply Chain](docs/SUPPLY_CHAIN.md) before a production release.
+- The current lockfile audits cleanly; run `npm run audit:deps` again for every release because registry advisories change over time.
+- The production renderer bundle is about 1.70 MB before gzip and should be split further to improve startup performance; its broader pre-existing TypeScript contract debt also needs a dedicated consolidation pass.
+- The Windows portable artifact is not Authenticode-signed and still uses Electron's default icon. A trusted signing certificate and approved application icon are prerequisites for public distribution.
 - Historical phase and verification documents in `docs/` are dated snapshots. Prefer current code, tests, this README, and a fresh `npm run gate` when status statements differ.
 
 ## Further Documentation

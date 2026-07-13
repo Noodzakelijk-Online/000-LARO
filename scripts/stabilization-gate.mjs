@@ -1,68 +1,65 @@
 #!/usr/bin/env node
 /**
- * Phase 089 — progressive stabilization gates.
+ * Run release quality gates in a fixed, fail-fast order.
  *
- * Runs the project's quality gates in a fixed order and STOPS at the first
- * failure, reporting exactly which gate blocked. This is the same ordering the
- * CI workflow enforces, runnable locally with one command (`npm run gate`).
+ * Gates:
+ *   1. server typecheck
+ *   2. Electron main-process typecheck
+ *   3. traceability report
+ *   4. runtime and account safety scans
+ *   5. Vitest suite
  *
- * Gates (in order, fail-fast):
- *   1. server typecheck   (tsc -p tsconfig.server.json)
- *   2. main typecheck     (tsc -p tsconfig.main.json)
- *   3. traceability       (scripts/traceability.mjs — no broken matrix refs)
- *   4. tests              (vitest run)
- *
- * Renderer typecheck + lint are known-non-blocking debt (docs/TECH_DEBT.md D2)
- * and are reported as warnings, not gates, so this command stays honest about
- * what it does and does not guarantee.
- *
- * Exit code is non-zero if any blocking gate fails.
+ * The dedicated renderer configuration is reported separately because its
+ * historical API-contract backlog is not yet a release-blocking gate.
  */
-import { spawnSync } from 'child_process';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { spawnSync } from "child_process";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+const TSC = join(ROOT, "node_modules", "typescript", "bin", "tsc");
+const VITEST = join(ROOT, "node_modules", "vitest", "vitest.mjs");
+const NPM_CLI = process.env.npm_execpath;
 
-const BLOCKING = [
-  { name: 'server typecheck', cmd: 'npx', args: ['tsc', '-p', 'tsconfig.server.json', '--noEmit'] },
-  { name: 'main typecheck', cmd: 'npx', args: ['tsc', '-p', 'tsconfig.main.json', '--noEmit'] },
-  { name: 'traceability', cmd: 'node', args: ['scripts/traceability.mjs', '--write'] },
-  { name: 'no-excuses scan', cmd: 'node', args: ['scripts/no-excuses-scan.mjs', '--write'] },
-  { name: 'account safety', cmd: 'node', args: ['scripts/account-safety-check.mjs', '--write'] },
-  { name: 'tests', cmd: 'npx', args: ['vitest', 'run'] },
-];
-
-const WARN = [
-  { name: 'renderer typecheck (non-blocking debt D2)', cmd: 'npx', args: ['tsc', '-p', 'tsconfig.renderer.json', '--noEmit'] },
-];
-
-function run(step) {
-  process.stdout.write(`\n▶ gate: ${step.name}\n`);
-  const r = spawnSync(step.cmd, step.args, { cwd: ROOT, stdio: 'inherit', shell: process.platform === 'win32' });
-  return r.status === 0;
-}
-
-let failedAt = null;
-for (const step of BLOCKING) {
-  if (!run(step)) {
-    failedAt = step.name;
-    break;
-  }
-  console.log(`✅ ${step.name} passed`);
-}
-
-if (failedAt) {
-  console.error(`\n❌ STABILIZATION GATE FAILED at: ${failedAt}`);
-  console.error('   Fix this gate before proceeding to the next phase (Phase 089: no advancing on red).');
+if (!NPM_CLI) {
+  console.error("Run this gate through npm so the native rebuild uses the active Node toolchain.");
   process.exit(1);
 }
 
-console.log('\n— non-blocking warnings —');
-for (const step of WARN) {
-  const ok = run(step);
-  console.log(ok ? `✅ ${step.name}` : `⚠️  ${step.name} has known issues (tracked, not a gate)`);
+const BLOCKING = [
+  { name: "Node native-module rebuild", cmd: process.execPath, args: [NPM_CLI, "rebuild", "better-sqlite3"] },
+  { name: "server typecheck", cmd: process.execPath, args: [TSC, "-p", "tsconfig.server.json", "--noEmit"] },
+  { name: "main typecheck", cmd: process.execPath, args: [TSC, "-p", "tsconfig.main.json", "--noEmit"] },
+  { name: "traceability", cmd: process.execPath, args: ["scripts/traceability.mjs", "--write"] },
+  { name: "no-excuses scan", cmd: process.execPath, args: ["scripts/no-excuses-scan.mjs", "--write"] },
+  { name: "account safety", cmd: process.execPath, args: ["scripts/account-safety-check.mjs", "--write"] },
+  { name: "tests", cmd: process.execPath, args: [VITEST, "run"] },
+];
+
+const WARN = [
+  { name: "renderer typecheck (tracked debt D2)", cmd: process.execPath, args: [TSC, "-p", "tsconfig.renderer.json", "--noEmit"] },
+];
+
+function run(step, silent = false) {
+  process.stdout.write(`\n> gate: ${step.name}\n`);
+  const result = spawnSync(step.cmd, step.args, {
+    cwd: ROOT,
+    stdio: silent ? "pipe" : "inherit",
+  });
+  return result.status === 0;
 }
 
-console.log('\n✅ ALL BLOCKING STABILIZATION GATES PASSED');
-process.exit(0);
+for (const step of BLOCKING) {
+  if (!run(step)) {
+    console.error(`\nSTABILIZATION GATE FAILED at: ${step.name}`);
+    process.exit(1);
+  }
+  console.log(`PASS: ${step.name}`);
+}
+
+console.log("\nNON-BLOCKING DIAGNOSTICS");
+for (const step of WARN) {
+  console.log(run(step, true) ? `PASS: ${step.name}` : `WARN: ${step.name} remains unresolved; run npm run typecheck:renderer for details`);
+}
+
+console.log("\nALL BLOCKING STABILIZATION GATES PASSED");

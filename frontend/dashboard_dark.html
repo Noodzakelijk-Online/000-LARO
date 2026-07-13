@@ -3320,7 +3320,10 @@
             const caseSelector = document.getElementById("activeCaseSelector");
             const caseId = defaultCaseIdFromUrl();
             if (caseSelector) {
-                caseSelector.innerHTML = `<option value="${caseId}">Case ${caseId}</option>`;
+                caseSelector.innerHTML = caseId
+                    ? `<option value="${caseId}">Case ${caseId}</option>`
+                    : '<option value="">No case selected</option>';
+                caseSelector.disabled = !caseId;
                 caseSelector.addEventListener("change", () => {
                     const value = Number(caseSelector.value);
                     if (Number.isFinite(value) && value > 0) {
@@ -3404,8 +3407,9 @@
 
         function defaultCaseIdFromUrl() {
             const params = new URLSearchParams(window.location.search);
-            const parsed = Number(params.get("case_id") || params.get("case") || 1);
-            return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+            const raw = params.get("case_id") || params.get("case");
+            const parsed = Number(raw);
+            return raw && Number.isFinite(parsed) && parsed > 0 ? parsed : null;
         }
 
         function normalizeControlTier(mode) {
@@ -3525,7 +3529,8 @@
 
         function initializeExpertControls() {
             const caseInput = document.getElementById("expertCaseId");
-            if (caseInput && !caseInput.value) caseInput.value = String(defaultCaseIdFromUrl());
+            const requestedCaseId = defaultCaseIdFromUrl();
+            if (caseInput && !caseInput.value && requestedCaseId) caseInput.value = String(requestedCaseId);
             ["sourceGmail", "sourceDrive", "expertCaseId", "expertGmailQuery", "expertDriveFolder", "expertMaxItems", "expertDaysBack", "expertSourceOrder"].forEach((id) => {
                 const control = document.getElementById(id);
                 if (!control) return;
@@ -3592,7 +3597,9 @@
             quickConnect.querySelector(".quick-action-meta").textContent = googleConnected
                 ? "Connection is ready; manage or reconnect."
                 : "Connect Gmail and Drive once.";
-            quickPull.disabled = !googleConnected || Boolean(pullTimer);
+            const selectedCaseId = Number(currentCaseId());
+            const hasPersistedCase = Number.isFinite(selectedCaseId) && selectedCaseId > 0;
+            quickPull.disabled = !googleConnected || !hasPersistedCase || Boolean(pullTimer);
             quickPull.querySelector(".quick-action-meta").textContent = pullTimer
                 ? "Evidence intake is running."
                 : googleConnected
@@ -3605,7 +3612,13 @@
             let label = "Connect Google";
             let microcopy = "Everything else stays hidden until this first lane is ready.";
 
-            if (pullTimer) {
+            if (!hasPersistedCase) {
+                action = "case";
+                title = "Create or select a case";
+                detail = "Evidence intake needs a persisted ledger case so every document, event, and source link has an authoritative home.";
+                label = "Open Case Center";
+                microcopy = "Create the case once, then return here to connect sources and pull evidence.";
+            } else if (pullTimer) {
                 action = "wait";
                 title = "Evidence is being pulled";
                 detail = "LARO is processing Gmail and Drive evidence. Progress updates below without a manual refresh.";
@@ -3798,15 +3811,24 @@
             const cases = data.cases || [];
             const counts = data.counts || {};
             const caseSelector = document.getElementById("activeCaseSelector");
-            if (caseSelector && cases.length) {
-                const selected = String(caseSelector.value || currentCaseId());
-                caseSelector.innerHTML = cases.map((item) => {
-                    const id = item.case_id || item.id;
-                    const label = item.title || `Case ${id}`;
-                    return `<option value="${escapeHtml(id)}">${escapeHtml(label)}</option>`;
-                }).join("");
-                if ([...caseSelector.options].some((option) => option.value === selected)) {
-                    caseSelector.value = selected;
+            if (caseSelector) {
+                const selected = String(caseSelector.value || currentCaseId() || "");
+                caseSelector.disabled = cases.length === 0;
+                if (!cases.length) {
+                    caseSelector.innerHTML = '<option value="">No case selected</option>';
+                    const expertCase = document.getElementById("expertCaseId");
+                    if (expertCase) expertCase.value = "";
+                } else {
+                    caseSelector.innerHTML = cases.map((item) => {
+                        const id = item.case_id || item.id;
+                        const label = item.title || `Case ${id}`;
+                        return `<option value="${escapeHtml(id)}">${escapeHtml(label)}</option>`;
+                    }).join("");
+                    if ([...caseSelector.options].some((option) => option.value === selected)) {
+                        caseSelector.value = selected;
+                    }
+                    const expertCase = document.getElementById("expertCaseId");
+                    if (expertCase) expertCase.value = caseSelector.value;
                 }
             }
 
@@ -3981,11 +4003,7 @@
                 setGoogleConnected(Boolean(status.connected), status.message, Boolean(status.configured));
                 return status;
             } catch (error) {
-                if (googleConnected) {
-                    setGoogleConnected(true, "Google connected. Live status refresh is temporarily unavailable.");
-                    return { connected: true, configured: true, error: error.message };
-                }
-                setGoogleConnected(false, "Google connection status is unavailable.");
+                setGoogleConnected(false, "Google connection status is unavailable; reconnect after the server is reachable.");
                 return { connected: false, configured: false, error: error.message };
             }
         }
@@ -4430,6 +4448,8 @@
                 startEvidencePull();
             } else if (action === "timeline") {
                 window.location.href = "evidence_timeline.html";
+            } else if (action === "case") {
+                window.location.href = "case_command_center.html";
             }
         });
         document.getElementById("workbenchOpenCase").addEventListener("click", () => {

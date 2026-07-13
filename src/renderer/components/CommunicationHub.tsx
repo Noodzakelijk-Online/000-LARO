@@ -39,8 +39,8 @@ interface Message {
   subject: string;
   content: string;
   timestamp: Date;
-  status: "sent" | "delivered" | "read" | "replied";
-  priority: "high" | "medium" | "low";
+  status: "saved";
+  priority: "normal";
   caseId?: string;
   responseTime?: number; // in hours
 }
@@ -81,7 +81,7 @@ export default function CommunicationHub({ caseId }: { caseId?: string }) {
   const sendMessageMutation = trpc.messages.send.useMutation({
     onSuccess: () => {
       refetchMessages();
-      toast.success("Message sent successfully");
+      toast.success("Note saved locally. No email was sent.");
       setMessageContent("");
       setSubject("");
     },
@@ -90,27 +90,17 @@ export default function CommunicationHub({ caseId }: { caseId?: string }) {
     },
   });
   
-  // Mark as read mutation
-  const markAsReadMutation = trpc.messages.markAsRead.useMutation({
-    onSuccess: () => {
-      refetchMessages();
-    },
-  });
-  
   // Convert backend messages to frontend format
   const messages: Message[] = messagesData.map((msg) => ({
     id: msg.id,
-    from: msg.direction === "sent" ? "You" : "Lawyer",
-    to: msg.direction === "sent" ? "Lawyer" : "You",
-    subject: msg.subject || "No subject",
-    content: msg.body,
-    timestamp: msg.sentAt || new Date(),
-    status: msg.status as any,
-    priority: msg.priority as any,
+    from: "You",
+    to: "Case file",
+    subject: "Local case note",
+    content: msg.content || "",
+    timestamp: msg.createdAt || new Date(),
+    status: "saved",
+    priority: "normal",
     caseId: msg.caseId || undefined,
-    responseTime: msg.readAt && msg.sentAt 
-      ? (msg.readAt.getTime() - msg.sentAt.getTime()) / (1000 * 60 * 60)
-      : undefined,
   }));
 
   const [selectedTemplate, setSelectedTemplate] = useState<string>("");
@@ -123,9 +113,8 @@ export default function CommunicationHub({ caseId }: { caseId?: string }) {
   const MESSAGE_TEMPLATES = templatesData.length > 0 
     ? templatesData.map((t) => ({
         id: t.id,
-        title: t.name,
-        content: t.body,
-        subject: t.subject,
+        title: t.name || "Template",
+        content: t.body || "",
       }))
     : [
       {
@@ -170,6 +159,7 @@ export default function CommunicationHub({ caseId }: { caseId?: string }) {
       subject: subject || "No subject",
       body: messageContent,
       priority: "normal",
+      caseId,
     });
     
     setSelectedTemplate("");
@@ -216,7 +206,7 @@ export default function CommunicationHub({ caseId }: { caseId?: string }) {
     return matchesSearch && matchesStatus && matchesPriority;
   });
 
-  const unreadCount = messages.filter(m => m.from !== "You" && m.status !== "read").length;
+  const unreadCount = 0;
   const avgResponseTime = messages
     .filter(m => m.responseTime)
     .reduce((acc, m) => acc + (m.responseTime || 0), 0) / 
@@ -267,7 +257,7 @@ export default function CommunicationHub({ caseId }: { caseId?: string }) {
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="inbox">
             <Mail className="w-4 h-4 mr-2" />
-            Inbox
+            Notes
             {unreadCount > 0 && (
               <Badge variant="destructive" className="ml-2 px-1.5 py-0 text-xs">
                 {unreadCount}
@@ -276,7 +266,7 @@ export default function CommunicationHub({ caseId }: { caseId?: string }) {
           </TabsTrigger>
           <TabsTrigger value="compose">
             <Send className="w-4 h-4 mr-2" />
-            Compose
+            New note
           </TabsTrigger>
         </TabsList>
 
@@ -419,17 +409,12 @@ export default function CommunicationHub({ caseId }: { caseId?: string }) {
           {/* Compose Form */}
           <Card>
             <CardHeader>
-              <CardTitle>New Message</CardTitle>
+              <CardTitle>New Case Note</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <label className="text-sm font-medium mb-2 block">To</label>
-                <Input placeholder="Select lawyer or enter email" />
-              </div>
-
-              <div>
                 <label className="text-sm font-medium mb-2 block">Subject</label>
-                <Input placeholder="Message subject" />
+                <Input placeholder="Note subject" value={subject} onChange={(event) => setSubject(event.target.value)} />
               </div>
 
               <div>
@@ -468,7 +453,7 @@ export default function CommunicationHub({ caseId }: { caseId?: string }) {
                 </Button>
                 <Button onClick={handleSendMessage}>
                   <Send className="w-4 h-4 mr-2" />
-                  Send Message
+                  Save Note
                 </Button>
               </div>
             </CardContent>

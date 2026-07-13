@@ -5,7 +5,7 @@ Date: 2026-07-06 · Branch `Phase-Imp`
 ## Target runtime
 
 LARO ships as an **Electron desktop app**, so the renderer runs in a **single,
-known Chromium** (bundled with Electron 29 — Chromium ~122). This removes the
+known Chromium** (bundled with Electron 43). This removes the
 usual cross-browser matrix: there is one engine to support, not many. The web
 build (if hosted) would additionally target current evergreen browsers.
 

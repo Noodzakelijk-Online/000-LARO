@@ -49,6 +49,24 @@ export default function EnhancedEvidenceUpload({ caseId }: { caseId?: string }) 
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const uploadEvidenceFile = trpc.evidenceFiles.upload.useMutation();
+
+  const fileToBase64 = async (file: File) => {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    let binary = "";
+    for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+      binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+    }
+    return btoa(binary);
+  };
+
+  const evidenceType = (file: File): "document" | "photo" | "video" | "audio" | "other" => {
+    if (file.type.startsWith("image/")) return "photo";
+    if (file.type.startsWith("video/")) return "video";
+    if (file.type.startsWith("audio/")) return "audio";
+    if (file.type.includes("pdf") || file.type.includes("word") || file.type.startsWith("text/")) return "document";
+    return "other";
+  };
 
   const categorizeFile = async (file: File): Promise<{ category: string; confidence: number }> => {
     // Simple file type based categorization
@@ -85,7 +103,18 @@ export default function EnhancedEvidenceUpload({ caseId }: { caseId?: string }) 
   };
 
   const handleFiles = useCallback(async (fileList: FileList) => {
-    const newFiles: UploadedFile[] = Array.from(fileList).map(file => ({
+    if (!caseId) {
+      toast.error("Select a case before uploading evidence");
+      return;
+    }
+
+    const selectedFiles = Array.from(fileList);
+    const oversized = selectedFiles.filter((file) => file.size > 7 * 1024 * 1024);
+    if (oversized.length > 0) {
+      toast.error(`${oversized.length} file(s) exceed the 7 MB upload limit`);
+    }
+
+    const newFiles: UploadedFile[] = selectedFiles.filter((file) => file.size <= 7 * 1024 * 1024).map(file => ({
       id: Math.random().toString(36).substr(2, 9),
       file,
       preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined,
@@ -98,13 +127,19 @@ export default function EnhancedEvidenceUpload({ caseId }: { caseId?: string }) 
     // Process each file
     for (const uploadedFile of newFiles) {
       try {
-        // Simulate upload progress
-        for (let i = 0; i <= 100; i += 20) {
-          await new Promise(resolve => setTimeout(resolve, 200));
-          setFiles(prev => prev.map(f => 
-            f.id === uploadedFile.id ? { ...f, progress: i } : f
-          ));
-        }
+        const base64 = await fileToBase64(uploadedFile.file);
+        setFiles(prev => prev.map(f =>
+          f.id === uploadedFile.id ? { ...f, progress: 50 } : f
+        ));
+
+        await uploadEvidenceFile.mutateAsync({
+          caseId,
+          title: uploadedFile.file.name,
+          type: evidenceType(uploadedFile.file),
+          fileName: uploadedFile.file.name,
+          mimeType: uploadedFile.file.type || "application/octet-stream",
+          base64,
+        });
 
         // Categorize file
         setFiles(prev => prev.map(f => 
@@ -112,9 +147,6 @@ export default function EnhancedEvidenceUpload({ caseId }: { caseId?: string }) 
         ));
 
         const { category, confidence } = await categorizeFile(uploadedFile.file);
-
-        // Simulate AI analysis
-        await new Promise(resolve => setTimeout(resolve, 1000));
 
         setFiles(prev => prev.map(f => 
           f.id === uploadedFile.id ? {
@@ -134,7 +166,7 @@ export default function EnhancedEvidenceUpload({ caseId }: { caseId?: string }) 
           } : f
         ));
 
-        toast.success(`${uploadedFile.file.name} uploaded and categorized`);
+        toast.success(`${uploadedFile.file.name} uploaded with a suggested category`);
       } catch (error) {
         setFiles(prev => prev.map(f => 
           f.id === uploadedFile.id ? { ...f, status: "error" as const } : f
@@ -142,7 +174,7 @@ export default function EnhancedEvidenceUpload({ caseId }: { caseId?: string }) 
         toast.error(`Failed to upload ${uploadedFile.file.name}`);
       }
     }
-  }, []);
+  }, [caseId, uploadEvidenceFile]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -234,7 +266,7 @@ export default function EnhancedEvidenceUpload({ caseId }: { caseId?: string }) 
             </div>
 
             <p className="text-xs text-muted-foreground">
-              Supports: PDF, Images (JPG, PNG), Videos (MP4), Documents (DOCX)
+              Supports files up to 7 MB: PDF, images, videos, and documents
             </p>
           </div>
 
@@ -333,7 +365,7 @@ export default function EnhancedEvidenceUpload({ caseId }: { caseId?: string }) 
                         {uploadedFile.status === "analyzing" && (
                           <div className="flex items-center gap-2 text-sm text-primary">
                             <Sparkles className="w-3 h-3 animate-pulse" />
-                            Analyzing with AI...
+                            Suggesting a category...
                           </div>
                         )}
 
@@ -346,12 +378,12 @@ export default function EnhancedEvidenceUpload({ caseId }: { caseId?: string }) 
                               </span>
                             </div>
 
-                            {/* AI Categorization */}
+                            {/* Filename/type-based category suggestion */}
                             {uploadedFile.category && (
                               <div className="bg-primary/5 border border-primary/20 rounded-md p-2">
                                 <div className="flex items-center gap-2 mb-1">
                                   <Sparkles className="w-3 h-3 text-primary" />
-                                  <span className="text-xs font-medium">AI Categorization</span>
+                                  <span className="text-xs font-medium">Suggested category</span>
                                   {uploadedFile.confidence && (
                                     <Badge variant="secondary" className="text-xs">
                                       {Math.round(uploadedFile.confidence * 100)}% confident

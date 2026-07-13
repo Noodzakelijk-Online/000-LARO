@@ -1,481 +1,120 @@
-/**
- * OAuth2 Callback Routes for Gmail, Outlook, and Trello
- */
-
-import { Router } from "express";
+import { randomBytes } from 'crypto';
+import { Router, type Request, type Response } from 'express';
 import {
   consumeOAuthState,
   exchangeCodeForTokens,
   getAccountInfo,
   saveEmailAccount,
-} from "./oauth2";
+} from './oauth2';
 
 const router = Router();
+type OAuthProvider = 'gmail' | 'outlook';
 
-/**
- * Gmail OAuth2 callback
- */
-router.get('/api/oauth/gmail/callback', async (req, res) => {
-  try {
-    const { code, state } = req.query;
-    
-    if (!code || !state) {
-      return res.status(400).send('Missing code or state parameter');
-    }
-    
-    const { userId, codeVerifier } = consumeOAuthState(state as string, "gmail");
-    
-    console.log(`[OAuth2] Gmail callback for user ${userId}`);
-    
-    // Exchange code for tokens
-    const tokens = await exchangeCodeForTokens('gmail', code as string, codeVerifier);
-    
-    // Get account info
-    const accountInfo = await getAccountInfo('gmail', tokens.accessToken);
-    
-    // Save to database
-    await saveEmailAccount(userId, 'gmail', tokens, accountInfo);
-    
-    // Redirect to success page
-    res.send(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Gmail Connected</title>
-        <style>
-          body {
-            font-family: Arial, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          }
-          .container {
-            background: white;
-            padding: 40px;
-            border-radius: 10px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-            text-align: center;
-            max-width: 400px;
-          }
-          .success-icon {
-            font-size: 64px;
-            color: #4CAF50;
-            margin-bottom: 20px;
-          }
-          h1 {
-            color: #333;
-            margin-bottom: 10px;
-          }
-          p {
-            color: #666;
-            margin-bottom: 30px;
-          }
-          button {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 12px 30px;
-            border-radius: 5px;
-            font-size: 16px;
-            cursor: pointer;
-          }
-          button:hover {
-            opacity: 0.9;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="success-icon">✓</div>
-          <h1>Gmail Connected!</h1>
-          <p>Your Gmail account <strong>${accountInfo.email}</strong> has been successfully connected.</p>
-          <button onclick="window.close()">Close Window</button>
-        </div>
-        <script>
-          // Auto-close after 3 seconds
-          setTimeout(() => {
-            window.close();
-          }, 3000);
-        </script>
-      </body>
-      </html>
-    `);
-  } catch (error) {
-    console.error('[OAuth2] Gmail callback error:', error);
-    res.status(500).send(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Connection Failed</title>
-        <style>
-          body {
-            font-family: Arial, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          }
-          .container {
-            background: white;
-            padding: 40px;
-            border-radius: 10px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-            text-align: center;
-            max-width: 400px;
-          }
-          .error-icon {
-            font-size: 64px;
-            color: #f44336;
-            margin-bottom: 20px;
-          }
-          h1 {
-            color: #333;
-            margin-bottom: 10px;
-          }
-          p {
-            color: #666;
-            margin-bottom: 30px;
-          }
-          button {
-            background: #f44336;
-            color: white;
-            border: none;
-            padding: 12px 30px;
-            border-radius: 5px;
-            font-size: 16px;
-            cursor: pointer;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="error-icon">✗</div>
-          <h1>Connection Failed</h1>
-          <p>${error instanceof Error ? error.message : 'Unknown error'}</p>
-          <button onclick="window.close()">Close Window</button>
-        </div>
-      </body>
-      </html>
-    `);
-  }
-});
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>'"]/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    "'": '&#39;',
+    '"': '&quot;',
+  })[character] as string);
+}
 
-/**
- * Trello OAuth callback
- * Trello uses token-based OAuth, not code-based
- */
-router.get('/api/oauth/trello/callback', async (req, res) => {
-  try {
-    const { token, state } = req.query;
-    
-    if (!token || !state) {
-      return res.status(400).send('Missing token or state parameter');
-    }
-    
-    // Decode state to get userId and caseId
-    const stateData = JSON.parse(Buffer.from(state as string, 'base64').toString());
-    const { userId, caseId } = stateData;
-    
-    if (!userId || !caseId) {
-      return res.status(400).send('Invalid state parameter');
-    }
-    
-    console.log(`[OAuth] Trello callback for user ${userId}, case ${caseId}`);
-    
-    // Store token in session or pass to frontend
-    // The token will be used by the frontend to complete the sync
-    res.send(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Trello Connected</title>
-        <style>
-          body {
-            font-family: Arial, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          }
-          .container {
-            background: white;
-            padding: 40px;
-            border-radius: 10px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-            text-align: center;
-            max-width: 400px;
-          }
-          .success-icon {
-            font-size: 64px;
-            color: #4CAF50;
-            margin-bottom: 20px;
-          }
-          h1 {
-            color: #333;
-            margin-bottom: 10px;
-          }
-          p {
-            color: #666;
-            margin-bottom: 30px;
-          }
-          button {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 12px 30px;
-            border-radius: 5px;
-            font-size: 16px;
-            cursor: pointer;
-          }
-          button:hover {
-            opacity: 0.9;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="success-icon">✓</div>
-          <h1>Trello Connected!</h1>
-          <p>Your Trello account has been successfully authorized.</p>
-          <button onclick="window.close()">Close Window</button>
-        </div>
-        <script>
-          // Pass token back to parent window
-          if (window.opener) {
-            window.opener.postMessage({
-              type: 'trello-token',
-              token: '${token}',
-              caseId: '${caseId}'
-            }, '*');
-          }
-          // Auto-close after 3 seconds
-          setTimeout(() => {
-            window.close();
-          }, 3000);
-        </script>
-      </body>
-      </html>
-    `);
-  } catch (error) {
-    console.error('[OAuth] Trello callback error:', error);
-    res.status(500).send(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Connection Failed</title>
-        <style>
-          body {
-            font-family: Arial, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          }
-          .container {
-            background: white;
-            padding: 40px;
-            border-radius: 10px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-            text-align: center;
-            max-width: 400px;
-          }
-          .error-icon {
-            font-size: 64px;
-            color: #f44336;
-            margin-bottom: 20px;
-          }
-          h1 {
-            color: #333;
-            margin-bottom: 10px;
-          }
-          p {
-            color: #666;
-            margin-bottom: 30px;
-          }
-          button {
-            background: #f44336;
-            color: white;
-            border: none;
-            padding: 12px 30px;
-            border-radius: 5px;
-            font-size: 16px;
-            cursor: pointer;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="error-icon">✗</div>
-          <h1>Connection Failed</h1>
-          <p>${error instanceof Error ? error.message : 'Unknown error'}</p>
-          <button onclick="window.close()">Close Window</button>
-        </div>
-      </body>
-      </html>
-    `);
-  }
-});
+function sendCallbackPage(
+  res: Response,
+  options: { success: boolean; title: string; message: string; status?: number }
+): void {
+  const nonce = randomBytes(18).toString('base64');
+  res.status(options.status ?? 200);
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader(
+    'Content-Security-Policy',
+    `default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'; base-uri 'none'; frame-ancestors 'none'`
+  );
+  res.type('html').send(`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>${escapeHtml(options.title)}</title>
+    <style>
+      body { font-family: Arial, sans-serif; min-height: 100vh; margin: 0; display: grid; place-items: center; background: #f4f6f8; color: #18212b; }
+      main { width: min(420px, calc(100% - 32px)); padding: 32px; box-sizing: border-box; background: #fff; border: 1px solid #d8dee5; border-radius: 8px; text-align: center; }
+      .status { width: 48px; height: 48px; margin: 0 auto 16px; display: grid; place-items: center; border-radius: 50%; background: ${options.success ? '#e8f5ec' : '#fdeceb'}; color: ${options.success ? '#247a3d' : '#b42318'}; font-size: 28px; font-weight: 700; }
+      h1 { margin: 0 0 10px; font-size: 24px; }
+      p { margin: 0 0 24px; color: #52606d; line-height: 1.5; }
+      button { border: 0; border-radius: 6px; padding: 11px 20px; background: #1769aa; color: white; font: inherit; cursor: pointer; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="status" aria-hidden="true">${options.success ? '&#10003;' : '!'}</div>
+      <h1>${escapeHtml(options.title)}</h1>
+      <p id="message">${escapeHtml(options.message)}</p>
+      <button id="close" type="button">Close</button>
+    </main>
+    <script nonce="${nonce}">
+      const closePage = () => {
+        window.close();
+        window.setTimeout(() => {
+          document.getElementById('message').textContent = 'You can now close this browser tab and return to LARO.';
+        }, 250);
+      };
+      document.getElementById('close').addEventListener('click', closePage);
+      window.setTimeout(closePage, 3000);
+    </script>
+  </body>
+</html>`);
+}
 
-/**
- * Outlook OAuth2 callback
- */
-router.get('/api/oauth/outlook/callback', async (req, res) => {
-  try {
-    const { code, state } = req.query;
-    
-    if (!code || !state) {
-      return res.status(400).send('Missing code or state parameter');
+function callbackHandler(provider: OAuthProvider) {
+  return async (req: Request, res: Response) => {
+    try {
+      const code = typeof req.query.code === 'string' ? req.query.code : '';
+      const state = typeof req.query.state === 'string' ? req.query.state : '';
+      if (!code || !state) {
+        sendCallbackPage(res, {
+          success: false,
+          title: 'Connection failed',
+          message: 'The provider did not return the required authorization details.',
+          status: 400,
+        });
+        return;
+      }
+
+      const oauthState = consumeOAuthState(state, provider);
+      const tokens = await exchangeCodeForTokens(provider, code, oauthState.codeVerifier);
+      const accountInfo = await getAccountInfo(provider, tokens.accessToken);
+      if (!accountInfo.email) throw new Error('Provider profile did not include an email address');
+      await saveEmailAccount(oauthState.userId, provider, tokens, accountInfo);
+
+      const providerName = provider === 'gmail' ? 'Google' : 'Microsoft';
+      sendCallbackPage(res, {
+        success: true,
+        title: `${providerName} connected`,
+        message: `${accountInfo.email} is connected to LARO.`,
+      });
+    } catch (error) {
+      console.error(`[OAuth2] ${provider} callback failed:`, error);
+      sendCallbackPage(res, {
+        success: false,
+        title: 'Connection failed',
+        message: 'The connection could not be completed. Return to LARO and try again.',
+        status: 500,
+      });
     }
-    
-    const { userId, codeVerifier } = consumeOAuthState(state as string, "outlook");
-    
-    console.log(`[OAuth2] Outlook callback for user ${userId}`);
-    
-    // Exchange code for tokens
-    const tokens = await exchangeCodeForTokens('outlook', code as string, codeVerifier);
-    
-    // Get account info
-    const accountInfo = await getAccountInfo('outlook', tokens.accessToken);
-    
-    // Save to database
-    await saveEmailAccount(userId, 'outlook', tokens, accountInfo);
-    
-    // Redirect to success page
-    res.send(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Outlook Connected</title>
-        <style>
-          body {
-            font-family: Arial, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          }
-          .container {
-            background: white;
-            padding: 40px;
-            border-radius: 10px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-            text-align: center;
-            max-width: 400px;
-          }
-          .success-icon {
-            font-size: 64px;
-            color: #4CAF50;
-            margin-bottom: 20px;
-          }
-          h1 {
-            color: #333;
-            margin-bottom: 10px;
-          }
-          p {
-            color: #666;
-            margin-bottom: 30px;
-          }
-          button {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 12px 30px;
-            border-radius: 5px;
-            font-size: 16px;
-            cursor: pointer;
-          }
-          button:hover {
-            opacity: 0.9;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="success-icon">✓</div>
-          <h1>Outlook Connected!</h1>
-          <p>Your Outlook account <strong>${accountInfo.email}</strong> has been successfully connected.</p>
-          <button onclick="window.close()">Close Window</button>
-        </div>
-        <script>
-          // Auto-close after 3 seconds
-          setTimeout(() => {
-            window.close();
-          }, 3000);
-        </script>
-      </body>
-      </html>
-    `);
-  } catch (error) {
-    console.error('[OAuth2] Outlook callback error:', error);
-    res.status(500).send(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Connection Failed</title>
-        <style>
-          body {
-            font-family: Arial, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          }
-          .container {
-            background: white;
-            padding: 40px;
-            border-radius: 10px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-            text-align: center;
-            max-width: 400px;
-          }
-          .error-icon {
-            font-size: 64px;
-            color: #f44336;
-            margin-bottom: 20px;
-          }
-          h1 {
-            color: #333;
-            margin-bottom: 10px;
-          }
-          p {
-            color: #666;
-            margin-bottom: 30px;
-          }
-          button {
-            background: #f44336;
-            color: white;
-            border: none;
-            padding: 12px 30px;
-            border-radius: 5px;
-            font-size: 16px;
-            cursor: pointer;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="error-icon">✗</div>
-          <h1>Connection Failed</h1>
-          <p>${error instanceof Error ? error.message : 'Unknown error'}</p>
-          <button onclick="window.close()">Close Window</button>
-        </div>
-      </body>
-      </html>
-    `);
-  }
+  };
+}
+
+router.get('/api/oauth/gmail/callback', callbackHandler('gmail'));
+router.get('/api/oauth/outlook/callback', callbackHandler('outlook'));
+router.get('/api/oauth/trello/callback', (_req, res) => {
+  sendCallbackPage(res, {
+    success: false,
+    title: 'Trello unavailable',
+    message: 'Trello connection is disabled until secure server-side token storage is available.',
+    status: 410,
+  });
 });
 
 export default router;

@@ -21,7 +21,7 @@ export interface SystemEmail {
 
 export interface SystemEmailResult {
   delivered: boolean;
-  provider: "sendgrid" | "smtp" | "console";
+  provider: "sendgrid" | "smtp" | "console" | "unconfigured";
 }
 
 function fromAddress(): string {
@@ -61,6 +61,8 @@ async function sendViaSmtp(email: SystemEmail): Promise<void> {
       process.env.SMTP_USER && process.env.SMTP_PASS
         ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
         : undefined,
+    disableFileAccess: true,
+    disableUrlAccess: true,
   });
   await transport.sendMail({
     from: fromAddress(),
@@ -81,13 +83,12 @@ export async function sendSystemEmail(email: SystemEmail): Promise<SystemEmailRe
     return { delivered: true, provider: "smtp" };
   }
 
-  // Development fallback: no provider configured. Log so the flow is testable.
-  console.log(
-    `\n[systemEmail] No email provider configured — logging message instead of sending.\n` +
-      `  To:      ${email.to}\n` +
-      `  Subject: ${email.subject}\n` +
-      `  Body:    ${email.text}\n`
-  );
+  if (ENV.isProd) {
+    console.warn('[systemEmail] No transactional email provider is configured; message was not sent.');
+    return { delivered: false, provider: "unconfigured" };
+  }
+
+  console.log(`[systemEmail] Development preview for ${email.to}: ${email.subject}\n${email.text}`);
   return { delivered: false, provider: "console" };
 }
 

@@ -15,15 +15,15 @@ deployment for real cases (not the dev/demo environment).
 - The current `package.json` version has a `CHANGELOG.md` entry (warn).
 
 ## Migration steps
-1. `npm ci` on the target (rebuilds the `better-sqlite3` native binding).
-2. Provide production credentials via the **environment**, never a bundled file
+1. Use Node 22.12+ and run `npm ci --ignore-scripts`.
+2. Run `npm run rebuild:node` for server validation or `npm run rebuild:electron` immediately before desktop packaging.
+3. Provide production credentials via the **environment**, never a bundled file
    (account safety — Phase 100).
-3. Run DB migrations (`npm run db:push` / packaged migrations in `drizzle/`).
-4. `NODE_ENV=production npm run preflight` — must pass with no blockers.
-5. `npm run gate` — full tsc + test suite green.
-6. Remove demo/seed + demo-labelled data; verify `admin.invariants` is clean.
-7. Confirm the emergency stop is released and `outreach.send.enabled` is set to
-   the intended value (default OFF — the real send is not implemented, D3).
+4. Back up the database. Checked-in migrations in `drizzle/` apply automatically when the database opens.
+5. `NODE_ENV=production npm run preflight` — must pass with no blockers.
+6. `npm run gate` and `npm audit --audit-level=moderate` — both must pass.
+7. Remove demo/seed data; verify `admin.invariants` is clean.
+8. Keep the emergency stop engaged and `outreach.send.enabled` off until the real provider, approval, idempotency, ownership, and audit path is verified.
 
 ## Data migration
 Prototype SQLite data can be carried over as-is (same schema). Use

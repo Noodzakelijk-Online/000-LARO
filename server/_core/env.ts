@@ -5,6 +5,9 @@
 export const ENV = {
   // Server
   PORT:             parseInt(process.env.PORT || '3000', 10),
+  HOST:             process.env.HOST || '127.0.0.1',
+  API_BODY_LIMIT:   process.env.API_BODY_LIMIT || '10mb',
+  SERVER_ONLY:      process.env.SERVER_ONLY === 'true',
   NODE_ENV:         process.env.NODE_ENV || 'production',
 
   // Database
@@ -111,10 +114,10 @@ export function assertSecurityConfig(): string[] {
   // "dev/demo/test must be visibly labelled"): report what is NOT configured so
   // operators are not surprised when a provider-dependent feature is inert.
   if (!ENV.OPENAI_API_KEY && !ENV.ANTHROPIC_API_KEY && !ENV.forgeApiKey && !ENV.GOOGLE_GEMINI_API_KEY) {
-    warnings.push('No AI provider key set — LLM features run in labelled mock mode.');
+    warnings.push('No Forge LLM key set — provider-backed AI analysis is unavailable.');
   }
   if (!ENV.AWS_S3_BUCKET) {
-    warnings.push('AWS_S3_BUCKET not set — evidence file storage is unavailable (uploads will not persist).');
+    warnings.push(`AWS_S3_BUCKET not set — evidence files use local storage at ${process.env.LOCAL_STORAGE_DIR || '<cwd>/laro-uploads'}.`);
   }
   if (!ENV.GOOGLE_CLIENT_ID && !ENV.GOOGLE_CLIENT_SECRET) {
     warnings.push('Google OAuth not configured — Gmail/Drive evidence collection is disabled.');
