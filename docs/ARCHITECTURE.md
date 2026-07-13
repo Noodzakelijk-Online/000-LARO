@@ -12,7 +12,7 @@ that the current architecture leaves open (which later phases must close).
 
 | Concern | Reality | Evidence |
 |---|---|---|
-| Shell | Single-process Electron 29 | `src-main/index.ts:169-199` |
+| Shell | Single-process Electron 43 | `src-main/index.ts` |
 | Backend | Express 4 + tRPC 10 **in the Electron main process** (not a separate service) | `src-main/index.ts:198-199`, `server/index.ts:49-121` |
 | Database | Local SQLite via Drizzle + better-sqlite3 (2 DBs: server + scanner) | `server/db.ts:17-19,232-233`, `src-main/database.ts:16-19` |
 | Frontend | React 18 + Vite + Tailwind + Radix + TanStack Query + tRPC client + wouter | `src/renderer/main.tsx`, `src/renderer/DashboardApp.tsx` |

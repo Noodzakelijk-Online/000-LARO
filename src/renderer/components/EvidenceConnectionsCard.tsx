@@ -100,11 +100,16 @@ export default function EvidenceConnectionsCard() {
     try {
       let authUrl: string | undefined;
 
-      // For Gmail and Google Drive, use the direct OAuth endpoint with userId
+      // Google OAuth covers both Gmail and Drive; request the protected URL from tRPC.
       if (platformId === 'gmail' || platformId === 'google-drive') {
-        // Use the backend server URL (adjust if your backend is on a different port)
-        const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-        authUrl = `${backendUrl}/api/oauth/gmail/connect?userId=${currentUser.id}`;
+        const result = platformId === 'gmail'
+          ? await gmailOAuthMutation.mutateAsync()
+          : await driveOAuthMutation.mutateAsync();
+        if (!result.success || !result.authUrl) {
+          toast.error(result.reason || 'Google OAuth is unavailable.');
+          return;
+        }
+        authUrl = result.authUrl;
         
         // Open OAuth in default system browser (handled by Electron setWindowOpenHandler)
         window.open(authUrl, '_blank');

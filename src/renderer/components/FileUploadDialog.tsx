@@ -14,7 +14,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Upload, X, FileText, Image, Video, Music, File, CheckCircle } from "lucide-react";
+import { Upload, X, FileText, Image, Video, Music, File } from "lucide-react";
+import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
 interface FileUploadDialogProps {
@@ -32,7 +33,7 @@ interface UploadedFile {
   url?: string;
 }
 
-const MAX_FILE_SIZE = 16 * 1024 * 1024; // 16 MB
+const MAX_FILE_SIZE = 7 * 1024 * 1024;
 const ALLOWED_TYPES = [
   "application/pdf",
   "application/msword",
@@ -60,10 +61,11 @@ export default function FileUploadDialog({
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [dragActive, setDragActive] = useState(false);
+  const uploadEvidenceFile = trpc.evidenceFiles.upload.useMutation();
 
   const validateFile = (file: File): { valid: boolean; error?: string } => {
     if (file.size > MAX_FILE_SIZE) {
-      return { valid: false, error: `File size exceeds 16 MB limit` };
+      return { valid: false, error: `File size exceeds 7 MB limit` };
     }
 
     if (!ALLOWED_TYPES.includes(file.type) && !file.type.startsWith("image/") && !file.type.startsWith("video/") && !file.type.startsWith("audio/")) {
@@ -126,9 +128,32 @@ export default function FileUploadDialog({
     setFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const detectFileType = (mimeType: string): "document" | "photo" | "video" | "audio" | "other" => {
+    if (mimeType.startsWith("image/")) return "photo";
+    if (mimeType.startsWith("video/")) return "video";
+    if (mimeType.startsWith("audio/")) return "audio";
+    if (mimeType.includes("pdf") || mimeType.includes("word") || mimeType.includes("excel") || mimeType.startsWith("text/")) {
+      return "document";
+    }
+    return "other";
+  };
+
+  const fileToBase64 = async (file: File) => {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    let binary = "";
+    for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+      binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+    }
+    return btoa(binary);
+  };
+
   const handleUpload = async () => {
     if (files.length === 0) {
       toast.error("Please select files to upload");
+      return;
+    }
+    if (!caseId) {
+      toast.error("Select a case before uploading evidence");
       return;
     }
 
@@ -136,24 +161,26 @@ export default function FileUploadDialog({
     setUploadProgress(0);
 
     try {
-      // Simulate upload progress
       const uploadedFiles: UploadedFile[] = [];
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        
-        // Simulate upload delay
-        await new Promise((resolve) => setTimeout(resolve, 500));
-
-        // TODO: Replace with actual upload to S3 via tRPC
-        // const result = await trpc.evidence.upload.mutate({ file, caseId });
+        const base64 = await fileToBase64(file);
+        setUploadProgress(((i + 0.5) / files.length) * 100);
+        const result = await uploadEvidenceFile.mutateAsync({
+          caseId,
+          title: file.name,
+          type: detectFileType(file.type),
+          fileName: file.name,
+          mimeType: file.type || "application/octet-stream",
+          base64,
+        });
 
         uploadedFiles.push({
-          id: `file-${Date.now()}-${i}`,
+          id: result.id,
           name: file.name,
           size: file.size,
           type: file.type,
-          url: URL.createObjectURL(file), // Temporary URL for preview
         });
 
         setUploadProgress(((i + 1) / files.length) * 100);
@@ -198,7 +225,7 @@ export default function FileUploadDialog({
         <DialogHeader>
           <DialogTitle>Upload Evidence Files</DialogTitle>
           <DialogDescription>
-            Upload documents, images, videos, or audio files (max 16 MB per file)
+            Upload documents, images, videos, or audio files (max 7 MB per file)
           </DialogDescription>
         </DialogHeader>
 
@@ -306,7 +333,7 @@ export default function FileUploadDialog({
             </Button>
             <Button
               onClick={handleUpload}
-              disabled={files.length === 0 || uploading}
+              disabled={files.length === 0 || uploading || !caseId}
               className="bg-gradient-to-r from-orange-500 to-orange-600"
             >
               {uploading ? (

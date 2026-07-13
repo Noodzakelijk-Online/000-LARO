@@ -33,7 +33,7 @@ export default function AgentDownload() {
 
   useEffect(() => {
     if (listDevices.data) {
-      setDevices(listDevices.data.devices);
+      setDevices(listDevices.data);
     }
   }, [listDevices.data]);
 
@@ -50,20 +50,9 @@ export default function AgentDownload() {
     }
   };
 
-  const getDownloadUrl = () => {
-    // In production, these would be actual download URLs
-    // For now, return placeholder URLs
-    switch (platform) {
-      case 'windows':
-        return '/downloads/laro-evidence-agent-setup.exe';
-      case 'macos':
-        return '/downloads/laro-evidence-agent.dmg';
-      case 'linux':
-        return '/downloads/laro-evidence-agent.AppImage';
-      default:
-        return '#';
-    }
-  };
+  const getDownloadUrl = () => platform === 'windows'
+    ? 'https://github.com/Noodzakelijk-Online/000-LARO/releases/latest'
+    : null;
 
   const getPlatformName = () => {
     switch (platform) {
@@ -222,13 +211,20 @@ export default function AgentDownload() {
               </div>
 
               {/* Download Button */}
-              <a
-                href={getDownloadUrl()}
-                download
-                className="block w-full text-center bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 px-6 rounded-lg transition-colors text-lg"
-              >
-                Download for {getPlatformName()}
-              </a>
+              {getDownloadUrl() ? (
+                <a
+                  href={getDownloadUrl() || undefined}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block w-full text-center bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 px-6 rounded-lg transition-colors text-lg"
+                >
+                  View Windows releases
+                </a>
+              ) : (
+                <p className="w-full text-center bg-gray-200 text-gray-700 font-semibold py-4 px-6 rounded-lg text-lg">
+                  {getPlatformName()} build is not published
+                </p>
+              )}
 
               <p className="text-sm text-gray-600 mt-4 text-center">
                 Version 1.0.0 | {platform === 'windows' ? '.exe installer' : platform === 'macos' ? '.dmg disk image' : '.AppImage'}
@@ -280,7 +276,7 @@ export default function AgentDownload() {
                 </div>
               ) : devices.length === 0 ? (
                 <p className="text-gray-600 text-center py-8">
-                  No devices registered yet. Install and launch the agent to register your first device.
+                  Remote device registration is not available in this build. Local scanning remains available in the desktop app.
                 </p>
               ) : (
                 <div className="space-y-4">

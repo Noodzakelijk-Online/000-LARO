@@ -10,6 +10,7 @@ import { getDb } from './db';
 import { evidenceSources, evidenceItems } from './schema';
 import { v4 as uuidv4 } from 'uuid';
 import { eq, and } from 'drizzle-orm';
+import { ENV } from './_core/env';
 
 export interface GmailThread {
   id: string;
@@ -66,8 +67,8 @@ interface EmailFilterOptions {
  */
 export function getGmailOAuthConfig() {
   return {
-    clientId: process.env.GOOGLE_OAUTH_CLIENT_ID || '',
-    clientSecret: process.env.GOOGLE_OAUTH_CLIENT_SECRET || '',
+    clientId: ENV.GOOGLE_CLIENT_ID || process.env.GOOGLE_OAUTH_CLIENT_ID || '',
+    clientSecret: ENV.GOOGLE_CLIENT_SECRET || process.env.GOOGLE_OAUTH_CLIENT_SECRET || '',
     redirectUri: `${process.env.OAUTH_REDIRECT_BASE_URL || 'http://localhost:3000'}/api/oauth/gmail/callback`,
     scopes: [
       'https://www.googleapis.com/auth/gmail.readonly',

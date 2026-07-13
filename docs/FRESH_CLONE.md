@@ -7,9 +7,10 @@ verified the tracked source is complete and self-contained.
 
 ## Procedure (reproducible)
 ```bash
-git clone --branch Phase-Imp --single-branch <repo> /tmp/fresh-clone-test
+git clone --branch main --single-branch <repo> /tmp/fresh-clone-test
 cd /tmp/fresh-clone-test
-npm ci                     # installs deps + rebuilds better-sqlite3 (postinstall)
+npm ci --ignore-scripts    # deterministic install without selecting an ABI
+npm run rebuild:node       # Node ABI for tests and standalone server
 npm run gate               # server+main tsc, traceability, scans, tests
 ```
 
@@ -23,10 +24,9 @@ npm run gate               # server+main tsc, traceability, scans, tests
 | `scripts/traceability.mjs` from clean checkout | ✅ exit 0 |
 
 ## Honest notes / setup requirements
-- **Dependencies are not tracked** (correctly): a fresh clone requires `npm ci`.
-  The `postinstall` step rebuilds the `better-sqlite3` native binding
-  (`electron-rebuild`); on a machine without build tools this is the one setup
-  prerequisite. Documented in the README/OPERATOR_RUNBOOK.
+- **Dependencies are not tracked** (correctly): a fresh clone requires `npm ci --ignore-scripts`.
+  Use `npm run rebuild:node` for tests/server work and `npm run rebuild:electron`
+  immediately before desktop launch or packaging. Native build tools may be required.
 - During this dry run the dependency tree was linked from the parent install to
   avoid re-downloading. That produced one **artifact**: `tsc -p tsconfig.main.json`
   reported `TS2742 (not portable)` because the linked `node_modules` resolved via

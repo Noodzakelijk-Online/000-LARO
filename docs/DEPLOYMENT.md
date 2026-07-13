@@ -5,9 +5,10 @@ Date: 2026-07-06 · Branch `Phase-Imp`
 ## Local dev — one command (Phase 031)
 
 ```bash
-npm install        # installs deps (+ rebuilds better-sqlite3 for Electron)
+npm ci --ignore-scripts
+npm run rebuild:node
 npm run setup      # creates .env from .env.example, prints next steps
-npm run dev        # Electron desktop app (renderer + main)
+npm run dev        # Electron desktop app; dev:main rebuilds the Electron ABI
 # or, API only:
 npm run dev:server # standalone server on http://localhost:3000
 npm run doctor     # environment self-diagnostic (Phase 034)
@@ -50,4 +51,5 @@ problems, so it can gate a deploy.
 ## Notes
 
 - The desktop app is packaged separately with `npm run dist:*` (electron-builder).
+- Current Windows builds are internal validation artifacts. Public distribution requires an approved application icon and an Authenticode signing certificate.
 - The packaged installer no longer bundles `.env` (Phase 030).

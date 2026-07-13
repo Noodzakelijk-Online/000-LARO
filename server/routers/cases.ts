@@ -11,6 +11,7 @@ import { classifyLegalAreas } from "../classification";
 import { createNotification } from "../notifications";
 import { caseIntakeSchema } from "../../shared/validation";
 import { assertCaseTransition } from "../stateMachines";
+import { createCaseId } from "../ids";
 
 export const casesRouter = router({
   // Phase 022 — search, filters, sorting, pagination. All server-side and
@@ -97,7 +98,7 @@ export const casesRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      const caseId = `CASE${Date.now().toString().slice(-6)}`;
+      const caseId = createCaseId();
       const userId = ctx.user.id;
 
       // Phase 025: deterministically classify the case into legal areas from its

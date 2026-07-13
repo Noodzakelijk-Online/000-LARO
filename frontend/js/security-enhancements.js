@@ -96,43 +96,17 @@ function enhanceFormSecurity() {
     
     // Add submit event listener
     form.addEventListener('submit', function(e) {
-      // Prevent default form submission
-      e.preventDefault();
-      
-      // Validate form
-      if (validateForm(this)) {
-        // Sanitize all inputs before submission
-        const formInputs = this.querySelectorAll('input, textarea');
-        formInputs.forEach(input => {
-          if (input.type !== 'password') {
-            input.value = sanitizeInput(input.value);
-          }
-        });
-        
-        // Simulate form submission (would be a real API call in production)
-        const submitButton = this.querySelector('button[type="submit"]');
-        const originalText = submitButton.innerHTML;
-        submitButton.innerHTML = 'Processing...';
-        submitButton.disabled = true;
-        
-        setTimeout(() => {
-          submitButton.innerHTML = originalText;
-          submitButton.disabled = false;
-          
-          // Handle form submission success
-          if (this.id === 'authForm') {
-            // Show dashboard after successful login
-            if (typeof showSection === 'function') {
-              showSection('dashboard');
-            }
-          } else {
-            // Show success message for other forms
-            if (typeof showSuccessMessage === 'function') {
-              showSuccessMessage(this);
-            }
-          }
-        }, 800);
+      if (!validateForm(this)) {
+        e.preventDefault();
+        return;
       }
+
+      const formInputs = this.querySelectorAll('input, textarea');
+      formInputs.forEach(input => {
+        if (input.type !== 'password') {
+          input.value = sanitizeInput(input.value);
+        }
+      });
     });
   });
   

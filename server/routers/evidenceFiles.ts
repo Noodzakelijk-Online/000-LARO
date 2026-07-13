@@ -11,7 +11,9 @@ import {
 import { getDb } from "../db";
 import { evidenceFiles } from "../schema";
 import { eq, and, desc } from "drizzle-orm";
-import { nanoid } from "nanoid";
+import { randomUUID } from "crypto";
+import { assertCaseOwnership } from "../_core/authz";
+import { sanitizeFilename, storageDelete, storageGet, storagePut } from "../storage";
 
 export const evidenceFilesRouter = router({
 
@@ -63,8 +65,48 @@ export const evidenceFilesRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.user.id;
+      await assertCaseOwnership(input.caseId, userId);
       const id = await createEvidenceFile(userId, input);
       return { id };
+    }),
+
+  upload: protectedProcedure
+    .input(z.object({
+      caseId: z.string().min(1),
+      title: z.string().min(1).max(500),
+      type: z.enum(["document", "email", "chat", "photo", "video", "audio", "other"]),
+      fileName: z.string().min(1).max(255),
+      mimeType: z.string().min(1).max(255),
+      base64: z.string().min(1).max(9_500_000),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      await assertCaseOwnership(input.caseId, ctx.user.id);
+      const bytes = Buffer.from(input.base64, "base64");
+      if (!bytes.length || bytes.length > 7 * 1024 * 1024) {
+        throw new Error("Evidence uploads must be between 1 byte and 7 MB");
+      }
+
+      const fileName = sanitizeFilename(input.fileName);
+      const storageKey = `evidence/${input.caseId}/manual/${randomUUID()}-${fileName}`;
+      const stored = await storagePut(storageKey, bytes, input.mimeType);
+      try {
+        const id = await createEvidenceFile(ctx.user.id, {
+          caseId: input.caseId,
+          title: input.title,
+          type: input.type,
+          source: "Upload",
+          fileName,
+          fileSize: String(bytes.length),
+          mimeType: input.mimeType,
+          fileUrl: stored.url,
+          contentHash: stored.sha256,
+          metadata: JSON.stringify({ storageKey: stored.key }),
+        });
+        return { id, sha256: stored.sha256 };
+      } catch (error) {
+        await storageDelete(stored.key).catch(() => undefined);
+        throw error;
+      }
     }),
 
   // Delete
@@ -72,7 +114,17 @@ export const evidenceFilesRouter = router({
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.user.id;
+      const file = await getEvidenceFile(userId, input.id);
+      if (!file) return { success: false };
       const success = await deleteEvidenceFile(userId, input.id);
+      if (success && typeof file.metadata === "string") {
+        try {
+          const storageKey = JSON.parse(file.metadata)?.storageKey;
+          if (typeof storageKey === "string" && storageKey) await storageDelete(storageKey);
+        } catch {
+          // Legacy metadata may not be JSON or may not identify a managed object.
+        }
+      }
       return { success };
     }),
 
@@ -102,10 +154,19 @@ export const evidenceFilesRouter = router({
       const file = await getEvidenceFile(userId, input.id);
       if (!file) throw new Error("File not found");
 
-      // If file has a stored URL return it directly
+      if (typeof file.metadata === "string") {
+        try {
+          const storageKey = JSON.parse(file.metadata)?.storageKey;
+          if (typeof storageKey === "string" && storageKey) {
+            return { url: await storageGet(storageKey) };
+          }
+        } catch {
+          // Fall through to a legacy URL when metadata is not managed storage.
+        }
+      }
+
       if ((file as any).fileUrl) return { url: (file as any).fileUrl };
 
-      // Otherwise return a placeholder (real S3 presigned URL would go here)
       return { url: null, message: "File not available for download" };
     }),
 

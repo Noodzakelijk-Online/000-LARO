@@ -17,7 +17,7 @@ baseline (required) + production preflight (advisory). Current run: **all green*
 - [ ] `admin.invariants` clean; `admin.reconcileReport` shows no orphans.
 - [ ] A backup has been taken and a **restore** was tested (server/backup.ts).
 - [ ] Emergency stop is released; `outreach.send.enabled` is the intended value
-      (default OFF — the real send is not implemented, D3).
+      (default OFF; enable only after provider, approval, ownership, idempotency, emergency-stop, and audit verification).
 - [ ] Operator knows: how to engage the emergency stop, where the runbook is
       (docs/OPERATOR_RUNBOOK.md), and how to roll back (docs/RELEASE_PROCESS.md).
 

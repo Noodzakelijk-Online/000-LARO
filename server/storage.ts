@@ -19,10 +19,10 @@ import fs from 'fs';
 
 const s3 = new S3Client({
   region: process.env.AWS_S3_REGION || 'eu-west-1',
-  credentials: {
+  credentials: process.env.AWS_S3_ACCESS_KEY && process.env.AWS_S3_SECRET_KEY ? {
     accessKeyId:     process.env.AWS_S3_ACCESS_KEY || '',
     secretAccessKey: process.env.AWS_S3_SECRET_KEY || '',
-  },
+  } : undefined,
 });
 
 const BUCKET = process.env.AWS_S3_BUCKET || 'laro-evidence';
@@ -87,6 +87,7 @@ export async function storagePut(
   contentType = 'application/octet-stream'
 ): Promise<{ key: string; url: string; sha256: string }> {
   const safeKey = sanitizeStorageKey(key);
+  if (!safeKey) throw new Error('Storage key must contain at least one valid path segment');
   const bodyBuffer = typeof body === 'string' ? Buffer.from(body) : body;
   const sha256 = hashBuffer(bodyBuffer);
 
@@ -104,6 +105,7 @@ export async function storagePut(
 
 export async function storageGet(key: string): Promise<string> {
   const safeKey = sanitizeStorageKey(key);
+  if (!safeKey) throw new Error('Storage key must contain at least one valid path segment');
   if (isS3Configured()) {
     const cmd = new GetObjectCommand({ Bucket: BUCKET, Key: safeKey });
     return getSignedUrl(s3, cmd, { expiresIn: 3600 });
@@ -115,6 +117,7 @@ export async function storageGet(key: string): Promise<string> {
 
 export async function storageDelete(key: string): Promise<void> {
   const safeKey = sanitizeStorageKey(key);
+  if (!safeKey) throw new Error('Storage key must contain at least one valid path segment');
   if (isS3Configured()) {
     await s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: safeKey }));
     return;

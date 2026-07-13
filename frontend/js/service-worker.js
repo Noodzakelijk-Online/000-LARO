@@ -13,8 +13,7 @@ const PRECACHE_RESOURCES = [
   '/js/form-validation.js',
   '/js/performance-optimizations.js',
   '/js/security-enhancements.js',
-  OFFLINE_URL,
-  'https://i.ibb.co/Qj1Vz7W/home-dark-mode.jpg'
+  OFFLINE_URL
 ];
 
 // Install event - precache critical resources
@@ -54,9 +53,7 @@ self.addEventListener('activate', event => {
 // Fetch event - implement cache-first strategy with network fallback
 self.addEventListener('fetch', event => {
   // Skip cross-origin requests
-  if (!event.request.url.startsWith(self.location.origin) && 
-      !event.request.url.startsWith('https://i.ibb.co') &&
-      !event.request.url.startsWith('https://danolbza.manus.space')) {
+  if (!event.request.url.startsWith(self.location.origin)) {
     return;
   }
 
@@ -118,9 +115,9 @@ self.addEventListener('fetch', event => {
             return response;
           })
           .catch(error => {
-            // For image requests, return a placeholder if offline
+            // Do not claim an image fallback when no cached response exists.
             if (event.request.url.match(/\.(jpg|jpeg|png|gif|webp|svg)$/)) {
-              return caches.match('/images/placeholder.svg');
+              return new Response('', { status: 503, statusText: 'Offline' });
             }
             
             // For API requests, return empty JSON with offline flag
@@ -139,43 +136,6 @@ self.addEventListener('fetch', event => {
   );
 });
 
-// Background sync for offline form submissions
-self.addEventListener('sync', event => {
-  if (event.tag === 'form-submission') {
-    event.waitUntil(syncFormData());
-  }
-});
-
-// Function to sync stored form data when online
-async function syncFormData() {
-  try {
-    // Get all stored form submissions
-    const formDataKeys = await localforage.keys();
-    const formSubmissionKeys = formDataKeys.filter(key => key.startsWith('form_submission_'));
-    
-    // Process each stored submission
-    for (const key of formSubmissionKeys) {
-      const formData = await localforage.getItem(key);
-      
-      // Attempt to submit the form data
-      const response = await fetch('/api/submit-form', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(formData)
-      });
-      
-      if (response.ok) {
-        // If successful, remove from storage
-        await localforage.removeItem(key);
-      }
-    }
-  } catch (error) {
-    console.error('Error syncing form data:', error);
-  }
-}
-
 // Push notification handling
 self.addEventListener('push', event => {
   if (!event.data) return;
@@ -185,8 +145,6 @@ self.addEventListener('push', event => {
     
     const options = {
       body: data.body || 'New notification from Legal AI Reach Out',
-      icon: '/images/logo.png',
-      badge: '/images/badge.png',
       data: {
         url: data.url || '/'
       }

@@ -5,6 +5,7 @@ import { eq, and } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import crypto from "crypto";
 import { encryptToken, decryptToken } from "./emailOAuth";
+import { ENV } from "./_core/env";
 
 export interface OAuth2Config {
   clientId: string;
@@ -55,8 +56,8 @@ export function getOAuth2Config(provider: 'gmail' | 'outlook'): OAuth2Config {
   const redirectBase = getOAuthRedirectBaseUrl();
   if (provider === 'gmail') {
     return {
-      clientId: process.env.GOOGLE_OAUTH_CLIENT_ID || '',
-      clientSecret: process.env.GOOGLE_OAUTH_CLIENT_SECRET || '',
+      clientId: ENV.GOOGLE_CLIENT_ID || process.env.GOOGLE_OAUTH_CLIENT_ID || '',
+      clientSecret: ENV.GOOGLE_CLIENT_SECRET || process.env.GOOGLE_OAUTH_CLIENT_SECRET || '',
       redirectUri: `${redirectBase}/api/oauth/gmail/callback`,
       scopes: [
         'https://www.googleapis.com/auth/gmail.send',
@@ -69,8 +70,8 @@ export function getOAuth2Config(provider: 'gmail' | 'outlook'): OAuth2Config {
     };
   } else {
     return {
-      clientId: process.env.MICROSOFT_OAUTH_CLIENT_ID || '',
-      clientSecret: process.env.MICROSOFT_OAUTH_CLIENT_SECRET || '',
+      clientId: ENV.MICROSOFT_CLIENT_ID || process.env.MICROSOFT_OAUTH_CLIENT_ID || '',
+      clientSecret: ENV.MICROSOFT_CLIENT_SECRET || process.env.MICROSOFT_OAUTH_CLIENT_SECRET || '',
       redirectUri: `${redirectBase}/api/oauth/outlook/callback`,
       scopes: [
         'https://graph.microsoft.com/Mail.Send',
@@ -201,35 +202,7 @@ export function consumeOAuthState(
  * Generate OAuth2 authorization URL
  */
 export function getAuthorizationUrl(provider: 'gmail' | 'outlook', userId: string): string {
-  const config = getOAuth2Config(provider);
-  
-  // Store userId in state parameter for callback
-  const state = Buffer.from(JSON.stringify({ userId, provider })).toString('base64');
-  
-  if (provider === 'gmail') {
-    const params = new URLSearchParams({
-      client_id: config.clientId,
-      redirect_uri: config.redirectUri,
-      response_type: 'code',
-      scope: config.scopes.join(' '),
-      access_type: 'offline', // Get refresh token
-      prompt: 'consent', // Force consent to get refresh token
-      state,
-    });
-    
-    return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
-  } else {
-    const params = new URLSearchParams({
-      client_id: config.clientId,
-      redirect_uri: config.redirectUri,
-      response_type: 'code',
-      scope: config.scopes.join(' '),
-      response_mode: 'query',
-      state,
-    });
-    
-    return `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?${params.toString()}`;
-  }
+  return beginOAuthFlow(provider, userId);
 }
 
 /**

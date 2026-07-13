@@ -13,9 +13,9 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const log = (m) => console.log(`[setup] ${m}`);
 
 // 1. Node version check.
-const major = Number(process.versions.node.split('.')[0]);
-if (Number.isFinite(major) && major < 20) {
-  console.error(`[setup] Node 20+ required; found ${process.versions.node}.`);
+const [major, minor] = process.versions.node.split('.').map(Number);
+if (major !== 22 || minor < 12) {
+  console.error(`[setup] Node 22.12+ in the Node 22 LTS line is required; found ${process.versions.node}.`);
   process.exit(1);
 }
 log(`Node ${process.versions.node} OK.`);

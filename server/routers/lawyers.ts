@@ -1,10 +1,10 @@
 import { z } from "zod";
-import { publicProcedure, router } from "../_core/trpc";
+import { adminProcedure, protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { lawyers as lawyersTable } from '../schema';
 
 export const lawyersRouter = router({
-  list: publicProcedure
+  list: protectedProcedure
     .input(z.object({
       page: z.number().optional().default(1),
       limit: z.number().optional().default(100),
@@ -16,7 +16,7 @@ export const lawyersRouter = router({
       return { lawyers: results };
     }),
 
-  byId: publicProcedure
+  byId: protectedProcedure
     .input(z.string())
     .query(async ({ input: id }) => {
       const db = await getDb();
@@ -26,7 +26,7 @@ export const lawyersRouter = router({
       return result.length > 0 ? result[0] : null;
     }),
 
-  create: publicProcedure
+  create: adminProcedure
     .input(z.object({
       name: z.string(),
       email: z.string().email().optional(),

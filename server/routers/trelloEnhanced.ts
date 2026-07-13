@@ -41,24 +41,8 @@ export const trelloEnhancedRouter = router({
         caseId: z.string(),
       })
     )
-    .mutation(async ({ input, ctx }) => {
-      try {
-        const db = await getDb();
-        if (!db) {
-          throw new Error('Database not available');
-        }
-
-        // Verify case ownership
-        const authUrl = getTrelloAuthorizationUrl(ctx.user.id, input.caseId);
-        
-        return {
-          success: true,
-          authUrl,
-        };
-      } catch (error) {
-        console.error('[Trello] Error generating OAuth URL:', error);
-        throw new Error(`Failed to generate OAuth URL: ${error}`);
-      }
+    .mutation(async () => {
+      throw new Error('Trello OAuth is not available until secure token storage is implemented.');
     }),
 
   /**

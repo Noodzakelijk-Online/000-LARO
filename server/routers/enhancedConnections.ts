@@ -1,9 +1,10 @@
 import { z } from 'zod';
 import { router, protectedProcedure } from '../_core/trpc';
 import { getDb } from '../db';
-import { evidenceSources } from '../schema';
+import { emailAccounts, evidenceSources } from '../schema';
 import { eq, and } from 'drizzle-orm';
 import { ENV } from '../_core/env';
+import { beginOAuthFlow } from '../oauth2';
 
 /**
  * Phase 012 — external provider reality review.
@@ -27,12 +28,12 @@ function providerAvailability(providerName: string): ProviderConfig {
     case 'gmail':
     case 'googledrive':
       return googleReady
-        ? { configured: true, connectPath: `/api/oauth/${p === 'gmail' ? 'google' : 'googledrive'}/connect` }
+        ? { configured: true, connectPath: 'gmail' }
         : { configured: false, reason: 'Google OAuth is not configured (GOOGLE_CLIENT_ID/SECRET missing).' };
     case 'outlook':
     case 'onedrive':
       return msReady
-        ? { configured: true, connectPath: `/api/oauth/${p === 'outlook' ? 'microsoft' : 'onedrive'}/connect` }
+        ? { configured: true, connectPath: 'outlook' }
         : { configured: false, reason: 'Microsoft OAuth is not configured (MICROSOFT_CLIENT_ID/SECRET missing).' };
     case 'slack':
     default:
@@ -48,6 +49,24 @@ const createEnhancedConnectionRouter = (providerName: string) => {
         try {
           const db = await getDb();
           if (!db) return { connected: false };
+
+          const oauthProvider = providerName === 'Gmail' || providerName === 'GoogleDrive'
+            ? 'gmail'
+            : providerName === 'Outlook' || providerName === 'OneDrive'
+              ? 'outlook'
+              : null;
+          if (oauthProvider) {
+            const accounts = await db.select().from(emailAccounts).where(
+              and(eq(emailAccounts.userId, ctx.user.id), eq(emailAccounts.provider, oauthProvider))
+            ).limit(1);
+            if (accounts[0]) {
+              return {
+                connected: accounts[0].status === 'connected',
+                itemCount: 1,
+                lastSync: accounts[0].connectedAt,
+              };
+            }
+          }
 
           const conditions = [
             eq(evidenceSources.userId, ctx.user.id),
@@ -71,7 +90,7 @@ const createEnhancedConnectionRouter = (providerName: string) => {
       }),
 
     getOAuthUrl: protectedProcedure
-      .mutation(async () => {
+      .mutation(async ({ ctx }) => {
         const avail = providerAvailability(providerName);
         if (!avail.configured || !avail.connectPath) {
           // Honest unavailability — no fake auth URL.
@@ -84,7 +103,7 @@ const createEnhancedConnectionRouter = (providerName: string) => {
         return {
           success: true as const,
           available: true as const,
-          authUrl: avail.connectPath,
+          authUrl: beginOAuthFlow(avail.connectPath as 'gmail' | 'outlook', ctx.user.id),
         };
       }),
 

@@ -45,7 +45,7 @@ export default function BulkEvidenceUpload({
   const [files, setFiles] = useState<FileWithPreview[]>([]);
   const [isUploading, setIsUploading] = useState(false);
 
-  const createEvidenceFile = trpc.evidenceFiles.create.useMutation();
+  const uploadEvidenceFile = trpc.evidenceFiles.upload.useMutation();
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const newFiles: FileWithPreview[] = acceptedFiles.map((file) => ({
@@ -73,7 +73,7 @@ export default function BulkEvidenceUpload({
       "application/vnd.ms-outlook": [".msg"],
       "text/*": [".txt", ".csv"],
     },
-    maxSize: 100 * 1024 * 1024, // 100MB
+    maxSize: 7 * 1024 * 1024,
   } as any);
 
   const removeFile = (id: string) => {
@@ -119,40 +119,24 @@ export default function BulkEvidenceUpload({
         prev.map((f) => (f.id === fileWithPreview.id ? { ...f, status: "uploading" } : f))
       );
 
-      // Simulate upload progress (in real implementation, use presigned URL with progress tracking)
-      const progressInterval = setInterval(() => {
-        setFiles((prev) =>
-          prev.map((f) =>
-            f.id === fileWithPreview.id && f.progress < 90
-              ? { ...f, progress: f.progress + 10 }
-              : f
-          )
-        );
-      }, 200);
-
-      // Read file as buffer
       const arrayBuffer = await fileWithPreview.file.arrayBuffer();
-      const buffer = new Uint8Array(arrayBuffer);
+      const bytes = new Uint8Array(arrayBuffer);
+      let binary = "";
+      for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+        binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+      }
+      const base64 = btoa(binary);
+      setFiles((prev) =>
+        prev.map((f) => (f.id === fileWithPreview.id ? { ...f, progress: 50 } : f))
+      );
 
-      // Upload to S3 (this would normally use presigned URL from backend)
-      const s3Key = `evidence/${caseId}/${Date.now()}-${fileWithPreview.file.name}`;
-      
-      // For now, we'll use a placeholder URL since we can't directly call server functions from client
-      // In production, you'd get a presigned URL from the backend first
-      const s3Url = `https://storage.example.com/${s3Key}`;
-
-      clearInterval(progressInterval);
-
-      // Create evidence file record
-      await createEvidenceFile.mutateAsync({
+      await uploadEvidenceFile.mutateAsync({
         caseId,
         title: fileWithPreview.file.name,
         type: detectFileType(fileWithPreview.file.type) as any,
         fileName: fileWithPreview.file.name,
-        fileSize: fileWithPreview.file.size.toString(),
-        mimeType: fileWithPreview.file.type,
-        source: "Upload",
-        fileUrl: s3Url,
+        mimeType: fileWithPreview.file.type || "application/octet-stream",
+        base64,
       });
 
       // Update status to completed
@@ -253,7 +237,7 @@ export default function BulkEvidenceUpload({
               <>
                 <p className="text-lg font-medium mb-2">Drag & drop files here</p>
                 <p className="text-sm text-muted-foreground">
-                  or click to select files (max 100MB per file)
+                  or click to select files (max 7 MB per file)
                 </p>
                 <p className="text-xs text-muted-foreground mt-2">
                   Supported: PDF, Word, Excel, Images, Videos, Emails

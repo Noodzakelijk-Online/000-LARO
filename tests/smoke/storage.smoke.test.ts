@@ -5,7 +5,7 @@
  * traversal) and the sha256 provenance hash. These do not touch S3 or disk.
  */
 import { describe, it, expect } from 'vitest';
-import { sanitizeStorageKey, sanitizeFilename, hashBuffer } from '../../server/storage';
+import { sanitizeStorageKey, sanitizeFilename, hashBuffer, storageGet } from '../../server/storage';
 
 describe('Phase 015 — sanitizeStorageKey', () => {
   it('strips leading slashes (no absolute paths)', () => {
@@ -49,5 +49,9 @@ describe('Phase 015 — hashBuffer (provenance)', () => {
 
   it('changes when content changes', () => {
     expect(hashBuffer('a')).not.toBe(hashBuffer('b'));
+  });
+
+  it('rejects an empty storage key', async () => {
+    await expect(storageGet('../..')).rejects.toThrow('Storage key must contain');
   });
 });

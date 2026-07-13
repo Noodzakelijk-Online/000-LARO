@@ -586,8 +586,12 @@ export const appRouter = router({
 
   // Agent procedures
   agent: router({
-    listDevices: publicProcedure.query(() => []),
-    revokeDevice: publicProcedure.mutation(() => ({})),
+    listDevices: protectedProcedure.query(() => []),
+    revokeDevice: protectedProcedure
+      .input(z.object({ deviceId: z.string().min(1) }))
+      .mutation(() => {
+        throw new Error('Remote device registration and revocation are not available in this build.');
+      }),
   }),
 });
 
