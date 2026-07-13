@@ -41,9 +41,13 @@ class TestLegalLedgerService(unittest.TestCase):
             "original_filename": "notice.txt",
             "title": "Repair notice",
             "document_type": "notice",
+            "date_on_document": "2024-03-10",
+            "sender": "Robert",
+            "recipient": "Vivare",
             "extracted_text": "On 2024-03-10 Vivare received notice. Repair deadline 2024-03-24.",
             "summary": "Repair notice and deadline.",
             "relevance_score": 0.91,
+            "confidentiality_level": "sensitive",
         }, actor="robert")
         fetched_document = self.ledger.get_document(case["case_id"], document["document_id"])
         self.assertEqual(fetched_document["title"], "Repair notice")
@@ -71,6 +75,7 @@ class TestLegalLedgerService(unittest.TestCase):
             "target_id": claim["id"],
             "snippet": "Vivare received notice",
             "relationship": "supports",
+            "user_confirmed": True,
         }, actor="robert")
 
         contradiction = self.ledger.add_contradiction(case["case_id"], {
@@ -111,7 +116,35 @@ class TestLegalLedgerService(unittest.TestCase):
         resolved_loop = self.ledger.update_open_loop(case["case_id"], open_loop["id"], {"action": "resolve"}, actor="robert")
         self.assertEqual(resolved_loop["status"], "resolved")
         self.assertTrue(any(node["id"] == f"document:{document['document_id']}" for node in graph["nodes"]))
+        document_node = next(node for node in graph["nodes"] if node["id"] == f"document:{document['document_id']}")
+        claim_node = next(node for node in graph["nodes"] if node["id"] == f"claim:{claim['id']}")
+        self.assertEqual(document_node["document_type"], "notice")
+        self.assertEqual(document_node["date"], "2024-03-10")
+        self.assertEqual(document_node["sender"], "Robert")
+        self.assertEqual(document_node["recipient"], "Vivare")
+        self.assertEqual(document_node["relevance_score"], 0.91)
+        self.assertEqual(document_node["confidentiality_level"], "sensitive")
+        self.assertEqual(document_node["extraction_status"], "extracted")
+        self.assertTrue(document_node["content_hash"])
+        self.assertEqual(claim_node["support_state"], "supported")
         self.assertTrue(any(edge["to"] == f"event:{event['id']}" for edge in graph["edges"]))
+        self.assertTrue(any(
+            edge["from"] == f"document:{document['document_id']}"
+            and edge["to"] == f"contradiction:{contradiction['id']}"
+            and edge["type"] == "conflicts_with"
+            for edge in graph["edges"]
+        ))
+        self.assertTrue(any(
+            edge["from"] == f"document:{document['document_id']}"
+            and edge["to"] == f"deadline:{deadline['id']}"
+            and edge["type"] == "suggests_deadline"
+            for edge in graph["edges"]
+        ))
+        self.assertEqual(graph["facets"]["document_types"], ["notice"])
+        self.assertEqual(graph["facets"]["claim_support_states"], ["supported"])
+        self.assertIn("Vivare", graph["facets"]["parties"])
+        self.assertEqual(graph["facets"]["date_from"], "2024-03-10")
+        self.assertEqual(graph["facets"]["date_to"], "2024-03-24")
         self.assertEqual(command_center["counts"]["active_cases"], 1)
         self.assertEqual(command_center["counts"]["cases_needing_evidence"], 0)
         self.assertTrue(command_center["next_actions"])

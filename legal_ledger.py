@@ -3861,16 +3861,44 @@ class LegalLedger:
 
             nodes: List[Dict[str, Any]] = [{"id": f"case:{case.id}", "type": "case", "label": case.title, "status": case.status}]
             edges: List[Dict[str, Any]] = []
+            facet_parties = set()
+            facet_document_types = set()
+            facet_claim_support_states = set()
+            facet_dates = set()
 
             party_nodes_by_name: Dict[str, str] = {}
             for party in session.query(Party).filter_by(case_id=case_id).all():
                 nodes.append({"id": f"party:{party.id}", "type": "party", "label": party.name, "role": party.role})
                 edges.append({"from": f"case:{case.id}", "to": f"party:{party.id}", "type": "involves"})
                 party_nodes_by_name[party.name.strip().lower()] = f"party:{party.id}"
+                if party.name:
+                    facet_parties.add(party.name.strip())
 
             for document in session.query(CaseDocument).filter_by(case_id=case_id).all():
-                nodes.append({"id": f"document:{document.id}", "type": "document", "label": document.title or document.original_filename, "source": document.source_type})
+                extraction_status = "extracted" if (document.extracted_text or document.ocr_text) else "pending"
+                nodes.append({
+                    "id": f"document:{document.id}",
+                    "type": "document",
+                    "label": document.title or document.original_filename,
+                    "source": document.source_type,
+                    "source_uri": document.source_uri,
+                    "document_type": document.document_type or "unknown",
+                    "date": document.date_on_document,
+                    "sender": document.sender,
+                    "recipient": document.recipient,
+                    "summary": document.summary,
+                    "relevance_score": document.relevance_score,
+                    "confidentiality_level": document.confidentiality_level,
+                    "extraction_status": extraction_status,
+                    "content_hash": document.content_hash,
+                })
                 edges.append({"from": f"case:{case.id}", "to": f"document:{document.id}", "type": "contains"})
+                facet_document_types.add(document.document_type or "unknown")
+                if document.date_on_document:
+                    facet_dates.add(document.date_on_document)
+                for party_name in (document.sender, document.recipient):
+                    if party_name:
+                        facet_parties.add(party_name.strip())
 
             for identifier in session.query(CaseIdentifier).filter_by(case_id=case_id).all():
                 nodes.append({
@@ -3899,8 +3927,34 @@ class LegalLedger:
                 edges.append({"from": f"case:{case.id}", "to": f"event:{event.id}", "type": "chronology", "review_status": review_status, "user_confirmed": event.user_confirmed})
                 if event.created_from_document_id:
                     edges.append({"from": f"document:{event.created_from_document_id}", "to": f"event:{event.id}", "type": "supports", "review_status": review_status, "user_confirmed": event.user_confirmed})
+                if event.event_date:
+                    facet_dates.add(event.event_date)
+                for party_name in (event.actor, event.affected_party):
+                    if party_name:
+                        facet_parties.add(party_name.strip())
+
+            evidence_links = session.query(EvidenceLink).filter_by(case_id=case_id).all()
+            claim_links: Dict[int, List[EvidenceLink]] = {}
+            for link in evidence_links:
+                if link.target_type == "claim":
+                    claim_links.setdefault(link.target_id, []).append(link)
 
             for claim in session.query(LegalClaim).filter_by(case_id=case_id).all():
+                links = [link for link in claim_links.get(claim.id, []) if link.relationship != "rejected_suggestion"]
+                confirmed_relationships = {link.relationship for link in links if link.user_confirmed}
+                has_pending = any(not link.user_confirmed for link in links)
+                if "supports" in confirmed_relationships and "disputes" in confirmed_relationships:
+                    support_state = "mixed"
+                elif "supports" in confirmed_relationships:
+                    support_state = "supported"
+                elif "disputes" in confirmed_relationships:
+                    support_state = "disputed"
+                elif has_pending:
+                    support_state = "pending_review"
+                elif "context" in confirmed_relationships:
+                    support_state = "context_only"
+                else:
+                    support_state = "unsupported"
                 nodes.append({
                     "id": f"claim:{claim.id}",
                     "type": "claim",
@@ -3910,11 +3964,16 @@ class LegalLedger:
                     "position_role": claim.position_role,
                     "subject_party": claim.subject_party,
                     "materiality": claim.materiality,
+                    "support_state": support_state,
                 })
                 edges.append({"from": f"case:{case.id}", "to": f"claim:{claim.id}", "type": "asserts"})
+                facet_claim_support_states.add(support_state)
+                for party_name in (claim.asserted_by, claim.subject_party):
+                    if party_name:
+                        facet_parties.add(party_name.strip())
 
             linked_obligation_sources = set()
-            for link in session.query(EvidenceLink).filter_by(case_id=case_id).all():
+            for link in evidence_links:
                 target = f"{link.target_type}:{link.target_id}"
                 edges.append({"from": f"document:{link.document_id}", "to": target, "type": link.relationship, "strength": link.strength, "user_confirmed": link.user_confirmed})
                 if link.target_type == "obligation":
@@ -3942,6 +4001,10 @@ class LegalLedger:
             for contradiction in session.query(Contradiction).filter_by(case_id=case_id).all():
                 nodes.append({"id": f"contradiction:{contradiction.id}", "type": "contradiction", "label": contradiction.title, "severity": contradiction.severity})
                 edges.append({"from": f"case:{case.id}", "to": f"contradiction:{contradiction.id}", "type": "flags"})
+                for source_ref in _json_load(contradiction.source_refs, []):
+                    document_id = source_ref.get("document_id") if isinstance(source_ref, dict) else None
+                    if document_id:
+                        edges.append({"from": f"document:{document_id}", "to": f"contradiction:{contradiction.id}", "type": "conflicts_with"})
 
             for warning in session.query(MissingEvidenceWarning).filter_by(case_id=case_id).all():
                 nodes.append({"id": f"missing_evidence:{warning.id}", "type": "missing_evidence", "label": warning.title, "status": warning.status, "severity": warning.severity})
@@ -3952,6 +4015,10 @@ class LegalLedger:
             for deadline in session.query(Deadline).filter_by(case_id=case_id).all():
                 nodes.append({"id": f"deadline:{deadline.id}", "type": "deadline", "label": deadline.title, "due_date": deadline.due_date, "status": deadline.status})
                 edges.append({"from": f"case:{case.id}", "to": f"deadline:{deadline.id}", "type": "requires_action"})
+                if deadline.source_document_id:
+                    edges.append({"from": f"document:{deadline.source_document_id}", "to": f"deadline:{deadline.id}", "type": "suggests_deadline"})
+                if deadline.due_date:
+                    facet_dates.add(deadline.due_date)
 
             for obligation in session.query(Obligation).filter_by(case_id=case_id).all():
                 node_id = f"obligation:{obligation.id}"
@@ -3973,6 +4040,11 @@ class LegalLedger:
                 party_node = party_nodes_by_name.get((obligation.responsible_party or "").strip().lower())
                 if party_node:
                     edges.append({"from": party_node, "to": node_id, "type": "responsible_for", "status": obligation.status})
+                if obligation.due_date:
+                    facet_dates.add(obligation.due_date)
+                for party_name in (obligation.responsible_party, obligation.beneficiary_party):
+                    if party_name and party_name != "unassigned":
+                        facet_parties.add(party_name.strip())
 
             for item in session.query(OpenLoop).filter_by(case_id=case_id).all():
                 nodes.append({"id": f"open_loop:{item.id}", "type": "open_loop", "label": item.title, "status": item.status})
@@ -4005,7 +4077,19 @@ class LegalLedger:
                 if approval.entity_type != "Draft" or not approval.entity_id:
                     edges.append({"from": f"case:{case.id}", "to": f"approval:{approval.id}", "type": "requires_approval"})
 
-            return {"case_id": case_id, "nodes": nodes, "edges": edges}
+            ordered_dates = sorted(facet_dates)
+            return {
+                "case_id": case_id,
+                "nodes": nodes,
+                "edges": edges,
+                "facets": {
+                    "parties": sorted(facet_parties, key=str.casefold),
+                    "document_types": sorted(facet_document_types, key=str.casefold),
+                    "claim_support_states": sorted(facet_claim_support_states, key=str.casefold),
+                    "date_from": ordered_dates[0] if ordered_dates else None,
+                    "date_to": ordered_dates[-1] if ordered_dates else None,
+                },
+            }
 
     def case_summary(self, case_id: int) -> Optional[Dict[str, Any]]:
         with self.session_scope() as session:
