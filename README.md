@@ -4,6 +4,15 @@ LARO is a local-first legal case operating system. It keeps a persistent, source
 
 It organizes and prepares legal material. It is not a lawyer, does not provide definitive legal advice, and never sends legal communication or shares evidence externally without an explicit approval record.
 
+## Repository Runtimes
+
+This repository currently contains two supported application runtimes:
+
+- The Electron/React/tRPC desktop application in `src-main/`, `src/renderer/`, and `server/`. Use `npm run setup`, `npm run dev`, or `npm run dev:server` for this runtime.
+- The Flask Case Command Center in `app.py`, `legal_ledger.py`, and `frontend/`. Use `run_local.ps1` for the source-linked legal ledger, Google evidence intake, Papertrail, matching, and approval-gated bundle workflow described below.
+
+They coexist during the platform migration and currently use separate databases. The desktop runtime defaults to `PORT=3000`; the Flask command center defaults to `LARO_FLASK_PORT=8768`. Shared OAuth values can live in the same `.env` file.
+
 ## What Runs Locally
 
 - Case Command Center: create and operate cases with progressive Focus, Guided, and Expert views.
@@ -44,7 +53,7 @@ Copy-Item .env.example .env
 
 5. Open [http://127.0.0.1:8768/case_command_center.html](http://127.0.0.1:8768/case_command_center.html).
 
-The launcher uses port `8768` by default so it does not collide with a typical Flask server on `5000`. It binds to `127.0.0.1` only. Set `PORT` before launching to use another free local port.
+The launcher uses `LARO_FLASK_PORT=8768` by default so it does not collide with the desktop server on `3000`. It binds to `127.0.0.1` only. Pass `-Port` to `run_local.ps1` or set `LARO_FLASK_PORT` to use another free local port.
 
 ## Google Evidence Sources
 
@@ -87,6 +96,12 @@ The Bundle tab can create an in-memory ZIP containing the case record, source-li
 External sharing remains a separate human action. LARO permits a download only when an approved `CaseBundle` record matches the current persisted case snapshot. Adding or changing evidence, analysis, outreach, drafts, or case details makes that approval stale and requires a new review. `LARO_BUNDLE_MAX_BYTES` limits the archive's total uncompressed size; oversized source files are omitted and identified in the manifest.
 
 ## Tests
+
+Run the Electron/tRPC verification gate:
+
+```powershell
+npm run gate
+```
 
 Run the legal-ledger verification suite:
 

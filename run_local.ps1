@@ -35,7 +35,15 @@ if (-not $env:LARO_HOST) {
     $env:LARO_HOST = "127.0.0.1"
 }
 
-$env:PORT = if ($PSBoundParameters.ContainsKey("Port")) { "$Port" } elseif ($env:PORT) { $env:PORT } else { "8768" }
+$env:PORT = if ($PSBoundParameters.ContainsKey("Port")) {
+    "$Port"
+} elseif ($env:LARO_FLASK_PORT) {
+    $env:LARO_FLASK_PORT
+} elseif ($env:PORT) {
+    $env:PORT
+} else {
+    "8768"
+}
 if (-not $env:LARO_DEBUG) {
     $env:LARO_DEBUG = "false"
 }

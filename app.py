@@ -4368,6 +4368,6 @@ if __name__ == '__main__':
     host = os.environ.get('LARO_HOST', '127.0.0.1').strip()
     if not _is_loopback_host(host):
         raise RuntimeError('LARO only binds to localhost. Use a local reverse proxy only after adding explicit access controls.')
-    port = int(os.environ.get('PORT', 8768))
+    port = int(os.environ.get('LARO_FLASK_PORT', os.environ.get('PORT', 8768)))
     debug = os.environ.get('LARO_DEBUG', '').strip().lower() in {'1', 'true', 'yes'}
     app.run(host=host, port=port, debug=debug, use_reloader=debug)
