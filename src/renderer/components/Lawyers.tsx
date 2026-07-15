@@ -4,17 +4,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Input } from "@/components/ui/input";
-import { Search, Mail, Phone, Globe, MapPin, Users, Filter, X, GitCompare } from "lucide-react";
+import { Search, Mail, Phone, Globe, MapPin, Users, GitCompare } from "lucide-react";
 import { useState } from "react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import LawyerComparisonView from "@/components/LawyerComparison";
 import SmartSearchFilters from "@/components/SmartSearchFilters";
+import { useLocation } from "wouter";
 
 export default function Lawyers() {
   const { data, isLoading } = trpc.lawyers.list.useQuery();
+  const [, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
-  const [showFilters, setShowFilters] = useState(false);
   const [filterLegalArea, setFilterLegalArea] = useState("");
   const [filterExperience, setFilterExperience] = useState("");
   const [filterAccepting, setFilterAccepting] = useState("");
@@ -53,15 +52,21 @@ export default function Lawyers() {
   const lawyers = data?.lawyers || [];
   
   const filteredLawyers = lawyers.filter((lawyer: any) => {
+    const areas = parseStringArray(lawyer.legalAreas);
+    const normalizedQuery = searchQuery.trim().toLowerCase();
     // Search filter
-    const matchesSearch = !searchQuery || 
-      lawyer.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      lawyer.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      lawyer.address?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = !normalizedQuery || [
+      lawyer.name,
+      lawyer.firm,
+      lawyer.email,
+      lawyer.phone,
+      lawyer.website,
+      lawyer.address,
+      ...areas,
+    ].some((value) => String(value ?? "").toLowerCase().includes(normalizedQuery));
     
     // Legal area filter
     const matchesLegalArea = !filterLegalArea || (() => {
-      const areas = parseStringArray(lawyer.legalAreas);
       return areas.some((area) => area.toLowerCase().includes(filterLegalArea.toLowerCase()));
     })();
     
@@ -97,9 +102,10 @@ export default function Lawyers() {
 
         {/* Search and Filter */}
         <div className="space-y-4">
-          <div className="flex items-center gap-4">
-            <div className="flex-1">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
+            <div className="min-w-0 flex-1">
               <SmartSearchFilters
+                searchType="lawyers"
                 onSearch={(query, filters) => {
                   setSearchQuery(query);
                   if (filters) {
@@ -111,14 +117,6 @@ export default function Lawyers() {
               />
             </div>
             <Button 
-              variant="outline" 
-              className="border-purple-500/30 hover:bg-purple-500/10 hover:border-purple-500/50"
-              onClick={() => setShowFilters(!showFilters)}
-            >
-              <Filter className="w-4 h-4 mr-2" />
-              {showFilters ? "Hide Filters" : "Show Filters"}
-            </Button>
-            <Button 
               variant={comparisonMode ? "default" : "outline"}
               className={comparisonMode ? "bg-purple-600 hover:bg-purple-700" : "border-purple-500/30 hover:bg-purple-500/10 hover:border-purple-500/50"}
               onClick={() => {
@@ -129,66 +127,7 @@ export default function Lawyers() {
               <GitCompare className="w-4 h-4 mr-2" />
               {comparisonMode ? `Compare (${selectedLawyers.length}/3)` : "Compare Mode"}
             </Button>
-            {(filterLegalArea || filterExperience || filterAccepting) && (
-              <Button 
-                variant="ghost" 
-                size="sm"
-                onClick={() => {
-                  setFilterLegalArea("");
-                  setFilterExperience("");
-                  setFilterAccepting("");
-                }}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <X className="w-4 h-4 mr-1" />
-                Clear Filters
-              </Button>
-            )}
           </div>
-
-          {/* Advanced Filters */}
-          {showFilters && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-card/30 rounded-lg border border-border/50">
-              <div>
-                <label className="text-sm font-medium mb-2 block">Legal Area</label>
-                <Input
-                  placeholder="e.g., Employment Law"
-                  value={filterLegalArea}
-                  onChange={(e) => setFilterLegalArea(e.target.value)}
-                  className="bg-background/50"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-2 block">Experience</label>
-                <Select value={filterExperience} onValueChange={setFilterExperience}>
-                  <SelectTrigger className="bg-background/50">
-                    <SelectValue placeholder="Any experience" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value=" ">Any experience</SelectItem>
-                    <SelectItem value="0-5">0-5 years</SelectItem>
-                    <SelectItem value="6-10">6-10 years</SelectItem>
-                    <SelectItem value="11-20">11-20 years</SelectItem>
-                    <SelectItem value="20+">20+ years</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-2 block">Accepting Cases</label>
-                <Select value={filterAccepting} onValueChange={setFilterAccepting}>
-                  <SelectTrigger className="bg-background/50">
-                    <SelectValue placeholder="Any status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value=" ">Any status</SelectItem>
-                    <SelectItem value="Yes">Yes - Accepting</SelectItem>
-                    <SelectItem value="Limited">Limited Capacity</SelectItem>
-                    <SelectItem value="No">No - Not Accepting</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          )}
 
           {/* Results Count */}
           <div className="text-sm text-muted-foreground">
@@ -328,6 +267,7 @@ export default function Lawyers() {
                       <Button 
                         variant="outline" 
                         className="w-full mt-4 border-purple-500/30 hover:bg-purple-500/10 hover:border-purple-500/50 transition-all group-hover:border-purple-500/50"
+                        onClick={() => setLocation(`/lawyers/${lawyer.id}`)}
                       >
                         View Profile
                       </Button>

@@ -6,13 +6,20 @@ import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 
-// Try to load .env from different possible locations
-const possibleEnvPaths = [
-  path.join(process.cwd(), '.env'), // Development
-  path.join(__dirname, '..', '..', '.env'), // dist/server -> root
-  path.join((process as any).resourcesPath || '', '.env'), // Packaged app: extraResources lands here
-  path.join((process as any).resourcesPath || '', 'app', '.env') // Legacy fallback
-];
+// A packaged desktop must not trust an arbitrary launch directory's `.env`.
+// Standalone/development servers retain cwd and dist-root discovery, while a
+// packaged build may only read configuration deliberately shipped as a resource.
+const packagedDesktop = process.env.LARO_PACKAGED_DESKTOP === 'true';
+const resourcesPath = (process as any).resourcesPath || '';
+const possibleEnvPaths = packagedDesktop
+  ? [
+      path.join(resourcesPath, '.env'),
+      path.join(resourcesPath, 'app', '.env'),
+    ]
+  : [
+      path.join(process.cwd(), '.env'),
+      path.join(__dirname, '..', '..', '.env'),
+    ];
 
 for (const envPath of possibleEnvPaths) {
   if (fs.existsSync(envPath)) {

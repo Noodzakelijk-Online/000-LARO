@@ -19,7 +19,6 @@ Updated: 2026-07-15
 | D13 | Some money and count fields are stored as text | Low | Normalize through reviewed migrations |
 | D14 | Renderer strings are not fully migrated to `t()` | Low | Complete i18n pass |
 
-Current priorities are D10 for data integrity, D8 for shared-contract drift,
-bundle splitting for renderer startup performance, and broader cross-browser and
-accessibility automation. Provider work must retain explicit credential,
+Current priorities are D10 for data integrity, D8 for shared-contract drift, and
+broader cross-browser and accessibility automation. Provider work must retain explicit credential,
 consent, approval, and audit gates.

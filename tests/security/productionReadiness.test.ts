@@ -42,6 +42,13 @@ describe('production readiness regressions', () => {
     expect(email).not.toContain('publicProcedure');
   });
 
+  it('accepts documented loopback development origins without weakening CSRF', async () => {
+    const { isAllowedOrigin } = await import('../../server/_core/csrf');
+    expect(isAllowedOrigin('http://localhost:5173')).toBe(true);
+    expect(isAllowedOrigin('http://127.0.0.1:5173')).toBe(true);
+    expect(isAllowedOrigin('https://attacker.example')).toBe(false);
+  });
+
   it('loads matcher datasets from packaged assets', () => {
     const matching = readFileSync(join(ROOT, 'server/matching.ts'), 'utf8');
     const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
@@ -83,13 +90,19 @@ describe('production readiness regressions', () => {
   });
 
   it('binds packaged Desktop to an available loopback port', () => {
+    const server = readFileSync(join(ROOT, 'server/index.ts'), 'utf8');
     const main = readFileSync(join(ROOT, 'src-main/index.ts'), 'utf8');
     const provider = readFileSync(join(ROOT, 'src/renderer/providers/TrpcProvider.tsx'), 'utf8');
     expect(main).toContain('resolveDesktopServerPort(process.env.OAUTH_REDIRECT_BASE_URL)');
     expect(main).toContain('const actualPort = await startServer(requestedPort)');
     expect(main).toContain('agentConfig.apiUrl = laroUrl');
     expect(main).toContain('process.env.OAUTH_REDIRECT_BASE_URL = laroUrl');
+    expect(main).toContain("process.env.LARO_PACKAGED_DESKTOP = app.isPackaged ? 'true' : 'false'");
+    expect(server).toContain("const packagedDesktop = process.env.LARO_PACKAGED_DESKTOP === 'true'");
+    expect(server.indexOf("path.join(process.cwd(), '.env')"))
+      .toBeGreaterThan(server.indexOf(': ['));
     expect(provider).toContain('window.location.origin');
+    expect(provider).not.toContain('window.location.port !== "5173"');
     expect(main).not.toContain('await startServer(PORT)');
   });
 
@@ -151,11 +164,14 @@ describe('production readiness regressions', () => {
     expect(realtime).toContain('socket.join(userRoom(userId))');
     expect(notifications).toContain('emitRealtimeNotification(params.userId');
     expect(client).toContain('const push = useCallback');
+    expect(client).toContain('io(window.location.origin)');
+    expect(client).not.toContain('transports: ["websocket", "polling"]');
     expect(client).not.toContain('socketInstance.emit("join"');
     expect(dashboard).toContain('<WebSocketProvider>');
     expect(notificationCenter).toContain('@/contexts/WebSocketContext');
     expect(notificationCenter).not.toContain('@/_core/hooks/useWebSocket');
     expect(vite).toContain("'/socket.io'");
+    expect(vite.match(/target: 'http:\/\/127\.0\.0\.1:3000'/g)).toHaveLength(2);
   });
 
   it('generates collision-resistant case identifiers', async () => {
@@ -172,5 +188,22 @@ describe('production readiness regressions', () => {
       expect(upload).not.toContain('storage.example.com');
       expect(upload).not.toMatch(/simulate(d)? upload/i);
     }
+  });
+
+  it('keeps production search honest and routes lawyer actions to real records', () => {
+    const search = readFileSync(join(ROOT, 'src/renderer/components/SmartSearchFilters.tsx'), 'utf8');
+    const lawyers = readFileSync(join(ROOT, 'src/renderer/components/Lawyers.tsx'), 'utf8');
+    const dashboard = readFileSync(join(ROOT, 'src/renderer/DashboardApp.tsx'), 'utf8');
+    expect(search).not.toContain('divorce lawyer Amsterdam');
+    expect(search).not.toContain('employment law urgent');
+    expect(search).not.toContain('Math.random()');
+    expect(lawyers).toContain('searchType="lawyers"');
+    expect(lawyers).toContain('setLocation(`/lawyers/${lawyer.id}`)');
+    expect(dashboard).not.toContain('RoutePlaceholder');
+    expect(dashboard).not.toContain('/email-automation');
+    expect(dashboard).not.toContain('/billing');
+    expect(dashboard).not.toContain('/reports');
+    expect(dashboard).toContain('lazy(() => import("@/components/Cases"))');
+    expect(dashboard).toContain('<Suspense fallback={<DashboardSkeleton />}>');
   });
 });

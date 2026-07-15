@@ -266,6 +266,7 @@ app.whenReady().then(async () => {
     );
     process.env.NODE_ENV = 'production';
   }
+  process.env.LARO_PACKAGED_DESKTOP = app.isPackaged ? 'true' : 'false';
 
   // Phase 006/007: generate/load per-install secrets and set them in the
   // environment BEFORE importing the server, so env.ts reads real secrets and

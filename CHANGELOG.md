@@ -7,6 +7,18 @@ versioning; dates are ISO. Version is sourced from `package.json` and surfaced b
 ## Unreleased
 
 ### Fixed
+- Lawyer search now stores filters under the correct directory type, removes
+  fabricated recent-search counts, exposes real filters without a second panel,
+  and opens the selected lawyer profile.
+- Unfinished placeholder routes and the dead mock email-campaign screen are no
+  longer exposed by the production renderer.
+- Dashboard routes load on demand, reducing the production entry chunk from
+  roughly 891 KB to 274 KB before gzip.
+- Local Vite sessions use the same-origin API proxy consistently for
+  `localhost` and `127.0.0.1`; authenticated Socket.IO uses resilient
+  polling-first negotiation without startup console warnings.
+- Packaged Desktop ignores arbitrary launch-directory `.env` files and accepts
+  configuration only from deliberately shipped package resources.
 - Outreach initiation now prepares idempotent lawyer drafts in the same action,
   while approval and irreversible provider delivery remain separate controls.
 - Lawyer replies can be recorded through an owner-scoped workflow action and

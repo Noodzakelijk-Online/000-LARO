@@ -68,9 +68,9 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     if (!userId) return;
 
     // Connect to WebSocket server
-    const socketInstance = io(window.location.origin, {
-      transports: ["websocket", "polling"],
-    });
+    // Keep Socket.IO's polling-first negotiation so restrictive proxies can
+    // establish the authenticated session before attempting a WebSocket upgrade.
+    const socketInstance = io(window.location.origin);
 
     socketInstance.on("connect", () => {
       console.log("[WebSocket] Connected");

@@ -16,7 +16,7 @@ acceptance. It supersedes the 2026-07-06 phase snapshot.
 | Runtime no-excuses scan | 0 suspect findings |
 | Account-safety scan | 0 high-severity findings |
 | Isolated backup/delete/restore/reopen drill | Pass |
-| Vitest | 31 files, 210 tests passed, 0 todo |
+| Vitest | 31 files, 212 tests passed, 0 todo |
 | Python unittest discovery | 202 tests passed |
 | Runtime dependency audit | 0 known vulnerabilities |
 | Renderer, main, and server production builds | Pass |
@@ -38,6 +38,10 @@ Playwright exercised the unpacked Windows application at 1440x900 and 390x844:
 - reporting period changed from 30 to 90 days;
 - desktop and mobile layouts remained readable without overlap or horizontal
   tab/content compression.
+- lawyer directory search used real loaded records, legal-area and text filters
+  updated the result set, and View Profile opened the selected persisted record;
+- development proxy, CSRF, and authenticated Socket.IO negotiation completed on
+  `127.0.0.1` with no console errors or warnings.
 
 ## Verified product path
 
@@ -67,7 +71,8 @@ Playwright exercised the unpacked Windows application at 1440x900 and 390x844:
 - The Electron and Flask runtimes still have separate schemas and databases.
 - Application-level reconciliation remains important until more invariants are
   declared as database foreign keys.
-- The renderer bundle is approximately 892 KB before gzip and should be split.
+- Route-level lazy loading keeps the production entry chunk near 274 KB before
+  gzip; the largest route chunk is near 230 KB.
 - Full i18n migration and additional cross-browser/a11y automation remain useful
   hardening work.
 

@@ -37,7 +37,7 @@ interface RecentSearch {
   id: string;
   query: string;
   timestamp: Date;
-  resultCount: number;
+  resultCount?: number;
 }
 
 const FILTER_PRESETS = [
@@ -103,26 +103,15 @@ export default function SmartSearchFilters({
     savedAt: search.createdAt || new Date(),
   }));
 
-  const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([
-    {
-      id: "1",
-      query: "divorce lawyer Amsterdam",
-      timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
-      resultCount: 15,
-    },
-    {
-      id: "2",
-      query: "employment law urgent",
-      timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000),
-      resultCount: 8,
-    },
-  ]);
+  const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
 
   const [activeFilters, setActiveFilters] = useState<{
     status?: string;
     urgency?: string;
     legalArea?: string;
     dateRange?: string;
+    experience?: string;
+    accepting?: string;
   }>({});
 
   const activeFilterCount = Object.values(activeFilters).filter(Boolean).length;
@@ -138,7 +127,6 @@ export default function SmartSearchFilters({
         id: Date.now().toString(),
         query: searchQuery,
         timestamp: new Date(),
-        resultCount: Math.floor(Math.random() * 50),
       };
       setRecentSearches((prev) => [newSearch, ...prev.slice(0, 9)]);
       toast.success(`Searching for: ${searchQuery}`);
@@ -150,8 +138,8 @@ export default function SmartSearchFilters({
   };
 
   const handleSaveFilter = () => {
-    if (!searchQuery.trim()) {
-      toast.error("Please enter a search query first");
+    if (!searchQuery.trim() && activeFilterCount === 0) {
+      toast.error("Enter a search query or choose a filter first");
       return;
     }
 
@@ -195,8 +183,8 @@ export default function SmartSearchFilters({
       {/* Inline Filters (shown first per client feedback) */}
       <Card className={compact ? "border-border/50 bg-card/30" : ""}>
         <CardContent className={compact ? "p-3 space-y-3" : "p-4 space-y-4"}>
-          <div className={`grid grid-cols-1 md:grid-cols-4 ${compact ? "gap-3" : "gap-4"}`}>
-            <div>
+          <div className={`grid grid-cols-1 ${searchType === "lawyers" ? "md:grid-cols-3" : "md:grid-cols-4"} ${compact ? "gap-3" : "gap-4"}`}>
+            {searchType === "cases" && <div>
               <label className="text-sm font-medium mb-1 block text-muted-foreground">Status</label>
               <Select
                 value={activeFilters.status || "all"}
@@ -219,9 +207,9 @@ export default function SmartSearchFilters({
                   <SelectItem value="closed">Closed</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
+            </div>}
 
-            <div>
+            {searchType === "cases" && <div>
               <label className="text-sm font-medium mb-1 block text-muted-foreground">Urgency</label>
               <Select
                 value={activeFilters.urgency || "all"}
@@ -243,34 +231,74 @@ export default function SmartSearchFilters({
                   <SelectItem value="low">Low</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
+            </div>}
 
-            <div>
-              <label className="text-sm font-medium mb-1 block text-muted-foreground">Legal Area</label>
+            {searchType === "lawyers" && <div>
+              <label className="text-sm font-medium mb-1 block text-muted-foreground">Experience</label>
               <Select
-                value={activeFilters.legalArea || "all"}
+                value={activeFilters.experience || "all"}
                 onValueChange={(value: string) =>
                   setActiveFilters((prev) => {
-                    const next = { ...prev, legalArea: value === "all" ? undefined : value };
+                    const next = { ...prev, experience: value === "all" ? undefined : value };
                     onSearch?.(searchQuery, next);
                     return next;
                   })
                 }
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="All areas" />
+                  <SelectValue placeholder="Any experience" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All areas</SelectItem>
-                  <SelectItem value="family">Family Law</SelectItem>
-                  <SelectItem value="employment">Employment Law</SelectItem>
-                  <SelectItem value="contract">Contract Law</SelectItem>
-                  <SelectItem value="real-estate">Real Estate</SelectItem>
+                  <SelectItem value="all">Any experience</SelectItem>
+                  <SelectItem value="0-5">0-5 years</SelectItem>
+                  <SelectItem value="6-10">6-10 years</SelectItem>
+                  <SelectItem value="11-20">11-20 years</SelectItem>
+                  <SelectItem value="20+">More than 20 years</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
+            </div>}
+
+            {searchType === "lawyers" && <div>
+              <label className="text-sm font-medium mb-1 block text-muted-foreground">Availability</label>
+              <Select
+                value={activeFilters.accepting || "all"}
+                onValueChange={(value: string) =>
+                  setActiveFilters((prev) => {
+                    const next = { ...prev, accepting: value === "all" ? undefined : value };
+                    onSearch?.(searchQuery, next);
+                    return next;
+                  })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Any availability" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Any availability</SelectItem>
+                  <SelectItem value="Yes">Accepting cases</SelectItem>
+                  <SelectItem value="Limited">Limited capacity</SelectItem>
+                  <SelectItem value="No">Not accepting cases</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>}
 
             <div>
+              <label className="text-sm font-medium mb-1 block text-muted-foreground">Legal Area</label>
+              <Input
+                value={activeFilters.legalArea || ""}
+                placeholder="Any legal area"
+                onChange={(event) =>
+                  setActiveFilters((prev) => {
+                    const value = event.target.value.trimStart();
+                    const next = { ...prev, legalArea: value || undefined };
+                    onSearch?.(searchQuery, next);
+                    return next;
+                  })
+                }
+              />
+            </div>
+
+            {searchType === "cases" && <div>
               <label className="text-sm font-medium mb-1 block text-muted-foreground">Date Range</label>
               <Select
                 value={activeFilters.dateRange || "all"}
@@ -293,7 +321,7 @@ export default function SmartSearchFilters({
                   <SelectItem value="year">This Year</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
+            </div>}
           </div>
 
           {/* Search Bar */}
@@ -301,7 +329,7 @@ export default function SmartSearchFilters({
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="Search cases, lawyers, or documents using natural language or keywords..."
+                placeholder={searchType === "lawyers" ? "Search lawyer name, email, address, or legal area..." : "Search cases using natural language or keywords..."}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSearch()}
@@ -310,10 +338,20 @@ export default function SmartSearchFilters({
             </div>
 
             <Button onClick={handleSearch}>Search</Button>
+            <Button
+              variant="outline"
+              onClick={handleSaveFilter}
+              disabled={createSavedSearchMutation.isLoading}
+              aria-label="Save current search"
+            >
+              <Save className="h-4 w-4" />
+              <span className="hidden sm:inline">Save</span>
+            </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Keyword match runs on every search. With 2+ characters, LARO also expands natural-language queries into
-            extra search terms (uses your configured AI keys when available).
+            {searchType === "lawyers"
+              ? "Search checks the loaded directory by name, firm, contact details, address, and legal areas."
+              : "Keyword match runs on every search. With 2+ characters, LARO can expand natural-language queries using your configured AI provider."}
           </p>
         </CardContent>
       </Card>
@@ -347,7 +385,7 @@ export default function SmartSearchFilters({
         </div>
       )}
 
-      {!compact && (
+      {!compact && searchType === "cases" && (
         <div>
           <h4 className="text-sm font-medium mb-2 text-white">Quick Filters</h4>
           <div className="flex flex-wrap gap-2">
@@ -375,10 +413,7 @@ export default function SmartSearchFilters({
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-sm font-medium text-white">Saved Searches</h4>
-              <Button variant="ghost" size="sm" onClick={handleSaveFilter}>
-                <Save className="w-3 h-3 mr-2" />
-                Save Current
-              </Button>
+              <Badge variant="outline">{savedFilters.length}</Badge>
             </div>
             <div className="space-y-2">
               {savedFilters.map((filter) => (
@@ -426,9 +461,9 @@ export default function SmartSearchFilters({
                     <Clock className="w-4 h-4 text-muted-foreground" />
                     <div>
                       <p className="text-sm text-white">{search.query}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {search.resultCount} results
-                      </p>
+                      {search.resultCount !== undefined && (
+                        <p className="text-xs text-muted-foreground">{search.resultCount} results</p>
+                      )}
                     </div>
                   </div>
                   <span className="text-xs text-muted-foreground">

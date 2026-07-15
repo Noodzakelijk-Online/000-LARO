@@ -148,11 +148,12 @@ The production-readiness branch was verified on 2026-07-15 against the Node 22 t
 - Server, Electron main-process, and shipped renderer TypeScript checks passed; ESLint passed.
 - Traceability reported 116 rows, 93 cited, and 0 broken references.
 - Runtime no-excuses scan reported 0 suspect findings; account safety reported 0 high-severity findings.
-- Vitest reported 31 passing files, 210 passing tests, and no skipped or todo tests.
+- Vitest reported 31 passing files, 212 passing tests, and no skipped or todo tests.
 - Full Python discovery reported 202 passing tests. Warning-focused optimization and UCID tests also passed with deprecations promoted to errors.
 - The Vite 8 renderer, Electron 43 main process, and standalone server builds completed successfully.
 
-The packaged desktop normally asks Windows for an available loopback port. Setting
+The packaged desktop ignores `.env` files in its launch directory and normally
+asks Windows for an available loopback port. Setting
 `OAUTH_REDIRECT_BASE_URL` to an explicit `localhost` or `127.0.0.1` port pins the
 desktop server to that registered OAuth callback port instead.
 - `npm audit` reported 0 known vulnerabilities.
@@ -230,7 +231,7 @@ portable executable plus its SHA-256 checksum.
 - Outreach target discovery is a review aid, not a complete or continuously verified directory of every lawyer, journalist, program, lobby, or advocacy organization.
 - Real external sending is intentionally disabled by default and should remain disabled until the target environment, provider, approval UI, emergency stop, and audit trail have been reviewed.
 - The current lockfile audits cleanly; run `npm run audit:deps` again for every release because registry advisories change over time.
-- The production renderer JavaScript bundle is about 892 KB before gzip (239 KB gzip) and should be split further to improve startup performance.
+- Dashboard routes are loaded on demand. The production entry chunk is about 274 KB before gzip (85 KB gzip); the largest route chunk is about 230 KB before gzip.
 - The internal Windows artifact uses the tracked LARO mark but is not Authenticode-signed. A trusted signing certificate and product-owner confirmation of the public brand asset are prerequisites for public distribution.
 - Historical phase and verification documents in `docs/` are dated snapshots. Prefer current code, tests, this README, and a fresh `npm run gate` when status statements differ.
 

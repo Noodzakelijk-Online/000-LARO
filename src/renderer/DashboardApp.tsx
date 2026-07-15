@@ -2,23 +2,24 @@
  * Full LARO web dashboard (cases, lawyers, evidence, outreach) — same surface area
  * as the deployed app at https://lawyerdashboard.manus.space
  */
+import { lazy, Suspense } from "react";
 import { Router, Route, Switch } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import { useAuth } from "@/_core/hooks/useAuth";
 import AuthPage from "@/components/AuthPage";
 import { DashboardSkeleton } from "@/components/SkeletonLoaders";
-import Home from "@/components/Home";
-import Cases from "@/components/Cases";
-import Lawyers from "@/components/Lawyers";
-import Help from "@/components/Help";
-import Settings from "@/components/Settings";
-import Privacy from "@/components/Privacy";
-import Admin from "@/components/Admin";
-import LawyerProfile from "@/components/LawyerProfile";
-import Messages from "@/components/Messages";
-import RoutePlaceholder from "@/components/RoutePlaceholder";
-import OutreachAnalytics from "@/components/OutreachAnalytics";
 import { WebSocketProvider } from "@/contexts/WebSocketContext";
+
+const Home = lazy(() => import("@/components/Home"));
+const Cases = lazy(() => import("@/components/Cases"));
+const Lawyers = lazy(() => import("@/components/Lawyers"));
+const LawyerProfile = lazy(() => import("@/components/LawyerProfile"));
+const OutreachAnalytics = lazy(() => import("@/components/OutreachAnalytics"));
+const Help = lazy(() => import("@/components/Help"));
+const Settings = lazy(() => import("@/components/Settings"));
+const Privacy = lazy(() => import("@/components/Privacy"));
+const Admin = lazy(() => import("@/components/Admin"));
+const Messages = lazy(() => import("@/components/Messages"));
 
 const fileProtocol =
   typeof window !== "undefined" && window.location.protocol === "file:";
@@ -37,17 +38,13 @@ export default function DashboardApp() {
   return (
     <WebSocketProvider>
     <Router {...(fileProtocol ? { hook: useHashLocation } : {})}>
+    <Suspense fallback={<DashboardSkeleton />}>
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/cases" component={Cases} />
-      <Route path="/lawyers/:id">
-        <LawyerProfile />
-      </Route>
+      <Route path="/lawyers/:id" component={LawyerProfile} />
       <Route path="/lawyers" component={Lawyers} />
       <Route path="/outreach" component={OutreachAnalytics} />
-      <Route path="/evidence">
-        <RoutePlaceholder title="Evidence is now inside each case" />
-      </Route>
       <Route path="/help" component={Help} />
 
       <Route path="/settings" component={Settings} />
@@ -61,17 +58,8 @@ export default function DashboardApp() {
 
       <Route path="/messages" component={Messages} />
       <Route path="/email" component={Messages} />
-      <Route path="/email-automation">
-        <RoutePlaceholder title="Email automation" />
-      </Route>
       <Route path="/analytics">
         <OutreachAnalytics />
-      </Route>
-      <Route path="/billing">
-        <RoutePlaceholder title="Billing" />
-      </Route>
-      <Route path="/reports">
-        <RoutePlaceholder title="Reports" />
       </Route>
 
       <Route>
@@ -81,6 +69,7 @@ export default function DashboardApp() {
         </div>
       </Route>
     </Switch>
+    </Suspense>
     </Router>
     </WebSocketProvider>
   );
