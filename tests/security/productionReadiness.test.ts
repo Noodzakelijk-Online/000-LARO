@@ -101,6 +101,60 @@ describe('production readiness regressions', () => {
     expect(main).toContain('process.env.LARO_APP_VERSION = app.getVersion()');
   });
 
+  it('keeps operator readiness deterministic after Electron packaging', () => {
+    const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+    const readiness = readFileSync(join(ROOT, 'scripts/operator-readiness.mjs'), 'utf8');
+    expect(pkg.scripts.readiness).toContain('npm run rebuild:node');
+    expect(pkg.scripts['readiness:production']).toContain('npm run rebuild:node');
+    expect(readiness).toContain('[result.stdout, result.stderr]');
+  });
+
+  it('builds the shipped renderer with production React regardless of local env files', () => {
+    const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+    const rendererBuild = readFileSync(join(ROOT, 'scripts/build-renderer.mjs'), 'utf8');
+    expect(pkg.scripts['build:renderer']).toBe('node scripts/build-renderer.mjs');
+    expect(rendererBuild.indexOf('process.env.NODE_ENV = "production"'))
+      .toBeLessThan(rendererBuild.indexOf('await import("vite")'));
+  });
+
+  it('keeps horizontal tabs stacked above their content at every viewport', () => {
+    const tabs = readFileSync(join(ROOT, 'src/renderer/components/ui/tabs.tsx'), 'utf8');
+    expect(tabs).toContain('data-[orientation=horizontal]:flex-col');
+    expect(tabs).not.toContain('data-horizontal:flex-col');
+    expect(tabs).not.toContain('group-data-horizontal/tabs');
+  });
+
+  it('ships its dashboard mark locally and uses it for Windows packaging', () => {
+    const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+    const constants = readFileSync(join(ROOT, 'shared/const.ts'), 'utf8');
+    expect(pkg.build.win.icon).toBe('build/icon.png');
+    expect(constants).toContain('APP_LOGO = "/laro-logo.png"');
+    expect(constants).not.toContain('manuscdn.com');
+    expect(readFileSync(join(ROOT, 'public/laro-logo.png')).byteLength).toBeGreaterThan(1_000);
+    expect(readFileSync(join(ROOT, 'build/icon.png')).byteLength).toBeGreaterThan(1_000);
+  });
+
+  it('attaches authenticated realtime updates without render-loop reconnects', () => {
+    const server = readFileSync(join(ROOT, 'server/index.ts'), 'utf8');
+    const realtime = readFileSync(join(ROOT, 'server/realtime.ts'), 'utf8');
+    const notifications = readFileSync(join(ROOT, 'server/notifications.ts'), 'utf8');
+    const client = readFileSync(join(ROOT, 'src/renderer/contexts/WebSocketContext.tsx'), 'utf8');
+    const dashboard = readFileSync(join(ROOT, 'src/renderer/DashboardApp.tsx'), 'utf8');
+    const notificationCenter = readFileSync(join(ROOT, 'src/renderer/components/NotificationCenter.tsx'), 'utf8');
+    const vite = readFileSync(join(ROOT, 'vite.config.ts'), 'utf8');
+    expect(server).toContain('initializeRealtimeServer(httpServer)');
+    expect(realtime).toContain('jwt.verify(token, ENV.JWT_SECRET)');
+    expect(realtime).toContain('isTokenRevoked(decoded.userId, decoded.iat)');
+    expect(realtime).toContain('socket.join(userRoom(userId))');
+    expect(notifications).toContain('emitRealtimeNotification(params.userId');
+    expect(client).toContain('const push = useCallback');
+    expect(client).not.toContain('socketInstance.emit("join"');
+    expect(dashboard).toContain('<WebSocketProvider>');
+    expect(notificationCenter).toContain('@/contexts/WebSocketContext');
+    expect(notificationCenter).not.toContain('@/_core/hooks/useWebSocket');
+    expect(vite).toContain("'/socket.io'");
+  });
+
   it('generates collision-resistant case identifiers', async () => {
     const { createCaseId } = await import('../../server/ids');
     const ids = Array.from({ length: 1_000 }, createCaseId);

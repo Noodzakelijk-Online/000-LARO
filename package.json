@@ -13,7 +13,7 @@
     "dev:main": "npm run rebuild:electron && tsc -p tsconfig.main.json && cross-env NODE_ENV=development electron dist/main/src-main/index.js",
     "dev:server": "npm run rebuild:node && cross-env NODE_ENV=development tsx server/index.ts",
     "build": "npm run build:renderer && npm run build:main && npm run build:server",
-    "build:renderer": "vite build",
+    "build:renderer": "node scripts/build-renderer.mjs",
     "build:main": "tsc -p tsconfig.main.json",
     "build:server": "tsc -p tsconfig.server.json",
     "typecheck": "tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.main.json --noEmit",
@@ -44,8 +44,8 @@
     "scan:no-excuses": "node scripts/no-excuses-scan.mjs --write",
     "scan:safety": "node scripts/account-safety-check.mjs --write",
     "preflight": "node scripts/prod-preflight.mjs",
-    "readiness": "node scripts/operator-readiness.mjs",
-    "readiness:production": "node scripts/operator-readiness.mjs --production",
+    "readiness": "npm run rebuild:node && node scripts/operator-readiness.mjs",
+    "readiness:production": "npm run rebuild:node && node scripts/operator-readiness.mjs --production",
     "regression:baseline": "node scripts/regression-baseline.mjs"
   },
   "dependencies": {
@@ -175,6 +175,7 @@
       "category": "public.app-category.legal-aid"
     },
     "win": {
+      "icon": "build/icon.png",
       "target": "portable"
     }
   }

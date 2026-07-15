@@ -7,6 +7,20 @@ versioning; dates are ISO. Version is sourced from `package.json` and surfaced b
 ## Unreleased
 
 ### Fixed
+- Outreach initiation now prepares idempotent lawyer drafts in the same action,
+  while approval and irreversible provider delivery remain separate controls.
+- Lawyer replies can be recorded through an owner-scoped workflow action and
+  update case state, response time, audit history, notifications, and analytics.
+- Outreach analytics now use real user-owned pipeline, response, lawyer,
+  legal-area, region, and daily trend data instead of hardcoded zero metrics.
+- Operator readiness rebuilds the native SQLite driver for Node and preserves
+  complete failure output after Electron packaging.
+- Renderer builds force production React before Vite loads, regardless of a
+  developer machine's local `.env`, preventing development-only reconnects.
+- The renderer now uses a local LARO logo, and Windows packaging is configured
+  with the same tracked application mark instead of a remote CDN/default icon.
+- Historical readiness documentation was reconciled so current release claims
+  point to reproducible gates and explicit target-environment acceptance.
 - Database backup now uses SQLite's online backup API and validates integrity,
   foreign keys, and core tables before success.
 - Restore now stages and validates the replacement, preserves the previous

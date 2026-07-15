@@ -437,14 +437,34 @@ export default function EnhancedCaseDetailsDialog({
       { enabled: open && !!caseId }
     );
 
-  const { data: outreachHistory } = trpc.outreach.byCaseId.useQuery(caseId, {
+  const { data: outreachHistory, refetch: refetchOutreach } = trpc.outreach.byCaseId.useQuery(caseId, {
     enabled: open && !!caseId,
   });
 
   /* ── mutations ── */
   const initiateOutreachMutation = trpc.workflow.initiateOutreach.useMutation({
-    onSuccess: () => { toast.success("Outreach initiated successfully!"); refetchMatches(); refetchCase(); },
+    onSuccess: (result) => {
+      toast.success(result.created ? `${result.created} outreach draft(s) prepared for review` : "Outreach is up to date");
+      refetchMatches(); refetchCase(); refetchOutreach();
+    },
     onError: (error) => { toast.error(`Failed to initiate outreach: ${error.message}`); },
+  });
+
+  const approveDraftMutation = trpc.workflow.approveDraft.useMutation({
+    onSuccess: () => { toast.success("Draft approved; nothing has been sent yet"); refetchOutreach(); },
+    onError: (error) => toast.error(error.message),
+  });
+  const rejectDraftMutation = trpc.workflow.rejectDraft.useMutation({
+    onSuccess: () => { toast.success("Draft rejected"); refetchOutreach(); },
+    onError: (error) => toast.error(error.message),
+  });
+  const sendApprovedMutation = trpc.workflow.sendApproved.useMutation({
+    onSuccess: () => { toast.success("Outreach sent"); refetchOutreach(); },
+    onError: (error) => toast.error(error.message),
+  });
+  const recordResponseMutation = trpc.workflow.recordResponse.useMutation({
+    onSuccess: (result) => { toast.success(`Response recorded: ${result.status}`); refetchOutreach(); refetchCase(); },
+    onError: (error) => toast.error(error.message),
   });
 
   const updateCaseMutation = trpc.cases.update.useMutation({
@@ -458,6 +478,16 @@ export default function EnhancedCaseDetailsDialog({
   const handleSaveEdit = () => {
     if (!editedCase || !caseId) return;
     updateCaseMutation.mutate({ id: caseId, caseSummary: editedCase.caseSummary, urgency: editedCase.urgency });
+  };
+  const handleSendApproved = (outreach: any) => {
+    const recipient = outreach.lawyerEmail || outreach.lawyerName || "this lawyer";
+    if (window.confirm(`Send the approved outreach to ${recipient}? This external action cannot be recalled.`)) {
+      sendApprovedMutation.mutate({ outreachId: outreach.id });
+    }
+  };
+  const handleRecordResponse = (outreachId: string, response: "Interested" | "Declined") => {
+    const notes = window.prompt("Optional response summary")?.trim() || undefined;
+    recordResponseMutation.mutate({ outreachId, response, notes });
   };
 
   if (!open) return null;
@@ -963,6 +993,23 @@ export default function EnhancedCaseDetailsDialog({
                                 {outreach.response && (
                                   <p className="text-xs mt-2 bg-background/60 p-2 rounded border border-border/20 text-foreground/70">{outreach.response}</p>
                                 )}
+                                <div className="mt-3 flex flex-wrap justify-end gap-2">
+                                  {outreach.status === "PendingApproval" && (
+                                    <>
+                                      <Button size="sm" variant="outline" onClick={() => rejectDraftMutation.mutate({ outreachId: outreach.id })}>Reject</Button>
+                                      <Button size="sm" onClick={() => approveDraftMutation.mutate({ outreachId: outreach.id })}>Approve</Button>
+                                    </>
+                                  )}
+                                  {outreach.status === "Approved" && (
+                                    <Button size="sm" onClick={() => handleSendApproved(outreach)} disabled={sendApprovedMutation.isPending}>Review &amp; send</Button>
+                                  )}
+                                  {outreach.status === "Sent" && (
+                                    <>
+                                      <Button size="sm" variant="outline" onClick={() => handleRecordResponse(outreach.id, "Declined")}>Declined</Button>
+                                      <Button size="sm" onClick={() => handleRecordResponse(outreach.id, "Interested")}>Interested</Button>
+                                    </>
+                                  )}
+                                </div>
                               </div>
                             ))}
                           </div>

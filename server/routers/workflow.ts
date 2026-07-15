@@ -18,6 +18,32 @@ const OUTREACH_PENDING = "PendingApproval";
 const OUTREACH_APPROVED = "Approved";
 const OUTREACH_REJECTED = "Rejected";
 
+async function prepareOutreachDraftRows(caseId: string, maxResults: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  let matches: Array<{ id: string; name: string }>;
+  try {
+    matches = (await findMatchingLawyers(caseId, { maxResults, sortBy: "score" })) as any[];
+  } catch (error) {
+    return { created: 0, candidates: 0, reason: error instanceof Error ? error.message : "No matches" };
+  }
+
+  let created = 0;
+  for (const match of matches) {
+    const result = await db.insert(outreachStatus).values({
+      id: nanoid(),
+      caseId,
+      lawyerId: match.id,
+      status: OUTREACH_PENDING,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as any).onConflictDoNothing();
+    if ((result as any)?.changes ?? 1) created += 1;
+  }
+  return { created, candidates: matches.length };
+}
+
 export const workflowRouter = router({
   /**
    * Move a case into the "Outreach" stage.
@@ -35,9 +61,10 @@ export const workflowRouter = router({
    * without approval).
    */
   initiateOutreach: protectedProcedure
-    .input(z.object({ caseId: z.string() }))
+    .input(z.object({ caseId: z.string(), maxResults: z.number().int().min(1).max(25).optional().default(5) }))
     .mutation(async ({ input, ctx }) => {
       await assertCaseOwnership(input.caseId, ctx.user.id);
+      await assertNotEmergencyStopped();
       enforceRateLimit(ctx, "outreach", RATE_LIMITS.caseCreate);
 
       const db = await getDb();
@@ -49,23 +76,24 @@ export const workflowRouter = router({
         .where(eq(casesTable.id, input.caseId))
         .limit(1);
 
-      if (existing[0]?.status === "Outreach") {
-        return { success: true, alreadyInitiated: true } as const;
+      const alreadyInitiated = existing[0]?.status === "Outreach";
+      if (!alreadyInitiated) {
+        await db.update(casesTable)
+          .set({ status: "Outreach", updatedAt: new Date() })
+          .where(eq(casesTable.id, input.caseId));
       }
 
-      await db.update(casesTable)
-        .set({ status: "Outreach", updatedAt: new Date() })
-        .where(eq(casesTable.id, input.caseId));
+      const drafts = await prepareOutreachDraftRows(input.caseId, input.maxResults);
 
       await createAuditLog({
         userId: ctx.user.id,
         action: AUDIT_ACTIONS.OUTREACH_INITIATED,
         entityType: "case",
         entityId: input.caseId,
-        details: { from: existing[0]?.status ?? null, to: "Outreach" },
+        details: { from: existing[0]?.status ?? null, to: "Outreach", draftsPrepared: drafts.candidates },
       });
 
-      return { success: true, alreadyInitiated: false } as const;
+      return { success: true, alreadyInitiated, ...drafts } as const;
     }),
 
   /**
@@ -84,43 +112,17 @@ export const workflowRouter = router({
       await assertCaseOwnership(input.caseId, ctx.user.id);
       await assertNotEmergencyStopped(); // Phase 104 — operator kill switch
       enforceRateLimit(ctx, "outreach-prepare", RATE_LIMITS.aiAnalysis);
-      const db = await getDb();
-      if (!db) throw new Error("Database not available");
-
-      let matches: Array<{ id: string; name: string }>;
-      try {
-        matches = (await findMatchingLawyers(input.caseId, { maxResults: input.maxResults, sortBy: "score" })) as any[];
-      } catch (e) {
-        // Case not classified yet / no lawyers — return honestly, create nothing.
-        return { success: true, created: 0, reason: e instanceof Error ? e.message : "No matches" };
-      }
-
-      let created = 0;
-      for (const m of matches) {
-        const res = await db
-          .insert(outreachStatus)
-          .values({
-            id: nanoid(),
-            caseId: input.caseId,
-            lawyerId: m.id,
-            status: OUTREACH_PENDING,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          } as any)
-          .onConflictDoNothing();
-        // better-sqlite3 returns changes; treat any insert as created.
-        if ((res as any)?.changes ?? 1) created += 1;
-      }
+      const drafts = await prepareOutreachDraftRows(input.caseId, input.maxResults);
 
       await createAuditLog({
         userId: ctx.user.id,
         action: AUDIT_ACTIONS.OUTREACH_INITIATED,
         entityType: "case",
         entityId: input.caseId,
-        details: { draftsPrepared: matches.length },
+        details: { draftsPrepared: drafts.candidates },
       });
 
-      return { success: true, created, candidates: matches.length };
+      return { success: true, ...drafts };
     }),
 
   /**
@@ -186,6 +188,18 @@ export const workflowRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { sendApprovedOutreach } = await import("../outreachSend");
       return sendApprovedOutreach(ctx.user.id, input.outreachId);
+    }),
+
+  /** Record an inbound outcome with ownership and state-transition checks. */
+  recordResponse: protectedProcedure
+    .input(z.object({
+      outreachId: z.string().min(1),
+      response: z.enum(["Interested", "Declined", "NoResponse"]),
+      notes: z.string().trim().max(5_000).optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const { recordOutreachResponse } = await import("../outreachSend");
+      return recordOutreachResponse(ctx.user.id, input.outreachId, input.response, input.notes);
     }),
 
   /**

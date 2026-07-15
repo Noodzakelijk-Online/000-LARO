@@ -4,9 +4,11 @@ This checklist separates repository evidence from target-environment approval.
 
 ## Automated Evidence
 
-`npm run readiness` requires traceability, no-excuses and account-safety scans,
-the regression baseline, and an isolated backup/restore round trip. It also runs
-the environment preflight as an advisory check.
+`npm run readiness` first rebuilds the native SQLite driver for Node, then
+requires traceability, no-excuses and account-safety scans, the regression
+baseline, and an isolated backup/restore round trip. It also runs the environment
+preflight as an advisory check and prints both stdout and stderr for a failed
+step so the blocker remains visible.
 
 `npm run readiness:production` makes the production preflight blocking. Run it
 with the target API environment, including strong `JWT_SECRET` and

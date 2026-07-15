@@ -25,6 +25,7 @@ import { getSystemSwitch, setSystemSwitch } from "./systemState";
 import { assertOutreachTransition } from "./stateMachines";
 import { createAuditLog, AUDIT_ACTIONS } from "./audit";
 import { assertCaseOwnership } from "./_core/authz";
+import { createNotification } from "./notifications";
 
 export interface SendResult {
   outreachId: string;
@@ -111,8 +112,70 @@ export async function sendApprovedOutreach(
   // Mark Sent (idempotently) + record.
   assertOutreachTransition(row.status ?? null, "Sent");
   await setSystemSwitch(guardKey, true);
-  await db.update(outreachStatus).set({ status: "Sent", SentAt: new Date(), updatedAt: new Date() } as any).where(eq(outreachStatus.id, outreachId));
+  const sentAt = new Date();
+  await db.update(outreachStatus).set({
+    status: "Sent",
+    initialContact: row.initialContact ?? sentAt,
+    lastContact: sentAt,
+    updatedAt: sentAt,
+  }).where(eq(outreachStatus.id, outreachId));
   await createAuditLog({ userId, action: AUDIT_ACTIONS.OUTREACH_STATUS_CHANGED, entityType: "outreach", entityId: outreachId, details: { from: "Approved", to: "Sent", provider: result.provider } });
 
   return { outreachId, sent: true, provider: result.provider, to };
+}
+
+export type LawyerResponse = "Interested" | "Declined" | "NoResponse";
+
+/** Record a response without triggering any automatic third-party contact. */
+export async function recordOutreachResponse(
+  userId: string,
+  outreachId: string,
+  response: LawyerResponse,
+  notes?: string,
+): Promise<{ outreachId: string; status: LawyerResponse; caseId: string }> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const row = (await db.select().from(outreachStatus).where(eq(outreachStatus.id, outreachId)).limit(1))[0];
+  if (!row?.caseId) {
+    const { TRPCError } = await import("@trpc/server");
+    throw new TRPCError({ code: "NOT_FOUND", message: "Outreach record not found." });
+  }
+
+  await assertCaseOwnership(row.caseId, userId);
+  assertOutreachTransition(row.status ?? null, response);
+
+  const respondedAt = new Date();
+  const sentAt = row.lastContact ?? row.initialContact ?? row.updatedAt ?? row.createdAt;
+  const responseTimeHours = sentAt
+    ? Math.max(0, (respondedAt.getTime() - sentAt.getTime()) / 3_600_000).toFixed(2)
+    : null;
+
+  await db.update(outreachStatus).set({
+    status: response,
+    response: notes?.trim() || null,
+    responseReceived: response === "NoResponse" ? "No" : "Yes",
+    responseTimeHours,
+    lastContact: respondedAt,
+    updatedAt: respondedAt,
+  }).where(eq(outreachStatus.id, outreachId));
+
+  if (response === "Interested") {
+    await db.update(casesTable).set({ status: "Matched", updatedAt: respondedAt }).where(eq(casesTable.id, row.caseId));
+  }
+
+  await createAuditLog({
+    userId,
+    action: AUDIT_ACTIONS.EMAIL_RESPONSE_RECEIVED,
+    entityType: "outreach",
+    entityId: outreachId,
+    details: { caseId: row.caseId, lawyerId: row.lawyerId, from: row.status, to: response, notes: notes?.trim() || null },
+  });
+  await createNotification({
+    userId,
+    title: response === "Interested" ? "Lawyer is interested" : response === "Declined" ? "Lawyer declined" : "No lawyer response",
+    body: notes?.trim() || `Outreach status changed to ${response}.`,
+  });
+
+  return { outreachId, status: response, caseId: row.caseId };
 }

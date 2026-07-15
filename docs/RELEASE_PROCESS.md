@@ -26,6 +26,7 @@ npm run dist:win
 For an API deployment, also run `npm run readiness:production` with the target
 environment. Confirm no `.env`, database, upload, token, or unrelated development
 asset appears in the package. Confirm the signature and checksum before rollout.
+Confirm that `build/icon.png` is the product-owner-approved public LARO mark.
 
 ## Canary
 

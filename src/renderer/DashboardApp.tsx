@@ -17,6 +17,8 @@ import Admin from "@/components/Admin";
 import LawyerProfile from "@/components/LawyerProfile";
 import Messages from "@/components/Messages";
 import RoutePlaceholder from "@/components/RoutePlaceholder";
+import OutreachAnalytics from "@/components/OutreachAnalytics";
+import { WebSocketProvider } from "@/contexts/WebSocketContext";
 
 const fileProtocol =
   typeof window !== "undefined" && window.location.protocol === "file:";
@@ -33,6 +35,7 @@ export default function DashboardApp() {
   }
 
   return (
+    <WebSocketProvider>
     <Router {...(fileProtocol ? { hook: useHashLocation } : {})}>
     <Switch>
       <Route path="/" component={Home} />
@@ -41,6 +44,7 @@ export default function DashboardApp() {
         <LawyerProfile />
       </Route>
       <Route path="/lawyers" component={Lawyers} />
+      <Route path="/outreach" component={OutreachAnalytics} />
       <Route path="/evidence">
         <RoutePlaceholder title="Evidence is now inside each case" />
       </Route>
@@ -61,7 +65,7 @@ export default function DashboardApp() {
         <RoutePlaceholder title="Email automation" />
       </Route>
       <Route path="/analytics">
-        <RoutePlaceholder title="Analytics" />
+        <OutreachAnalytics />
       </Route>
       <Route path="/billing">
         <RoutePlaceholder title="Billing" />
@@ -78,5 +82,6 @@ export default function DashboardApp() {
       </Route>
     </Switch>
     </Router>
+    </WebSocketProvider>
   );
 }

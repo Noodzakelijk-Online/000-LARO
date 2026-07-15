@@ -36,6 +36,7 @@ import { getDb } from './db';
 import { assertSecurityConfig, ENV } from './_core/env';
 import { listenHttpServer } from './listen';
 import { APP_VERSION } from './_core/version';
+import { initializeRealtimeServer } from './realtime';
 
 // ─── Environment ──────────────────────────────────────────────────────────────
 
@@ -46,6 +47,7 @@ const isDev = process.env.NODE_ENV === 'development';
 
 const app = express();
 const httpServer = createServer(app);
+initializeRealtimeServer(httpServer);
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
 

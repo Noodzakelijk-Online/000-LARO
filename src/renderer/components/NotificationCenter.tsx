@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { useWebSocket } from "@/_core/hooks/useWebSocket";
+import { useWebSocket } from "@/contexts/WebSocketContext";
 
 export interface Notification {
   id: string;

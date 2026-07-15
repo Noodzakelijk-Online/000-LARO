@@ -12,6 +12,7 @@
 import { nanoid } from "nanoid";
 import { getDb } from "./db";
 import { notifications } from "./schema";
+import { emitRealtimeNotification } from "./realtime";
 
 export async function createNotification(params: {
   userId: string;
@@ -32,6 +33,10 @@ export async function createNotification(params: {
       read: false,
       createdAt: new Date(),
     } as any);
+    emitRealtimeNotification(params.userId, {
+      title: params.title,
+      message: params.body,
+    });
   } catch (e) {
     console.error("[Notifications] Failed to create notification:", e);
   }

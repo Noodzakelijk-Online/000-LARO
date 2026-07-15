@@ -7,16 +7,9 @@
  *   classification -> lawyer matching -> outreach draft -> human review
  *   -> send via provider -> response tracking -> outcome -> export package.
  *
- * This suite is intentionally HONEST, not green-by-construction. It:
- *   (1) exercises the units of the critical path that are genuinely wired
- *       and pure (no DB / no native modules), asserting real behaviour; and
- *   (2) records the steps that are NOT yet wired end-to-end as `todo`
- *       markers that name the phase which will implement them.
- *
- * As later phases make a step real, its `todo` becomes a real `it(...)`
- * assertion. A green run here means "the wired units still behave"; it does
- * NOT claim the whole path works. See docs/CRITICAL_PATH.md for the full
- * status table and the manual end-to-end verification steps.
+ * This fast suite covers pure normalization. The real DB/API path is covered
+ * by the acceptance, e2e, evidence, and outreach lifecycle suites referenced
+ * at the end of this file.
  */
 import { describe, it, expect } from 'vitest';
 import {
@@ -70,19 +63,7 @@ describe('Critical path — legal-area normalization (wired, pure)', () => {
 });
 
 /**
- * Steps that are NOT yet wired end-to-end. These are `todo` (not `skip`) so
- * they show up as pending work in the runner and are impossible to mistake for
- * passing coverage. Each names the phase that will make it a real assertion.
- * Evidence for each gap is in docs/phase-audit.md and docs/CRITICAL_PATH.md.
+ * The DB-backed critical path is exercised in acceptance/acceptance.test.ts,
+ * e2e/workflow.e2e.test.ts, backend/partials_hardening.test.ts, and
+ * backend/realSend.test.ts. This file retains the fast pure normalization gate.
  */
-describe('Critical path — end-to-end steps pending implementation', () => {
-  it.todo('account: signup + login issue and verify a session (needs DB harness) — Phases 007/040');
-  it.todo('case intake: create case persists owner + status (needs DB harness) — Phases 005/040');
-  it.todo('evidence: upload stores bytes + provenance hash (uploader currently fakes S3) — Phase 015');
-  it.todo('classification: case description -> legal areas via classifier (currently echoes caseType) — Phase 025');
-  it.todo('matching: UI uses the real scoring engine, not Math.random() — Phase 011');
-  it.todo('outreach draft + human approval gate exists before any send — Phase 026');
-  it.todo('send: a configured provider actually transmits to the lawyer (no fake "sent") — Phases 012/014');
-  it.todo('response tracking: inbound replies link back to the outreach — Phase 027');
-  it.todo('export: evidence package renders to PDF/zip — Phases 015/023');
-});

@@ -148,7 +148,7 @@ The production-readiness branch was verified on 2026-07-15 against the Node 22 t
 - Server, Electron main-process, and shipped renderer TypeScript checks passed; ESLint passed.
 - Traceability reported 116 rows, 93 cited, and 0 broken references.
 - Runtime no-excuses scan reported 0 suspect findings; account safety reported 0 high-severity findings.
-- Vitest reported 31 passing files, 204 passing tests, and 9 explicit todos.
+- Vitest reported 31 passing files, 210 passing tests, and no skipped or todo tests.
 - Full Python discovery reported 202 passing tests. Warning-focused optimization and UCID tests also passed with deprecations promoted to errors.
 - The Vite 8 renderer, Electron 43 main process, and standalone server builds completed successfully.
 
@@ -230,8 +230,8 @@ portable executable plus its SHA-256 checksum.
 - Outreach target discovery is a review aid, not a complete or continuously verified directory of every lawyer, journalist, program, lobby, or advocacy organization.
 - Real external sending is intentionally disabled by default and should remain disabled until the target environment, provider, approval UI, emergency stop, and audit trail have been reviewed.
 - The current lockfile audits cleanly; run `npm run audit:deps` again for every release because registry advisories change over time.
-- The production renderer JavaScript bundle is about 1.27 MB before gzip (316 KB gzip) and should be split further to improve startup performance.
-- The Windows portable artifact is not Authenticode-signed and still uses Electron's default icon. A trusted signing certificate and approved application icon are prerequisites for public distribution.
+- The production renderer JavaScript bundle is about 892 KB before gzip (239 KB gzip) and should be split further to improve startup performance.
+- The internal Windows artifact uses the tracked LARO mark but is not Authenticode-signed. A trusted signing certificate and product-owner confirmation of the public brand asset are prerequisites for public distribution.
 - Historical phase and verification documents in `docs/` are dated snapshots. Prefer current code, tests, this README, and a fresh `npm run gate` when status statements differ.
 
 ## Further Documentation

@@ -35,7 +35,10 @@ for (const check of checks) {
   console.log(`[${status}] ${check.name}${passed ? '' : ` (exit ${result.status})`}`);
   if (!passed && check.required) {
     failures.push(check.name);
-    const detail = (result.stderr || result.stdout || '').trim();
+    const detail = [result.stdout, result.stderr]
+      .filter((stream) => typeof stream === 'string' && stream.trim())
+      .join('\n')
+      .trim();
     if (detail) console.error(detail);
   }
 }

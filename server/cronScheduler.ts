@@ -11,10 +11,9 @@ import { retryWithBackoff } from './retry';
  *  - observable status (last run, last success, last error, run count) exposed
  *    via getJobStatus() for the health/observability endpoints.
  *
- * Honesty: the hourly outreach job does NOT send anything. Automated outreach
- * follow-ups require the real send path + human-approval gate (Phase 026), which
- * are not implemented. The job records a heartbeat and clearly logs that
- * follow-ups are disabled, rather than pretending to process outreach.
+ * The hourly outreach job does NOT send anything. The real send path is
+ * explicit, human-approved, provider-backed, and feature-flagged; scheduled
+ * follow-ups remain disabled so a cron tick cannot contact a third party.
  */
 
 export interface JobStatus {
@@ -115,7 +114,7 @@ export function initCronScheduler() {
   // Hourly outreach heartbeat — intentionally does NOT send anything.
   cron.schedule('0 * * * *', () => {
     void runJob('outreach-heartbeat', async () => {
-      console.log('[Cron] Outreach follow-ups are disabled (no send path / approval gate — Phase 026). Heartbeat only.');
+      console.log('[Cron] Automated outreach follow-ups are disabled; explicit approved sends only. Heartbeat recorded.');
     }, { retries: 0 });
   });
 

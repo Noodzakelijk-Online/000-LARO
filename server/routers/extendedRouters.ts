@@ -25,7 +25,7 @@ import {
   emailAccounts,
   channelIntegrations,
 } from "../schema";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { assertCaseOwnership } from "../_core/authz";
 import { nanoid } from "nanoid";
 import { assertCaseTransition } from "../stateMachines";
@@ -87,23 +87,121 @@ export const adminAnalyticsRouter = router({
   featureUsage: adminProcedure.query((): Array<{ feature: string; count: number }> => []),
 });
 
-/* ─── outreachAnalytics (real where data exists, honest zero otherwise) ───── */
+/* ─── outreachAnalytics (owned, persisted workflow data) ─────────────────── */
+const RESPONSE_STATES = new Set(["Interested", "Declined"]);
+const SENT_STATES = new Set(["Sent", "Interested", "Declined", "NoResponse"]);
+
+function outreachResponded(row: typeof outreachStatus.$inferSelect): boolean {
+  return RESPONSE_STATES.has(String(row.status)) || String(row.responseReceived).toLowerCase() === "yes";
+}
+
+async function ownedOutreach(userId: string) {
+  const db = await getDb();
+  if (!db) return [] as Array<typeof outreachStatus.$inferSelect>;
+  const caseIds = (await db.select({ id: casesTable.id }).from(casesTable).where(eq(casesTable.userId, userId))).map((row) => row.id);
+  if (caseIds.length === 0) return [] as Array<typeof outreachStatus.$inferSelect>;
+  return db.select().from(outreachStatus).where(inArray(outreachStatus.caseId, caseIds));
+}
+
 export const outreachAnalyticsRouter = router({
   getOverallMetrics: protectedProcedure.query(async ({ ctx }) => {
-    const db = await getDb();
-    if (!db) return { prepared: 0, approved: 0, rejected: 0, sent: 0, responseRate: 0 };
-    const caseIds = (await db.select({ id: casesTable.id }).from(casesTable).where(eq(casesTable.userId, ctx.user.id))).map((r) => r.id);
-    if (caseIds.length === 0) return { prepared: 0, approved: 0, rejected: 0, sent: 0, responseRate: 0 };
-    const all = await db.select().from(outreachStatus);
-    const mine = all.filter((o: any) => caseIds.includes(o.caseId));
-    const approved = mine.filter((o: any) => o.status === "Approved").length;
-    // `sent` is honestly 0 until the real send path is enabled (Phase 026/D3).
-    return { prepared: mine.length, approved, rejected: mine.filter((o: any) => o.status === "Rejected").length, sent: 0, responseRate: 0 };
+    const rows = await ownedOutreach(ctx.user.id);
+    const sentRows = rows.filter((row) => SENT_STATES.has(String(row.status)));
+    const respondedRows = sentRows.filter(outreachResponded);
+    const interested = respondedRows.filter((row) => row.status === "Interested").length;
+    const responseTimes = respondedRows.map((row) => Number(row.responseTimeHours)).filter(Number.isFinite);
+    return {
+      totalOutreach: rows.length,
+      prepared: rows.length,
+      approved: rows.filter((row) => row.status === "Approved").length,
+      rejected: rows.filter((row) => row.status === "Rejected").length,
+      sent: sentRows.length,
+      responses: respondedRows.length,
+      interested,
+      declined: respondedRows.filter((row) => row.status === "Declined").length,
+      overallResponseRate: sentRows.length ? (respondedRows.length / sentRows.length) * 100 : 0,
+      acceptanceRate: respondedRows.length ? (interested / respondedRows.length) * 100 : 0,
+      averageResponseTimeHours: responseTimes.length ? responseTimes.reduce((sum, value) => sum + value, 0) / responseTimes.length : 0,
+    };
   }),
-  getPerformanceTrends: protectedProcedure.query((): Array<{ date: string; prepared: number; approved: number }> => []),
-  getResponseRateByLawyer: protectedProcedure.query((): Array<{ lawyerId: string; name: string; responseRate: number }> => []),
-  getTimeToMatchByLegalArea: protectedProcedure.query((): Array<{ legalArea: string; avgDays: number }> => []),
-  getMatchSuccessByRegion: protectedProcedure.query((): Array<{ region: string; matches: number }> => []),
+
+  getPerformanceTrends: protectedProcedure
+    .input(z.object({ days: z.number().int().min(1).max(365).optional().default(30) }).optional())
+    .query(async ({ input, ctx }) => {
+      const cutoff = Date.now() - (input?.days ?? 30) * 86_400_000;
+      const grouped = new Map<string, { date: string; prepared: number; sent: number; responses: number; interested: number }>();
+      for (const row of await ownedOutreach(ctx.user.id)) {
+        const createdAt = row.createdAt?.getTime() ?? 0;
+        if (createdAt < cutoff) continue;
+        const date = new Date(createdAt).toISOString().slice(0, 10);
+        const item = grouped.get(date) ?? { date, prepared: 0, sent: 0, responses: 0, interested: 0 };
+        item.prepared += 1;
+        if (SENT_STATES.has(String(row.status))) item.sent += 1;
+        if (outreachResponded(row)) item.responses += 1;
+        if (row.status === "Interested") item.interested += 1;
+        grouped.set(date, item);
+      }
+      return [...grouped.values()].sort((a, b) => a.date.localeCompare(b.date));
+    }),
+
+  getResponseRateByLawyer: protectedProcedure
+    .input(z.object({ limit: z.number().int().min(1).max(100).optional().default(10) }).optional())
+    .query(async ({ input, ctx }) => {
+      const rows = await ownedOutreach(ctx.user.id);
+      const db = await getDb();
+      if (!db) return [];
+      const lawyerIds = [...new Set(rows.map((row) => row.lawyerId).filter((id): id is string => !!id))];
+      const lawyerRows = lawyerIds.length ? await db.select().from(lawyersTable).where(inArray(lawyersTable.id, lawyerIds)) : [];
+      const names = new Map(lawyerRows.map((lawyer) => [lawyer.id, lawyer.name || "Unknown lawyer"]));
+      return lawyerIds.map((lawyerId) => {
+        const lawyerOutreach = rows.filter((row) => row.lawyerId === lawyerId && SENT_STATES.has(String(row.status)));
+        const responses = lawyerOutreach.filter(outreachResponded);
+        const responseTimes = responses.map((row) => Number(row.responseTimeHours)).filter(Number.isFinite);
+        return {
+          lawyerId,
+          name: names.get(lawyerId) || "Unknown lawyer",
+          totalOutreach: lawyerOutreach.length,
+          responses: responses.length,
+          interested: responses.filter((row) => row.status === "Interested").length,
+          responseRate: lawyerOutreach.length ? (responses.length / lawyerOutreach.length) * 100 : 0,
+          averageResponseTimeHours: responseTimes.length ? responseTimes.reduce((sum, value) => sum + value, 0) / responseTimes.length : 0,
+        };
+      }).sort((a, b) => b.responseRate - a.responseRate || b.responses - a.responses).slice(0, input?.limit ?? 10);
+    }),
+
+  getTimeToMatchByLegalArea: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) return [];
+    const cases = await db.select({ id: casesTable.id, legalAreas: casesTable.legalAreas }).from(casesTable).where(eq(casesTable.userId, ctx.user.id));
+    const rows = await ownedOutreach(ctx.user.id);
+    const grouped = new Map<string, number[]>();
+    for (const caseRow of cases) {
+      const times = rows.filter((row) => row.caseId === caseRow.id && row.status === "Interested").map((row) => Number(row.responseTimeHours)).filter(Number.isFinite);
+      if (!times.length) continue;
+      let areas: string[] = [];
+      try { areas = JSON.parse(caseRow.legalAreas || "[]"); } catch { areas = []; }
+      for (const area of areas) grouped.set(area, [...(grouped.get(area) || []), ...times]);
+    }
+    return [...grouped.entries()].map(([legalArea, hours]) => ({
+      legalArea,
+      avgDays: hours.reduce((sum, value) => sum + value, 0) / hours.length / 24,
+    })).sort((a, b) => a.avgDays - b.avgDays);
+  }),
+
+  getMatchSuccessByRegion: protectedProcedure.query(async ({ ctx }) => {
+    const rows = (await ownedOutreach(ctx.user.id)).filter((row) => row.status === "Interested" && row.lawyerId);
+    const db = await getDb();
+    if (!db || !rows.length) return [];
+    const lawyerIds = [...new Set(rows.map((row) => row.lawyerId as string))];
+    const lawyerRows = await db.select({ id: lawyersTable.id, city: lawyersTable.city }).from(lawyersTable).where(inArray(lawyersTable.id, lawyerIds));
+    const cityByLawyer = new Map(lawyerRows.map((lawyer) => [lawyer.id, lawyer.city || "Unknown"]));
+    const counts = new Map<string, number>();
+    for (const row of rows) {
+      const region = cityByLawyer.get(row.lawyerId as string) || "Unknown";
+      counts.set(region, (counts.get(region) || 0) + 1);
+    }
+    return [...counts.entries()].map(([region, matches]) => ({ region, matches })).sort((a, b) => b.matches - a.matches);
+  }),
 });
 
 /* ─── relevanceScoring (real matching engine) ────────────────────────────── */
