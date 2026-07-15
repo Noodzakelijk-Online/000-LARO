@@ -158,6 +158,14 @@ describe('production readiness regressions', () => {
     expect(main).not.toContain('await startServer(PORT)');
   });
 
+  it('does not inherit development-only behavior in a packaged executable', () => {
+    const main = readFileSync(join(ROOT, 'src-main/index.ts'), 'utf8');
+    const desktopRuntime = readFileSync(join(ROOT, 'src-main/desktopPort.ts'), 'utf8');
+    expect(main).toContain('isDesktopDevelopmentMode(app.isPackaged, process.env.NODE_ENV)');
+    expect(main).not.toContain("const isDev = process.env.NODE_ENV === 'development'");
+    expect(desktopRuntime).toContain("return !isPackaged && nodeEnv === 'development'");
+  });
+
   it('reports the package version consistently across operational endpoints', () => {
     const health = readFileSync(join(ROOT, 'server/index.ts'), 'utf8');
     const system = readFileSync(join(ROOT, 'server/_core/systemRouter.ts'), 'utf8');

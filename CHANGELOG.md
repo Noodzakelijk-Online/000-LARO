@@ -30,6 +30,8 @@ versioning; dates are ISO. Version is sourced from `package.json` and surfaced b
   polling-first negotiation without startup console warnings.
 - Packaged Desktop ignores arbitrary launch-directory `.env` files and accepts
   configuration only from deliberately shipped package resources.
+- Packaged Desktop cannot inherit Vite, DevTools, or other development behavior
+  from a launcher that sets `NODE_ENV=development`.
 - Outreach initiation now prepares idempotent lawyer drafts in the same action,
   while approval and irreversible provider delivery remain separate controls.
 - Lawyer replies can be recorded through an owner-scoped workflow action and
