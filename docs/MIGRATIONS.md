@@ -21,11 +21,13 @@ take a backup **before** changing the schema, restore it if a migration fails.
 # Back up (writes to <db-dir>/db-backups/…):
 npm run db:backup                 # uses DATABASE_URL, else ./laro.sqlite
 
-# Restore a backup:
-node scripts/db-backup.mjs --restore "<path-to>.bak"
+# Validate and restore a backup while the application is stopped:
+npm run db:validate -- "<path-to>.bak"
+npm run db:restore -- "<path-to>.bak"
 ```
 
-The backup also captures the `-wal`/`-shm` sidecar files when present.
+The online SQLite backup includes committed WAL state in one consistent file.
+Restore stages and validates the replacement and preserves the previous database.
 
 ## Recommended flow for a schema change
 

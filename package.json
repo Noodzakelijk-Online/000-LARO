@@ -28,7 +28,10 @@
     "setup": "node scripts/setup.mjs",
     "doctor": "node scripts/doctor.mjs",
     "audit:deps": "npm audit",
-    "db:backup": "node scripts/db-backup.mjs",
+    "db:backup": "tsx scripts/backup.ts",
+    "db:restore": "tsx scripts/backup.ts --restore",
+    "db:validate": "tsx scripts/backup.ts --validate",
+    "recovery:drill": "tsx scripts/recovery-drill.ts",
     "serve": "npm run rebuild:node && npm run build:server && cross-env NODE_ENV=production node dist/server/server/index.js",
     "docker:build": "docker build -t laro-server .",
     "docker:run": "docker run --rm -p 3000:3000 --env-file .env laro-server",
@@ -42,6 +45,7 @@
     "scan:safety": "node scripts/account-safety-check.mjs --write",
     "preflight": "node scripts/prod-preflight.mjs",
     "readiness": "node scripts/operator-readiness.mjs",
+    "readiness:production": "node scripts/operator-readiness.mjs --production",
     "regression:baseline": "node scripts/regression-baseline.mjs"
   },
   "dependencies": {
@@ -137,6 +141,7 @@
     "eslint": "^9.39.2",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.3",
+    "tsx": "^4.23.1",
     "typescript": "^5.4.5",
     "vite": "^8.1.4",
     "vitest": "^4.1.0"
@@ -161,7 +166,8 @@
         "from": "assets",
         "to": "assets",
         "filter": [
-          "**/*"
+          "legal-taxonomy-mapping.json",
+          "rechtspraak-keywords-analysis.json"
         ]
       }
     ],

@@ -46,7 +46,7 @@ Last updated: 2026-07-06 (after phases 000–070).
 | 030 | Secrets management & credential rotation | **Implemented** | `.env` unbundled + `.env.example` + per-install secrets (006/007); **OAuth-token crypto now authenticated AES-256-GCM** (`server/crypto.ts`, D4 closed). Account-safety scan (100) enforces no leaked secrets. Tested. |
 | 031 | Local dev one-command experience | **Implemented** | `scripts/setup.mjs` + `npm run setup`; `docs/DEPLOYMENT.md`. |
 | 032 | Docker & deployment readiness | **Implemented** | `Dockerfile` (server backend) + `.dockerignore` + `docker-compose.yml` + npm docker scripts. Image not built here (no daemon). |
-| 033 | Database migrations & rollback safety | **Implemented** | `scripts/db-backup.mjs` (+`--restore`) + `npm run db:backup`; `docs/MIGRATIONS.md`. |
+| 033 | Database migrations & rollback safety | **Implemented** | `scripts/backup.ts` (verified backup/validate/restore) + `npm run db:backup`; `docs/MIGRATIONS.md`. |
 | 034 | CLI / doctor self-diagnostic | **Implemented** | `scripts/doctor.mjs` + `npm run doctor`; exits non-zero on prod-critical issues. |
 | 035 | Observability, health, readiness | **Implemented** | `/api/live`, `/api/ready`, `/api/health` (dbReady/version/env/uptime). |
 | 036 | Admin/operator diagnostics | **Implemented** | `admin.diagnostics` + `admin.tableCounts` (adminProcedure), no secret values. |

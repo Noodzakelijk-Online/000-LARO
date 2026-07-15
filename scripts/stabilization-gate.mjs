@@ -17,6 +17,7 @@ import { dirname, join } from "path";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const TSC = join(ROOT, "node_modules", "typescript", "bin", "tsc");
 const VITEST = join(ROOT, "node_modules", "vitest", "vitest.mjs");
+const TSX = join(ROOT, "node_modules", "tsx", "dist", "cli.mjs");
 const NPM_CLI = process.env.npm_execpath;
 
 if (!NPM_CLI) {
@@ -33,6 +34,7 @@ const BLOCKING = [
   { name: "traceability", cmd: process.execPath, args: ["scripts/traceability.mjs", "--write"] },
   { name: "no-excuses scan", cmd: process.execPath, args: ["scripts/no-excuses-scan.mjs", "--write"] },
   { name: "account safety", cmd: process.execPath, args: ["scripts/account-safety-check.mjs", "--write"] },
+  { name: "backup/restore drill", cmd: process.execPath, args: [TSX, "scripts/recovery-drill.ts"] },
   { name: "tests", cmd: process.execPath, args: [VITEST, "run"] },
 ];
 

@@ -152,13 +152,15 @@ The production-readiness branch was verified on 2026-07-15 against the Node 22 t
 - Full Python discovery reported 202 passing tests. Warning-focused optimization and UCID tests also passed with deprecations promoted to errors.
 - The Vite 8 renderer, Electron 43 main process, and standalone server builds completed successfully.
 - `npm audit` reported 0 known vulnerabilities.
-- Production preflight and operator-readiness diagnostics reported no blockers.
+- Production preflight and operator-readiness diagnostics reported no blockers;
+  the isolated backup/delete/restore/reopen drill passed.
 - Playwright smoke tests passed at 1440x900 and 390x844 with clean consoles, one coalesced local-session bootstrap, live command-center and Google-status responses, responsive depth controls, a closable Google dialog, and a functional password-visibility control.
 
 Run the same checks locally:
 
 ```powershell
 npm run gate
+npm run readiness
 python -m unittest -v test_authentication test_document_intelligence test_google_oauth test_lawyer_matching test_legal_ledger test_outreach_targets
 ```
 
@@ -168,7 +170,7 @@ For a broader Flask regression run:
 python -m unittest discover -v -p "test_*.py"
 ```
 
-The npm gate is fail-fast and blocks on server, Electron main-process, and renderer TypeScript checks, lint, traceability, safety scans, and Vitest.
+The npm gate is fail-fast and blocks on server, Electron main-process, and renderer TypeScript checks, lint, traceability, safety scans, an isolated database recovery drill, and Vitest.
 
 ## Docker and Packaging
 
@@ -185,6 +187,10 @@ Windows desktop packaging uses:
 ```powershell
 npm run dist:win
 ```
+
+The package includes only the two matcher datasets from `assets/`; the legacy
+development service, Python cache files, and local configuration are excluded.
+See [Backup and Restore](docs/BACKUP_RESTORE.md) for verified database recovery.
 
 CI runs Node and Python gates for pushes and pull requests to `main`. The release workflow targets Node 22 and publishes a Windows portable artifact without writing provider secrets into the build workspace.
 

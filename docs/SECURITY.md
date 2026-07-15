@@ -23,7 +23,8 @@ Date: 2026-07-15
 
 - Keep standalone secrets and OAuth credentials outside Git and outside desktop artifacts.
 - Keep `outreach.send.enabled` off until provider, approval, emergency-stop, ownership, and audit checks are verified in the target environment.
-- Run `npm run gate`, `npm audit --audit-level=moderate`, and the Python suite before release.
+- Run `npm run gate`, `npm run readiness`, `npm audit --omit=dev`, and the Python suite before release.
+- Validate a target-data backup before migration; restore only while writes are stopped.
 - Configure `LARO_PASSWORD_RESET_URL_TEMPLATE` and SMTP before enabling password reset for non-local users.
 - Renderer TypeScript and lint are blocking release gates.
 

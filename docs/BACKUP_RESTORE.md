@@ -1,29 +1,52 @@
-# Backup & Restore (Phase 053)
+# Backup and Restore
 
-Date: 2026-07-06 · Branch `Phase-Imp`
-
-Real SQLite backup/restore in `server/backup.ts`.
+LARO stores application state in SQLite. The server path is `DATABASE_URL`; the
+desktop application uses `<userData>/laro-server.sqlite`.
 
 ## Backup
-- `backupDatabase(destPath)` uses better-sqlite3's online `.backup()` — a
-  consistent copy that is safe while the app is running. Returns `{ path, bytes }`.
-- The server DB lives at `DATABASE_URL` (desktop: `<userData>/laro-server.sqlite`).
+
+```powershell
+npm run db:backup
+npm run db:backup -- C:\Backups\laro.sqlite
+```
+
+The command uses SQLite's online backup API, then requires `PRAGMA quick_check`,
+a clean foreign-key check, and the minimum LARO schema before reporting success.
+The default destination is a timestamped file under `db-backups` beside the live
+database.
+
+## Validate
+
+```powershell
+npm run db:validate -- C:\Backups\laro.sqlite
+```
+
+Validation is read-only. A file that is corrupt, violates foreign keys, or lacks
+core LARO tables is rejected.
 
 ## Restore
-- `validateBackup(srcPath)` confirms the file is a SQLite DB containing the core
-  tables (`users`, `cases`) before any destructive action.
-- `restoreDatabase(srcPath)` keeps a timestamped `.bak-<ts>` of the current DB,
-  copies the backup over the live file, and removes stale `-wal`/`-shm` sidecars.
-- **The app must be restarted** afterward so the restored DB is opened.
 
-## Operator procedure
-1. Close LARO.
-2. Copy `<userData>/laro-server.sqlite` somewhere safe (or call `backupDatabase`).
-3. To restore: place the backup file, call `restoreDatabase(path)`, relaunch.
+1. Stop incoming API traffic or close LARO Desktop.
+2. Validate the selected backup.
+3. Restore it:
 
-## Verification
-`tests/backend/phase051_060.test.ts` backs up a live DB to a temp file and
-asserts it is a valid, restorable SQLite DB containing `cases`.
+```powershell
+npm run db:restore -- C:\Backups\laro.sqlite
+```
 
-## CLI
-`npx tsx scripts/backup.ts <dest.sqlite>` — one-shot backup of the configured DB.
+Restore copies and validates a staged file in the live database directory,
+checkpoints and closes the current SQLite connection, moves the previous database
+to `laro-server.sqlite.bak-<timestamp>`, and then installs the staged file. A
+failed replacement attempts to move the previous database back into place. The
+next request or desktop launch reopens the restored database.
+
+## Recovery Proof
+
+```powershell
+npm run recovery:drill
+```
+
+The drill creates an isolated migrated database, writes a marker, performs a
+verified backup, deletes the marker, restores the backup, and proves both marker
+recovery and preservation of the previous database. It never touches the live DB.
+`npm run readiness` includes this drill as a required check.

@@ -30,7 +30,8 @@ Important boundaries:
 - Provider credentials stay server-side and are encrypted at rest.
 - Evidence blobs use S3 when configured or confined local storage with SHA-256 provenance hashes.
 - External outreach is disabled by default and requires ownership, approval, feature-flag, emergency-stop, provider, and idempotency checks.
-- Server, Electron main, renderer TypeScript, ESLint, safety scans, traceability, and Vitest are blocking release gates.
+- Server, Electron main, renderer TypeScript, ESLint, safety scans, traceability,
+  an isolated database recovery drill, and Vitest are blocking release gates.
 
 ## Flask Flow
 
@@ -78,6 +79,8 @@ Private records are scoped as follows:
 - Docker packages only the standalone Express/tRPC API, not Electron or Flask.
 - Flask is a separate local process launched by `run_local.ps1`.
 - SQLite files, uploads, token vaults, and generated secrets are runtime state and are ignored by Git.
+- Desktop packaging allowlists the two matcher datasets and excludes the legacy
+  development service under `assets`.
 - Public Windows distribution still requires an approved icon and Authenticode signing certificate.
 
 ## Current Architectural Risks

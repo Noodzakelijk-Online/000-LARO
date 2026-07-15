@@ -4,6 +4,17 @@ All notable changes to LARO are documented here. This project follows semantic
 versioning; dates are ISO. Version is sourced from `package.json` and surfaced by
 `system.appInfo` / `admin.debugBundle`.
 
+## Unreleased
+
+### Fixed
+- Database backup now uses SQLite's online backup API and validates integrity,
+  foreign keys, and core tables before success.
+- Restore now stages and validates the replacement, preserves the previous
+  database, and rolls back a failed file replacement.
+- Operator readiness includes an isolated backup/restore drill.
+- Desktop packaging allowlists matcher data instead of shipping the unrelated
+  development service and cached Python files under `assets`.
+
 ## [1.3.0] — 2026-07-06
 Closing renderer-independent Partials with real code.
 

@@ -1,29 +1,37 @@
-# Final Human-Operator Readiness (Phase 115)
+# Operator Readiness
 
-Date: 2026-07-06 · Branch `Phase-Imp`
+This checklist separates repository evidence from target-environment approval.
 
-Can a human operator safely run LARO? This is the sign-off checklist, backed by a
-runnable script (`npm run readiness`).
+## Automated Evidence
 
-## Automated readiness (`scripts/operator-readiness.mjs`)
-Composes and must pass: traceability, no-excuses scan, account safety, regression
-baseline (required) + production preflight (advisory). Current run: **all green**.
+`npm run readiness` requires traceability, no-excuses and account-safety scans,
+the regression baseline, and an isolated backup/restore round trip. It also runs
+the environment preflight as an advisory check.
 
-## Manual operator sign-off checklist
-- [ ] `npm run gate` green (server+main tsc, traceability, scans, full tests).
-- [ ] `NODE_ENV=production npm run preflight` green in the target environment.
-- [ ] Strong `JWT_SECRET` / `COOKIE_SECRET`; no `.env` in the bundle (Phase 100).
-- [ ] Demo mode OFF; demo/seed data removed from the production DB.
-- [ ] `admin.invariants` clean; `admin.reconcileReport` shows no orphans.
-- [ ] A backup has been taken and a **restore** was tested (server/backup.ts).
-- [ ] Emergency stop is released; `outreach.send.enabled` is the intended value
-      (default OFF; enable only after provider, approval, ownership, idempotency, emergency-stop, and audit verification).
-- [ ] Operator knows: how to engage the emergency stop, where the runbook is
-      (docs/OPERATOR_RUNBOOK.md), and how to roll back (docs/RELEASE_PROCESS.md).
+`npm run readiness:production` makes the production preflight blocking. Run it
+with the target API environment, including strong `JWT_SECRET` and
+`COOKIE_SECRET`. LARO Desktop generates equivalent per-install secrets in its
+user-data directory.
 
-## Honest readiness verdict
-LARO is **operator-ready as a triage/match/prepare tool** with working safety
-controls (emergency stop, approval gate, retention, GDPR). It is **not** ready to
-be represented as an end-to-end autonomous outreach system: the send loop (D3) is
-unbuilt and the renderer has dead-router screens (D1). Operate it for what is real;
-keep send disabled until D3 is implemented and re-reviewed.
+## Release Checklist
+
+- [ ] `npm ci` succeeds on supported Node 22.
+- [ ] `npm run gate` and the Python test suite pass.
+- [ ] `npm audit --omit=dev` reports no unresolved runtime vulnerability.
+- [ ] `npm run readiness` passes, including the recovery drill.
+- [ ] `npm run readiness:production` passes for an API deployment.
+- [ ] The Windows portable artifact builds and launches on a clean profile.
+- [ ] Demo data is absent from the target database.
+- [ ] `admin.invariants` and `admin.reconcileReport` are clean.
+- [ ] A target-data backup is validated before migration or release.
+- [ ] The emergency stop and `outreach.send.enabled` state are confirmed.
+- [ ] Google, storage, LLM, and outreach providers show their intended state.
+
+## Supported Operating Modes
+
+The application supports local desktop operation and an API-only container. AI,
+Google import, S3 storage, and outreach delivery depend on configured providers;
+when absent, those actions fail explicitly rather than fabricating results.
+Outreach delivery remains disabled by default and requires operator approval,
+the feature flag, provider readiness, ownership checks, idempotency, and a
+released emergency stop.

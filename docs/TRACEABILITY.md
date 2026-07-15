@@ -34,7 +34,7 @@ None — every artifact cited in the matrix exists. ✅
 | 029 | Security headers & web security | Implemented | ✅ `server/index.ts` |
 | 030 | Secrets management & credential rotation | Implemented | ✅ `server/crypto.ts` |
 | 031 | Local dev one-command experience | Implemented | ✅ `scripts/setup.mjs`<br>✅ `docs/DEPLOYMENT.md` |
-| 033 | Database migrations & rollback safety | Implemented | ✅ `scripts/db-backup.mjs`<br>✅ `docs/MIGRATIONS.md` |
+| 033 | Database migrations & rollback safety | Implemented | ✅ `scripts/backup.ts`<br>✅ `docs/MIGRATIONS.md` |
 | 034 | CLI / doctor self-diagnostic | Implemented | ✅ `scripts/doctor.mjs` |
 | 038 | Fake provider lab for tests only | Implemented | ✅ `server/testing/fakeProviders.ts` |
 | 039 | Test-data factories & fixtures | Implemented | ✅ `tests/factories.ts` |

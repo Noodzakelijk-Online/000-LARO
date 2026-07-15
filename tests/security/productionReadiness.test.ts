@@ -44,7 +44,14 @@ describe('production readiness regressions', () => {
 
   it('loads matcher datasets from packaged assets', () => {
     const matching = readFileSync(join(ROOT, 'server/matching.ts'), 'utf8');
+    const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+    const packagedAssets = pkg.build.extraResources.find((entry: { from?: string }) => entry.from === 'assets');
     expect(matching).toContain('assets');
+    expect(packagedAssets.filter).toEqual([
+      'legal-taxonomy-mapping.json',
+      'rechtspraak-keywords-analysis.json',
+    ]);
+    expect(packagedAssets.filter).not.toContain('**/*');
     expect(readFileSync(join(ROOT, 'assets/legal-taxonomy-mapping.json'), 'utf8')).toContain('specializationToCourtCategories');
     expect(readFileSync(join(ROOT, 'assets/rechtspraak-keywords-analysis.json'), 'utf8')).toContain('keywords_by_area');
   });

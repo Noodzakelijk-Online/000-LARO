@@ -39,7 +39,7 @@ Descriptive words (mock/stub/placeholder/fake) needing human judgement. Triage o
 | `server/_core/env.ts` | 78 | `* in production and the secrets are still the shipped placeholders (or empty),` |
 | `server/_core/env.ts` | 88 | `* to the insecure placeholder. Returns a list of non-fatal warnings (e.g.` |
 
-## Markers in tests / scripts / renderer (195) — reported, not failing
+## Markers in tests / scripts / renderer (196) — reported, not failing
 
 These are informational. Renderer debt is tracked separately (docs/TECH_DEBT.md D1/D2); test/script occurrences are usually the words "mock"/"fake" used descriptively.
 
@@ -81,6 +81,7 @@ These are informational. Renderer debt is tracked separately (docs/TECH_DEBT.md 
 | `src/renderer/components/NewCaseDialog.tsx` | 2 |
 | `src/renderer/components/UnifiedInbox.tsx` | 2 |
 | `src/renderer/pages/HomePage.tsx` | 2 |
+| `scripts/doctor.mjs` | 2 |
 | `tests/caseUpdate.test.ts` | 2 |
 | `tests/smoke/criticalPath.smoke.test.ts` | 2 |
 | `tests/smoke/noFakeSuccess.smoke.test.ts` | 2 |
@@ -104,7 +105,6 @@ These are informational. Renderer debt is tracked separately (docs/TECH_DEBT.md 
 | `src/renderer/components/ui/input.tsx` | 1 |
 | `src/renderer/components/ui/select.tsx` | 1 |
 | `src/renderer/components/ui/textarea.tsx` | 1 |
-| `scripts/prod-preflight.mjs` | 1 |
 | `tests/e2e/workflow.e2e.test.ts` | 1 |
 | `tests/matching.test.ts` | 1 |
 | `tests/security/productionReadiness.test.ts` | 1 |
