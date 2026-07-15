@@ -144,7 +144,8 @@ See [Operator Runbook](docs/OPERATOR_RUNBOOK.md), [Security](docs/SECURITY.md), 
 
 ## Verification
 
-The production-readiness branch was verified locally on 2026-07-15. CI repeats the Node checks on the supported Node 22 toolchain:
+Protected `main` commit `677a46a` was verified locally and in GitHub Actions on
+2026-07-15. CI repeats the Node checks on the supported Node 22 toolchain:
 
 - `npm run gate`: all blocking gates passed.
 - Server, Electron main-process, and shipped renderer TypeScript checks passed; ESLint passed.
@@ -165,6 +166,13 @@ desktop server to that registered OAuth callback port instead.
 - Playwright smoke tests passed at 1440x900 and 390x844 with clean consoles, one coalesced local-session bootstrap, live command-center and Google-status responses, responsive depth controls, a closable Google dialog, and a functional password-visibility control.
 - Packaged Electron scanner QA passed signup, shared-session authorization, empty-state rendering, disabled unsafe scan state, Settings navigation, and clean renderer console checks.
 - A packaged launch from a directory containing hostile development `.env` values still reported production mode, database readiness, and a random `127.0.0.1` port.
+- Main CI run `29455232706` passed Node and Python; Windows workflow
+  `29455232654` passed the gate, build, Electron ABI check, package, checksum,
+  and upload stages.
+- The downloaded CI executable matched SHA-256
+  `c6cf367f112b4dc4fd64d749666f00ae169a175a4f2a168aaf1159a06dc3cb38`,
+  launched the dashboard, and contained the validated seven-category matching
+  terminology dataset.
 
 Run the same checks locally:
 
