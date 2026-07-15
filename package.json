@@ -160,7 +160,7 @@
         "to": "assets",
         "filter": [
           "legal-taxonomy-mapping.json",
-          "rechtspraak-keywords-analysis.json"
+          "legal-keywords.json"
         ]
       }
     ],

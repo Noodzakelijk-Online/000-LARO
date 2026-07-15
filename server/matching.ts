@@ -19,7 +19,12 @@ interface TaxonomyMapping {
 }
 
 let cachedTaxonomyMapping: TaxonomyMapping | null = null;
-let cachedRechtspraakKeywords: Record<string, string[]> | null = null;
+let cachedLegalKeywords: Record<string, string[]> | null = null;
+
+interface LegalKeywordDataset {
+  schemaVersion: number;
+  categories: Record<string, { keywords: string[] }>;
+}
 
 function matchingDataPath(fileName: string): string {
   const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
@@ -46,29 +51,32 @@ function loadMatchingData() {
     }
   }
   
-  if (!cachedRechtspraakKeywords) {
+  if (!cachedLegalKeywords) {
     try {
-      const keywordsPath = matchingDataPath("rechtspraak-keywords-analysis.json");
-      const data = JSON.parse(fs.readFileSync(keywordsPath, "utf-8"));
-      cachedRechtspraakKeywords = {};
+      const keywordsPath = matchingDataPath("legal-keywords.json");
+      const data = JSON.parse(fs.readFileSync(keywordsPath, "utf-8")) as LegalKeywordDataset;
+      if (data.schemaVersion !== 1 || !data.categories) {
+        throw new Error("Unsupported legal keyword dataset schema");
+      }
+      cachedLegalKeywords = {};
       
-      for (const [category, categoryData] of Object.entries(data.keywords_by_area || {})) {
-        const keywords = (categoryData as any).top_keywords
-          .slice(0, 50)
-          .map((kw: any) => kw.keyword.toLowerCase());
-        cachedRechtspraakKeywords[category] = keywords;
+      for (const [category, categoryData] of Object.entries(data.categories)) {
+        if (!Array.isArray(categoryData.keywords)) continue;
+        cachedLegalKeywords[category] = categoryData.keywords
+          .filter((keyword): keyword is string => typeof keyword === "string" && keyword.trim().length > 0)
+          .map((keyword) => keyword.toLowerCase());
       }
     } catch (error) {
-      console.error("Error loading rechtspraak keywords:", error);
+      console.error("Error loading legal keyword dataset:", error);
     }
   }
   
-  return { mapping: cachedTaxonomyMapping, keywords: cachedRechtspraakKeywords };
+  return { mapping: cachedTaxonomyMapping, keywords: cachedLegalKeywords };
 }
 
 /**
  * Calculate keyword-based confidence boost
- * Checks if case description contains keywords from court cases in relevant legal areas
+ * Checks if case description contains curated terms in relevant legal areas.
  */
 function calculateKeywordBoost(
   caseDescription: string,
@@ -473,7 +481,7 @@ export async function findMatchingLawyers(
     keywordBoostScore = keywordBoost.score;
     if (keywordBoost.matchedKeywords.length > 0) {
       matchReasons.push(
-        `Legal terminology match (${keywordBoost.matchedKeywords.length} keywords from 877k court cases)`
+        `Legal terminology match (${keywordBoost.matchedKeywords.length} curated terms)`
       );
     }
     matchScore += keywordBoostScore;

@@ -3,7 +3,7 @@
  * Test Matching Accuracy with Sample Cases
  * 
  * Creates sample cases and tests the matching algorithm's accuracy
- * including keyword-based confidence boosting from 877k court cases.
+ * including keyword-based confidence boosting from the curated legal taxonomy.
  */
 
 import { getDb, createCase } from "../db";
