@@ -70,6 +70,9 @@ describe('production readiness regressions', () => {
     expect(dashboard).toContain('No case selected');
     expect(dashboard).not.toContain('params.get("case") || 1');
     expect(dashboard).not.toContain('Live status refresh is temporarily unavailable');
+    expect(dashboard).toContain('localStorage.removeItem("auth_token")');
+    expect(dashboard).toContain('localStorage.removeItem("access_token")');
+    expect(dashboard).toContain('const token = localStorage.getItem("laroAuthToken") || localStorage.getItem("auth_token") || localStorage.getItem("access_token")');
   });
 
   it('keeps API-only deployments explicit and runs compatibility schema repair after migrations', () => {

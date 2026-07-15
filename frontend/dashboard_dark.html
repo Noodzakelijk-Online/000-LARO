@@ -3255,6 +3255,8 @@
                 if (!response.ok) throw new Error("Unable to establish the local LARO session");
                 const data = await response.json();
                 localStorage.setItem("laroAuthToken", data.token);
+                localStorage.removeItem("auth_token");
+                localStorage.removeItem("access_token");
                 return data.token;
             })();
             try {
@@ -4230,7 +4232,7 @@
         }
 
         function authHeaders() {
-            const token = localStorage.getItem("auth_token") || localStorage.getItem("access_token") || localStorage.getItem("laroAuthToken");
+            const token = localStorage.getItem("laroAuthToken") || localStorage.getItem("auth_token") || localStorage.getItem("access_token");
             return token ? { Authorization: `Bearer ${token}` } : {};
         }
 
