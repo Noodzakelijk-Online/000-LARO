@@ -1,6 +1,6 @@
 /**
  * File Preview Modal Component
- * Displays PDFs and images with zoom controls, OCR, comparison, and annotation features
+ * Displays PDFs and images with zoom controls, download, and image comparison.
  */
 
 import React, { useState, useEffect } from 'react';
@@ -8,9 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import OcrExtractor from './OcrExtractor';
 import FileComparisonView from './FileComparisonView';
-import AnnotationCanvas from './AnnotationCanvas';
 import {
   ZoomIn,
   ZoomOut,
@@ -21,8 +19,6 @@ import {
   FileText,
   Eye,
   Columns,
-  Pencil,
-  ScanText,
 } from 'lucide-react';
 
 interface FilePreviewModalProps {
@@ -38,7 +34,7 @@ interface FilePreviewModalProps {
   caseId?: string;
 }
 
-type ViewMode = 'preview' | 'ocr' | 'compare' | 'annotate';
+type ViewMode = 'preview' | 'compare';
 
 export default function FilePreviewModal({ isOpen, onClose, file, caseId }: FilePreviewModalProps) {
   const [zoom, setZoom] = useState(100);
@@ -62,8 +58,6 @@ export default function FilePreviewModal({ isOpen, onClose, file, caseId }: File
   const isImage = file.mimeType.startsWith('image/');
   const isPdf = file.mimeType === 'application/pdf';
   const isSupported = isImage || isPdf;
-  const supportsOcr = isImage;
-  const supportsAnnotation = isImage;
   const supportsComparison = isImage && !!caseId;
 
   const handleZoomIn = () => {
@@ -95,11 +89,6 @@ export default function FilePreviewModal({ isOpen, onClose, file, caseId }: File
     setError('Failed to load image');
   };
 
-  const handleAnnotationSave = (annotations: any[], dataUrl: string) => {
-    // Could save annotations to database here
-    console.log('Annotations saved:', annotations.length);
-  };
-
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
@@ -121,22 +110,14 @@ export default function FilePreviewModal({ isOpen, onClose, file, caseId }: File
           {/* Mode Tabs */}
           {isSupported && (
             <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)} className="w-full">
-              <TabsList className="grid w-full grid-cols-4">
+              <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="preview" className="gap-2">
                   <Eye className="w-4 h-4" />
                   <span className="hidden sm:inline">Preview</span>
                 </TabsTrigger>
-                <TabsTrigger value="ocr" disabled={!supportsOcr} className="gap-2">
-                  <ScanText className="w-4 h-4" />
-                  <span className="hidden sm:inline">OCR</span>
-                </TabsTrigger>
                 <TabsTrigger value="compare" disabled={!supportsComparison} className="gap-2">
                   <Columns className="w-4 h-4" />
                   <span className="hidden sm:inline">Compare</span>
-                </TabsTrigger>
-                <TabsTrigger value="annotate" disabled={!supportsAnnotation} className="gap-2">
-                  <Pencil className="w-4 h-4" />
-                  <span className="hidden sm:inline">Annotate</span>
                 </TabsTrigger>
               </TabsList>
 
@@ -266,20 +247,6 @@ export default function FilePreviewModal({ isOpen, onClose, file, caseId }: File
                 )}
               </TabsContent>
 
-              {/* OCR Tab */}
-              <TabsContent value="ocr" className="mt-4">
-                {supportsOcr && (
-                  <OcrExtractor
-                    itemId={file.id}
-                    fileUrl={file.fileUrl}
-                    mimeType={file.mimeType}
-                    onExtracted={(text) => {
-                      console.log('Text extracted:', text.length, 'characters');
-                    }}
-                  />
-                )}
-              </TabsContent>
-
               {/* Compare Tab */}
               <TabsContent value="compare" className="mt-4">
                 {supportsComparison && caseId && (
@@ -298,16 +265,6 @@ export default function FilePreviewModal({ isOpen, onClose, file, caseId }: File
                 )}
               </TabsContent>
 
-              {/* Annotate Tab */}
-              <TabsContent value="annotate" className="mt-4">
-                {supportsAnnotation && (
-                  <AnnotationCanvas
-                    imageUrl={file.fileUrl}
-                    fileName={file.fileName}
-                    onSave={handleAnnotationSave}
-                  />
-                )}
-              </TabsContent>
             </Tabs>
           )}
 

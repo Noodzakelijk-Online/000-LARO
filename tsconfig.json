@@ -17,7 +17,8 @@
     "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/renderer/*"]
+      "@/*": ["./src/renderer/*"],
+      "radix-ui": ["./src/renderer/lib/radix-ui.ts"]
     }
   },
   "include": [],

@@ -4,6 +4,60 @@ All notable changes to LARO are documented here. This project follows semantic
 versioning; dates are ISO. Version is sourced from `package.json` and surfaced by
 `system.appInfo` / `admin.debugBundle`.
 
+## Unreleased
+
+### Fixed
+- Replaced the desktop scanner's false offline login and fabricated upload path
+  with shared-session authorization, explicit native folder consent, per-file
+  review, real byte persistence, and SHA-256 provenance.
+- Restricted 15-minute scanner JWTs to the evidence upload mutation and bound
+  `desktop_scanner` provenance to those credentials; removed the obsolete
+  all-access local-agent bearer path.
+- Removed unreachable scanner, sync, mobile, OCR, annotation, and inbox
+  prototypes, and removed filename-based confidence labels and invented upload
+  progress from reachable evidence controls.
+- Removed seven unused runtime packages and their obsolete type packages,
+  reducing the install by 33 transitive packages.
+- Lawyer search now stores filters under the correct directory type, removes
+  fabricated recent-search counts, exposes real filters without a second panel,
+  and opens the selected lawyer profile.
+- Unfinished placeholder routes and the dead mock email-campaign screen are no
+  longer exposed by the production renderer.
+- Dashboard routes load on demand, reducing the production entry chunk from
+  roughly 891 KB to 274 KB before gzip.
+- Local Vite sessions use the same-origin API proxy consistently for
+  `localhost` and `127.0.0.1`; authenticated Socket.IO uses resilient
+  polling-first negotiation without startup console warnings.
+- Packaged Desktop ignores arbitrary launch-directory `.env` files and accepts
+  configuration only from deliberately shipped package resources.
+- Outreach initiation now prepares idempotent lawyer drafts in the same action,
+  while approval and irreversible provider delivery remain separate controls.
+- Lawyer replies can be recorded through an owner-scoped workflow action and
+  update case state, response time, audit history, notifications, and analytics.
+- Outreach analytics now use real user-owned pipeline, response, lawyer,
+  legal-area, region, and daily trend data instead of hardcoded zero metrics.
+- Operator readiness rebuilds the native SQLite driver for Node and preserves
+  complete failure output after Electron packaging.
+- Renderer builds force production React before Vite loads, regardless of a
+  developer machine's local `.env`, preventing development-only reconnects.
+- The renderer now uses a local LARO logo, and Windows packaging is configured
+  with the same tracked application mark instead of a remote CDN/default icon.
+- Historical readiness documentation was reconciled so current release claims
+  point to reproducible gates and explicit target-environment acceptance.
+- Database backup now uses SQLite's online backup API and validates integrity,
+  foreign keys, and core tables before success.
+- Restore now stages and validates the replacement, preserves the previous
+  database, and rolls back a failed file replacement.
+- Operator readiness includes an isolated backup/restore drill.
+- Desktop packaging allowlists matcher data instead of shipping the unrelated
+  development service and cached Python files under `assets`.
+- Packaged Desktop binds to an available loopback port instead of failing when
+  port 3000 is occupied.
+- Explicit loopback OAuth callback configuration preserves its registered port,
+  and operational endpoints report the package version consistently.
+- Tagged Windows releases now fail closed on tag/version mismatch, missing
+  signing credentials, or an invalid signature and publish a SHA-256 checksum.
+
 ## [1.3.0] — 2026-07-06
 Closing renderer-independent Partials with real code.
 

@@ -1,96 +1,94 @@
-# Architecture Decision & Current-Stack Validation — 000-LARO (Phase 004)
+# LARO Architecture
 
-Date: 2026-07-06 · Branch `staging` @ `1b78ed6`
+Updated: 2026-07-15
 
-Purpose: record the **real** architecture, validate the current stack against the
-product goal, decide whether to keep it, and list the fail-safe / labelling gaps
-that the current architecture leaves open (which later phases must close).
+LARO contains two supported local-first runtimes. They share a repository and selected provider configuration, but they currently have separate schemas and databases. This is an explicit transitional constraint, not an implied synchronization mechanism.
 
----
+## Runtime Map
 
-## 1. The stack, as it actually is
+| Runtime | Responsibility | Entry point | Persistence |
+| --- | --- | --- | --- |
+| Electron + Express/tRPC + React | Desktop case workflows, provider connections, evidence storage, matching, controlled outreach, and administration | `src-main/index.ts`, `server/index.ts`, `src/renderer/main.tsx` | Drizzle over SQLite plus local disk or S3 evidence storage |
+| Flask Case Command Center | Legal ledger, document intelligence, source-linked timelines, Papertrail, bundles, matching, and outreach preparation | `app.py`, `legal_ledger.py`, `frontend/` | SQLAlchemy over SQLite plus local uploads, auth database, and encrypted token vault |
 
-| Concern | Reality | Evidence |
-|---|---|---|
-| Shell | Single-process Electron 43 | `src-main/index.ts` |
-| Backend | Express 4 + tRPC 10 **in the Electron main process** (not a separate service) | `src-main/index.ts:198-199`, `server/index.ts:49-121` |
-| Database | Local SQLite via Drizzle + better-sqlite3 (2 DBs: server + scanner) | `server/db.ts:17-19,232-233`, `src-main/database.ts:16-19` |
-| Frontend | React 18 + Vite + Tailwind + Radix + TanStack Query + tRPC client + wouter | `src/renderer/main.tsx`, `src/renderer/DashboardApp.tsx` |
-| File storage | AWS S3 (presigned URLs), no-op local fallback | `server/storage.ts:7-35` |
-| Scheduler | `node-cron`, started on server listen | `server/cronScheduler.ts`, `server/index.ts:176` |
-| AI | Pluggable LLM (`server/llm.ts`, Manus Forge), labelled mock without a key | `server/llm.ts:212-321` |
+The Electron process starts the Express/tRPC API and React renderer together. The same API can run standalone through `npm run dev:server` or Docker. The Flask runtime binds to loopback by default on port 8768 so both runtimes can operate concurrently.
 
-**Contradiction resolved:** the previous `PROJECT_INFO.md` claimed Docker + MySQL 8.0
-+ Redis + an `electron/` directory. None exist in the repo (no Dockerfile,
-docker-compose, MySQL/Redis client, or `electron/` dir). `PROJECT_INFO.md` has been
-corrected (Phase 075).
+## Desktop Flow
 
-## 2. Architecture Decision Record
+```text
+Electron main process
+  -> generates or loads per-install secrets
+  -> initializes SQLite migrations and integrity checks
+  -> starts Express/tRPC on loopback
+  -> loads the Vite-built React renderer
+  -> renderer calls /api/trpc with an HTTP-only session cookie
+```
 
-**Decision:** Keep the Electron + in-process Express/tRPC + local-SQLite architecture.
+Important boundaries:
 
-**Context:** LARO is delivered as a desktop app for a single operator/claimant
-workflow. The heavy "microservice" framing in old docs was never implemented and
-adds no value to a desktop deliverable.
+- tRPC procedures enforce authentication, role checks, case ownership, and team access.
+- Provider credentials stay server-side and are encrypted at rest.
+- Evidence blobs use S3 when configured or confined local storage with SHA-256 provenance hashes.
+- External outreach is disabled by default and requires ownership, approval, feature-flag, emergency-stop, provider, and idempotency checks.
+- Server, Electron main, renderer TypeScript, ESLint, safety scans, traceability,
+  an isolated database recovery drill, and Vitest are blocking release gates.
 
-**Rationale for keeping it:**
-- The in-process server means one artifact, no container runtime dependency, and a
-  genuine "unzip and run" desktop experience.
-- SQLite is appropriate for a single-user desktop scope and is already the real
-  persistence layer with a working (if fragile) migration system.
-- tRPC gives end-to-end typed calls between the renderer and the in-process backend.
+## Flask Flow
 
-**Consequences / accepted trade-offs:**
-- No horizontal scaling / multi-tenant server. Acceptable for the desktop scope; if
-  a hosted multi-tenant SaaS is later required, the server is already an Express app
-  and can be extracted to run standalone (`npm run dev:server` already does this).
-- SQLite integrity must be enforced deliberately (FKs/uniques/indexes are currently
-  missing — Phase 005/061).
+```text
+Flask app
+  -> authenticates the configured local owner or a password account
+  -> scopes ledger calls to the authenticated external user id
+  -> stores cases and review state in the legal ledger
+  -> stores uploaded evidence under the configured local root
+  -> stores OAuth credentials only in the encrypted local token vault
+  -> renders the command-center HTML clients
+```
 
-**Rejected alternative:** resurrecting the Docker/MySQL/Redis stack — rejected as
-unimplemented, unnecessary for the desktop deliverable, and a source of doc drift.
+Important boundaries:
 
-## 3. Stack validation against the product goal
+- Password users and hashed bearer sessions persist in `LARO_AUTH_DATABASE_PATH`; no sample users are seeded.
+- The loopback session bootstrap accepts only `LARO_LOCAL_ACCOUNT_EMAIL` and is rejected for non-loopback requests.
+- Google OAuth status requires authentication. Start and callback state are bound to the authenticated Flask session, and return paths are local-only.
+- Ledger case routes use one centralized ownership check before reading or mutating legal material.
+- Document analysis produces review suggestions. It does not silently promote model output into confirmed facts.
+- Case-bundle approval is tied to the exact persisted case snapshot and becomes stale when relevant state changes.
 
-| Goal need | Does the stack support it? | Note |
-|---|---|---|
-| Case + evidence persistence | ✅ | SQLite/Drizzle; needs constraints (Phase 005) |
-| Evidence blobs | ✅ | S3; must fix silent-drop fallback (Phase 015) |
-| External providers (Gmail/Drive/Outlook/Trello) | ✅ | Real clients present |
-| Background outreach jobs | ✅ (capability) | `node-cron` present; outreach job body is commented out (Phase 016) |
-| AI classification/matching/rating | ✅ (capability) | LLM layer exists; classification/matching not wired to it (Phases 011/025) |
-| Desktop distribution | ✅ | electron-builder; must stop bundling `.env` (Phase 030/100) |
+## Data Ownership
 
-**Verdict:** the stack is adequate for the product goal. The problem is not the
-architecture — it is that the **critical-path business logic on top of it is
-fake/dead/missing** (see `docs/CRITICAL_PATH.md`).
+The desktop and Flask schemas are not automatically synchronized. A case created in one runtime is not guaranteed to appear in the other. Until a reviewed migration or replication contract exists, operators must treat each runtime as authoritative only for its documented workflows.
 
-## 4. Fail-safe & labelling gaps this architecture currently leaves open
+Private records are scoped as follows:
 
-Phase 004's special-attention theme: *production config must fail safe;
-dev/demo/test modes must be visibly labelled and impossible to confuse with prod.*
-The current architecture **does not** meet this yet:
+- Desktop cases, evidence, documents, communications, inbox threads, sync jobs, and search results are user- or case-owner scoped.
+- Global lawyer directory data can be read for matching, while lawyer mutation is administrative.
+- Flask ledger records are keyed to the authenticated external user identity.
+- API responses never include encrypted access or refresh token ciphertext.
 
-- **Fails open, not safe:** `server/_core/env.ts` defaults every var (incl.
-  `JWT_SECRET='change-this-secret'`) and never validates — the app boots in a
-  predictable-secret state. `NODE_ENV` even defaults to `'production'`. → Phase 006.
-- **Demo/mock reachable in production, unlabelled:** random matching
-  (`server/routers/matching.ts:34`), fake OCR (`server/routers/index.ts:381-390`),
-  LLM mock on missing key (`server/llm.ts:268-300`), and a URL-param public demo
-  mode (`src/renderer/_core/hooks/useAuth.ts`). → Phases 014/037.
-- **Auth bypass baked in:** `local-default`/`local-dev-token` bearer tokens in
-  `server/context.ts:29-52`. → Phase 007.
+## Providers and AI
 
-These are recorded here so the architecture record is honest about what it does
-**not** yet guarantee. They are not fixed in Phase 004 (which is
-decision/validation only); they are the first work items of Stage A.
+- Google and Microsoft OAuth require configured client credentials and explicit user consent.
+- Trello OAuth remains disabled until its server-side token lifecycle is complete.
+- Provider-backed AI fails closed when its credentials are absent.
+- Flask document intelligence always has a deterministic review path and can optionally use a loopback-only Ollama endpoint.
+- Model-derived observations must contain literal source support and remain unconfirmed until reviewed.
 
-## 5. Entry-point flow (for operators)
+## Deployment Model
 
-`electron dist/main/src-main/index.js`
-→ `app.whenReady()` sets `DATABASE_URL=userData/laro-server.sqlite`, pins `NODE_ENV`
-→ `import('../server/index').startServer(3000)` (runs migrations, listens, starts cron)
-→ `BrowserWindow` loads `http://localhost:3000`
-→ renderer boots the React SPA → tRPC client calls `/api/trpc`.
+- Electron is the primary desktop distribution target.
+- Docker packages only the standalone Express/tRPC API, not Electron or Flask.
+- Flask is a separate local process launched by `run_local.ps1`.
+- SQLite files, uploads, token vaults, and generated secrets are runtime state and are ignored by Git.
+- Desktop packaging allowlists the two matcher datasets and excludes the legacy
+  development service under `assets`.
+- Public Windows distribution still requires an approved icon and Authenticode signing certificate.
 
-Port `3000` is hardcoded (`src-main/index.ts:16`).
+## Current Architectural Risks
+
+1. The two runtimes can drift because they do not share a database or generated cross-runtime contract.
+2. Several old prototype HTML and documentation files remain for traceability and are not supported entry points.
+3. Some desktop schema fields still store numeric values as text and need reviewed migrations.
+4. Database integrity remains partly application-enforced; additional foreign keys require migration planning.
+5. The renderer bundle should be split further to improve startup performance.
+
+Use current code, `README.md`, `docs/SECURITY.md`, and fresh gate output as status authority. Historical phase reports are snapshots, not release evidence.

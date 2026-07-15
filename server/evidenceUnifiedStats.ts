@@ -2,7 +2,6 @@ import { eq, sql, and } from "drizzle-orm";
 import { evidence, evidenceFiles } from "./schema";
 
 /** Drizzle sqlite instance from `getDb()` */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyDb = any;
 
 function n(v: unknown): number {

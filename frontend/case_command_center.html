@@ -2997,6 +2997,23 @@
             grid-template-columns: repeat(4, minmax(0, 1fr));
         }
 
+        .papertrail-facet-grid {
+            align-items: end;
+            display: grid;
+            gap: 0.65rem;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        }
+
+        .papertrail-filter-actions {
+            align-items: flex-end;
+            display: flex;
+            min-height: 100%;
+        }
+
+        .papertrail-filter-actions .btn-secondary-ledger {
+            width: 100%;
+        }
+
         .papertrail-filter-button {
             background: #07101f;
             border: 1px solid var(--ledger-border);
@@ -3758,6 +3775,11 @@
         let reviewTypeFilter = "all";
         let papertrailTypeFilter = "all";
         let papertrailQuery = "";
+        let papertrailPartyFilter = "all";
+        let papertrailDateFrom = "";
+        let papertrailDateTo = "";
+        let papertrailDocumentTypeFilter = "all";
+        let papertrailClaimSupportFilter = "all";
         let detailState = {};
         let googleConnectionState = null;
         let pendingFocusTarget = null;
@@ -7649,6 +7671,7 @@
             const parts = [
                 node.status,
                 node.review_status,
+                node.support_state,
                 node.role,
                 node.actor,
                 node.affected_party,
@@ -7656,6 +7679,11 @@
                 node.responsible_party,
                 node.beneficiary_party,
                 node.source,
+                node.document_type,
+                node.extraction_status,
+                node.sender && node.recipient ? `${node.sender} to ${node.recipient}` : node.sender || node.recipient,
+                Number(node.relevance_score) > 0 ? `${Math.round(Number(node.relevance_score) * 100)}% relevant` : "",
+                node.confidentiality_level,
                 node.identifier_type,
                 node.item_type,
                 node.target_type && node.target_id ? `prepared as ${node.target_type}` : "",
@@ -7691,6 +7719,13 @@
                 node.responsible_party,
                 node.beneficiary_party,
                 node.source,
+                node.document_type,
+                node.extraction_status,
+                node.sender,
+                node.recipient,
+                node.summary,
+                node.support_state,
+                node.confidentiality_level,
                 node.identifier_type,
                 node.source_party,
                 node.item_type,
@@ -7699,6 +7734,73 @@
                 node.date,
                 node.due_date
             ].join(" ").toLowerCase();
+        }
+
+        function papertrailNodeParties(node = {}) {
+            return [
+                node.type === "party" ? node.label : "",
+                node.sender,
+                node.recipient,
+                node.actor,
+                node.affected_party,
+                node.asserted_by,
+                node.subject_party,
+                node.responsible_party,
+                node.beneficiary_party,
+                node.source_party
+            ].filter(Boolean).map((value) => String(value).trim().toLowerCase());
+        }
+
+        function papertrailConnectedIds(seedPredicate) {
+            const graph = detailState.papertrail || { nodes: [], edges: [] };
+            const seedIds = new Set(graph.nodes.filter(seedPredicate).map((node) => node.id));
+            const ids = new Set(seedIds);
+            graph.edges.forEach((edge) => {
+                if (seedIds.has(edge.from)) ids.add(edge.to);
+                if (seedIds.has(edge.to)) ids.add(edge.from);
+            });
+            return ids;
+        }
+
+        function intersectPapertrailIds(left, right) {
+            return new Set([...left].filter((id) => right.has(id)));
+        }
+
+        function papertrailFacetOptions(key) {
+            return detailState.papertrail?.facets?.[key] || [];
+        }
+
+        function normalizePapertrailFilters() {
+            const partyOptions = papertrailFacetOptions("parties");
+            const documentTypes = papertrailFacetOptions("document_types");
+            const supportStates = papertrailFacetOptions("claim_support_states");
+            if (papertrailPartyFilter !== "all" && !partyOptions.includes(papertrailPartyFilter)) papertrailPartyFilter = "all";
+            if (papertrailDocumentTypeFilter !== "all" && !documentTypes.includes(papertrailDocumentTypeFilter)) papertrailDocumentTypeFilter = "all";
+            if (papertrailClaimSupportFilter !== "all" && !supportStates.includes(papertrailClaimSupportFilter)) papertrailClaimSupportFilter = "all";
+        }
+
+        function papertrailAllowedIds() {
+            const graph = detailState.papertrail || { nodes: [], edges: [] };
+            let allowed = new Set(graph.nodes.map((node) => node.id));
+
+            if (papertrailPartyFilter !== "all") {
+                const selected = papertrailPartyFilter.toLowerCase();
+                allowed = intersectPapertrailIds(allowed, papertrailConnectedIds((node) => papertrailNodeParties(node).includes(selected)));
+            }
+            if (papertrailDateFrom || papertrailDateTo) {
+                allowed = intersectPapertrailIds(allowed, papertrailConnectedIds((node) => {
+                    const date = String(node.date || node.due_date || "").slice(0, 10);
+                    if (!date) return false;
+                    return (!papertrailDateFrom || date >= papertrailDateFrom) && (!papertrailDateTo || date <= papertrailDateTo);
+                }));
+            }
+            if (papertrailDocumentTypeFilter !== "all") {
+                allowed = intersectPapertrailIds(allowed, papertrailConnectedIds((node) => node.type === "document" && node.document_type === papertrailDocumentTypeFilter));
+            }
+            if (papertrailClaimSupportFilter !== "all") {
+                allowed = intersectPapertrailIds(allowed, papertrailConnectedIds((node) => node.type === "claim" && node.support_state === papertrailClaimSupportFilter));
+            }
+            return allowed;
         }
 
         function papertrailTypeOptions() {
@@ -7721,20 +7823,32 @@
 
         function filteredPapertrailNodes() {
             const nodes = detailState.papertrail?.nodes || [];
+            normalizePapertrailFilters();
             if (papertrailTypeFilter !== "all" && !nodes.some((node) => node.type === papertrailTypeFilter)) {
                 papertrailTypeFilter = "all";
             }
             const query = papertrailQuery.trim().toLowerCase();
-            return nodes.filter((node) => {
+            const allowed = papertrailAllowedIds();
+            const matched = nodes.filter((node) => {
                 const typeMatch = papertrailTypeFilter === "all" || node.type === papertrailTypeFilter;
                 const queryMatch = !query || papertrailNodeSearchText(node).includes(query);
-                return typeMatch && queryMatch;
+                return allowed.has(node.id) && typeMatch && queryMatch;
             });
+            if (!query && papertrailTypeFilter === "all") return matched;
+
+            const visibleIds = new Set(matched.map((node) => node.id));
+            (detailState.papertrail?.edges || []).forEach((edge) => {
+                const fromNode = nodes.find((node) => node.id === edge.from);
+                const toNode = nodes.find((node) => node.id === edge.to);
+                if (visibleIds.has(edge.from) && ["case", "document"].includes(toNode?.type)) visibleIds.add(edge.to);
+                if (visibleIds.has(edge.to) && ["case", "document"].includes(fromNode?.type)) visibleIds.add(edge.from);
+            });
+            return nodes.filter((node) => visibleIds.has(node.id));
         }
 
         function filteredPapertrailEdges(nodes) {
             const visibleIds = new Set(nodes.map((node) => node.id));
-            return (detailState.papertrail?.edges || []).filter((edge) => visibleIds.has(edge.from) || visibleIds.has(edge.to));
+            return (detailState.papertrail?.edges || []).filter((edge) => visibleIds.has(edge.from) && visibleIds.has(edge.to));
         }
 
         function renderPapertrail() {
@@ -7742,6 +7856,7 @@
             const nodes = filteredPapertrailNodes();
             const edges = filteredPapertrailEdges(nodes);
             const typeOptions = papertrailTypeOptions();
+            const facets = graph.facets || {};
             return `
                 <section class="detail-section papertrail-workbench">
                     <div class="panel-header">
@@ -7763,6 +7878,23 @@
                                     <span>${escapeHtml(option.label)}</span>
                                 </button>
                             `).join("")}
+                        </div>
+                        <div class="papertrail-facet-grid">
+                            <label class="input-field"><span>Party or institution</span><select class="control" id="papertrailPartyFilter">
+                                <option value="all">All parties</option>
+                                ${(facets.parties || []).map((party) => `<option value="${escapeHtml(party)}" ${papertrailPartyFilter === party ? "selected" : ""}>${escapeHtml(party)}</option>`).join("")}
+                            </select></label>
+                            <label class="input-field"><span>From</span><input class="control" type="date" id="papertrailDateFrom" value="${escapeHtml(papertrailDateFrom)}" min="${escapeHtml(facets.date_from || "")}" max="${escapeHtml(facets.date_to || "")}"></label>
+                            <label class="input-field"><span>Through</span><input class="control" type="date" id="papertrailDateTo" value="${escapeHtml(papertrailDateTo)}" min="${escapeHtml(facets.date_from || "")}" max="${escapeHtml(facets.date_to || "")}"></label>
+                            <label class="input-field"><span>Document type</span><select class="control" id="papertrailDocumentTypeFilter">
+                                <option value="all">All document types</option>
+                                ${(facets.document_types || []).map((type) => `<option value="${escapeHtml(type)}" ${papertrailDocumentTypeFilter === type ? "selected" : ""}>${escapeHtml(type.replace(/_/g, " "))}</option>`).join("")}
+                            </select></label>
+                            <label class="input-field"><span>Claim evidence</span><select class="control" id="papertrailClaimSupportFilter">
+                                <option value="all">All claim states</option>
+                                ${(facets.claim_support_states || []).map((state) => `<option value="${escapeHtml(state)}" ${papertrailClaimSupportFilter === state ? "selected" : ""}>${escapeHtml(state.replace(/_/g, " "))}</option>`).join("")}
+                            </select></label>
+                            <div class="papertrail-filter-actions"><button class="btn-secondary-ledger" type="button" id="papertrailResetFilters">Reset filters</button></div>
                         </div>
                     </div>
                     <div class="papertrail-canvas">
@@ -8851,6 +8983,36 @@
                     search.focus();
                     search.setSelectionRange(cursor, cursor);
                 }
+            });
+            document.getElementById("papertrailPartyFilter")?.addEventListener("change", (event) => {
+                papertrailPartyFilter = event.target.value || "all";
+                renderDetail();
+            });
+            document.getElementById("papertrailDateFrom")?.addEventListener("change", (event) => {
+                papertrailDateFrom = event.target.value || "";
+                renderDetail();
+            });
+            document.getElementById("papertrailDateTo")?.addEventListener("change", (event) => {
+                papertrailDateTo = event.target.value || "";
+                renderDetail();
+            });
+            document.getElementById("papertrailDocumentTypeFilter")?.addEventListener("change", (event) => {
+                papertrailDocumentTypeFilter = event.target.value || "all";
+                renderDetail();
+            });
+            document.getElementById("papertrailClaimSupportFilter")?.addEventListener("change", (event) => {
+                papertrailClaimSupportFilter = event.target.value || "all";
+                renderDetail();
+            });
+            document.getElementById("papertrailResetFilters")?.addEventListener("click", () => {
+                papertrailTypeFilter = "all";
+                papertrailQuery = "";
+                papertrailPartyFilter = "all";
+                papertrailDateFrom = "";
+                papertrailDateTo = "";
+                papertrailDocumentTypeFilter = "all";
+                papertrailClaimSupportFilter = "all";
+                renderDetail();
             });
             document.querySelectorAll(".timeline-row, .timeline-card, .timeline-story-event").forEach((row) => {
                 row.querySelector(".timeline-approve")?.addEventListener("click", () => reviewTimelineEvent(row, "approve").catch((error) => showToast(error.message)));

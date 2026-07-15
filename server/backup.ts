@@ -1,19 +1,9 @@
-/**
- * Phase 053 — backup and restore procedures.
- *
- * Real SQLite backup/restore for the server database:
- *  - backupDatabase(destPath): uses better-sqlite3's online `.backup()` (a
- *    consistent copy that is safe while the DB is in use).
- *  - restoreDatabase(srcPath): validates the source is a readable SQLite DB with
- *    the core tables, then replaces the live DB file (a `.bak` of the current DB
- *    is kept). The caller must restart the app so the new DB is opened.
- *
- * See docs/BACKUP_RESTORE.md for the operator procedure.
- */
 import fs from "fs";
 import path from "path";
 import Database from "better-sqlite3";
-import { getDb } from "./db";
+import { closeDatabaseForMaintenance, getDb } from "./db";
+
+const REQUIRED_TABLES = ["users", "lawyers", "cases", "evidence", "audit_logs", "system_config"];
 
 function rawClient(db: any): any {
   return db?.$client ?? db?.session?.client ?? null;
@@ -23,53 +13,99 @@ function currentDbPath(): string {
   return process.env.DATABASE_URL || "laro.sqlite";
 }
 
-/** Create a consistent backup of the live database at `destPath`. */
+/** Create and verify a consistent online backup of the live database. */
 export async function backupDatabase(destPath: string): Promise<{ path: string; bytes: number }> {
   const db = await getDb();
   const sqlite = rawClient(db);
   if (!sqlite) throw new Error("Database not available for backup");
 
-  fs.mkdirSync(path.dirname(path.resolve(destPath)), { recursive: true });
-  // better-sqlite3: db.backup(destination) returns a Promise.
-  await sqlite.backup(destPath);
-  const bytes = fs.statSync(destPath).size;
-  return { path: destPath, bytes };
+  const destination = path.resolve(destPath);
+  if (destination === path.resolve(currentDbPath())) {
+    throw new Error("Refusing to back up the database over itself");
+  }
+
+  fs.mkdirSync(path.dirname(destination), { recursive: true });
+  await sqlite.backup(destination);
+  const validation = validateBackup(destination);
+  if (!validation.valid) {
+    try { fs.unlinkSync(destination); } catch { /* preserve the validation error */ }
+    throw new Error(`Backup verification failed: ${validation.reason}`);
+  }
+  return { path: destination, bytes: fs.statSync(destination).size };
 }
 
-/** Validate that a file is a SQLite DB containing the core LARO tables. */
+/** Validate SQLite integrity, foreign keys, and the minimum LARO schema. */
 export function validateBackup(srcPath: string): { valid: boolean; reason?: string; tables?: string[] } {
-  if (!fs.existsSync(srcPath)) return { valid: false, reason: "File does not exist" };
+  const source = path.resolve(srcPath);
+  if (!fs.existsSync(source)) return { valid: false, reason: "File does not exist" };
+
   let probe: InstanceType<typeof Database> | null = null;
   try {
-    probe = new Database(srcPath, { readonly: true, fileMustExist: true });
+    probe = new Database(source, { readonly: true, fileMustExist: true });
+    const integrity = probe.pragma("quick_check") as Array<{ quick_check: string }>;
+    if (integrity.length !== 1 || integrity[0]?.quick_check !== "ok") {
+      return { valid: false, reason: `SQLite quick_check failed: ${JSON.stringify(integrity)}` };
+    }
+
+    const foreignKeyErrors = probe.pragma("foreign_key_check") as unknown[];
+    if (foreignKeyErrors.length > 0) {
+      return { valid: false, reason: `Foreign-key check found ${foreignKeyErrors.length} violation(s)` };
+    }
+
     const rows = probe.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as Array<{ name: string }>;
-    const names = rows.map((r) => r.name);
-    const required = ["users", "cases"];
-    const missing = required.filter((t) => !names.includes(t));
-    if (missing.length > 0) return { valid: false, reason: `Missing core tables: ${missing.join(", ")}`, tables: names };
+    const names = rows.map((row) => row.name);
+    const missing = REQUIRED_TABLES.filter((table) => !names.includes(table));
+    if (missing.length > 0) {
+      return { valid: false, reason: `Missing core tables: ${missing.join(", ")}`, tables: names };
+    }
     return { valid: true, tables: names };
-  } catch (e) {
-    return { valid: false, reason: e instanceof Error ? e.message : String(e) };
+  } catch (error) {
+    return { valid: false, reason: error instanceof Error ? error.message : String(error) };
   } finally {
-    try { probe?.close(); } catch { /* ignore */ }
+    try { probe?.close(); } catch { /* best effort */ }
   }
 }
 
 /**
- * Restore the live DB from `srcPath`. Keeps a `.bak` of the previous DB. The app
- * must be restarted afterward to reopen the database.
+ * Restore a verified backup through a staged file in the live DB directory.
+ * The current connection is checkpointed and closed, the previous DB is moved
+ * aside, and a failed replacement is rolled back before the error is returned.
  */
-export function restoreDatabase(srcPath: string): { restored: true; backupOfPrevious: string } {
-  const check = validateBackup(srcPath);
+export function restoreDatabase(srcPath: string): { restored: true; backupOfPrevious: string | null } {
+  const source = path.resolve(srcPath);
+  const live = path.resolve(currentDbPath());
+  if (source === live) throw new Error("Refusing to restore a database over itself");
+
+  const check = validateBackup(source);
   if (!check.valid) throw new Error(`Refusing to restore: ${check.reason}`);
 
-  const live = path.resolve(currentDbPath());
-  const prevBak = `${live}.bak-${Date.now()}`;
-  if (fs.existsSync(live)) fs.copyFileSync(live, prevBak);
-  fs.copyFileSync(path.resolve(srcPath), live);
-  // Remove WAL/SHM sidecars so the restored DB is opened cleanly.
-  for (const ext of ["-wal", "-shm"]) {
-    try { if (fs.existsSync(live + ext)) fs.unlinkSync(live + ext); } catch { /* ignore */ }
+  fs.mkdirSync(path.dirname(live), { recursive: true });
+  const staged = `${live}.restore-${process.pid}-${Date.now()}.tmp`;
+  const previous = `${live}.bak-${Date.now()}`;
+  fs.copyFileSync(source, staged);
+
+  const stagedCheck = validateBackup(staged);
+  if (!stagedCheck.valid) {
+    try { fs.unlinkSync(staged); } catch { /* best effort */ }
+    throw new Error(`Refusing to restore staged copy: ${stagedCheck.reason}`);
   }
-  return { restored: true, backupOfPrevious: prevBak };
+
+  closeDatabaseForMaintenance();
+  for (const extension of ["-wal", "-shm"]) {
+    try { if (fs.existsSync(live + extension)) fs.unlinkSync(live + extension); } catch { /* best effort */ }
+  }
+
+  const hadLiveDatabase = fs.existsSync(live);
+  try {
+    if (hadLiveDatabase) fs.renameSync(live, previous);
+    fs.renameSync(staged, live);
+  } catch (error) {
+    try {
+      if (!fs.existsSync(live) && fs.existsSync(previous)) fs.renameSync(previous, live);
+    } catch { /* leave both paths in place for manual recovery */ }
+    try { if (fs.existsSync(staged)) fs.unlinkSync(staged); } catch { /* best effort */ }
+    throw error;
+  }
+
+  return { restored: true, backupOfPrevious: hadLiveDatabase ? previous : null };
 }

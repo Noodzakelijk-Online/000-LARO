@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 
 const ROOT = join(__dirname, '..', '..');
@@ -42,11 +42,56 @@ describe('production readiness regressions', () => {
     expect(email).not.toContain('publicProcedure');
   });
 
+  it('accepts documented loopback development origins without weakening CSRF', async () => {
+    const { isAllowedOrigin } = await import('../../server/_core/csrf');
+    expect(isAllowedOrigin('http://localhost:5173')).toBe(true);
+    expect(isAllowedOrigin('http://127.0.0.1:5173')).toBe(true);
+    expect(isAllowedOrigin('https://attacker.example')).toBe(false);
+  });
+
   it('loads matcher datasets from packaged assets', () => {
     const matching = readFileSync(join(ROOT, 'server/matching.ts'), 'utf8');
+    const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+    const packagedAssets = pkg.build.extraResources.find((entry: { from?: string }) => entry.from === 'assets');
     expect(matching).toContain('assets');
+    expect(packagedAssets.filter).toEqual([
+      'legal-taxonomy-mapping.json',
+      'rechtspraak-keywords-analysis.json',
+    ]);
+    expect(packagedAssets.filter).not.toContain('**/*');
     expect(readFileSync(join(ROOT, 'assets/legal-taxonomy-mapping.json'), 'utf8')).toContain('specializationToCourtCategories');
     expect(readFileSync(join(ROOT, 'assets/rechtspraak-keywords-analysis.json'), 'utf8')).toContain('keywords_by_area');
+  });
+
+  it('fails closed for unsigned, unaccepted, or version-mismatched tagged releases', async () => {
+    const workflow = readFileSync(join(ROOT, '.github/workflows/build.yml'), 'utf8');
+    const acceptance = JSON.parse(readFileSync(join(ROOT, 'release-acceptance.json'), 'utf8'));
+    const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+    const { validateReleaseAcceptance } = await import('../../scripts/release-acceptance.mjs');
+    expect(workflow).toContain('WINDOWS_CSC_LINK is required for tagged releases');
+    expect(workflow).toContain("Tag ${{ github.ref_name }} does not match package version");
+    expect(workflow).toContain('release-acceptance.mjs --require-approved --tag');
+    expect(workflow).toContain("$signature.Status -ne 'Valid'");
+    expect(workflow).toContain('release-artifacts/*');
+    expect(workflow).not.toContain('path: release/**/*.exe');
+    expect(acceptance.version).toBe(pkg.version);
+    expect(['pending', 'approved']).toContain(acceptance.gates.publicBrand.status);
+    expect(['pending', 'approved']).toContain(acceptance.gates.liveProviders.status);
+
+    const rejected = validateReleaseAcceptance({
+      record: {
+        schemaVersion: 1,
+        version: pkg.version,
+        gates: {
+          publicBrand: { status: 'pending' },
+          liveProviders: { status: 'pending', providerScope: [] },
+        },
+      },
+      packageVersion: pkg.version,
+      tag: `v${pkg.version}`,
+      requireApproved: true,
+    });
+    expect(rejected.errors).toContain('release acceptance pending: publicBrand, liveProviders');
   });
 
   it('does not invent an active dashboard case or preserve unverified OAuth status', () => {
@@ -54,6 +99,9 @@ describe('production readiness regressions', () => {
     expect(dashboard).toContain('No case selected');
     expect(dashboard).not.toContain('params.get("case") || 1');
     expect(dashboard).not.toContain('Live status refresh is temporarily unavailable');
+    expect(dashboard).toContain('localStorage.removeItem("auth_token")');
+    expect(dashboard).toContain('localStorage.removeItem("access_token")');
+    expect(dashboard).toContain('const token = localStorage.getItem("laroAuthToken") || localStorage.getItem("auth_token") || localStorage.getItem("access_token")');
   });
 
   it('keeps API-only deployments explicit and runs compatibility schema repair after migrations', () => {
@@ -61,6 +109,91 @@ describe('production readiness regressions', () => {
     const database = readFileSync(join(ROOT, 'server/db.ts'), 'utf8');
     expect(server).toContain('!ENV.SERVER_ONLY');
     expect(database.indexOf('migrate(_db')).toBeLessThan(database.lastIndexOf('ensureSupportTicketsTable(sqlite)'));
+  });
+
+  it('binds packaged Desktop to an available loopback port', () => {
+    const server = readFileSync(join(ROOT, 'server/index.ts'), 'utf8');
+    const main = readFileSync(join(ROOT, 'src-main/index.ts'), 'utf8');
+    const provider = readFileSync(join(ROOT, 'src/renderer/providers/TrpcProvider.tsx'), 'utf8');
+    expect(main).toContain('resolveDesktopServerPort(process.env.OAUTH_REDIRECT_BASE_URL)');
+    expect(main).toContain('const actualPort = await startServer(requestedPort)');
+    expect(main).toContain('agentConfig.apiUrl = laroUrl');
+    expect(main).toContain('process.env.OAUTH_REDIRECT_BASE_URL = laroUrl');
+    expect(main).toContain("process.env.LARO_PACKAGED_DESKTOP = app.isPackaged ? 'true' : 'false'");
+    expect(server).toContain("const packagedDesktop = process.env.LARO_PACKAGED_DESKTOP === 'true'");
+    expect(server.indexOf("path.join(process.cwd(), '.env')"))
+      .toBeGreaterThan(server.indexOf(': ['));
+    expect(provider).toContain('window.location.origin');
+    expect(provider).not.toContain('window.location.port !== "5173"');
+    expect(main).not.toContain('await startServer(PORT)');
+  });
+
+  it('reports the package version consistently across operational endpoints', () => {
+    const health = readFileSync(join(ROOT, 'server/index.ts'), 'utf8');
+    const system = readFileSync(join(ROOT, 'server/_core/systemRouter.ts'), 'utf8');
+    const admin = readFileSync(join(ROOT, 'server/routers/admin.ts'), 'utf8');
+    const main = readFileSync(join(ROOT, 'src-main/index.ts'), 'utf8');
+    expect(health).toContain('version: APP_VERSION');
+    expect(system.match(/version: APP_VERSION/g)).toHaveLength(2);
+    expect(admin).toContain('appVersion: APP_VERSION');
+    expect(main).toContain('process.env.LARO_APP_VERSION = app.getVersion()');
+  });
+
+  it('keeps operator readiness deterministic after Electron packaging', () => {
+    const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+    const readiness = readFileSync(join(ROOT, 'scripts/operator-readiness.mjs'), 'utf8');
+    expect(pkg.scripts.readiness).toContain('npm run rebuild:node');
+    expect(pkg.scripts['readiness:production']).toContain('npm run rebuild:node');
+    expect(readiness).toContain('[result.stdout, result.stderr]');
+  });
+
+  it('builds the shipped renderer with production React regardless of local env files', () => {
+    const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+    const rendererBuild = readFileSync(join(ROOT, 'scripts/build-renderer.mjs'), 'utf8');
+    expect(pkg.scripts['build:renderer']).toBe('node scripts/build-renderer.mjs');
+    expect(rendererBuild.indexOf('process.env.NODE_ENV = "production"'))
+      .toBeLessThan(rendererBuild.indexOf('await import("vite")'));
+  });
+
+  it('keeps horizontal tabs stacked above their content at every viewport', () => {
+    const tabs = readFileSync(join(ROOT, 'src/renderer/components/ui/tabs.tsx'), 'utf8');
+    expect(tabs).toContain('data-[orientation=horizontal]:flex-col');
+    expect(tabs).not.toContain('data-horizontal:flex-col');
+    expect(tabs).not.toContain('group-data-horizontal/tabs');
+  });
+
+  it('ships its dashboard mark locally and uses it for Windows packaging', () => {
+    const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+    const constants = readFileSync(join(ROOT, 'shared/const.ts'), 'utf8');
+    expect(pkg.build.win.icon).toBe('build/icon.png');
+    expect(constants).toContain('APP_LOGO = "/laro-logo.png"');
+    expect(constants).not.toContain('manuscdn.com');
+    expect(readFileSync(join(ROOT, 'public/laro-logo.png')).byteLength).toBeGreaterThan(1_000);
+    expect(readFileSync(join(ROOT, 'build/icon.png')).byteLength).toBeGreaterThan(1_000);
+  });
+
+  it('attaches authenticated realtime updates without render-loop reconnects', () => {
+    const server = readFileSync(join(ROOT, 'server/index.ts'), 'utf8');
+    const realtime = readFileSync(join(ROOT, 'server/realtime.ts'), 'utf8');
+    const notifications = readFileSync(join(ROOT, 'server/notifications.ts'), 'utf8');
+    const client = readFileSync(join(ROOT, 'src/renderer/contexts/WebSocketContext.tsx'), 'utf8');
+    const dashboard = readFileSync(join(ROOT, 'src/renderer/DashboardApp.tsx'), 'utf8');
+    const notificationCenter = readFileSync(join(ROOT, 'src/renderer/components/NotificationCenter.tsx'), 'utf8');
+    const vite = readFileSync(join(ROOT, 'vite.config.ts'), 'utf8');
+    expect(server).toContain('initializeRealtimeServer(httpServer)');
+    expect(realtime).toContain('jwt.verify(token, ENV.JWT_SECRET)');
+    expect(realtime).toContain('isTokenRevoked(decoded.userId, decoded.iat)');
+    expect(realtime).toContain('socket.join(userRoom(userId))');
+    expect(notifications).toContain('emitRealtimeNotification(params.userId');
+    expect(client).toContain('const push = useCallback');
+    expect(client).toContain('io(window.location.origin)');
+    expect(client).not.toContain('transports: ["websocket", "polling"]');
+    expect(client).not.toContain('socketInstance.emit("join"');
+    expect(dashboard).toContain('<WebSocketProvider>');
+    expect(notificationCenter).toContain('@/contexts/WebSocketContext');
+    expect(notificationCenter).not.toContain('@/_core/hooks/useWebSocket');
+    expect(vite).toContain("'/socket.io'");
+    expect(vite.match(/target: 'http:\/\/127\.0\.0\.1:3000'/g)).toHaveLength(2);
   });
 
   it('generates collision-resistant case identifiers', async () => {
@@ -77,5 +210,58 @@ describe('production readiness regressions', () => {
       expect(upload).not.toContain('storage.example.com');
       expect(upload).not.toMatch(/simulate(d)? upload/i);
     }
+  });
+
+  it('keeps production search honest and routes lawyer actions to real records', () => {
+    const search = readFileSync(join(ROOT, 'src/renderer/components/SmartSearchFilters.tsx'), 'utf8');
+    const lawyers = readFileSync(join(ROOT, 'src/renderer/components/Lawyers.tsx'), 'utf8');
+    const dashboard = readFileSync(join(ROOT, 'src/renderer/DashboardApp.tsx'), 'utf8');
+    expect(search).not.toContain('divorce lawyer Amsterdam');
+    expect(search).not.toContain('employment law urgent');
+    expect(search).not.toContain('Math.random()');
+    expect(lawyers).toContain('searchType="lawyers"');
+    expect(lawyers).toContain('setLocation(`/lawyers/${lawyer.id}`)');
+    expect(dashboard).not.toContain('RoutePlaceholder');
+    expect(dashboard).not.toContain('/email-automation');
+    expect(dashboard).not.toContain('/billing');
+    expect(dashboard).not.toContain('/reports');
+    expect(dashboard).toContain('lazy(() => import("@/components/Cases"))');
+    expect(dashboard).toContain('<Suspense fallback={<DashboardSkeleton />}>');
+  });
+
+  it('keeps the desktop scanner consent-gated and fail-closed', () => {
+    const main = readFileSync(join(ROOT, 'src-main/index.ts'), 'utf8');
+    const app = readFileSync(join(ROOT, 'src/renderer/App.tsx'), 'utf8');
+    const home = readFileSync(join(ROOT, 'src/renderer/pages/HomePage.tsx'), 'utf8');
+    const scan = readFileSync(join(ROOT, 'src/renderer/pages/ScanPage.tsx'), 'utf8');
+    const uploader = readFileSync(join(ROOT, 'src-main/uploader.ts'), 'utf8');
+    const routers = readFileSync(join(ROOT, 'server/routers/index.ts'), 'utf8');
+
+    expect(existsSync(join(ROOT, 'src/renderer/pages/AuthPage.tsx'))).toBe(false);
+    expect(app).toContain('getScannerToken');
+    expect(app).toContain('scanner never creates an offline or anonymous session');
+    expect(home).toContain('Nothing uploads until you review the results');
+    expect(home).toContain('folders: scanFolders');
+    expect(home).toContain('autoUpload: false');
+    expect(scan).toContain('setScanFileSelection');
+    expect(scan).toContain('Upload selected');
+    expect(main).toContain('approvedScanFolders');
+    expect(main).toContain("autoUpload: false");
+    expect(main).toContain("process.env.HOST = '127.0.0.1'");
+    expect(main).not.toContain("ipcMain.handle('agent:token'");
+    expect(uploader).toContain('evidenceFiles.upload.mutate');
+    expect(uploader).not.toContain('s3.example.com');
+    expect(uploader).not.toMatch(/simulat(?:e|ed|ing) S3 upload/i);
+    expect(routers).not.toContain('localFileUpload: router');
+    expect(existsSync(join(ROOT, 'src/renderer/components/LocalFileUpload.tsx'))).toBe(false);
+  });
+
+  it('accepts only bounded supported evidence files', async () => {
+    const rules = await import('../../shared/evidenceFiles');
+    expect(rules.MAX_EVIDENCE_FILE_BYTES).toBe(7 * 1024 * 1024);
+    expect(rules.isSupportedEvidenceMimeType('application/pdf')).toBe(true);
+    expect(rules.isSupportedEvidenceMimeType('image/png')).toBe(true);
+    expect(rules.isSupportedEvidenceMimeType('application/x-msdownload')).toBe(false);
+    expect(rules.evidenceTypeForMime('message/rfc822')).toBe('email');
   });
 });

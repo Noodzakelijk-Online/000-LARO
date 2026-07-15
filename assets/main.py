@@ -4,7 +4,7 @@ Part of Win11 Development Environment
 """
 
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List
 from contextlib import asynccontextmanager
 
@@ -154,7 +154,7 @@ async def health_check():
     return HealthResponse(
         service="fastapi",
         status="healthy",
-        timestamp=datetime.utcnow().isoformat(),
+        timestamp=datetime.now(timezone.utc).isoformat(),
         version="1.0.0",
         databases=db_status
     )
@@ -258,7 +258,7 @@ async def create_document(document: dict):
         raise HTTPException(status_code=503, detail="MongoDB not available")
     
     db = mongo_client.devdb
-    document["created_at"] = datetime.utcnow().isoformat()
+    document["created_at"] = datetime.now(timezone.utc).isoformat()
     result = await db.documents.insert_one(document)
     
     return {

@@ -22,7 +22,9 @@ export interface RetryOptions {
   jitter?: (ceil: number) => number;
 }
 
-const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+const defaultSleep = (ms: number) => new Promise<void>((resolve) => {
+  setTimeout(resolve, ms);
+});
 
 /** Default: retry only on clearly transient errors, never on programmer errors. */
 export function defaultIsRetryable(err: unknown): boolean {

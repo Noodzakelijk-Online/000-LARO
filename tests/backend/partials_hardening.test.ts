@@ -37,7 +37,13 @@ describe('007/030 (D4) — authenticated token crypto', () => {
 describe('080 (D5) — CSRF origin guard', () => {
   const run = (method: string, headers: Record<string, string>) => {
     let status = 200; let body: any = null; let nexted = false;
-    const req: any = { method, headers };
+    const req: any = {
+      method,
+      headers,
+      protocol: 'http',
+      get: (name: string) => name.toLowerCase() === 'host' ? headers.host : undefined,
+      socket: {},
+    };
     const res: any = { status: (s: number) => { status = s; return res; }, json: (b: any) => { body = b; return res; } };
     csrfGuard(req, res, () => { nexted = true; });
     return { status, body, nexted };
@@ -48,9 +54,13 @@ describe('080 (D5) — CSRF origin guard', () => {
     expect(run('POST', { origin: 'http://localhost:3000' }).nexted).toBe(true);
   });
   it('rejects a cross-site origin on mutations', () => {
-    const r = run('POST', { origin: 'http://evil.example' });
+    const r = run('POST', { origin: 'http://evil.example', host: '127.0.0.1:45678' });
     expect(r.nexted).toBe(false);
     expect(r.status).toBe(403);
+  });
+  it('allows the exact same origin on an ephemeral desktop port', () => {
+    const origin = 'http://127.0.0.1:45678';
+    expect(run('POST', { origin, host: '127.0.0.1:45678' }).nexted).toBe(true);
   });
   it('allows same-origin/native requests with no Origin/Referer', () => {
     expect(run('POST', {}).nexted).toBe(true);

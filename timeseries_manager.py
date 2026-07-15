@@ -8,13 +8,25 @@ for metrics, analytics, and monitoring.
 import logging
 import time
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional
 
 from db_optimization import db_manager
 
 # Configure logging
 logger = logging.getLogger('legal_ai_platform.timeseries')
+
+
+def _utc_now() -> datetime:
+    """Return an aware UTC timestamp for metrics and time-range queries."""
+    return datetime.now(timezone.utc)
+
+
+def _influx_timestamp(value: datetime) -> str:
+    """Serialize timestamps as RFC 3339 without producing a duplicate UTC suffix."""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc).isoformat().replace('+00:00', 'Z')
 
 class TimeSeriesManager:
     """
@@ -87,7 +99,7 @@ class TimeSeriesManager:
             measurement='case_events',
             tags=tags,
             fields=fields,
-            timestamp=datetime.utcnow()
+            timestamp=_utc_now()
         )
         
         logger.debug(f"Recorded case event: {event_type} for case {case_id}")
@@ -134,7 +146,7 @@ class TimeSeriesManager:
             measurement='user_activities',
             tags=tags,
             fields=fields,
-            timestamp=datetime.utcnow()
+            timestamp=_utc_now()
         )
         
         logger.debug(f"Recorded user activity: {activity_type} for user {user_id}")
@@ -179,7 +191,7 @@ class TimeSeriesManager:
             measurement='system_metrics',
             tags=tags,
             fields=fields,
-            timestamp=datetime.utcnow()
+            timestamp=_utc_now()
         )
         
         logger.debug(f"Recorded system metric: {metric_type} = {value}")
@@ -204,14 +216,14 @@ class TimeSeriesManager:
         
         # Set default time range if not provided
         if not start_time:
-            start_time = datetime.utcnow() - timedelta(days=30)
+            start_time = _utc_now() - timedelta(days=30)
         
         if not end_time:
-            end_time = datetime.utcnow()
+            end_time = _utc_now()
         
         # Format times for query
-        start_str = start_time.isoformat() + 'Z'
-        end_str = end_time.isoformat() + 'Z'
+        start_str = _influx_timestamp(start_time)
+        end_str = _influx_timestamp(end_time)
         
         # Build query
         query = f"""
@@ -319,14 +331,14 @@ class TimeSeriesManager:
         
         # Set default time range if not provided
         if not start_time:
-            start_time = datetime.utcnow() - timedelta(days=30)
+            start_time = _utc_now() - timedelta(days=30)
         
         if not end_time:
-            end_time = datetime.utcnow()
+            end_time = _utc_now()
         
         # Format times for query
-        start_str = start_time.isoformat() + 'Z'
-        end_str = end_time.isoformat() + 'Z'
+        start_str = _influx_timestamp(start_time)
+        end_str = _influx_timestamp(end_time)
         
         # Build query
         query = f"""
@@ -442,14 +454,14 @@ class TimeSeriesManager:
         
         # Set default time range if not provided
         if not start_time:
-            start_time = datetime.utcnow() - timedelta(hours=24)
+            start_time = _utc_now() - timedelta(hours=24)
         
         if not end_time:
-            end_time = datetime.utcnow()
+            end_time = _utc_now()
         
         # Format times for query
-        start_str = start_time.isoformat() + 'Z'
-        end_str = end_time.isoformat() + 'Z'
+        start_str = _influx_timestamp(start_time)
+        end_str = _influx_timestamp(end_time)
         
         # Build query
         query = f"""
@@ -573,7 +585,7 @@ timeseries_manager = TimeSeriesManager()
 #
 # # Get case metrics
 # case_metrics = timeseries_manager.get_case_metrics(
-#     start_time=datetime.utcnow() - timedelta(days=30),
+#     start_time=_utc_now() - timedelta(days=30),
 #     category='FAMILY_LAW'
 # )
 #

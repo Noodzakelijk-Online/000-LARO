@@ -6,6 +6,7 @@ import { getElectronAPI } from "@/lib/electronApiShim";
 
 interface HomePageProps {
   onNavigate: (page: string) => void;
+  onScanStarted: (scanId: string) => void;
   config: any;
 }
 
@@ -15,22 +16,16 @@ interface Case {
   caseType: string;
   urgency: string;
   status: string;
-  createdAt: string;
+  createdAt: string | Date | null;
 }
 
-function isPlaceholderAgentToken(token: string | null | undefined): boolean {
-  const t = (token ?? "").trim();
-  return !t || t === "local-default" || t === "local-dev-token";
-}
-
-export default function HomePage({ onNavigate, config }: HomePageProps) {
+export default function HomePage({ onNavigate, onScanStarted, config }: HomePageProps) {
   const electronAPI = getElectronAPI();
   const [cases, setCases] = useState<Case[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedCase, setSelectedCase] = useState<Case | null>(null);
-  const [autoUpload, setAutoUpload] = useState(true);
-  const [excludedFolders, setExcludedFolders] = useState<string[]>([]);
+  const [scanFolders, setScanFolders] = useState<string[]>([]);
 
   const apiClient = useMemo(() => {
     const base = config?.apiUrl?.replace(/\/$/, "");
@@ -47,15 +42,10 @@ export default function HomePage({ onNavigate, config }: HomePageProps) {
               credentials: "include",
             });
           },
-          headers() {
-            const token = config?.token?.trim();
-            if (isPlaceholderAgentToken(token)) return {};
-            return { Authorization: `Bearer ${token}` };
-          },
         }),
       ],
     });
-  }, [config?.apiUrl, config?.token]);
+  }, [config?.apiUrl]);
 
   useEffect(() => {
     if (!apiClient) {
@@ -65,13 +55,13 @@ export default function HomePage({ onNavigate, config }: HomePageProps) {
     }
 
     let cancelled = false;
-    (async () => {
-      setIsLoading(true);
-      setError("");
+    const refreshCases = async (showLoading: boolean) => {
+      if (showLoading) setIsLoading(true);
       try {
         const data = await apiClient.cases.list.query({ page: 1, limit: 100 });
         if (cancelled) return;
-        setCases((data.cases ?? []) as Case[]);
+        setCases((data.cases ?? []) as unknown as Case[]);
+        setError("");
       } catch (err: unknown) {
         console.error("Failed to load cases:", err);
         if (!cancelled) {
@@ -81,18 +71,22 @@ export default function HomePage({ onNavigate, config }: HomePageProps) {
               : "Failed to load cases.";
           setError(
             msg.includes("UNAUTHORIZED") || msg.includes("Not authenticated")
-              ? "Not signed in to LARO. Log in from the main window (same app), then reopen the scanner, or set a real API token in Scanner → Settings."
+              ? "Not signed in to LARO. Sign in from the main window, then retry."
               : msg
           );
           setCases([]);
         }
       } finally {
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled && showLoading) setIsLoading(false);
       }
-    })();
+    };
+
+    void refreshCases(true);
+    const interval = window.setInterval(() => void refreshCases(false), 10_000);
 
     return () => {
       cancelled = true;
+      window.clearInterval(interval);
     };
   }, [apiClient]);
 
@@ -103,7 +97,7 @@ export default function HomePage({ onNavigate, config }: HomePageProps) {
     void apiClient.cases.list
       .query({ page: 1, limit: 100 })
       .then((data) => {
-        setCases((data.cases ?? []) as Case[]);
+        setCases((data.cases ?? []) as unknown as Case[]);
       })
       .catch((err: unknown) => {
         console.error("Failed to load cases:", err);
@@ -117,21 +111,19 @@ export default function HomePage({ onNavigate, config }: HomePageProps) {
       .finally(() => setIsLoading(false));
   };
 
-  const handleAddExcludedFolder = async () => {
-    const folder = await electronAPI.selectFolder();
-    if (folder && Array.isArray(folder)) {
-      const next = [...excludedFolders];
-      for (const f of folder) {
-        if (f && !next.includes(f)) next.push(f);
+  const handleAddScanFolder = async () => {
+    const folders = await electronAPI.selectFolder();
+    if (folders && Array.isArray(folders)) {
+      const next = [...scanFolders];
+      for (const folder of folders) {
+        if (folder && !next.includes(folder)) next.push(folder);
       }
-      setExcludedFolders(next);
-    } else if (typeof folder === "string" && folder && !excludedFolders.includes(folder)) {
-      setExcludedFolders([...excludedFolders, folder]);
+      setScanFolders(next);
     }
   };
 
-  const handleRemoveExcludedFolder = (folder: string) => {
-    setExcludedFolders(excludedFolders.filter((f) => f !== folder));
+  const handleRemoveScanFolder = (folder: string) => {
+    setScanFolders(scanFolders.filter((value) => value !== folder));
   };
 
   const handleStartScan = async () => {
@@ -139,17 +131,20 @@ export default function HomePage({ onNavigate, config }: HomePageProps) {
       alert("Please select a case first");
       return;
     }
+    if (!scanFolders.length) {
+      alert("Select at least one folder to scan");
+      return;
+    }
 
     try {
-      await electronAPI.startScan({
+      const result = await electronAPI.startScan({
         caseId: selectedCase.id,
         caseName: `${selectedCase.clientName} - ${selectedCase.caseType}`,
-        autoUpload,
-        excludedFolders,
-        folders: [],
+        autoUpload: false,
+        excludedFolders: [],
+        folders: scanFolders,
       });
-
-      onNavigate("scan");
+      onScanStarted(result.scanId);
     } catch (err: unknown) {
       console.error("Failed to start scan:", err);
       alert("Failed to start scan: " + (err instanceof Error ? err.message : String(err)));
@@ -256,52 +251,34 @@ export default function HomePage({ onNavigate, config }: HomePageProps) {
           </div>
 
           <div className="rounded-lg bg-white p-6 shadow">
-            <h2 className="mb-4 text-lg font-semibold text-gray-900">Scan Settings</h2>
-
-            <div className="flex items-center justify-between border-b border-gray-200 py-3">
-              <div>
-                <h3 className="font-medium text-gray-900">Automatic Upload</h3>
-                <p className="text-sm text-gray-600">Upload files immediately as they are found</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setAutoUpload(!autoUpload)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                  autoUpload ? "bg-blue-600" : "bg-gray-200"
-                }`}
-              >
-                <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    autoUpload ? "translate-x-6" : "translate-x-1"
-                  }`}
-                />
-              </button>
-            </div>
-
-            <div className="mt-4">
+            <h2 className="mb-1 text-lg font-semibold text-gray-900">Folders to scan</h2>
+            <p className="mb-4 text-sm text-gray-600">
+              Only folders you explicitly select are scanned. Nothing uploads until you review the results.
+            </p>
+            <div>
               <div className="mb-3 flex items-center justify-between">
-                <h3 className="font-medium text-gray-900">Excluded Folders</h3>
+                <h3 className="font-medium text-gray-900">Selected folders</h3>
                 <button
                   type="button"
-                  onClick={handleAddExcludedFolder}
+                  onClick={handleAddScanFolder}
                   className="rounded-lg bg-blue-600 px-3 py-1 text-sm text-white transition-colors hover:bg-blue-700"
                 >
-                  Add Folder
+                  Choose folders
                 </button>
               </div>
 
-              {excludedFolders.length === 0 ? (
+              {scanFolders.length === 0 ? (
                 <p className="text-sm text-gray-600">
-                  No folders excluded. All accessible files will be scanned.
+                  No folders selected.
                 </p>
               ) : (
                 <div className="space-y-2">
-                  {excludedFolders.map((folder) => (
+                  {scanFolders.map((folder) => (
                     <div key={folder} className="flex items-center justify-between rounded bg-gray-50 p-2">
                       <span className="flex-1 truncate text-sm text-gray-700">{folder}</span>
                       <button
                         type="button"
-                        onClick={() => handleRemoveExcludedFolder(folder)}
+                        onClick={() => handleRemoveScanFolder(folder)}
                         className="ml-2 text-red-600 hover:text-red-700"
                       >
                         Remove
@@ -316,10 +293,14 @@ export default function HomePage({ onNavigate, config }: HomePageProps) {
           <button
             type="button"
             onClick={handleStartScan}
-            disabled={!selectedCase}
+            disabled={!selectedCase || scanFolders.length === 0}
             className="w-full rounded-lg bg-blue-600 px-6 py-4 text-lg font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
           >
-            {selectedCase ? "Start Evidence Scan" : "Select a Case to Continue"}
+            {!selectedCase
+              ? "Select a Case to Continue"
+              : scanFolders.length === 0
+                ? "Choose a Folder to Continue"
+                : "Scan Selected Folders"}
           </button>
         </div>
       </div>

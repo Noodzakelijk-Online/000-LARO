@@ -21,9 +21,5 @@ export const LEGAL_DISCLAIMER_EN =
   "Always have generated documents and analyses reviewed by a qualified lawyer before relying on them.";
 export const LEGAL_DISCLAIMER = `${LEGAL_DISCLAIMER_NL}\n${LEGAL_DISCLAIMER_EN}`;
 
-/**
- * Same mark as the live Manus deployment (favicon + sidebar).
- * @see https://lawyerdashboard.manus.space/
- */
-export const APP_LOGO =
-  "https://files.manuscdn.com/user_upload_by_module/web_dev_logo/90835377/qYsNgVMIHKMYsBVw.png";
+/** Local copy of the established LARO dashboard mark; no CDN dependency. */
+export const APP_LOGO = "/laro-logo.png";

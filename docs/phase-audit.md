@@ -4,6 +4,10 @@
 **Audited branch:** `staging`
 **Audited commit:** `1b78ed6` ("fix: Gap analysis data pulling logic", 2026-06-28)
 **Audit date:** 2026-07-06
+
+> Historical snapshot. It records defects found at the audited commit and is
+> not a current capability statement. Use `docs/FINAL_VERIFICATION_REPORT.md`,
+> `docs/PRODUCT_DEFINITION.md`, and a fresh `npm run gate` for current evidence.
 **Source of truth for phases:** `000-LARO__Giant_Codex_Goal_Prompt.pdf` (124 pages, 116 phases 000–115)
 **Method:** Full read of the PDF + read-only static audit of the codebase across five parallel work-streams (architecture, database, authentication/authorization, critical-path features, operations/tests/safety). Every verdict below cites `file:line` evidence. **No code was modified.**
 

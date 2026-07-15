@@ -27,7 +27,8 @@ import {
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { useWebSocket } from "@/_core/hooks/useWebSocket";
+import { useWebSocket } from "@/contexts/WebSocketContext";
+import { useLocation } from "wouter";
 
 export interface Notification {
   id: string;
@@ -45,6 +46,7 @@ export interface Notification {
 
 export default function NotificationCenter() {
   const [open, setOpen] = useState(false);
+  const [, navigate] = useLocation();
   
   const utils = trpc.useUtils();
   
@@ -235,7 +237,9 @@ export default function NotificationCenter() {
                                 size="sm"
                                 className="h-auto p-0 text-xs"
                                 onClick={() => {
-                                  // TODO: Navigate to action URL
+                                  if (notification.actionUrl?.startsWith("/") && !notification.actionUrl.startsWith("//")) {
+                                    navigate(notification.actionUrl);
+                                  }
                                   setOpen(false);
                                 }}
                               >
@@ -275,22 +279,6 @@ export default function NotificationCenter() {
           )}
         </ScrollArea>
 
-        {/* Footer */}
-        {notifications.length > 0 && (
-          <div className="p-3 border-t border-border">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full text-xs"
-              onClick={() => {
-                // TODO: Navigate to notifications page
-                setOpen(false);
-              }}
-            >
-              View all notifications
-            </Button>
-          </div>
-        )}
       </PopoverContent>
     </Popover>
   );

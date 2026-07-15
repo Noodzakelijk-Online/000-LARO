@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build-windows:
@@ -20,6 +20,26 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci --ignore-scripts
+      - name: Validate tagged release metadata and signing configuration
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        env:
+          WINDOWS_CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+          WINDOWS_CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          if ('${{ github.ref_name }}' -ne "v$version") {
+            throw "Tag ${{ github.ref_name }} does not match package version v$version"
+          }
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CSC_LINK)) {
+            throw 'WINDOWS_CSC_LINK is required for tagged releases'
+          }
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CSC_KEY_PASSWORD)) {
+            throw 'WINDOWS_CSC_KEY_PASSWORD is required for tagged releases'
+          }
+      - name: Validate external release acceptance
+        if: startsWith(github.ref, 'refs/tags/')
+        run: node scripts/release-acceptance.mjs --require-approved --tag "${{ github.ref_name }}"
       - name: Run production quality gate
         run: npm run gate
       - name: Build application
@@ -31,18 +51,42 @@ jobs:
       - name: Package Windows portable application
         run: npx electron-builder --win --publish never
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+      - name: Verify and stage release artifact
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $matches = @(Get-ChildItem "release/$version" -File -Filter 'LARO Desktop *.exe')
+          if ($matches.Count -ne 1) {
+            throw "Expected one portable executable, found $($matches.Count)"
+          }
+          $portable = $matches[0]
+          if ('${{ github.ref_type }}' -eq 'tag') {
+            $signature = Get-AuthenticodeSignature $portable.FullName
+            if ($signature.Status -ne 'Valid') {
+              throw "Tagged release is not validly signed: $($signature.Status)"
+            }
+          }
+          New-Item -ItemType Directory -Force release-artifacts | Out-Null
+          $published = "release-artifacts/LARO-Desktop-$version-Windows-x64.exe"
+          Copy-Item -LiteralPath $portable.FullName -Destination $published
+          $hash = (Get-FileHash -Algorithm SHA256 $published).Hash.ToLowerInvariant()
+          "$hash *$(Split-Path $published -Leaf)" | Set-Content "$published.sha256" -Encoding ascii
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v7
         with:
           name: LARO-Desktop-Windows
-          path: release/**/*.exe
+          path: release-artifacts/*
           if-no-files-found: error
+          retention-days: 14
 
   release:
     needs: [build-windows]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
     steps:
       - name: Download Windows artifact
         uses: actions/download-artifact@v8
@@ -63,6 +107,6 @@ jobs:
             ### Installation
             1. Download the Windows executable.
             2. Run it and complete provider setup in LARO when needed.
-          files: release/windows/**/*.exe
+          files: release/windows/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

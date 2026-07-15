@@ -1,37 +1,52 @@
-# Release Process, Canary & Rollback (Phase 069)
+# Release Process
 
-Date: 2026-07-06 · Branch `Phase-Imp`
+## Branches and Versions
 
-## Branch model
-- `Phase-Imp` (active work) → PR → `staging` → `main`.
-- `Phase-Imp` branched from `staging` (`1b78ed6`).
+Changes enter `main` through a reviewed pull request with passing CI. Use
+semantic versions from `package.json`, add the matching changelog entry, and tag
+the accepted main commit as `vX.Y.Z`. Tags build and publish the Windows portable
+artifact through `.github/workflows/build.yml`.
 
-## Versioning
-- Semantic version in `package.json` (`app.getVersion()` surfaces it via
-  `system.appInfo` and `/api/health`).
-- Tag releases `vX.Y.Z`; the release CI job (build.yml) publishes on tags.
+Tagged releases fail closed unless the tag exactly matches `package.json`,
+`WINDOWS_CSC_LINK` and `WINDOWS_CSC_KEY_PASSWORD` repository secrets are set,
+`release-acceptance.json` records approved public-brand and live-provider gates,
+and Windows reports the executable's Authenticode signature as `Valid`. Each
+approval must identify its approver, timestamp, evidence references, and, for
+providers, the tested provider scope. The workflow publishes only the versioned
+portable executable and its SHA-256 checksum. Main-branch and manual builds
+remain internal validation artifacts.
 
-## Pre-release quality gates (Phase 068 CI)
-1. `tsc` server + main — must pass (blocking).
-2. `npx vitest run` — must pass (blocking).
-3. `npm run doctor` — no prod-critical issues.
-4. `npm audit` triaged (docs/SUPPLY_CHAIN.md).
-5. Confirm no secrets committed; `.env` not bundled.
+## Pre-release Gates
 
-## Canary / staged rollout
-- **Feature flags (Phase 058)** are the canary mechanism. Risky features ship
-  **off** (e.g. `outreach.send.enabled=false`) and are enabled per-install /
-  per-operator via `featureFlags.set` or `FEATURE_*` env, then widened.
-- No blast radius: flags gate behaviour without redeploying.
+```powershell
+npm ci
+npm run gate
+npm run readiness
+npm audit --omit=dev
+npm run dist:win
+npm run release:check
+```
+
+For an API deployment, also run `npm run readiness:production` with the target
+environment. Confirm no `.env`, database, upload, token, or unrelated development
+asset appears in the package. Confirm the signature and checksum before rollout.
+Confirm that `build/icon.png` is the product-owner-approved public LARO mark.
+Before tagging, update `release-acceptance.json` in a reviewed pull request. A
+pending record is valid for normal development but blocks every tagged release.
+
+## Canary
+
+Risky behavior ships disabled. In particular, `outreach.send.enabled` defaults
+to `false` and must only be enabled after provider, approval, ownership,
+idempotency, emergency-stop, and audit checks pass.
 
 ## Rollback
-- **App**: revert to the previous tagged build/installer.
-- **Database**: restore from a backup — `scripts/backup.ts` / `npm run db:backup`
-  and `restoreDatabase()` (Phase 033/053). A `.bak-<ts>` of the live DB is kept on
-  restore.
-- **Config**: rotate secrets by deleting `userData/laro-secrets.json` (regenerated
-  on next launch — Phase 030).
 
-## Post-release verification
-- Hit `/api/live`, `/api/ready`, `/api/health`; run the critical-path smoke
-  (docs/ACCEPTANCE_TESTS.md); confirm `admin.invariants` is clean.
+1. Engage the emergency stop for an outreach incident.
+2. Reinstall the previous signed or retained application artifact.
+3. Validate the pre-release database backup.
+4. Stop traffic or close Desktop, then run `npm run db:restore -- <backup>`.
+5. Start the application and verify `/api/live`, `/api/ready`, `/api/health`,
+   `admin.invariants`, and the critical user flow.
+
+Do not restore a database while another process can continue writing to it.

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { protectedProcedure, router } from "../_core/trpc";
+import { evidenceUploadProcedure, protectedProcedure, router } from "../_core/trpc";
 import {
   searchEvidenceFiles,
   getEvidenceFile,
@@ -14,6 +14,12 @@ import { eq, and, desc } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { assertCaseOwnership } from "../_core/authz";
 import { sanitizeFilename, storageDelete, storageGet, storagePut } from "../storage";
+import {
+  isSupportedEvidenceMimeType,
+  MAX_EVIDENCE_BASE64_CHARS,
+  MAX_EVIDENCE_FILE_BYTES,
+} from "../../shared/evidenceFiles";
+import { TRPCError } from "@trpc/server";
 
 export const evidenceFilesRouter = router({
 
@@ -70,20 +76,36 @@ export const evidenceFilesRouter = router({
       return { id };
     }),
 
-  upload: protectedProcedure
+  upload: evidenceUploadProcedure
     .input(z.object({
       caseId: z.string().min(1),
       title: z.string().min(1).max(500),
       type: z.enum(["document", "email", "chat", "photo", "video", "audio", "other"]),
       fileName: z.string().min(1).max(255),
       mimeType: z.string().min(1).max(255),
-      base64: z.string().min(1).max(9_500_000),
+      source: z.enum(["manual", "desktop_scanner"]).optional().default("manual"),
+      base64: z.string().min(1).max(MAX_EVIDENCE_BASE64_CHARS).regex(
+        /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/,
+        "Invalid base64 evidence payload"
+      ),
     }))
     .mutation(async ({ ctx, input }) => {
+      const scannerCredential = ctx.authScope === "evidence-scanner";
+      if (scannerCredential !== (input.source === "desktop_scanner")) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: scannerCredential
+            ? "Scanner uploads must identify the desktop scanner source"
+            : "Desktop scanner provenance requires a scanner credential",
+        });
+      }
       await assertCaseOwnership(input.caseId, ctx.user.id);
       const bytes = Buffer.from(input.base64, "base64");
-      if (!bytes.length || bytes.length > 7 * 1024 * 1024) {
+      if (!bytes.length || bytes.length > MAX_EVIDENCE_FILE_BYTES) {
         throw new Error("Evidence uploads must be between 1 byte and 7 MB");
+      }
+      if (!isSupportedEvidenceMimeType(input.mimeType)) {
+        throw new Error("Evidence file type is not supported");
       }
 
       const fileName = sanitizeFilename(input.fileName);
@@ -94,7 +116,7 @@ export const evidenceFilesRouter = router({
           caseId: input.caseId,
           title: input.title,
           type: input.type,
-          source: "Upload",
+          source: input.source,
           fileName,
           fileSize: String(bytes.length),
           mimeType: input.mimeType,

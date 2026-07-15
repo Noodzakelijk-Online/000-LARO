@@ -39,7 +39,7 @@ import {
 import { APP_LOGO, APP_TITLE } from "@/const";
 import { ConnectionStatus } from "./ConnectionStatus";
 import { useIsMobile } from "@/hooks/useMobile";
-import { Home, LogOut, PanelLeft, Briefcase, Settings, HelpCircle, Shield, BarChart3, ChevronDown, ChevronRight } from "lucide-react";
+import { Home, LogOut, PanelLeft, Briefcase, Settings, HelpCircle, Shield, BarChart3, ChevronDown, ChevronRight, Megaphone } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import ChatWidget from "./ChatWidget";
@@ -49,6 +49,7 @@ import NotificationCenter from "./NotificationCenter";
 const mainMenuItems = [
   { icon: Home, label: "Home", path: "/" },
   { icon: Briefcase, label: "My Cases", path: "/cases" },
+  { icon: Megaphone, label: "Outreach", path: "/outreach" },
   { icon: HelpCircle, label: "Help & Resources", path: "/help" },
 ];
 

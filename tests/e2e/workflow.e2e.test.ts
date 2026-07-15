@@ -60,9 +60,10 @@ suite('Phase 043 — critical-path e2e', () => {
     const matches = await caller.matching.findLawyers({ caseId });
     expect(matches.length).toBeGreaterThan(0);
 
-    // Prepare outreach drafts (PendingApproval), then review + approve.
-    const prep = await caller.workflow.prepareDrafts({ caseId });
+    // One start action advances the case and prepares reviewable drafts.
+    const prep = await caller.workflow.initiateOutreach({ caseId });
     expect(prep.created).toBeGreaterThan(0);
+    expect(prep.alreadyInitiated).toBe(false);
 
     const queue = await caller.workflow.reviewQueue({ caseId });
     expect(queue.length).toBeGreaterThan(0);

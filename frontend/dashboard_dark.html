@@ -3238,6 +3238,33 @@
         let currentCommandCenterData = null;
         let workspaceSearchTerm = "";
         let dashboardToastTimer = null;
+        let dashboardAuthPromise = null;
+
+        async function ensureDashboardAuth(force = false) {
+            const existing = localStorage.getItem("laroAuthToken") || localStorage.getItem("auth_token") || localStorage.getItem("access_token");
+            if (existing && !force) return existing;
+            if (dashboardAuthPromise && !force) return dashboardAuthPromise;
+
+            dashboardAuthPromise = (async () => {
+                const response = await fetch("/api/auth/session-login", {
+                    method: "POST",
+                    credentials: "same-origin",
+                    headers: { "Content-Type": "application/json" },
+                    body: "{}"
+                });
+                if (!response.ok) throw new Error("Unable to establish the local LARO session");
+                const data = await response.json();
+                localStorage.setItem("laroAuthToken", data.token);
+                localStorage.removeItem("auth_token");
+                localStorage.removeItem("access_token");
+                return data.token;
+            })();
+            try {
+                return await dashboardAuthPromise;
+            } finally {
+                dashboardAuthPromise = null;
+            }
+        }
 
         function showDashboardToast(message) {
             const toast = document.getElementById("dashboardToast");
@@ -3927,12 +3954,17 @@
             }
         }
 
-        async function refreshCommandCenter() {
+        async function refreshCommandCenter(retry = true) {
             try {
+                const token = await ensureDashboardAuth();
                 const response = await fetch(COMMAND_CENTER_URL, {
                     credentials: "same-origin",
-                    headers: authHeaders()
+                    headers: { Authorization: `Bearer ${token}` }
                 });
+                if (response.status === 401 && retry) {
+                    await ensureDashboardAuth(true);
+                    return refreshCommandCenter(false);
+                }
                 if (!response.ok) return null;
                 const payload = await response.json();
                 renderCommandCenter(payload);
@@ -3995,9 +4027,17 @@
             return googleState === "connected";
         }
 
-        async function refreshGoogleConnectionStatus() {
+        async function refreshGoogleConnectionStatus(retry = true) {
             try {
-                const response = await fetch(GOOGLE_STATUS_URL, { credentials: "same-origin" });
+                const token = await ensureDashboardAuth();
+                const response = await fetch(GOOGLE_STATUS_URL, {
+                    credentials: "same-origin",
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                if (response.status === 401 && retry) {
+                    await ensureDashboardAuth(true);
+                    return refreshGoogleConnectionStatus(false);
+                }
                 if (!response.ok) throw new Error(`Google status ${response.status}`);
                 const status = await response.json();
                 setGoogleConnected(Boolean(status.connected), status.message, Boolean(status.configured));
@@ -4050,18 +4090,32 @@
             showGoogleModal();
         }
 
-        function beginGoogleOAuth() {
+        async function beginGoogleOAuth() {
             const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
             document.getElementById("modalConnectionText").textContent = "Opening Google OAuth...";
             const oauthUrl = `${GOOGLE_AUTHORIZE_URL}?return_to=${encodeURIComponent(returnTo)}&popup=1`;
-            googleOAuthPopup = window.open(oauthUrl, "laro-google-oauth", "popup=yes,width=560,height=760,menubar=no,toolbar=no,location=no,status=no");
+            googleOAuthPopup = window.open("about:blank", "laro-google-oauth", "popup=yes,width=560,height=760,menubar=no,toolbar=no,location=no,status=no");
             if (googleOAuthPopup) {
-                document.getElementById("modalConnectionText").textContent = "Complete Google sign-in in the opened window";
-                document.getElementById("googleConnectionMessage").textContent = "This dialog updates automatically after Google confirms access. The connection window can be closed after success.";
+                try {
+                    await refreshGoogleConnectionStatus();
+                    googleOAuthPopup.location.href = oauthUrl;
+                    document.getElementById("modalConnectionText").textContent = "Complete Google sign-in in the opened window";
+                    document.getElementById("googleConnectionMessage").textContent = "This dialog updates automatically after Google confirms access. The connection window can be closed after success.";
+                } catch (error) {
+                    googleOAuthPopup.close();
+                    googleOAuthPopup = null;
+                    setGoogleConnected(false, error.message || "Unable to establish the LARO session before Google sign-in.");
+                    return;
+                }
                 startGoogleOAuthPolling();
                 return;
             }
-            window.location.href = `${GOOGLE_AUTHORIZE_URL}?return_to=${encodeURIComponent(returnTo)}`;
+            try {
+                await refreshGoogleConnectionStatus();
+                window.location.href = `${GOOGLE_AUTHORIZE_URL}?return_to=${encodeURIComponent(returnTo)}`;
+            } catch (error) {
+                setGoogleConnected(false, error.message || "Unable to establish the LARO session before Google sign-in.");
+            }
         }
 
         function showGoogleModal() {
@@ -4178,7 +4232,7 @@
         }
 
         function authHeaders() {
-            const token = localStorage.getItem("auth_token") || localStorage.getItem("access_token") || localStorage.getItem("laroAuthToken");
+            const token = localStorage.getItem("laroAuthToken") || localStorage.getItem("auth_token") || localStorage.getItem("access_token");
             return token ? { Authorization: `Bearer ${token}` } : {};
         }
 

@@ -6,13 +6,20 @@ import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 
-// Try to load .env from different possible locations
-const possibleEnvPaths = [
-  path.join(process.cwd(), '.env'), // Development
-  path.join(__dirname, '..', '..', '.env'), // dist/server -> root
-  path.join((process as any).resourcesPath || '', '.env'), // Packaged app: extraResources lands here
-  path.join((process as any).resourcesPath || '', 'app', '.env') // Legacy fallback
-];
+// A packaged desktop must not trust an arbitrary launch directory's `.env`.
+// Standalone/development servers retain cwd and dist-root discovery, while a
+// packaged build may only read configuration deliberately shipped as a resource.
+const packagedDesktop = process.env.LARO_PACKAGED_DESKTOP === 'true';
+const resourcesPath = (process as any).resourcesPath || '';
+const possibleEnvPaths = packagedDesktop
+  ? [
+      path.join(resourcesPath, '.env'),
+      path.join(resourcesPath, 'app', '.env'),
+    ]
+  : [
+      path.join(process.cwd(), '.env'),
+      path.join(__dirname, '..', '..', '.env'),
+    ];
 
 for (const envPath of possibleEnvPaths) {
   if (fs.existsSync(envPath)) {
@@ -34,6 +41,9 @@ import { initCronScheduler } from './cronScheduler';
 import oauth2CallbacksRouter from './oauth2Callbacks';
 import { getDb } from './db';
 import { assertSecurityConfig, ENV } from './_core/env';
+import { listenHttpServer } from './listen';
+import { APP_VERSION } from './_core/version';
+import { initializeRealtimeServer } from './realtime';
 
 // ─── Environment ──────────────────────────────────────────────────────────────
 
@@ -44,6 +54,7 @@ const isDev = process.env.NODE_ENV === 'development';
 
 const app = express();
 const httpServer = createServer(app);
+initializeRealtimeServer(httpServer);
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
 
@@ -124,7 +135,7 @@ app.get('/api/health', async (_req, res) => {
   res.status(dbReady ? 200 : 503).json({
     status: dbReady ? 'healthy' : 'degraded',
     dbReady,
-    version: process.env.npm_package_version || '1.0.0',
+    version: APP_VERSION,
     env: ENV.NODE_ENV,
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
@@ -183,7 +194,7 @@ if (!isDev && !ENV.SERVER_ONLY) {
 }
 // ─── Lifecycle ──────────────────────────────────────────────────────────────
 
-export async function startServer(port: number = PORT) {
+export async function startServer(port: number = PORT): Promise<number> {
   // Phase 006: validate security-critical configuration BEFORE accepting any
   // request. In production this throws (fail-safe) if secrets are insecure; in
   // development it returns warnings we log loudly so the mode is unmistakable.
@@ -204,16 +215,10 @@ export async function startServer(port: number = PORT) {
     console.warn('[Server] Development mode will continue without a ready database.');
   }
 
-  return new Promise<void>((resolve) => {
-    httpServer.listen(port, ENV.HOST, () => {
-      console.log(`[Server] Integrated backend listening on http://${ENV.HOST}:${port}`);
-
-      // Initialize background cron jobs
-      initCronScheduler();
-
-      resolve();
-    });
-  });
+  const actualPort = await listenHttpServer(httpServer, port, ENV.HOST);
+  console.log(`[Server] Integrated backend listening on http://${ENV.HOST}:${actualPort}`);
+  initCronScheduler();
+  return actualPort;
 }
 
 // Start if run directly (though Electron usually calls startServer)

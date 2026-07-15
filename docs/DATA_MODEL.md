@@ -1,62 +1,44 @@
-# Data Model, Ownership & Persistence — 000-LARO (Phase 005)
+# Data Model, Ownership, and Persistence
 
-Date: 2026-07-06 · Branch `staging`
+Current as of 2026-07-15.
 
-Records the persistence design and the Phase 005 hardening applied to it.
+## Topology
 
----
+- `laro-server.sqlite`: canonical Electron/Express application data through
+  Drizzle ORM.
+- `laro-agent.db`: ephemeral desktop scanner progress and review state through
+  prepared SQLite statements.
+- Managed evidence bytes: AWS S3 when configured, otherwise the Electron
+  user-data upload directory.
+- The optional Flask command-center runtime retains a separate ledger database;
+  it does not silently share Electron records.
 
-## 1. Engine & topology
+Both SQLite connections enable WAL, foreign-key enforcement, and a 5-second busy
+timeout. The scanner database declares its scan-to-file foreign key.
 
-- **SQLite** via Drizzle ORM + better-sqlite3, running in-process inside Electron.
-- Two databases: `laro-server.sqlite` (app data, 47 tables, Drizzle) and
-  `laro-agent.db` (desktop scanner state, raw SQL).
+## Ownership
 
-## 2. Phase 005 changes (applied)
+- User-owned rows carry `userId` and are filtered by the authenticated user.
+- Case-scoped operations call `assertCaseOwnership`.
+- Lawyer directory rows are global reference data; private case/outreach records
+  remain owner-scoped.
+- Scanner uploads use a short-lived token for the signed-in user and pass through
+  the same evidence ownership guard as manual uploads.
 
-Implemented in [server/db.ts](../server/db.ts) as idempotent, boot-time steps so
-they apply to existing on-disk databases without a destructive migration
-(consistent with the codebase's existing `ensureAllTablesColumns` pattern):
+## Integrity
 
-- **Connection PRAGMAs** (`applyConnectionPragmas`): `journal_mode = WAL`,
-  `foreign_keys = ON`, `busy_timeout = 5000`. These are per-connection settings
-  SQLite does not persist, so they are set every time the DB is opened.
-- **Unique constraint on `users.email`** (`CREATE UNIQUE INDEX IF NOT EXISTS
-  users_email_unique ... WHERE email IS NOT NULL`) — one account per address.
-  Created defensively: if a legacy DB already holds duplicate emails the CREATE
-  fails and we log a reconcile-then-retry warning instead of crashing boot.
-- **Hot-path indexes** on the highest-traffic lookup columns that were previously
-  unindexed: `outreach_status(caseId|lawyerId|status)`, `email_messages(accountId)`,
-  `email_activity(caseId)`, `lawyer_interactions(lawyerId)`, `evidence_items(userId)`,
-  `unified_messages(userId)`, `notifications(userId)`, `audit_logs(userId)`.
+- User email and case/lawyer outreach pairs have unique indexes.
+- Evidence storage keys and filenames are sanitized and confined.
+- Evidence bytes produce SHA-256 provenance stored in metadata and projected as
+  `contentHash` / `hashAlgo` on reads.
+- Storage is deleted if evidence-record creation fails.
+- Reconciliation and invariant reports detect orphan or inconsistent records.
+- Backup validation and an isolated delete/restore/reopen drill are release
+  gates.
 
-Verification: `npx tsc -p tsconfig.server.json --noEmit` passes; indexes are
-created with `IF NOT EXISTS` and guarded against "no such table" on
-partially-migrated DBs.
+## Remaining model work
 
-## 3. Ownership model
-
-- User-owned tables carry a `userId` column and are filtered by
-  `ctx.user.id` in their routers (enforced — see Phase 008 / `docs/SECURITY.md`).
-- Case-scoped child tables (`communication_gaps`, `expected_documents`,
-  `outreach_status`, etc.) are keyed by `caseId` and are now guarded at the API
-  layer by `assertCaseOwnership(caseId, userId)` before any read/write.
-
-## 4. Known remaining gaps (future phases)
-
-- **Declared foreign keys**: `foreign_keys` is now ON, but the schema still
-  declares few explicit FK constraints. Introducing them requires reconciling
-  existing orphan rows first (Phase 054 reconciliation) — tracked, not done here.
-- **Numeric-as-text columns** (money, counts) remain `text`; typed columns are a
-  later data-model refinement (Phase 060/061).
-- **Two `shared/` copies** and the boot-time auto-`TEXT` column backfill remain;
-  see the technical-debt notes in `docs/phase-audit.md`.
-- **Whole-account deletion / export** (GDPR) is still missing — Phase 028.
-
-## 5. Design decision: runtime ensure vs generated migration
-
-The unique index and hot indexes are applied at runtime (idempotently) rather
-than via a new drizzle migration, because the existing migration 0001 performs
-destructive table rebuilds and the repo already relies on a runtime
-schema-reconciliation layer. `schema.ts` remains the declarative source of truth;
-a consolidated, non-destructive migration baseline is planned for Phase 033.
+Many relationships are still application-enforced rather than declared as SQL
+foreign keys. Adding constraints requires a reviewed migration after reconciling
+existing installations. Some historical money and count fields remain text and
+should be normalized through the same migration discipline.

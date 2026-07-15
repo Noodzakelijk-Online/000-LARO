@@ -25,7 +25,10 @@ export interface TestApp {
   schema: any;
   appRouter: any;
   tmpDir: string;
-  makeCaller: (user: { id: string; name?: string; role?: string; email?: string | null } | null) => any;
+  makeCaller: (
+    user: { id: string; name?: string; role?: string; email?: string | null } | null,
+    authScope?: "session" | "evidence-scanner"
+  ) => any;
   cleanup: () => void;
 }
 
@@ -60,9 +63,9 @@ export async function bootTestApp(): Promise<TestApp> {
 
   const db = await dbmod.getDb();
 
-  const makeCaller = (user: any) => {
+  const makeCaller = (user: any, authScope: "session" | "evidence-scanner" = "session") => {
     const { req, res } = fakeReqRes();
-    return appRouter.createCaller({ req, res, user });
+    return appRouter.createCaller({ req, res, user, authScope });
   };
 
   return {

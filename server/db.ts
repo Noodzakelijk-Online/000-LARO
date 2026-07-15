@@ -12,6 +12,7 @@ import { createCaseId } from './ids';
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 
 let _db: ReturnType<typeof drizzle> | null = null;
+let _sqlite: InstanceType<typeof Database> | null = null;
 
 // Determine DB path (using .laro.sqlite in current dir for now, 
 // will be refined in Electron to use app.getPath('userData'))
@@ -325,6 +326,7 @@ export async function getDb() {
     try {
       const dbPath = getDbPath();
       const sqlite = new Database(dbPath);
+      _sqlite = sqlite;
       _db = drizzle(sqlite);
       applyConnectionPragmas(sqlite); // Phase 005: WAL, foreign_keys, busy_timeout
       console.log("[Database] SQLite initialized at:", dbPath);
@@ -393,11 +395,29 @@ export async function getDb() {
 
     } catch (error) {
       console.error("[Database] Failed to connect to SQLite or run migrations:", error);
+      try { _sqlite?.close(); } catch { /* best effort after failed initialization */ }
+      _sqlite = null;
       _db = null; // Reset db if initialization fails
       throw error; // Throw so we don't silently return an empty db
     }
   }
   return _db;
+}
+
+/** Close and reset the singleton before an offline restore or shutdown. */
+export function closeDatabaseForMaintenance(): void {
+  if (!_sqlite) {
+    _db = null;
+    return;
+  }
+
+  try {
+    _sqlite.pragma("wal_checkpoint(TRUNCATE)");
+  } finally {
+    _sqlite.close();
+    _sqlite = null;
+    _db = null;
+  }
 }
 
 export async function upsertUser(user: InsertUser): Promise<void> {

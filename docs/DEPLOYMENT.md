@@ -51,5 +51,9 @@ problems, so it can gate a deploy.
 ## Notes
 
 - The desktop app is packaged separately with `npm run dist:*` (electron-builder).
-- Current Windows builds are internal validation artifacts. Public distribution requires an approved application icon and an Authenticode signing certificate.
+- Branch and manual Windows builds are internal validation artifacts. Tagged
+  releases require `WINDOWS_CSC_LINK` and `WINDOWS_CSC_KEY_PASSWORD`, verify a
+  valid Authenticode signature, and publish a SHA-256 checksum. The package uses
+  the established LARO mark from `build/icon.png`; the product owner must confirm
+  that this mark is the approved public brand before public distribution.
 - The packaged installer no longer bundles `.env` (Phase 030).

@@ -1,41 +1,40 @@
-# Threat Model & Security Design Review (Phase 064)
+# Threat Model
 
-Date: 2026-07-06 · Branch `Phase-Imp`
+Current as of 2026-07-15. Scope: Electron/React, the integrated Express/tRPC API,
+SQLite, managed evidence storage, and configured external providers.
 
-Scope: LARO desktop app (Electron + in-process Express/tRPC + local SQLite). STRIDE
-over the real attack surface. Cross-reference: `docs/SECURITY.md`.
+## Assets and boundaries
 
-## Assets
-- Client PII (case names/emails/addresses), evidence files, OAuth tokens, session
-  secrets, the local database.
+Assets include case PII, evidence bytes and hashes, OAuth credentials, session
+secrets, outreach content, the local databases, and release artifacts.
 
-## Trust boundaries
-1. Renderer ↔ in-process API (localhost:3000) — same machine, but reachable by any
-   local process / a malicious webpage (DNS-rebinding/CSRF class).
-2. API ↔ external providers (Google/Microsoft/S3/SMTP) over TLS.
-3. Packaged artifact ↔ end user's disk.
+Trust boundaries:
 
-## STRIDE
+1. sandboxed renderer to validated Electron IPC;
+2. loopback HTTP renderer/scanner to authenticated API;
+3. API to Google, Microsoft, S3, LLM, and email providers over TLS;
+4. signed release artifact to the end-user machine.
 
-| Category | Threat | Mitigation | Residual |
-|---|---|---|---|
-| **S**poofing | Forged session / local-agent token | Per-install random `JWT_SECRET`/`LOCAL_AGENT_TOKEN` (006/007); legacy constants dev-only | JWT has no server-side revocation |
-| **T**ampering | Path traversal on upload; malformed input | Key/filename sanitization + base-dir confinement (015/047); Zod validation + state machine (021/059) | — |
-| **R**epudiation | "Who did what?" | Audit log on case CRUD, outreach, login, GDPR (019) | Audit log is user-scoped only |
-| **I**nfo disclosure | Cross-tenant data (IDOR); secrets in artifact | `assertCaseOwnership` + protected procs (008, tested 046); `.env` no longer bundled (030); security headers/CSP (029) | Weak OAuth-token encryption (`Buffer.alloc(32,secret)`); permissive dev CORS |
-| **D**enial of service | Request flooding | In-memory rate limits on login/create/matching/outreach (018) | Not distributed (single-process desktop — acceptable) |
-| **E**levation | Non-admin hits admin ops | `adminProcedure` role gate (036/061, tested) | Signup can't create admins (by design) |
+## STRIDE review
 
-## Highest-priority residuals (tracked)
-1. **OAuth-token encryption** is weak — replace `Buffer.alloc(32, JWT_SECRET)` +
-   CBC with AES-256-GCM and a proper key. (`docs/SECURITY.md` §5 item 2.)
-2. **CSRF / permissive dev CORS** — add CSRF tokens / strict origin for
-   state-changing requests. (029 follow-up.)
-3. **JWT revocation** — add a server-side session/deny list.
-4. **Unauthenticated OAuth-connect** binds a mailbox to any userId (012 follow-up).
+| Category | Main threats | Current controls | Residual |
+| --- | --- | --- | --- |
+| Spoofing | forged sessions or scanner identity | per-install secrets, bcrypt, signed HTTP-only sessions, revocation, 15-minute scanner token | bearer theft remains possible on a compromised host |
+| Tampering | path traversal, altered evidence, invalid transitions | confined storage, filename/key sanitation, SHA-256 provenance, Zod validation, state machines | hashes detect change but do not provide external timestamping |
+| Repudiation | disputed user/provider action | owner-scoped audit history, delivery idempotency, response records | local administrators can access the host database |
+| Information disclosure | IDOR, token leakage, untrusted navigation | ownership guards, AES-256-GCM OAuth token storage, CSP/security headers, strict origins, sandboxed windows, protocol-checked external links | endpoint security and disk encryption remain operator responsibilities |
+| Denial of service | request floods, huge uploads or scans | rate limits, 10 MB API body cap, 7 MB evidence cap, explicit scan folders, bounded workers | in-memory limits are per process |
+| Elevation | renderer or user reaches operator functions | context isolation, narrow IPC, admin role gate, fail-closed production secrets | host compromise is outside the application boundary |
 
-## Design principles enforced
-- No third party contacted without human approval (026) + feature flag off by
-  default (058) + non-reversible warning (062).
-- Fail-safe config: production refuses insecure secrets (006).
-- No fake success surfaced as production (014).
+## External-action controls
+
+Preparing and approving outreach do not contact anyone. Sending requires case
+ownership, an approved state, a real provider, `outreach.send.enabled`, a
+released emergency stop, and an unused idempotency record. Provider failure
+leaves the action unsent.
+
+## Release controls
+
+Production checks include dependency audit, account-safety and unfinished-work
+scans, recovery drill, package/native-module verification, tagged-version
+matching, and mandatory Authenticode verification for public tagged releases.

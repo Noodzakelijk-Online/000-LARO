@@ -71,7 +71,20 @@ export const emailAccountsRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) return [];
-    return db.select().from(emailAccounts).where(eq(emailAccounts.userId, ctx.user.id));
+    return db
+      .select({
+        id: emailAccounts.id,
+        provider: emailAccounts.provider,
+        email: emailAccounts.email,
+        displayName: emailAccounts.displayName,
+        status: emailAccounts.status,
+        connectedAt: emailAccounts.connectedAt,
+        tokenExpiry: emailAccounts.tokenExpiry,
+        createdAt: emailAccounts.createdAt,
+        updatedAt: emailAccounts.updatedAt,
+      })
+      .from(emailAccounts)
+      .where(eq(emailAccounts.userId, ctx.user.id));
   }),
 
   refreshToken: protectedProcedure
@@ -120,9 +133,23 @@ export const emailAccountsRouter = router({
       return { success: true as const };
     }),
 
-  syncJobs: protectedProcedure.query(async () => {
+  syncJobs: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) return [];
-    return db.select().from(emailSyncJobs).limit(50);
+    return db
+      .select({
+        id: emailSyncJobs.id,
+        accountId: emailSyncJobs.accountId,
+        caseId: emailSyncJobs.caseId,
+        status: emailSyncJobs.status,
+        startDate: emailSyncJobs.startDate,
+        endDate: emailSyncJobs.endDate,
+        keywords: emailSyncJobs.keywords,
+        createdAt: emailSyncJobs.createdAt,
+      })
+      .from(emailSyncJobs)
+      .innerJoin(emailAccounts, eq(emailSyncJobs.accountId, emailAccounts.id))
+      .where(eq(emailAccounts.userId, ctx.user.id))
+      .limit(50);
   }),
 });

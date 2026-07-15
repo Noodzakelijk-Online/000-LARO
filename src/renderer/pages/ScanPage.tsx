@@ -1,178 +1,248 @@
-import { useState, useEffect } from 'react';
-import { toast } from 'sonner';
-import type { AgentConfig } from '../../shared/types';
+import { useEffect, useMemo, useState } from "react";
+import { AlertCircle, ArrowLeft, CheckCircle2, FileText, FolderSearch, Pause, Play, Square, Upload } from "lucide-react";
+import { toast } from "sonner";
+import { getElectronAPI } from "@/lib/electronApiShim";
+import type { FileItem, ScanProgress } from "../../../shared/types";
 
 interface Props {
-  config: AgentConfig | null;
-  onNavigate: (page: any) => void;
-  onLogout: () => void;
+  activeScanId: string | null;
+  onNavigate: (page: string) => void;
 }
 
-interface SystemInfo {
-  hostname: string;
-  username: string;
-  platform: string;
-  version: string;
-  freeMemory: number;
-  totalMemory: number;
-}
+type Phase = "scanning" | "paused" | "review" | "uploading" | "completed" | "failed" | "cancelled";
 
-export default function DashboardPage({ config, onNavigate, onLogout }: Props) {
-  const [sysInfo, setSysInfo] = useState<SystemInfo | null>(null);
-  const [updateInfo, setUpdateInfo] = useState<{ currentVersion: string } | null>(null);
+export default function ScanPage({ activeScanId, onNavigate }: Props) {
+  const electronAPI = getElectronAPI();
+  const [phase, setPhase] = useState<Phase>(activeScanId ? "scanning" : "review");
+  const [progress, setProgress] = useState<Partial<ScanProgress>>({ scanId: activeScanId ?? "" });
+  const [files, setFiles] = useState<FileItem[]>([]);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+
+  const loadFiles = async () => {
+    if (!activeScanId) return;
+    const result = await electronAPI.getScanFiles(activeScanId);
+    const next = (result.files ?? []) as FileItem[];
+    setFiles(next);
+    setSelectedIds(new Set(next.filter((file) => file.uploadStatus === "pending").map((file) => file.id)));
+  };
 
   useEffect(() => {
-    window.electronAPI.getSystemInfo().then(setSysInfo);
-    window.electronAPI.checkForUpdates().then(setUpdateInfo);
-  }, []);
+    electronAPI.clearScanProgressListeners();
+    electronAPI.clearUploadProgressListeners();
 
-  const memUsed = sysInfo
-    ? Math.round(((sysInfo.totalMemory - sysInfo.freeMemory) / sysInfo.totalMemory) * 100)
+    electronAPI.onScanProgress((next: Partial<ScanProgress>) => {
+      if (!activeScanId || next.scanId !== activeScanId) return;
+      setProgress((current) => ({ ...current, ...next }));
+      if (next.status === "review") {
+        setPhase("review");
+        void loadFiles();
+      } else if (next.status === "cancelled") {
+        setPhase("cancelled");
+      } else if (next.status === "failed" || next.status === "error") {
+        setPhase("failed");
+      }
+    });
+
+    electronAPI.onUploadProgress((next: { scanId?: string; done?: boolean; failedFiles?: number; fileId?: string; failed?: boolean; errorMessage?: string }) => {
+      if (!activeScanId || next.scanId !== activeScanId) return;
+      setProgress((current) => ({ ...current, ...next }));
+      if (next.fileId) {
+        setFiles((current) => current.map((file) => file.id === next.fileId
+          ? { ...file, uploadStatus: next.failed ? "failed" : "completed", uploadProgress: next.failed ? 0 : 100, errorMessage: next.errorMessage }
+          : file));
+      }
+      if (next.done) {
+        setPhase(next.failedFiles ? "failed" : "completed");
+        setBusy(false);
+        void loadFiles();
+      }
+    });
+
+    return () => {
+      electronAPI.clearScanProgressListeners();
+      electronAPI.clearUploadProgressListeners();
+    };
+  }, [activeScanId]);
+
+  const totalBytes = useMemo(() => files.reduce((sum, file) => sum + Number(file.size || 0), 0), [files]);
+  const selectedBytes = useMemo(
+    () => files.filter((file) => selectedIds.has(file.id)).reduce((sum, file) => sum + Number(file.size || 0), 0),
+    [files, selectedIds]
+  );
+
+  const toggleFile = (fileId: string) => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(fileId)) next.delete(fileId);
+      else next.add(fileId);
+      return next;
+    });
+  };
+
+  const startUpload = async () => {
+    if (!activeScanId || selectedIds.size === 0) return;
+    setBusy(true);
+    try {
+      await electronAPI.setScanFileSelection(activeScanId, [...selectedIds]);
+      setFiles((current) => current.map((file) => ({
+        ...file,
+        uploadStatus: selectedIds.has(file.id) ? "pending" : "excluded",
+      })));
+      await electronAPI.startUpload(activeScanId);
+      setPhase("uploading");
+    } catch (error) {
+      setBusy(false);
+      toast.error(error instanceof Error ? error.message : "Could not start the evidence upload");
+    }
+  };
+
+  const pause = async () => {
+    await electronAPI.pauseScan();
+    setPhase("paused");
+  };
+
+  const resume = async () => {
+    await electronAPI.resumeScan();
+    setPhase("scanning");
+  };
+
+  const cancel = async () => {
+    await electronAPI.stopScan();
+    setPhase("cancelled");
+  };
+
+  if (!activeScanId) {
+    return <EmptyScan onBack={() => onNavigate("home")} />;
+  }
+
+  const scanning = phase === "scanning" || phase === "paused";
+  const uploadableFiles = files.filter((file) => file.uploadStatus !== "excluded");
+  const uploadPercent = uploadableFiles.length
+    ? Math.round((uploadableFiles.filter((file) => file.uploadStatus === "completed").length / uploadableFiles.length) * 100)
     : 0;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col">
-      {/* Top bar */}
-      <header className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
-            <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
-            </svg>
-          </div>
-          <span className="font-semibold text-white">LARO Desktop</span>
-        </div>
-
-        <nav className="flex items-center gap-2">
-          <NavBtn label="Dashboard" active onClick={() => {}} />
-          <NavBtn label="New Scan" onClick={() => onNavigate('scan')} />
-          <NavBtn label="Settings" onClick={() => onNavigate('settings')} />
-          <button
-            onClick={onLogout}
-            className="ml-4 text-xs text-slate-500 hover:text-slate-300 transition-colors"
-          >
-            Sign out
-          </button>
-        </nav>
+    <main className="flex min-h-screen flex-col bg-slate-950 text-white">
+      <header className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
+        <button type="button" onClick={() => onNavigate("home")} className="flex items-center gap-2 text-sm text-slate-300 hover:text-white">
+          <ArrowLeft className="h-4 w-4" /> New scan
+        </button>
+        <StatusBadge phase={phase} />
+        <button type="button" onClick={() => window.close()} className="text-sm text-slate-400 hover:text-white">Close</button>
       </header>
 
-      {/* Content */}
-      <main className="flex-1 p-6 space-y-6">
-        {/* Welcome */}
-        <div>
-          <h1 className="text-xl font-bold">
-            Welcome, {sysInfo?.username ?? 'Agent'}
-          </h1>
-          <p className="text-slate-400 text-sm mt-1">
-            {sysInfo?.hostname} · {sysInfo?.platform} · v{updateInfo?.currentVersion ?? '…'}
-          </p>
-        </div>
-
-        {/* Quick action cards */}
-        <div className="grid grid-cols-3 gap-4">
-          <ActionCard
-            icon="🔍"
-            title="Scan for evidence"
-            description="Scan your computer for legal documents, emails, and files relevant to your case."
-            action="Start scan"
-            onClick={() => onNavigate('scan')}
-            primary
-          />
-          <ActionCard
-            icon="☁️"
-            title="Open LARO web app"
-            description="Access the full LARO dashboard, cases, lawyers, and outreach in your browser."
-            action="Open web app"
-            onClick={() => window.electronAPI.openExternal(config?.apiUrl ?? 'http://localhost:3000')}
-          />
-          <ActionCard
-            icon="⚙️"
-            title="Settings"
-            description="Configure your API connection, scan preferences, and agent options."
-            action="Open settings"
-            onClick={() => onNavigate('settings')}
-          />
-        </div>
-
-        {/* System info */}
-        <div className="bg-slate-900 rounded-xl p-5 border border-slate-800">
-          <h2 className="text-sm font-semibold text-slate-300 mb-4">System status</h2>
-          <div className="grid grid-cols-2 gap-x-8 gap-y-3">
-            <InfoRow label="Server URL" value={config?.apiUrl ?? '—'} />
-            <InfoRow label="Device" value={sysInfo?.hostname ?? '—'} />
-            <InfoRow label="Memory used" value={sysInfo ? `${memUsed}%` : '—'} />
-            <InfoRow label="Connected" value={config?.token ? '✅ Yes' : '❌ No'} />
+      <div className="mx-auto w-full max-w-5xl flex-1 space-y-5 overflow-auto p-5">
+        <section className="border border-slate-800 bg-slate-900 p-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h1 className="text-lg font-semibold">Evidence folder scan</h1>
+              <p className="mt-1 text-sm text-slate-400">
+                {scanning
+                  ? `${progress.scannedFiles ?? progress.totalFiles ?? 0} eligible files found so far`
+                  : `${files.length} eligible files found (${formatBytes(totalBytes)})`}
+              </p>
+            </div>
+            {scanning ? (
+              <div className="flex gap-2">
+                {phase === "paused" ? (
+                  <IconButton label="Resume scan" onClick={resume}><Play className="h-4 w-4" /></IconButton>
+                ) : (
+                  <IconButton label="Pause scan" onClick={pause}><Pause className="h-4 w-4" /></IconButton>
+                )}
+                <IconButton label="Cancel scan" onClick={cancel}><Square className="h-4 w-4" /></IconButton>
+              </div>
+            ) : null}
           </div>
-        </div>
+          {(scanning || phase === "uploading") && (
+            <div className="mt-4 h-2 overflow-hidden bg-slate-800">
+              <div className={`h-full bg-blue-500 ${scanning ? "w-1/3 animate-pulse" : ""}`} style={scanning ? undefined : { width: `${uploadPercent}%` }} />
+            </div>
+          )}
+          {progress.currentFile && scanning ? <p className="mt-2 truncate text-xs text-slate-500">{progress.currentFile}</p> : null}
+          {progress.errorMessage ? <p className="mt-3 text-sm text-red-400">{progress.errorMessage}</p> : null}
+        </section>
 
-        {/* How it works */}
-        <div className="bg-slate-900 rounded-xl p-5 border border-slate-800">
-          <h2 className="text-sm font-semibold text-slate-300 mb-4">How it works</h2>
-          <ol className="space-y-2">
-            {[
-              'Click "Start scan" and select folders to search',
-              'LARO finds documents, emails, and files relevant to your legal case',
-              'Review the found files and select which ones to upload',
-              'Files are uploaded securely to your LARO case dashboard',
-            ].map((step, i) => (
-              <li key={i} className="flex items-start gap-3 text-sm text-slate-400">
-                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-900 text-blue-300 text-xs flex items-center justify-center font-bold">
-                  {i + 1}
-                </span>
-                {step}
-              </li>
-            ))}
-          </ol>
-        </div>
-      </main>
-    </div>
-  );
-}
+        {(phase === "review" || phase === "uploading" || phase === "completed" || phase === "failed") && (
+          <section className="border border-slate-800 bg-slate-900">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-5 py-4">
+              <div>
+                <h2 className="font-medium">Review evidence</h2>
+                <p className="mt-1 text-xs text-slate-400">{selectedIds.size} selected, {formatBytes(selectedBytes)}</p>
+              </div>
+              {phase === "review" ? (
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setSelectedIds(new Set(files.map((file) => file.id)))} className="border border-slate-700 px-3 py-2 text-sm hover:bg-slate-800">Select all</button>
+                  <button type="button" onClick={() => setSelectedIds(new Set())} className="border border-slate-700 px-3 py-2 text-sm hover:bg-slate-800">Clear</button>
+                  <button type="button" disabled={busy || selectedIds.size === 0} onClick={startUpload} className="flex items-center gap-2 bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
+                    <Upload className="h-4 w-4" /> Upload selected
+                  </button>
+                </div>
+              ) : null}
+            </div>
 
-function NavBtn({ label, onClick, active }: { label: string; onClick: () => void; active?: boolean }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
-        active ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-      }`}
-    >
-      {label}
-    </button>
-  );
-}
-
-function ActionCard({ icon, title, description, action, onClick, primary }: {
-  icon: string; title: string; description: string; action: string;
-  onClick: () => void; primary?: boolean;
-}) {
-  return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col gap-3 hover:border-slate-700 transition-colors">
-      <span className="text-2xl">{icon}</span>
-      <div>
-        <h3 className="font-semibold text-sm text-white">{title}</h3>
-        <p className="text-xs text-slate-400 mt-1 leading-relaxed">{description}</p>
+            {files.length === 0 ? (
+              <div className="p-8 text-center text-sm text-slate-400">No supported evidence files up to 7 MB were found.</div>
+            ) : (
+              <div className="max-h-[52vh] divide-y divide-slate-800 overflow-auto">
+                {files.map((file) => (
+                  <label key={file.id} className="flex cursor-pointer items-center gap-3 px-5 py-3 hover:bg-slate-800/60">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(file.id)}
+                      disabled={phase !== "review"}
+                      onChange={() => toggleFile(file.id)}
+                      className="h-4 w-4 accent-blue-500"
+                    />
+                    <FileText className="h-4 w-4 shrink-0 text-slate-400" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm text-slate-200">{file.name}</p>
+                      <p className="truncate text-xs text-slate-500">{file.path}</p>
+                    </div>
+                    <span className="text-xs text-slate-500">{formatBytes(file.size)}</span>
+                    <FileState state={file.uploadStatus} />
+                  </label>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
       </div>
-      <button
-        onClick={onClick}
-        className={`mt-auto w-full py-2 rounded-lg text-sm font-medium transition-colors ${
-          primary
-            ? 'bg-blue-600 hover:bg-blue-700 text-white'
-            : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
-        }`}
-      >
-        {action}
-      </button>
-    </div>
+    </main>
   );
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
+function EmptyScan({ onBack }: { onBack: () => void }) {
   return (
-    <div className="flex items-center justify-between">
-      <span className="text-xs text-slate-500">{label}</span>
-      <span className="text-xs text-slate-300 font-mono">{value}</span>
-    </div>
+    <main className="flex min-h-screen items-center justify-center bg-slate-950 p-6 text-white">
+      <section className="max-w-md border border-slate-800 bg-slate-900 p-6 text-center">
+        <FolderSearch className="mx-auto h-8 w-8 text-slate-400" />
+        <h1 className="mt-4 text-lg font-semibold">No active scan</h1>
+        <p className="mt-2 text-sm text-slate-400">Select a case and one or more folders before starting.</p>
+        <button type="button" onClick={onBack} className="mt-5 bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-700">Configure scan</button>
+      </section>
+    </main>
   );
+}
+
+function StatusBadge({ phase }: { phase: Phase }) {
+  const tone = phase === "completed" ? "text-emerald-300" : phase === "failed" || phase === "cancelled" ? "text-red-300" : "text-blue-300";
+  return <span className={`text-xs font-semibold uppercase ${tone}`}>{phase}</span>;
+}
+
+function FileState({ state }: { state: FileItem["uploadStatus"] }) {
+  if (state === "completed") return <CheckCircle2 className="h-4 w-4 text-emerald-400" />;
+  if (state === "failed") return <AlertCircle className="h-4 w-4 text-red-400" />;
+  return null;
+}
+
+function IconButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
+  return <button type="button" title={label} aria-label={label} onClick={onClick} className="border border-slate-700 p-2 hover:bg-slate-800">{children}</button>;
+}
+
+function formatBytes(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  const index = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1);
+  return `${(value / 1024 ** index).toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
 }

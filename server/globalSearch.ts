@@ -143,16 +143,19 @@ export async function globalSearch(
   }
 
   // Search documents
-  if (types.includes("document")) {
+  if (types.includes("document") && userId) {
     try {
       const documentResults = await db
         .select()
         .from(documents)
         .where(
-          or(
-            like(documents.name, searchPattern),
-            like(documents.type, searchPattern),
-            like(documents.folder, searchPattern)
+          and(
+            or(
+              like(documents.name, searchPattern),
+              like(documents.type, searchPattern),
+              like(documents.folder, searchPattern)
+            ),
+            eq(documents.userId, userId)
           )
         )
         .limit(Math.min(limit, 20));
@@ -256,7 +259,8 @@ function calculateRelevance(query: string, fields: string[]): number {
  */
 export async function getSearchSuggestions(
   partialQuery: string,
-  limit: number = 5
+  limit: number = 5,
+  userId?: string
 ): Promise<string[]> {
   const db = await getDb();
   if (!db || partialQuery.length < 2) {
@@ -268,13 +272,15 @@ export async function getSearchSuggestions(
 
   try {
     // Get case type suggestions
-    const caseResults = await db
-      .select({ caseType: cases.caseType })
-      .from(cases)
-      .where(like(cases.caseType, searchPattern))
-      .limit(limit);
-    
-    caseResults.forEach(c => c.caseType && suggestions.add(c.caseType));
+    if (userId) {
+      const caseResults = await db
+        .select({ caseType: cases.caseType })
+        .from(cases)
+        .where(and(like(cases.caseType, searchPattern), eq(cases.userId, userId)))
+        .limit(limit);
+
+      caseResults.forEach(c => c.caseType && suggestions.add(c.caseType));
+    }
 
     // Get lawyer name suggestions
     const lawyerResults = await db

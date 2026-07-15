@@ -1,74 +1,41 @@
 #!/usr/bin/env node
-/**
- * Phase 034 — CLI doctor / self-diagnostic command.
- *
- * Prints a health report of the environment and configuration. Exits non-zero
- * when a production-critical problem is found (insecure/missing secrets), so it
- * can gate a deploy. Run via `npm run doctor`.
- */
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const isProd = (process.env.NODE_ENV || 'production') === 'production';
-
 const results = [];
-const ok = (m) => results.push(['ok', m]);
-const warn = (m) => results.push(['warn', m]);
-const fail = (m) => results.push(['fail', m]);
+const record = (level, message) => results.push([level, message]);
 
-// Node
 const [major, minor] = process.versions.node.split('.').map(Number);
-major === 22 && minor >= 12
-  ? ok(`Node ${process.versions.node}`)
-  : fail(`Node ${process.versions.node} (need Node 22.12+ in the Node 22 LTS line)`);
+record(major === 22 && minor >= 12 ? 'ok' : 'fail',
+  `Node ${process.versions.node}${major === 22 && minor >= 12 ? '' : ' (need Node 22.12+ in the Node 22 LTS line)'}`);
 
-// Secrets
-const INSECURE_JWT = 'change-this-secret';
-const INSECURE_COOKIE = 'change-this-cookie-secret';
-const jwt = process.env.JWT_SECRET || '';
-const cookie = process.env.COOKIE_SECRET || '';
-const jwtBad = !jwt || jwt === INSECURE_JWT;
-const cookieBad = !cookie || cookie === INSECURE_COOKIE;
-if (isProd) {
-  jwtBad ? fail('JWT_SECRET missing/insecure (production)') : ok('JWT_SECRET set');
-  cookieBad ? fail('COOKIE_SECRET missing/insecure (production)') : ok('COOKIE_SECRET set');
-} else {
-  jwtBad ? warn('JWT_SECRET using dev default') : ok('JWT_SECRET set');
-  cookieBad ? warn('COOKIE_SECRET using dev default') : ok('COOKIE_SECRET set');
+for (const [key, placeholder] of [['JWT_SECRET', 'change-this-secret'], ['COOKIE_SECRET', 'change-this-cookie-secret']]) {
+  const value = process.env[key] || '';
+  const bad = !value || value === placeholder;
+  record(bad ? (isProd ? 'fail' : 'warn') : 'ok', `${key} ${bad ? 'missing or insecure' : 'set'}${isProd ? ' (production)' : ''}`);
 }
 
-// Database driver + file
 try {
   require('better-sqlite3');
-  ok('better-sqlite3 native binding loads');
+  record('ok', 'better-sqlite3 native binding loads');
 } catch {
-  fail('better-sqlite3 native binding not built for Node (run: npm run rebuild:node)');
+  record('fail', 'better-sqlite3 native binding not built for Node (run: npm run rebuild:node)');
 }
+
 const dbPath = process.env.DATABASE_URL || 'laro.sqlite';
-fs.existsSync(dbPath) ? ok(`Database file present (${dbPath})`) : warn(`Database file not created yet (${dbPath})`);
+record(fs.existsSync(dbPath) ? 'ok' : 'warn', `Database ${fs.existsSync(dbPath) ? 'present' : 'not created yet'} (${dbPath})`);
+record(fs.existsSync(path.resolve('drizzle', 'meta', '_journal.json')) ? 'ok' : 'warn', 'Migrations folder present');
+record(process.env.FORGE_API_KEY ? 'ok' : 'warn', process.env.FORGE_API_KEY ? 'LLM provider configured' : 'No FORGE_API_KEY; provider-backed AI actions are unavailable');
+record(process.env.AWS_S3_BUCKET ? 'ok' : 'warn', process.env.AWS_S3_BUCKET ? 'S3 storage configured' : 'S3 not configured; evidence uses local storage');
+record(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET ? 'ok' : 'warn',
+  process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET ? 'Google OAuth configured' : 'Google OAuth not configured; Gmail and Drive are disabled');
 
-// Migrations folder
-fs.existsSync(path.resolve('drizzle', 'meta', '_journal.json'))
-  ? ok('Migrations folder present')
-  : warn('Migrations folder not found');
-
-// Optional integrations
-const has = (k) => !!process.env[k];
-has('FORGE_API_KEY')
-  ? ok('Forge-compatible LLM provider configured')
-  : warn('No FORGE_API_KEY — provider-backed AI actions are unavailable');
-has('AWS_S3_BUCKET') ? ok('S3 storage configured') : warn('S3 not configured — evidence stored on local disk');
-(has('GOOGLE_CLIENT_ID') && has('GOOGLE_CLIENT_SECRET'))
-  ? ok('Google OAuth configured')
-  : warn('Google OAuth not configured — Gmail/Drive disabled');
-
-// Report
-const icon = { ok: '✓', warn: '!', fail: '✗' };
-console.log(`\nLARO doctor — env=${process.env.NODE_ENV || 'production'}\n`);
-for (const [level, msg] of results) console.log(`  ${icon[level]} ${msg}`);
-const fails = results.filter((r) => r[0] === 'fail').length;
-const warns = results.filter((r) => r[0] === 'warn').length;
-console.log(`\n${results.length} checks — ${fails} failed, ${warns} warnings.\n`);
-process.exit(fails > 0 ? 1 : 0);
+console.log(`\nLARO doctor: env=${process.env.NODE_ENV || 'production'}\n`);
+for (const [level, message] of results) console.log(`  [${level.toUpperCase()}] ${message}`);
+const failures = results.filter(([level]) => level === 'fail').length;
+const warnings = results.filter(([level]) => level === 'warn').length;
+console.log(`\n${results.length} checks: ${failures} failed, ${warnings} warnings.\n`);
+process.exit(failures > 0 ? 1 : 0);

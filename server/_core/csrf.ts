@@ -16,6 +16,8 @@ import type { Request, Response, NextFunction } from 'express';
 const STATIC_ALLOWED = [
   'http://localhost:3000',
   'http://localhost:5173',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:5173',
   'app://.',
   'file://',
 ];
@@ -33,10 +35,21 @@ export function isAllowedOrigin(origin: string | undefined | null): boolean {
   return allowedOrigins().includes(origin);
 }
 
+function isRequestOrigin(req: Request, candidate: string): boolean {
+  const host = req.get?.('host') || req.headers.host;
+  if (!host) return false;
+  const protocol = req.protocol || ((req.socket as { encrypted?: boolean } | undefined)?.encrypted ? 'https' : 'http');
+  try {
+    return new URL(candidate).origin === `${protocol}://${host}`;
+  } catch {
+    return false;
+  }
+}
+
 /** Strict CORS: only ever echo an allowlisted origin — never `*` with credentials. */
 export function corsMiddleware(req: Request, res: Response, next: NextFunction): void {
   const origin = req.headers.origin;
-  if (origin && isAllowedOrigin(origin)) {
+  if (origin && (isAllowedOrigin(origin) || isRequestOrigin(req, origin))) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Vary', 'Origin');
     res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -44,7 +57,7 @@ export function corsMiddleware(req: Request, res: Response, next: NextFunction):
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
   }
   if (req.method === 'OPTIONS') {
-    res.sendStatus(isAllowedOrigin(origin) || !origin ? 200 : 403);
+    res.sendStatus((!!origin && isRequestOrigin(req, origin)) || isAllowedOrigin(origin) || !origin ? 200 : 403);
     return;
   }
   next();
@@ -58,7 +71,7 @@ export function csrfGuard(req: Request, res: Response, next: NextFunction): void
 
   const origin = req.headers.origin;
   if (origin) {
-    if (!isAllowedOrigin(origin)) {
+    if (!isAllowedOrigin(origin) && !isRequestOrigin(req, origin)) {
       res.status(403).json({ error: 'CSRF: origin not allowed' });
       return;
     }
@@ -69,7 +82,7 @@ export function csrfGuard(req: Request, res: Response, next: NextFunction): void
   if (referer) {
     try {
       const refOrigin = new URL(referer).origin;
-      if (!isAllowedOrigin(refOrigin)) {
+      if (!isAllowedOrigin(refOrigin) && !isRequestOrigin(req, refOrigin)) {
         res.status(403).json({ error: 'CSRF: referer not allowed' });
         return;
       }

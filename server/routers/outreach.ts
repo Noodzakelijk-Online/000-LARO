@@ -16,11 +16,13 @@ export const outreachRouter = router({
         .select({
           id: outreachStatus.id,
           lawyerName: lawyers.name,
+          lawyerEmail: lawyers.email,
           status: outreachStatus.status,
           distanceKm: outreachStatus.distanceKm,
           initialContact: outreachStatus.initialContact,
           followUpsSent: outreachStatus.followUpsSent,
           response: outreachStatus.response,
+          responseTimeHours: outreachStatus.responseTimeHours,
           lastContact: outreachStatus.lastContact,
         })
         .from(outreachStatus)

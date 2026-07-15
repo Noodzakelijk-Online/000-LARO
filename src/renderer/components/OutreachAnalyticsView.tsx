@@ -83,16 +83,17 @@ export default function OutreachAnalyticsView({ caseId }: OutreachAnalyticsViewP
 
   // Calculate metrics from outreach history
   const totalOutreaches = outreachHistory?.length || 0;
-  const responsesReceived = outreachHistory?.filter(o => o.response)?.length || 0;
-  const acceptances = outreachHistory?.filter(o => o.status === "Accepted")?.length || 0;
-  const responseRate = totalOutreaches > 0 ? (responsesReceived / totalOutreaches) * 100 : 0;
+  const sentOutreach = outreachHistory?.filter(o => ["Sent", "Interested", "Declined", "NoResponse"].includes(String(o.status))).length || 0;
+  const responsesReceived = outreachHistory?.filter(o => ["Interested", "Declined"].includes(String(o.status)) || !!o.response)?.length || 0;
+  const acceptances = outreachHistory?.filter(o => o.status === "Interested")?.length || 0;
+  const responseRate = sentOutreach > 0 ? (responsesReceived / sentOutreach) * 100 : 0;
   const acceptanceRate = responsesReceived > 0 ? (acceptances / responsesReceived) * 100 : 0;
 
   // Calculate average response time
   const responseTimes = outreachHistory
     ?.filter(o => o.lastContact && o.initialContact)
     ?.map(o => {
-      const initial = new Date(o.initialContact).getTime();
+      const initial = new Date(o.initialContact!).getTime();
       const last = new Date(o.lastContact!).getTime();
       return (last - initial) / (1000 * 60 * 60); // hours
     }) || [];
@@ -155,7 +156,7 @@ export default function OutreachAnalyticsView({ caseId }: OutreachAnalyticsViewP
             <div className="text-center py-8 text-muted-foreground">
               <Mail className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p>No outreach attempts yet</p>
-              <p className="text-sm mt-2">Lawyers will be contacted automatically based on matching criteria</p>
+              <p className="text-sm mt-2">Prepare and approve outreach from the Lawyer Matching tab.</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -168,7 +169,7 @@ export default function OutreachAnalyticsView({ caseId }: OutreachAnalyticsViewP
                     <div className="flex items-center gap-3">
                       <div className="font-medium">{outreach.lawyerName || "Unknown Lawyer"}</div>
                       <Badge variant={
-                        outreach.status === "Accepted" ? "default" :
+                        outreach.status === "Interested" ? "default" :
                         outreach.status === "Declined" ? "destructive" :
                         outreach.status === "Contacted" ? "secondary" :
                         "outline"
@@ -183,7 +184,7 @@ export default function OutreachAnalyticsView({ caseId }: OutreachAnalyticsViewP
                       )}
                     </div>
                     <div className="text-sm text-muted-foreground mt-1">
-                      Initial contact: {format(new Date(outreach.initialContact), "MMM dd, yyyy HH:mm")}
+                      Initial contact: {outreach.initialContact ? format(new Date(outreach.initialContact), "MMM dd, yyyy HH:mm") : "Not recorded"}
                       {outreach.lastContact && outreach.lastContact !== outreach.initialContact && (
                         <> • Last contact: {format(new Date(outreach.lastContact), "MMM dd, yyyy HH:mm")}</>
                       )}
@@ -246,9 +247,9 @@ export default function OutreachAnalyticsView({ caseId }: OutreachAnalyticsViewP
               <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
                 <Mail className="h-5 w-5 text-blue-500 mt-0.5" />
                 <div>
-                  <div className="font-medium text-blue-500">Outreach Starting Soon</div>
+                  <div className="font-medium text-blue-500">No Outreach Yet</div>
                   <div className="text-sm text-muted-foreground mt-1">
-                    We're matching your case with qualified lawyers. Outreach will begin shortly.
+                    Prepare drafts from Lawyer Matching when you are ready to begin.
                   </div>
                 </div>
               </div>

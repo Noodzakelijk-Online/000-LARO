@@ -4,6 +4,22 @@ import { getDb } from "./db";
 import { evidence } from "./schema";
 
 export type EvidenceFileRow = typeof evidence.$inferSelect;
+export type EvidenceFileView = EvidenceFileRow & {
+  contentHash: string | null;
+  hashAlgo: string | null;
+};
+
+function withProvenance(row: EvidenceFileRow): EvidenceFileView {
+  let metadata: Record<string, unknown> = {};
+  if (typeof row.metadata === "string" && row.metadata) {
+    try { metadata = JSON.parse(row.metadata); } catch { metadata = {}; }
+  }
+  return {
+    ...row,
+    contentHash: typeof metadata.contentHash === "string" ? metadata.contentHash : null,
+    hashAlgo: typeof metadata.hashAlgo === "string" ? metadata.hashAlgo : null,
+  };
+}
 
 export async function searchEvidenceFiles(opts: {
   userId: string;
@@ -11,7 +27,7 @@ export async function searchEvidenceFiles(opts: {
   query?: string;
   limit?: number;
   offset?: number;
-}): Promise<{ files: EvidenceFileRow[]; total: number }> {
+}): Promise<{ files: EvidenceFileView[]; total: number }> {
   const db = await getDb();
   if (!db) return { files: [], total: 0 };
 
@@ -40,10 +56,10 @@ export async function searchEvidenceFiles(opts: {
     .limit(limit)
     .offset(offset);
 
-  return { files, total };
+  return { files: files.map(withProvenance), total };
 }
 
-export async function getEvidenceFile(userId: string, id: string): Promise<EvidenceFileRow | null> {
+export async function getEvidenceFile(userId: string, id: string): Promise<EvidenceFileView | null> {
   const db = await getDb();
   if (!db) return null;
   const [row] = await db
@@ -51,7 +67,7 @@ export async function getEvidenceFile(userId: string, id: string): Promise<Evide
     .from(evidence)
     .where(and(eq(evidence.id, id), eq(evidence.userId, userId)))
     .limit(1);
-  return row ?? null;
+  return row ? withProvenance(row) : null;
 }
 
 export async function createEvidenceFile(
@@ -114,14 +130,15 @@ export async function deleteEvidenceFile(userId: string, id: string): Promise<bo
   return (res as unknown as { affectedRows?: number }).affectedRows !== 0;
 }
 
-export async function getEvidenceFilesByCase(userId: string, caseId: string): Promise<EvidenceFileRow[]> {
+export async function getEvidenceFilesByCase(userId: string, caseId: string): Promise<EvidenceFileView[]> {
   const db = await getDb();
   if (!db) return [];
-  return db
+  const rows = await db
     .select()
     .from(evidence)
     .where(and(eq(evidence.userId, userId), eq(evidence.caseId, caseId)))
     .orderBy(desc(evidence.createdAt));
+  return rows.map(withProvenance);
 }
 
 export async function getEvidenceStats(userId: string): Promise<{

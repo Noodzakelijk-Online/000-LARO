@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState, ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, ReactNode } from "react";
 import { io, Socket } from "socket.io-client";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
@@ -25,16 +25,16 @@ const TOAST_BURST_WINDOW_MS = 1500;
 function useBurstToaster() {
   const buffers = useRef<Record<string, { count: number; lastDetail?: string; timer: ReturnType<typeof setTimeout> | null }>>({});
 
-  const flush = (key: string, render: (count: number, lastDetail?: string) => void) => {
+  const flush = useCallback((key: string, render: (count: number, lastDetail?: string) => void) => {
     const buf = buffers.current[key];
     if (!buf || buf.count === 0) return;
     render(buf.count, buf.lastDetail);
     buf.count = 0;
     buf.lastDetail = undefined;
     buf.timer = null;
-  };
+  }, []);
 
-  const push = (
+  const push = useCallback((
     key: string,
     detail: string | undefined,
     render: (count: number, lastDetail?: string) => void
@@ -52,7 +52,7 @@ function useBurstToaster() {
       lastDetail: detail,
       timer: setTimeout(() => flush(key, render), TOAST_BURST_WINDOW_MS),
     };
-  };
+  }, [flush]);
 
   return { push };
 }
@@ -61,22 +61,21 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const { user } = useAuth();
+  const userId = user?.id;
   const { push } = useBurstToaster();
 
   useEffect(() => {
-    if (!user) return;
+    if (!userId) return;
 
     // Connect to WebSocket server
-    const socketInstance = io(window.location.origin, {
-      transports: ["websocket", "polling"],
-    });
+    // Keep Socket.IO's polling-first negotiation so restrictive proxies can
+    // establish the authenticated session before attempting a WebSocket upgrade.
+    const socketInstance = io(window.location.origin);
 
     socketInstance.on("connect", () => {
       console.log("[WebSocket] Connected");
       setIsConnected(true);
 
-      // Join user-specific room
-      socketInstance.emit("join", user.id);
     });
 
     socketInstance.on("disconnect", () => {
@@ -132,7 +131,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     return () => {
       socketInstance.disconnect();
     };
-  }, [user, push]);
+  }, [userId, push]);
 
   return (
     <WebSocketContext.Provider value={{ socket, isConnected }}>

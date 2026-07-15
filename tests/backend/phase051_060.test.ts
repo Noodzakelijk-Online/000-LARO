@@ -2,7 +2,7 @@
  * Phases 051–060 — DB-backed behavioural tests (real temp DB).
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { existsSync } from 'fs';
+import { existsSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { bootTestApp, sqliteAvailable, type TestApp } from '../helpers/app';
 import { buildUser, buildLawyer } from '../factories';
@@ -106,6 +106,10 @@ suite('Phases 051–060 — services', () => {
     const check = validateBackup(dest);
     expect(check.valid).toBe(true);
     expect(check.tables).toContain('cases');
+
+    const corrupt = join(app.tmpDir, 'corrupt.sqlite');
+    writeFileSync(corrupt, 'not a sqlite database');
+    expect(validateBackup(corrupt).valid).toBe(false);
   });
 
   it('Phase 056 — billing status reports free tier, no forced billing', async () => {

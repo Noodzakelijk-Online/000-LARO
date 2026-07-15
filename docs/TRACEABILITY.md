@@ -21,7 +21,7 @@ None — every artifact cited in the matrix exists. ✅
 | 006 | Configuration validation & startup guards | Implemented | ✅ `tests/smoke/configGuard.smoke.test.ts` |
 | 007 | Authentication model & session security | Implemented | ✅ `server/crypto.ts`<br>✅ `server/sessionRevocation.ts` |
 | 008 | Authorization & resource ownership | Implemented | ✅ `tests/smoke/authz.smoke.test.ts` |
-| 010 | Frontend architecture & navigation | Partial | ✅ `docs/FRONTEND_ARCHITECTURE.md` |
+| 010 | Frontend architecture & navigation | Implemented | ✅ `docs/FRONTEND_ARCHITECTURE.md` |
 | 011 | Core workflow vertical slice | Implemented | ✅ `server/outreachSend.ts` |
 | 012 | External provider reality review | Implemented | ✅ `docs/PROVIDERS.md` |
 | 013 | Compliance & policy boundaries | Partial | ✅ `docs/COMPLIANCE.md` |
@@ -34,14 +34,14 @@ None — every artifact cited in the matrix exists. ✅
 | 029 | Security headers & web security | Implemented | ✅ `server/index.ts` |
 | 030 | Secrets management & credential rotation | Implemented | ✅ `server/crypto.ts` |
 | 031 | Local dev one-command experience | Implemented | ✅ `scripts/setup.mjs`<br>✅ `docs/DEPLOYMENT.md` |
-| 033 | Database migrations & rollback safety | Implemented | ✅ `scripts/db-backup.mjs`<br>✅ `docs/MIGRATIONS.md` |
+| 033 | Database migrations & rollback safety | Implemented | ✅ `scripts/backup.ts`<br>✅ `docs/MIGRATIONS.md` |
 | 034 | CLI / doctor self-diagnostic | Implemented | ✅ `scripts/doctor.mjs` |
 | 038 | Fake provider lab for tests only | Implemented | ✅ `server/testing/fakeProviders.ts` |
 | 039 | Test-data factories & fixtures | Implemented | ✅ `tests/factories.ts` |
 | 041 | Frontend & component test suite | Partial | ✅ `tests/frontend/frontendLogic.test.ts` |
 | 042 | Worker/job test suite | Implemented | ✅ `tests/backend/worker.test.ts` |
 | 043 | End-to-end workflow tests | Implemented | ✅ `tests/e2e/workflow.e2e.test.ts` |
-| 044 | Acceptance test matrix | Implemented | ✅ `docs/ACCEPTANCE_TESTS.md`<br>✅ `tests/acceptance/acceptance.test.ts` |
+| 044 | Acceptance test matrix | Implemented | ✅ `docs/ACCEPTANCE_TESTS.md` |
 | 045 | Adversarial break-the-app tests | Implemented | ✅ `tests/security/adversarial.test.ts` |
 | 046 | Cross-user isolation tests | Implemented | ✅ `tests/security/isolation.test.ts` |
 | 047 | File safety & path traversal tests | Implemented | ✅ `tests/security/fileSafety.test.ts` |
@@ -78,14 +78,14 @@ None — every artifact cited in the matrix exists. ✅
 | 081 | Non-technical user simulation | Implemented | ✅ `tests/sim/nonTechnicalUser.test.ts` |
 | 082 | Autonomy-first product review | Implemented | ✅ `docs/AUTONOMY_REVIEW.md` |
 | 083 | Value review | Implemented | ✅ `docs/VALUE_REVIEW.md` |
-| 084 | Product realism review | Implemented | ✅ `docs/PRODUCT_REALISM.md` |
+| 084 | Product realism review | Implemented | ✅ `docs/PRODUCT_REALISM.md`<br>✅ `docs/FINAL_VERIFICATION_REPORT.md` |
 | 085 | Requirements traceability | Implemented | ✅ `scripts/traceability.mjs`<br>✅ `docs/TRACEABILITY.md` |
 | 086 | Task graph & dependency map | Implemented | ✅ `docs/TASK_GRAPH.md` |
 | 087 | Codex worklog & checkpoints | Implemented | ✅ `docs/CODEX_WORKLOG.md`<br>✅ `docs/CODEX_CHECKPOINTS.md`<br>✅ `docs/PROCESS_RULES.md` |
 | 088 | Context-loss resume safety | Implemented | ✅ `docs/RESUME_SAFETY.md` |
 | 089 | Progressive stabilization gates | Implemented | ✅ `scripts/stabilization-gate.mjs` |
 | 090 | No vanity work rule | Implemented | ✅ `docs/PROCESS_RULES.md` |
-| 091 | Feature-level definition of done | Implemented | ✅ `docs/DEFINITION_OF_DONE.md` |
+| 091 | Feature-level definition of done | Implemented | ✅ `docs/DEFINITION_OF_DONE.md`<br>✅ `docs/FINAL_VERIFICATION_REPORT.md` |
 | 092 | Fresh-clone dry run | Implemented | ✅ `docs/FRESH_CLONE.md` |
 | 093 | Manual verification evidence | Implemented | ✅ `docs/MANUAL_VERIFICATION.md` |
 | 094 | Final no-excuses search | Implemented | ✅ `scripts/no-excuses-scan.mjs`<br>✅ `docs/NO_EXCUSES_SEARCH.md` |

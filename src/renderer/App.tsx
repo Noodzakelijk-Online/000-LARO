@@ -1,95 +1,134 @@
-import { useState, useEffect } from 'react';
-import AuthPage from '../renderer/pages/AuthPage';
-import HomePage from '../renderer/pages/HomePage';
-import ScanPage from '../renderer/pages/ScanPage';
-import SettingsPage from '../renderer/pages/SettingsPage';
-import { getElectronApi } from '../../lib/electronApiShim';
-import type { AgentConfig } from '../../shared/types';
-import { Page } from '../../shared/types';
+import { useEffect, useState } from "react";
+import HomePage from "./pages/HomePage";
+import ScanPage from "./pages/ScanPage";
+import SettingsPage from "./pages/SettingsPage";
+import { getElectronAPI } from "@/lib/electronApiShim";
+import { trpc } from "@/lib/trpc";
+import type { AgentConfig, Page } from "../../shared/types";
 
 export default function App() {
-  const electronAPI = getElectronApi();
-  const [currentPage, setCurrentPage] = useState<Page>('auth');
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [config, setConfig] = useState<any>(null);
+  const electronAPI = getElectronAPI();
+  const [currentPage, setCurrentPage] = useState<Page>("home");
+  const [config, setConfig] = useState<AgentConfig | null>(null);
+  const [activeScanId, setActiveScanId] = useState<string | null>(null);
+
+  const session = trpc.auth.me.useQuery(undefined, {
+    refetchInterval: 15_000,
+    retry: false,
+  });
+  const scannerToken = trpc.auth.getScannerToken.useQuery(undefined, {
+    enabled: Boolean(session.data),
+    refetchInterval: 10 * 60_000,
+    retry: false,
+  });
 
   useEffect(() => {
-    // Load configuration on startup
-    loadConfig();
+    void electronAPI.getConfig().then(setConfig).catch((error: unknown) => {
+      console.error("Failed to load scanner configuration:", error);
+    });
   }, []);
 
-  const loadConfig = async () => {
-    try {
-      const cfg = await electronAPI.getConfig();
-      setConfig(cfg);
-      
-      // Check if already authenticated
-      if (cfg.token && cfg.deviceId) {
-        setIsAuthenticated(true);
-        setCurrentPage('home');
-      }
-    } catch (error) {
-      console.error('Failed to load config:', error);
-    }
-  };
+  useEffect(() => {
+    if (!session.data || !scannerToken.data?.token) return;
+    void electronAPI
+      .setConfig({
+        token: scannerToken.data.token,
+        userId: session.data.id,
+        deviceId: "local-evidence-scanner",
+      })
+      .then(setConfig)
+      .catch((error: unknown) => console.error("Failed to authorize evidence scanner:", error));
+  }, [session.data, scannerToken.data?.token]);
 
-  const handleLogin = async (token: string, deviceId: string, userId: string) => {
-    // Update config
-    const updatedConfig = await electronAPI.setConfig({
-      token,
-      deviceId,
-      userId,
-    });
-    
-    setConfig(updatedConfig);
-    setIsAuthenticated(true);
-    setCurrentPage('home');
-  };
+  useEffect(() => {
+    if (!session.isFetched || session.data || !config?.token) return;
+    void electronAPI
+      .setConfig({ token: null, userId: null, deviceId: null, caseId: null })
+      .then(setConfig)
+      .catch((error: unknown) => console.error("Failed to clear scanner authorization:", error));
+  }, [session.isFetched, session.data, config?.token]);
 
-  const handleAgentSettingsSave = async (updates: Partial<AgentConfig>) => {
-    const updated = await electronAPI.setConfig(updates);
+  const saveSettings = async (updates: Partial<AgentConfig>) => {
+    const updated = await electronAPI.setConfig({ caseId: updates.caseId ?? null });
     setConfig(updated);
   };
 
-  const handleLogout = async () => {
-    // Clear authentication
-    const updatedConfig = await electronAPI.setConfig({
-      token: null,
-      deviceId: null,
-      userId: null,
-    });
-    
-    setConfig(updatedConfig);
-    setIsAuthenticated(false);
-    setCurrentPage('auth');
-  };
+  if (session.isLoading || (session.data && scannerToken.isLoading) || !config) {
+    return <ScannerStatus title="Preparing evidence scanner" detail="Verifying your LARO session..." />;
+  }
 
-  const renderPage = () => {
-    if (!isAuthenticated) {
-      return <AuthPage onLogin={handleLogin} />;
-    }
+  if (!session.data || scannerToken.isError || !scannerToken.data?.token) {
+    return (
+      <ScannerStatus
+        title="Sign in required"
+        detail="Sign in in the main LARO window, then retry. The scanner never creates an offline or anonymous session."
+        actionLabel="Retry"
+        onAction={() => void session.refetch()}
+      />
+    );
+  }
 
-    switch (currentPage) {
-      case 'home':
-        return <HomePage onNavigate={(page) => setCurrentPage(page as Page)} config={config} />;
-      case 'scan':
-        return <ScanPage onNavigate={(page) => setCurrentPage(page as Page)} onLogout={handleLogout} config={config} />;
-      case 'settings':
-        return (
-          <SettingsPage
-            config={config}
-            onNavigate={(page) => setCurrentPage(page as Page)}
-            onSave={handleAgentSettingsSave}
-          />
-        );
-      default:
-        return <HomePage onNavigate={(page) => setCurrentPage(page as Page)} config={config} />;
-    }
-  };
+  if (!config.token || config.userId !== session.data.id) {
+    return <ScannerStatus title="Preparing evidence scanner" detail="Creating a short-lived upload session..." />;
+  }
 
+  switch (currentPage) {
+    case "scan":
+      return (
+        <ScanPage
+          activeScanId={activeScanId}
+          onNavigate={(page) => setCurrentPage(page as Page)}
+        />
+      );
+    case "settings":
+      return (
+        <SettingsPage
+          config={config}
+          onNavigate={(page) => setCurrentPage(page as Page)}
+          onSave={saveSettings}
+        />
+      );
+    default:
+      return (
+        <HomePage
+          config={config}
+          onNavigate={(page) => setCurrentPage(page as Page)}
+          onScanStarted={(scanId) => {
+            setActiveScanId(scanId);
+            setCurrentPage("scan");
+          }}
+        />
+      );
+  }
+}
+
+function ScannerStatus({
+  title,
+  detail,
+  actionLabel,
+  onAction,
+}: {
+  title: string;
+  detail: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
   return (
-    <div className="w-full h-full bg-gray-50">
-      {renderPage()}
-    </div>
+    <main className="flex min-h-screen items-center justify-center bg-slate-950 p-6 text-white">
+      <section className="w-full max-w-md border border-slate-800 bg-slate-900 p-6">
+        <h1 className="text-lg font-semibold">{title}</h1>
+        <p className="mt-2 text-sm leading-6 text-slate-400">{detail}</p>
+        <div className="mt-5 flex gap-3">
+          {actionLabel && onAction ? (
+            <button type="button" onClick={onAction} className="bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-700">
+              {actionLabel}
+            </button>
+          ) : null}
+          <button type="button" onClick={() => window.close()} className="border border-slate-700 px-4 py-2 text-sm hover:bg-slate-800">
+            Close
+          </button>
+        </div>
+      </section>
+    </main>
   );
 }
