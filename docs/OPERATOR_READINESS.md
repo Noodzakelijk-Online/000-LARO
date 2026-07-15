@@ -30,6 +30,8 @@ user-data directory.
 - [ ] A target-data backup is validated before migration or release.
 - [ ] The emergency stop and `outreach.send.enabled` state are confirmed.
 - [ ] Google, storage, LLM, and outreach providers show their intended state.
+- [ ] `release-acceptance.json` matches the package version and records reviewed
+      brand and enabled-provider evidence; the tagged workflow rejects pending gates.
 - [ ] The tagged portable executable reports Authenticode `Valid` and its
       published SHA-256 matches the release checksum.
 

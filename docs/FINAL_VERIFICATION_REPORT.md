@@ -85,6 +85,11 @@ Windows reports `NotSigned`, matching the external signing gate below.
 | Public branding | Awaiting owner confirmation | Product owner confirms `build/icon.png` / `public/laro-logo.png` as the approved public mark |
 | Live providers | Not exercised with production accounts | Target Google OAuth, storage/LLM as used, and outbound email credentials pass consent, send, callback, and audit checks |
 
+These external states are represented in `release-acceptance.json`. Normal
+development builds may retain pending gates, but the tagged release workflow
+requires reviewed approver, timestamp, evidence, and provider-scope records
+before it can publish.
+
 ## Residual engineering work
 
 - The Electron and Flask runtimes still have separate schemas and databases.

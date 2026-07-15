@@ -9,9 +9,12 @@ artifact through `.github/workflows/build.yml`.
 
 Tagged releases fail closed unless the tag exactly matches `package.json`,
 `WINDOWS_CSC_LINK` and `WINDOWS_CSC_KEY_PASSWORD` repository secrets are set,
-and Windows reports the executable's Authenticode signature as `Valid`. The
-workflow publishes only the versioned portable executable and its SHA-256
-checksum. Main-branch and manual builds remain internal validation artifacts.
+`release-acceptance.json` records approved public-brand and live-provider gates,
+and Windows reports the executable's Authenticode signature as `Valid`. Each
+approval must identify its approver, timestamp, evidence references, and, for
+providers, the tested provider scope. The workflow publishes only the versioned
+portable executable and its SHA-256 checksum. Main-branch and manual builds
+remain internal validation artifacts.
 
 ## Pre-release Gates
 
@@ -21,12 +24,15 @@ npm run gate
 npm run readiness
 npm audit --omit=dev
 npm run dist:win
+npm run release:check
 ```
 
 For an API deployment, also run `npm run readiness:production` with the target
 environment. Confirm no `.env`, database, upload, token, or unrelated development
 asset appears in the package. Confirm the signature and checksum before rollout.
 Confirm that `build/icon.png` is the product-owner-approved public LARO mark.
+Before tagging, update `release-acceptance.json` in a reviewed pull request. A
+pending record is valid for normal development but blocks every tagged release.
 
 ## Canary
 

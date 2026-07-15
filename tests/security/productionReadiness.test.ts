@@ -63,13 +63,35 @@ describe('production readiness regressions', () => {
     expect(readFileSync(join(ROOT, 'assets/rechtspraak-keywords-analysis.json'), 'utf8')).toContain('keywords_by_area');
   });
 
-  it('fails closed for unsigned or version-mismatched tagged releases', () => {
+  it('fails closed for unsigned, unaccepted, or version-mismatched tagged releases', async () => {
     const workflow = readFileSync(join(ROOT, '.github/workflows/build.yml'), 'utf8');
+    const acceptance = JSON.parse(readFileSync(join(ROOT, 'release-acceptance.json'), 'utf8'));
+    const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+    const { validateReleaseAcceptance } = await import('../../scripts/release-acceptance.mjs');
     expect(workflow).toContain('WINDOWS_CSC_LINK is required for tagged releases');
     expect(workflow).toContain("Tag ${{ github.ref_name }} does not match package version");
+    expect(workflow).toContain('release-acceptance.mjs --require-approved --tag');
     expect(workflow).toContain("$signature.Status -ne 'Valid'");
     expect(workflow).toContain('release-artifacts/*');
     expect(workflow).not.toContain('path: release/**/*.exe');
+    expect(acceptance.version).toBe(pkg.version);
+    expect(['pending', 'approved']).toContain(acceptance.gates.publicBrand.status);
+    expect(['pending', 'approved']).toContain(acceptance.gates.liveProviders.status);
+
+    const rejected = validateReleaseAcceptance({
+      record: {
+        schemaVersion: 1,
+        version: pkg.version,
+        gates: {
+          publicBrand: { status: 'pending' },
+          liveProviders: { status: 'pending', providerScope: [] },
+        },
+      },
+      packageVersion: pkg.version,
+      tag: `v${pkg.version}`,
+      requireApproved: true,
+    });
+    expect(rejected.errors).toContain('release acceptance pending: publicBrand, liveProviders');
   });
 
   it('does not invent an active dashboard case or preserve unverified OAuth status', () => {

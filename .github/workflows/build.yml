@@ -37,6 +37,9 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CSC_KEY_PASSWORD)) {
             throw 'WINDOWS_CSC_KEY_PASSWORD is required for tagged releases'
           }
+      - name: Validate external release acceptance
+        if: startsWith(github.ref, 'refs/tags/')
+        run: node scripts/release-acceptance.mjs --require-approved --tag "${{ github.ref_name }}"
       - name: Run production quality gate
         run: npm run gate
       - name: Build application

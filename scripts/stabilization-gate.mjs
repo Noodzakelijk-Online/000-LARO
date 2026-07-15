@@ -6,9 +6,10 @@
  *   1. server typecheck
  *   2. Electron main-process typecheck
  *   3. renderer typecheck and lint
- *   4. traceability report
- *   5. runtime and account safety scans
- *   6. Vitest suite
+ *   4. release acceptance record schema/version
+ *   5. traceability report
+ *   6. runtime and account safety scans
+ *   7. Vitest suite
  */
 import { spawnSync } from "child_process";
 import { fileURLToPath } from "url";
@@ -31,6 +32,7 @@ const BLOCKING = [
   { name: "main typecheck", cmd: process.execPath, args: [TSC, "-p", "tsconfig.main.json", "--noEmit"] },
   { name: "renderer typecheck", cmd: process.execPath, args: [TSC, "-p", "tsconfig.renderer.json", "--noEmit"] },
   { name: "lint", cmd: process.execPath, args: [NPM_CLI, "run", "lint", "--silent"] },
+  { name: "release acceptance record", cmd: process.execPath, args: ["scripts/release-acceptance.mjs"] },
   { name: "traceability", cmd: process.execPath, args: ["scripts/traceability.mjs", "--write"] },
   { name: "no-excuses scan", cmd: process.execPath, args: ["scripts/no-excuses-scan.mjs", "--write"] },
   { name: "account safety", cmd: process.execPath, args: ["scripts/account-safety-check.mjs", "--write"] },
