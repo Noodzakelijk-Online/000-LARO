@@ -92,7 +92,7 @@ export default function OutreachAnalyticsView({ caseId }: OutreachAnalyticsViewP
   const responseTimes = outreachHistory
     ?.filter(o => o.lastContact && o.initialContact)
     ?.map(o => {
-      const initial = new Date(o.initialContact).getTime();
+      const initial = new Date(o.initialContact!).getTime();
       const last = new Date(o.lastContact!).getTime();
       return (last - initial) / (1000 * 60 * 60); // hours
     }) || [];
@@ -183,7 +183,7 @@ export default function OutreachAnalyticsView({ caseId }: OutreachAnalyticsViewP
                       )}
                     </div>
                     <div className="text-sm text-muted-foreground mt-1">
-                      Initial contact: {format(new Date(outreach.initialContact), "MMM dd, yyyy HH:mm")}
+                      Initial contact: {outreach.initialContact ? format(new Date(outreach.initialContact), "MMM dd, yyyy HH:mm") : "Not recorded"}
                       {outreach.lastContact && outreach.lastContact !== outreach.initialContact && (
                         <> • Last contact: {format(new Date(outreach.lastContact), "MMM dd, yyyy HH:mm")}</>
                       )}

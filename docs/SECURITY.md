@@ -1,6 +1,6 @@
 # Security
 
-Date: 2026-07-13 | Branch: `agent/production-readiness-audit`
+Date: 2026-07-15
 
 ## Implemented controls
 
@@ -14,13 +14,18 @@ Date: 2026-07-13 | Branch: `agent/production-readiness-audit`
 - Production startup fails if the database cannot initialize. The API binds to loopback by default; Docker explicitly opts into `0.0.0.0`.
 - Provider-backed AI fails closed without `FORGE_API_KEY`. Transactional email never reports delivery when no provider is configured and does not log reset codes in production.
 - Evidence storage rejects empty/traversal-only keys, confines local paths, preserves content hashes, and can use the AWS default credential chain instead of blank credentials.
+- The Flask runtime has no seeded users. It persists Werkzeug password hashes and SHA-256 digests of bearer/reset tokens in an ignored SQLite auth database; reset tokens are short-lived, single-use, and never returned by the API.
+- Flask investor access requires an operator-provisioned password. The dashboard does not fabricate investor metrics when no verified metrics source exists.
+- Email account list responses exclude encrypted access and refresh tokens. Sync jobs, global document search, search suggestions, and unified inbox writes are caller-scoped.
+- Google status requires authentication, OAuth state is attached to the authenticated Flask session, callback JavaScript uses Jinja's JSON serializer, and return URLs are restricted to local absolute paths.
 
 ## Operational requirements
 
 - Keep standalone secrets and OAuth credentials outside Git and outside desktop artifacts.
 - Keep `outreach.send.enabled` off until provider, approval, emergency-stop, ownership, and audit checks are verified in the target environment.
 - Run `npm run gate`, `npm audit --audit-level=moderate`, and the Python suite before release.
-- Treat the remaining renderer TypeScript contract debt as a release risk: Vite production builds are blocking, but the dedicated renderer compiler is still a non-blocking diagnostic.
+- Configure `LARO_PASSWORD_RESET_URL_TEMPLATE` and SMTP before enabling password reset for non-local users.
+- Renderer TypeScript and lint are blocking release gates.
 
 ## Rotation
 

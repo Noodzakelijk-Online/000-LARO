@@ -92,7 +92,9 @@ export default function AutoSyncScheduler({ caseId }: AutoSyncSchedulerProps) {
 
     try {
       // Simulate sync
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      await new Promise((resolve) => {
+        setTimeout(resolve, 2000);
+      });
 
       setSchedules((prev) => ({
         ...prev,

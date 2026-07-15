@@ -69,7 +69,9 @@ async function fetchCasesPage(page: number, maxRetries = 3): Promise<any> {
       }
       
       // Exponential backoff
-      await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
+      await new Promise(resolve => {
+        setTimeout(resolve, 1000 * Math.pow(2, attempt));
+      });
     }
   }
 }
@@ -226,7 +228,9 @@ async function scrapeAllCases(resume = true): Promise<void> {
       }
       
       // Rate limiting
-      await new Promise(resolve => setTimeout(resolve, delayBetweenRequests));
+      await new Promise(resolve => {
+        setTimeout(resolve, delayBetweenRequests);
+      });
       
     } catch (error: any) {
       console.error(`[Rechtspraak] Error on page ${page}:`, error.message);

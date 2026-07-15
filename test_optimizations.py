@@ -13,7 +13,7 @@ import unittest
 import requests
 from unittest import mock
 from flask import Flask, jsonify, session
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -210,7 +210,7 @@ class TestDatabaseOptimization(unittest.TestCase):
         
         # Get case metrics
         case_metrics = timeseries_manager.get_case_metrics(
-            start_time=datetime.utcnow() - timedelta(days=30),
+            start_time=datetime.now(timezone.utc) - timedelta(days=30),
             category='FAMILY_LAW'
         )
         self.assertIsInstance(case_metrics, dict)

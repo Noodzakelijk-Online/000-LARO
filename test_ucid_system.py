@@ -22,6 +22,7 @@ class TestUCIDSystem(unittest.TestCase):
         """Clean up test environment after each test."""
         db.session.remove()
         db.drop_all()
+        db.engine.dispose()
         self.app_context.pop()
 
     def test_01_generate_ucid(self):
@@ -44,7 +45,6 @@ class TestUCIDSystem(unittest.TestCase):
         self.assertEqual(created_case.name, "Test Case 1")
         print(f"Created case with UCID: {created_case.ucid}, Name: {created_case.name}")
         print("test_02_create_case_with_ucid: PASSED")
-        return created_case.ucid
 
     def test_03_link_sub_case_id(self):
         """Test linking a sub-case ID to an existing UCID."""

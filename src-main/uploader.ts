@@ -68,7 +68,9 @@ export class FileUploader extends EventEmitter {
       while (!this.shouldStop) {
         // Wait if paused
         while (this.isPaused && !this.shouldStop) {
-          await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise(resolve => {
+            setTimeout(resolve, 100);
+          });
         }
         
         if (this.shouldStop) break;
@@ -259,7 +261,9 @@ export class FileUploader extends EventEmitter {
         
         // Exponential backoff
         const delay = Math.pow(2, retryCount) * 1000;
-        await new Promise(resolve => setTimeout(resolve, delay));
+        await new Promise(resolve => {
+          setTimeout(resolve, delay);
+        });
         
         // Retry
         this.activeUploads.delete(file.id);

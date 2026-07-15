@@ -195,7 +195,6 @@ export default function BulkEvidenceUpload({
     if (!open || !hasPending || isUploading) return;
     void uploadAll();
     // Auto-upload immediately after files are added via click/drag-drop.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [files, open, isUploading]);
 
   const cancelAll = () => {

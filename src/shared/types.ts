@@ -14,6 +14,7 @@ export interface AgentConfig {
   deviceId: string | null;
   deviceName: string;
   userId: string | null;
+  caseId: string | null;
 }
 
 export interface ScanConfig {

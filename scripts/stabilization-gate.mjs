@@ -5,12 +5,10 @@
  * Gates:
  *   1. server typecheck
  *   2. Electron main-process typecheck
- *   3. traceability report
- *   4. runtime and account safety scans
- *   5. Vitest suite
- *
- * The dedicated renderer configuration is reported separately because its
- * historical API-contract backlog is not yet a release-blocking gate.
+ *   3. renderer typecheck and lint
+ *   4. traceability report
+ *   5. runtime and account safety scans
+ *   6. Vitest suite
  */
 import { spawnSync } from "child_process";
 import { fileURLToPath } from "url";
@@ -30,21 +28,19 @@ const BLOCKING = [
   { name: "Node native-module rebuild", cmd: process.execPath, args: [NPM_CLI, "rebuild", "better-sqlite3"] },
   { name: "server typecheck", cmd: process.execPath, args: [TSC, "-p", "tsconfig.server.json", "--noEmit"] },
   { name: "main typecheck", cmd: process.execPath, args: [TSC, "-p", "tsconfig.main.json", "--noEmit"] },
+  { name: "renderer typecheck", cmd: process.execPath, args: [TSC, "-p", "tsconfig.renderer.json", "--noEmit"] },
+  { name: "lint", cmd: process.execPath, args: [NPM_CLI, "run", "lint", "--silent"] },
   { name: "traceability", cmd: process.execPath, args: ["scripts/traceability.mjs", "--write"] },
   { name: "no-excuses scan", cmd: process.execPath, args: ["scripts/no-excuses-scan.mjs", "--write"] },
   { name: "account safety", cmd: process.execPath, args: ["scripts/account-safety-check.mjs", "--write"] },
   { name: "tests", cmd: process.execPath, args: [VITEST, "run"] },
 ];
 
-const WARN = [
-  { name: "renderer typecheck (tracked debt D2)", cmd: process.execPath, args: [TSC, "-p", "tsconfig.renderer.json", "--noEmit"] },
-];
-
-function run(step, silent = false) {
+function run(step) {
   process.stdout.write(`\n> gate: ${step.name}\n`);
   const result = spawnSync(step.cmd, step.args, {
     cwd: ROOT,
-    stdio: silent ? "pipe" : "inherit",
+    stdio: "inherit",
   });
   return result.status === 0;
 }
@@ -55,11 +51,6 @@ for (const step of BLOCKING) {
     process.exit(1);
   }
   console.log(`PASS: ${step.name}`);
-}
-
-console.log("\nNON-BLOCKING DIAGNOSTICS");
-for (const step of WARN) {
-  console.log(run(step, true) ? `PASS: ${step.name}` : `WARN: ${step.name} remains unresolved; run npm run typecheck:renderer for details`);
 }
 
 console.log("\nALL BLOCKING STABILIZATION GATES PASSED");

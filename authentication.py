@@ -1,381 +1,403 @@
-from flask import Flask, request, jsonify, session
-import os
-import json
+"""Persistent authentication for the local Flask case workspace."""
+
+from __future__ import annotations
+
+import datetime as dt
 import hashlib
+import logging
+import os
 import secrets
-import datetime
+import smtplib
+import sqlite3
+from contextlib import contextmanager
+from email.message import EmailMessage
 from functools import wraps
+from typing import Callable, Iterator, Optional
+from urllib.parse import quote
+
+from flask import jsonify, request, session
+from werkzeug.security import check_password_hash, generate_password_hash
+
+
+logger = logging.getLogger(__name__)
+
+
+def _utcnow() -> dt.datetime:
+    return dt.datetime.now(dt.timezone.utc)
+
+
+def _iso(value: dt.datetime) -> str:
+    return value.astimezone(dt.timezone.utc).isoformat()
+
+
+def _parse_time(value: str) -> dt.datetime:
+    parsed = dt.datetime.fromisoformat(value)
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=dt.timezone.utc)
+
+
+def _token_digest(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
 
 class EmailAuthenticationSystem:
-    """
-    Email authentication system for the Legal AI Reach Out platform.
-    Handles both user authentication and investor access.
-    """
-    
+    """Durable bearer-session authentication with owner-aware route guards."""
+
+    SESSION_TTL = dt.timedelta(days=1)
+    RESET_TTL = dt.timedelta(minutes=15)
+
     def __init__(self, app):
-        """Initialize the authentication system with a Flask app."""
         self.app = app
-        self.app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(16))
-        
-        # In a real implementation, these would be stored in a database
-        # For demonstration purposes, we'll use in-memory storage
-        self.users = {}
-        self.investors = {}
-        self.sessions = {}
-        self.reset_tokens = {}
-        
-        # Load sample data
-        self._load_sample_data()
-        
-        # Register routes
+        configured_path = app.config.get("LARO_AUTH_DATABASE_PATH") or os.environ.get("LARO_AUTH_DATABASE_PATH")
+        self.database_path = os.path.abspath(configured_path or os.path.join(app.instance_path, "laro_auth.sqlite3"))
+        os.makedirs(os.path.dirname(self.database_path), exist_ok=True)
+        self._initialize_database()
         self._register_routes()
-    
-    def _load_sample_data(self):
-        """Load sample user and investor data."""
-        # Sample users
-        sample_users = [
-            {
-                'email': 'user@example.com',
-                'password_hash': self._hash_password('password123'),
-                'first_name': 'John',
-                'last_name': 'Doe',
-                'created_at': datetime.datetime.now().isoformat()
-            },
-            {
-                'email': 'user2@example.com',
-                'password_hash': self._hash_password('password123'),
-                'first_name': 'Jane',
-                'last_name': 'Smith',
-                'created_at': datetime.datetime.now().isoformat()
-            }
-        ]
-        
-        for user in sample_users:
-            self.users[user['email']] = user
-        
-        # Sample investors
-        sample_investors = [
-            {
-                'email': 'investor@example.com',
-                'access_level': 2,
-                'created_at': datetime.datetime.now().isoformat()
-            },
-            {
-                'email': 'investor2@example.com',
-                'access_level': 1,
-                'created_at': datetime.datetime.now().isoformat()
-            }
-        ]
-        
-        for investor in sample_investors:
-            self.investors[investor['email']] = investor
-    
-    def _register_routes(self):
-        """Register authentication routes with the Flask app."""
-        # User authentication routes
-        @self.app.route('/api/auth/register', methods=['POST'])
+
+    @contextmanager
+    def _connection(self) -> Iterator[sqlite3.Connection]:
+        connection = sqlite3.connect(self.database_path, timeout=10)
+        connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute("PRAGMA busy_timeout = 5000")
+        try:
+            yield connection
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+
+    def _initialize_database(self) -> None:
+        with self._connection() as connection:
+            connection.executescript(
+                """
+                PRAGMA journal_mode = WAL;
+                CREATE TABLE IF NOT EXISTS auth_users (
+                    email TEXT PRIMARY KEY,
+                    password_hash TEXT NOT NULL,
+                    first_name TEXT NOT NULL,
+                    last_name TEXT NOT NULL,
+                    user_type TEXT NOT NULL DEFAULT 'user',
+                    access_level INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    last_login TEXT
+                );
+                CREATE TABLE IF NOT EXISTS auth_sessions (
+                    token_hash TEXT PRIMARY KEY,
+                    email TEXT NOT NULL,
+                    user_type TEXT NOT NULL,
+                    expires_at TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS auth_sessions_email_idx ON auth_sessions(email);
+                CREATE INDEX IF NOT EXISTS auth_sessions_expiry_idx ON auth_sessions(expires_at);
+                CREATE TABLE IF NOT EXISTS auth_reset_tokens (
+                    token_hash TEXT PRIMARY KEY,
+                    email TEXT NOT NULL,
+                    expires_at TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS auth_reset_email_idx ON auth_reset_tokens(email);
+                """
+            )
+
+    @staticmethod
+    def _normalize_email(value: object) -> str:
+        return str(value or "").strip().lower()
+
+    def _get_user(self, email: str) -> Optional[sqlite3.Row]:
+        with self._connection() as connection:
+            return connection.execute("SELECT * FROM auth_users WHERE email = ?", (email,)).fetchone()
+
+    def _register_routes(self) -> None:
+        @self.app.route("/api/auth/register", methods=["POST"])
         def register():
-            data = request.json
-            
-            # Validate required fields
-            required_fields = ['email', 'password', 'first_name', 'last_name']
-            for field in required_fields:
-                if field not in data:
-                    return jsonify({'error': f'Missing required field: {field}'}), 400
-            
-            email = data['email']
-            
-            # Check if user already exists
-            if email in self.users:
-                return jsonify({'error': 'Email already registered'}), 400
-            
-            # Create new user
-            new_user = {
-                'email': email,
-                'password_hash': self._hash_password(data['password']),
-                'first_name': data['first_name'],
-                'last_name': data['last_name'],
-                'created_at': datetime.datetime.now().isoformat()
-            }
-            
-            self.users[email] = new_user
-            
-            # Create session
-            session_token = self._create_session(email, 'user')
-            
+            data = request.get_json(silent=True) or {}
+            email = self._normalize_email(data.get("email"))
+            password = str(data.get("password") or "")
+            first_name = str(data.get("first_name") or "").strip()
+            last_name = str(data.get("last_name") or "").strip()
+            if not email or "@" not in email:
+                return jsonify({"error": "A valid email is required"}), 400
+            if len(password) < 8:
+                return jsonify({"error": "Password must contain at least 8 characters"}), 400
+            if not first_name or not last_name:
+                return jsonify({"error": "First name and last name are required"}), 400
+
+            try:
+                with self._connection() as connection:
+                    connection.execute(
+                        """INSERT INTO auth_users
+                           (email, password_hash, first_name, last_name, user_type, access_level, created_at)
+                           VALUES (?, ?, ?, ?, 'user', 0, ?)""",
+                        (email, generate_password_hash(password), first_name, last_name, _iso(_utcnow())),
+                    )
+            except sqlite3.IntegrityError:
+                return jsonify({"error": "Email already registered"}), 409
+
+            token = self._create_session(email, "user")
             return jsonify({
-                'message': 'Registration successful',
-                'user': {
-                    'email': email,
-                    'first_name': new_user['first_name'],
-                    'last_name': new_user['last_name']
-                },
-                'token': session_token
+                "message": "Registration successful",
+                "user": {"email": email, "first_name": first_name, "last_name": last_name},
+                "token": token,
             }), 201
-        
-        @self.app.route('/api/auth/login', methods=['POST'])
+
+        @self.app.route("/api/auth/login", methods=["POST"])
         def login():
-            data = request.json
-            
-            # Validate required fields
-            if 'email' not in data or 'password' not in data:
-                return jsonify({'error': 'Email and password are required'}), 400
-            
-            email = data['email']
-            password = data['password']
-            
-            # Check if user exists
-            if email not in self.users:
-                return jsonify({'error': 'Invalid email or password'}), 401
-            
-            # Verify password
-            user = self.users[email]
-            if not self._verify_password(password, user['password_hash']):
-                return jsonify({'error': 'Invalid email or password'}), 401
-            
-            # Create session
-            session_token = self._create_session(email, 'user')
-            
-            # Update last login
-            user['last_login'] = datetime.datetime.now().isoformat()
-            
+            data = request.get_json(silent=True) or {}
+            email = self._normalize_email(data.get("email"))
+            password = str(data.get("password") or "")
+            user = self._get_user(email)
+            if not user or not check_password_hash(user["password_hash"], password):
+                return jsonify({"error": "Invalid email or password"}), 401
+
+            now = _utcnow()
+            with self._connection() as connection:
+                connection.execute("UPDATE auth_users SET last_login = ? WHERE email = ?", (_iso(now), email))
+            token = self._create_session(email, user["user_type"])
             return jsonify({
-                'message': 'Login successful',
-                'user': {
-                    'email': email,
-                    'first_name': user['first_name'],
-                    'last_name': user['last_name']
+                "message": "Login successful",
+                "user": {
+                    "email": email,
+                    "first_name": user["first_name"],
+                    "last_name": user["last_name"],
+                    "type": user["user_type"],
                 },
-                'token': session_token
+                "token": token,
             }), 200
-        
-        @self.app.route('/api/auth/logout', methods=['POST'])
+
+        @self.app.route("/api/auth/logout", methods=["POST"])
         @self._require_auth
         def logout():
-            # Get token from Authorization header
-            auth_header = request.headers.get('Authorization')
-            if not auth_header or not auth_header.startswith('Bearer '):
-                return jsonify({'error': 'Invalid authorization header'}), 401
-            
-            token = auth_header.split(' ')[1]
-            
-            # Remove session
-            if token in self.sessions:
-                del self.sessions[token]
-            
-            return jsonify({'message': 'Logout successful'}), 200
-        
-        @self.app.route('/api/auth/reset-password', methods=['POST'])
+            token = self._bearer_token()
+            if token:
+                with self._connection() as connection:
+                    connection.execute("DELETE FROM auth_sessions WHERE token_hash = ?", (_token_digest(token),))
+            session.clear()
+            return jsonify({"message": "Logout successful"}), 200
+
+        @self.app.route("/api/auth/reset-password", methods=["POST"])
         def request_reset():
-            data = request.json
-            
-            if 'email' not in data:
-                return jsonify({'error': 'Email is required'}), 400
-            
-            email = data['email']
-            
-            # Check if user exists
-            if email not in self.users:
-                # For security reasons, don't reveal that the email doesn't exist
-                return jsonify({'message': 'If your email is registered, you will receive a reset link'}), 200
-            
-            # Generate reset token
-            reset_token = secrets.token_urlsafe(32)
-            expiry = datetime.datetime.now() + datetime.timedelta(hours=1)
-            
-            self.reset_tokens[reset_token] = {
-                'email': email,
-                'expiry': expiry.isoformat()
-            }
-            
-            # In a real implementation, send an email with the reset link
-            # For demonstration purposes, we'll just return the token
-            return jsonify({
-                'message': 'If your email is registered, you will receive a reset link',
-                'debug_token': reset_token  # Remove in production
-            }), 200
-        
-        @self.app.route('/api/auth/reset-password/<token>', methods=['POST'])
+            data = request.get_json(silent=True) or {}
+            email = self._normalize_email(data.get("email"))
+            generic = {"message": "If the account exists, password reset instructions will be sent"}
+            user = self._get_user(email) if email else None
+            if not user:
+                return jsonify(generic), 200
+
+            raw_token = secrets.token_urlsafe(32)
+            token_hash = _token_digest(raw_token)
+            now = _utcnow()
+            with self._connection() as connection:
+                connection.execute("DELETE FROM auth_reset_tokens WHERE email = ?", (email,))
+                connection.execute(
+                    "INSERT INTO auth_reset_tokens (token_hash, email, expires_at, created_at) VALUES (?, ?, ?, ?)",
+                    (token_hash, email, _iso(now + self.RESET_TTL), _iso(now)),
+                )
+
+            try:
+                delivered = self._deliver_password_reset(email, raw_token)
+            except Exception:
+                delivered = False
+                logger.exception("Password reset delivery failed")
+            if not delivered:
+                logger.warning("Password reset requested, but no working reset delivery is configured")
+                with self._connection() as connection:
+                    connection.execute("DELETE FROM auth_reset_tokens WHERE token_hash = ?", (token_hash,))
+            return jsonify(generic), 200
+
+        @self.app.route("/api/auth/reset-password/<token>", methods=["POST"])
         def reset_password(token):
-            data = request.json
-            
-            if 'password' not in data:
-                return jsonify({'error': 'New password is required'}), 400
-            
-            # Check if token exists and is valid
-            if token not in self.reset_tokens:
-                return jsonify({'error': 'Invalid or expired token'}), 400
-            
-            token_data = self.reset_tokens[token]
-            expiry = datetime.datetime.fromisoformat(token_data['expiry'])
-            
-            if datetime.datetime.now() > expiry:
-                del self.reset_tokens[token]
-                return jsonify({'error': 'Token has expired'}), 400
-            
-            # Update password
-            email = token_data['email']
-            self.users[email]['password_hash'] = self._hash_password(data['password'])
-            
-            # Remove token
-            del self.reset_tokens[token]
-            
-            return jsonify({'message': 'Password has been reset successfully'}), 200
-        
-        # Investor authentication routes
-        @self.app.route('/api/investor/auth', methods=['POST'])
+            data = request.get_json(silent=True) or {}
+            password = str(data.get("password") or "")
+            if len(password) < 8:
+                return jsonify({"error": "Password must contain at least 8 characters"}), 400
+
+            token_hash = _token_digest(token)
+            with self._connection() as connection:
+                reset = connection.execute(
+                    "SELECT email, expires_at FROM auth_reset_tokens WHERE token_hash = ?", (token_hash,)
+                ).fetchone()
+                if not reset or _utcnow() > _parse_time(reset["expires_at"]):
+                    if reset:
+                        connection.execute("DELETE FROM auth_reset_tokens WHERE token_hash = ?", (token_hash,))
+                    return jsonify({"error": "Invalid or expired token"}), 400
+                connection.execute(
+                    "UPDATE auth_users SET password_hash = ? WHERE email = ?",
+                    (generate_password_hash(password), reset["email"]),
+                )
+                connection.execute("DELETE FROM auth_reset_tokens WHERE token_hash = ?", (token_hash,))
+                connection.execute("DELETE FROM auth_sessions WHERE email = ?", (reset["email"],))
+            return jsonify({"message": "Password has been reset successfully"}), 200
+
+        @self.app.route("/api/investor/auth", methods=["POST"])
         def investor_auth():
-            data = request.json
-            
-            if 'email' not in data:
-                return jsonify({'error': 'Email is required'}), 400
-            
-            email = data['email']
-            
-            # Check if investor exists
-            if email not in self.investors:
-                return jsonify({'error': 'Email not registered as an investor'}), 401
-            
-            # Create session
-            session_token = self._create_session(email, 'investor')
-            
-            # Update last login
-            investor = self.investors[email]
-            investor['last_login'] = datetime.datetime.now().isoformat()
-            
+            data = request.get_json(silent=True) or {}
+            email = self._normalize_email(data.get("email"))
+            password = str(data.get("password") or "")
+            user = self._get_user(email)
+            if not user or user["user_type"] != "investor" or not check_password_hash(user["password_hash"], password):
+                return jsonify({"error": "Invalid investor credentials"}), 401
+            token = self._create_session(email, "investor")
             return jsonify({
-                'message': 'Investor authentication successful',
-                'access_level': investor['access_level'],
-                'token': session_token
+                "message": "Investor authentication successful",
+                "access_level": user["access_level"],
+                "token": token,
             }), 200
-        
-        # Protected routes
-        @self.app.route('/api/user/profile', methods=['GET'])
+
+        @self.app.route("/api/user/profile", methods=["GET"])
         @self._require_auth
         def get_profile():
-            # Get user from session
-            user_email = session.get('user_email')
-            user = self.users.get(user_email)
-            
+            user = self._get_user(session.get("user_email", ""))
             if not user:
-                return jsonify({'error': 'User not found'}), 404
-            
+                return jsonify({"error": "User not found"}), 404
             return jsonify({
-                'email': user['email'],
-                'first_name': user['first_name'],
-                'last_name': user['last_name'],
-                'created_at': user['created_at'],
-                'last_login': user.get('last_login')
+                "email": user["email"],
+                "first_name": user["first_name"],
+                "last_name": user["last_name"],
+                "created_at": user["created_at"],
+                "last_login": user["last_login"],
             }), 200
-        
-        @self.app.route('/api/investor/dashboard', methods=['GET'])
+
+        @self.app.route("/api/investor/dashboard", methods=["GET"])
         @self._require_investor_auth
         def get_investor_dashboard():
-            # Get investor from session
-            investor_email = session.get('user_email')
-            investor = self.investors.get(investor_email)
-            
-            if not investor:
-                return jsonify({'error': 'Investor not found'}), 404
-            
-            # In a real implementation, fetch dashboard data from database
-            # For demonstration purposes, return sample data
+            user = self._get_user(session.get("user_email", ""))
+            if not user:
+                return jsonify({"error": "Investor not found"}), 404
             return jsonify({
-                'investor': {
-                    'email': investor['email'],
-                    'access_level': investor['access_level'],
-                    'last_login': investor.get('last_login')
+                "investor": {
+                    "email": user["email"],
+                    "access_level": user["access_level"],
+                    "last_login": user["last_login"],
                 },
-                'metrics': {
-                    'response_rate': 42,
-                    'case_acceptance': 1.8,
-                    'time_to_lawyer': 3.2,
-                    'profit_margin': 48
-                }
+                "metrics": None,
+                "message": "No verified investor metrics source is configured.",
             }), 200
-    
-    def _hash_password(self, password):
-        """Hash a password using SHA-256."""
-        return hashlib.sha256(password.encode()).hexdigest()
-    
-    def _verify_password(self, password, password_hash):
-        """Verify a password against a hash."""
-        return self._hash_password(password) == password_hash
-    
-    def _create_session(self, email, user_type):
-        """Create a new session for a user or investor."""
-        session_token = secrets.token_hex(16)
-        expiry = datetime.datetime.now() + datetime.timedelta(days=1)
-        
-        self.sessions[session_token] = {
-            'email': email,
-            'type': user_type,
-            'expiry': expiry.isoformat()
-        }
-        
-        return session_token
-    
-    def _require_auth(self, f):
-        """Decorator to require authentication for a route."""
-        @wraps(f)
-        def decorated(*args, **kwargs):
-            # Get token from Authorization header
-            auth_header = request.headers.get('Authorization')
-            if not auth_header or not auth_header.startswith('Bearer '):
-                return jsonify({'error': 'Authentication required'}), 401
-            
-            token = auth_header.split(' ')[1]
-            
-            # Check if token exists and is valid
-            if token not in self.sessions:
-                return jsonify({'error': 'Invalid or expired token'}), 401
-            
-            session_data = self.sessions[token]
-            expiry = datetime.datetime.fromisoformat(session_data['expiry'])
-            
-            if datetime.datetime.now() > expiry:
-                del self.sessions[token]
-                return jsonify({'error': 'Session has expired'}), 401
-            
-            # Set user email in session
-            session['user_email'] = session_data['email']
-            session['user_type'] = session_data['type']
 
-            # Case routes carry highly sensitive legal material. The application
-            # injects a ledger ownership check once its persistent ledger is
-            # initialized, so every authenticated case endpoint has one guard.
-            case_id = kwargs.get('case_id') or (request.view_args or {}).get('case_id')
-            case_access_check = self.app.config.get('LARO_CASE_ACCESS_CHECK')
+    def provision_investor(self, email: str, password: str, access_level: int = 1) -> None:
+        """Provision or rotate an investor account through an operator-controlled path."""
+        normalized = self._normalize_email(email)
+        if not normalized or "@" not in normalized or len(password) < 8:
+            raise ValueError("A valid email and password of at least 8 characters are required")
+        now = _iso(_utcnow())
+        with self._connection() as connection:
+            connection.execute(
+                """INSERT INTO auth_users
+                   (email, password_hash, first_name, last_name, user_type, access_level, created_at)
+                   VALUES (?, ?, 'Investor', 'Account', 'investor', ?, ?)
+                   ON CONFLICT(email) DO UPDATE SET
+                     password_hash = excluded.password_hash,
+                     user_type = 'investor',
+                     access_level = excluded.access_level""",
+                (normalized, generate_password_hash(password), max(1, int(access_level)), now),
+            )
+
+    def _deliver_password_reset(self, email: str, token: str) -> bool:
+        delivery: Optional[Callable[[str, str], None]] = self.app.config.get("LARO_PASSWORD_RESET_DELIVERY")
+        if callable(delivery):
+            delivery(email, token)
+            return True
+
+        value = lambda key, default="": str(self.app.config.get(key) or os.environ.get(key) or default).strip()
+        host = value("SMTP_HOST")
+        sender = value("SMTP_FROM")
+        template = value("LARO_PASSWORD_RESET_URL_TEMPLATE")
+        if not host or not sender or "{token}" not in template:
+            return False
+
+        reset_url = template.replace("{token}", quote(token, safe=""))
+        message = EmailMessage()
+        message["From"] = sender
+        message["To"] = email
+        message["Subject"] = "Reset your LARO password"
+        message.set_content(
+            "A password reset was requested for your LARO account. "
+            f"Open this link within {int(self.RESET_TTL.total_seconds() // 60)} minutes:\n\n{reset_url}\n\n"
+            "If you did not request this, ignore this message."
+        )
+
+        port = int(value("SMTP_PORT", "587"))
+        username = value("SMTP_USER")
+        password = value("SMTP_PASS")
+        starttls = value("SMTP_STARTTLS", "true").lower() not in {"0", "false", "no"}
+        with smtplib.SMTP(host, port, timeout=15) as smtp:
+            if starttls:
+                smtp.starttls()
+            if username:
+                smtp.login(username, password)
+            smtp.send_message(message)
+        return True
+
+    def _create_session(self, email: str, user_type: str) -> str:
+        token = secrets.token_urlsafe(32)
+        now = _utcnow()
+        with self._connection() as connection:
+            connection.execute("DELETE FROM auth_sessions WHERE expires_at <= ?", (_iso(now),))
+            connection.execute(
+                "INSERT INTO auth_sessions (token_hash, email, user_type, expires_at, created_at) VALUES (?, ?, ?, ?, ?)",
+                (_token_digest(token), self._normalize_email(email), user_type, _iso(now + self.SESSION_TTL), _iso(now)),
+            )
+        return token
+
+    @staticmethod
+    def _bearer_token() -> Optional[str]:
+        header = request.headers.get("Authorization", "")
+        scheme, separator, token = header.partition(" ")
+        if separator and scheme.lower() == "bearer" and token.strip():
+            return token.strip()
+        return None
+
+    def _authenticate_request(self, required_type: Optional[str] = None):
+        token = self._bearer_token()
+        if not token:
+            return None, (jsonify({"error": "Authentication required"}), 401)
+        digest = _token_digest(token)
+        with self._connection() as connection:
+            record = connection.execute(
+                "SELECT email, user_type, expires_at FROM auth_sessions WHERE token_hash = ?", (digest,)
+            ).fetchone()
+            if not record:
+                return None, (jsonify({"error": "Invalid or expired token"}), 401)
+            if _utcnow() > _parse_time(record["expires_at"]):
+                connection.execute("DELETE FROM auth_sessions WHERE token_hash = ?", (digest,))
+                return None, (jsonify({"error": "Session has expired"}), 401)
+
+        if required_type and record["user_type"] != required_type:
+            return None, (jsonify({"error": f"{required_type.title()} access required"}), 403)
+        session["user_email"] = record["email"]
+        session["user_type"] = record["user_type"]
+        return record, None
+
+    def _require_auth(self, function):
+        @wraps(function)
+        def decorated(*args, **kwargs):
+            record, error = self._authenticate_request()
+            if error:
+                return error
+            case_id = kwargs.get("case_id") or (request.view_args or {}).get("case_id")
+            case_access_check = self.app.config.get("LARO_CASE_ACCESS_CHECK")
             if case_id is not None and callable(case_access_check):
-                if not case_access_check(case_id, session_data['email']):
-                    return jsonify({'error': 'Case not found'}), 404
-            
-            return f(*args, **kwargs)
-        return decorated
-    
-    def _require_investor_auth(self, f):
-        """Decorator to require investor authentication for a route."""
-        @wraps(f)
-        def decorated(*args, **kwargs):
-            # First require authentication
-            auth_result = self._require_auth(lambda: None)()
-            if isinstance(auth_result, tuple) and auth_result[1] != 200:
-                return auth_result
-            
-            # Then check if user is an investor
-            if session.get('user_type') != 'investor':
-                return jsonify({'error': 'Investor access required'}), 403
-            
-            return f(*args, **kwargs)
+                if not case_access_check(case_id, record["email"]):
+                    return jsonify({"error": "Case not found"}), 404
+            return function(*args, **kwargs)
         return decorated
 
-# Example usage
-if __name__ == '__main__':
-    app = Flask(__name__)
-    auth_system = EmailAuthenticationSystem(app)
-    
-    @app.route('/')
-    def index():
-        return 'Authentication System is running!'
-    
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    def _require_investor_auth(self, function):
+        @wraps(function)
+        def decorated(*args, **kwargs):
+            _, error = self._authenticate_request("investor")
+            if error:
+                return error
+            return function(*args, **kwargs)
+        return decorated
+
+
+if __name__ == "__main__":
+    from flask import Flask
+
+    standalone_app = Flask(__name__)
+    standalone_app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", secrets.token_hex(32))
+    EmailAuthenticationSystem(standalone_app)
+    standalone_app.run(host="127.0.0.1", port=5000, debug=False)

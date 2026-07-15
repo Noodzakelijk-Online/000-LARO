@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import type { AgentConfig } from '../../shared/types';
+import { getElectronAPI } from '@/lib/electronApiShim';
 
 interface Props {
   config: AgentConfig | null;
@@ -18,12 +19,13 @@ interface SystemInfo {
 }
 
 export default function DashboardPage({ config, onNavigate, onLogout }: Props) {
+  const electronAPI = getElectronAPI();
   const [sysInfo, setSysInfo] = useState<SystemInfo | null>(null);
   const [updateInfo, setUpdateInfo] = useState<{ currentVersion: string } | null>(null);
 
   useEffect(() => {
-    window.electronAPI.getSystemInfo().then(setSysInfo);
-    window.electronAPI.checkForUpdates().then(setUpdateInfo);
+    electronAPI.getSystemInfo().then(setSysInfo);
+    electronAPI.checkForUpdates().then(setUpdateInfo);
   }, []);
 
   const memUsed = sysInfo
@@ -84,7 +86,7 @@ export default function DashboardPage({ config, onNavigate, onLogout }: Props) {
             title="Open LARO web app"
             description="Access the full LARO dashboard, cases, lawyers, and outreach in your browser."
             action="Open web app"
-            onClick={() => window.electronAPI.openExternal(config?.apiUrl ?? 'http://localhost:3000')}
+            onClick={() => electronAPI.openExternal(config?.apiUrl ?? 'http://localhost:3000')}
           />
           <ActionCard
             icon="⚙️"

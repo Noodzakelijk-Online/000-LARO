@@ -56,7 +56,16 @@ export default function BulkFileOperations({ caseId, onOperationComplete }: Bulk
     caseId,
   });
 
-  const items: FileItem[] = itemsData?.items || [];
+  const items: FileItem[] = (itemsData || []).map((item: any) => ({
+    id: item.id,
+    fileName: item.fileName || item.title || "Untitled evidence",
+    fileSize: item.size || "",
+    itemType: item.type || item.sourceType || "document",
+    relevanceScore: String(item.relevanceScore ?? 0),
+    tags: item.tags || "[]",
+    timestamp: item.timestamp || item.uploadedAt || item.createdAt || new Date(),
+    fileUrl: "",
+  }));
 
   // Mutations
   const deleteMutation = trpc.bulkFileOperations.deleteItems.useMutation();
@@ -105,18 +114,18 @@ export default function BulkFileOperations({ caseId, onOperationComplete }: Bulk
 
     try {
       const result = await deleteMutation.mutateAsync({
-        itemIds: Array.from(selectedIds),
+        ids: Array.from(selectedIds),
       });
 
-      if (result.success) {
-        toast.success(`Deleted ${result.deletedCount} file(s)`);
+      if (result.deleted > 0) {
+        toast.success(`Deleted ${result.deleted} file(s)`);
         setSelectedIds(new Set());
         await refetch();
         if (onOperationComplete) {
           onOperationComplete();
         }
       } else {
-        toast.error(`Failed to delete files: ${result.errors.join(', ')}`);
+        toast.error("No selected files were deleted");
       }
     } catch (error) {
       toast.error('Failed to delete files');
@@ -144,17 +153,17 @@ export default function BulkFileOperations({ caseId, onOperationComplete }: Bulk
         .filter((tag) => tag.length > 0);
 
       const result = await addTagsMutation.mutateAsync({
-        itemIds: Array.from(selectedIds),
+        ids: Array.from(selectedIds),
         tags,
       });
 
-      if (result.success) {
-        toast.success(`Tagged ${result.updatedCount} file(s)`);
+      if (result.updated > 0) {
+        toast.success(`Tagged ${result.updated} file(s)`);
         setNewTags('');
         setShowTagInput(false);
         await refetch();
       } else {
-        toast.error(`Failed to tag files: ${result.errors.join(', ')}`);
+        toast.error("No selected files were tagged");
       }
     } catch (error) {
       toast.error('Failed to tag files');
@@ -178,16 +187,16 @@ export default function BulkFileOperations({ caseId, onOperationComplete }: Bulk
       }
 
       const result = await setScoreMutation.mutateAsync({
-        itemIds: Array.from(selectedIds),
+        ids: Array.from(selectedIds),
         score,
       });
 
-      if (result.success) {
-        toast.success(`Set relevance score to ${score} for ${result.updatedCount} file(s)`);
+      if (result.updated > 0) {
+        toast.success(`Set relevance score to ${score} for ${result.updated} file(s)`);
         setShowScoreInput(false);
         await refetch();
       } else {
-        toast.error(`Failed to set score: ${result.errors.join(', ')}`);
+        toast.error("No selected files were updated");
       }
     } catch (error) {
       toast.error('Failed to set relevance score');

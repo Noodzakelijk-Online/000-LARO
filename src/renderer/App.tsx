@@ -3,12 +3,12 @@ import AuthPage from '../renderer/pages/AuthPage';
 import HomePage from '../renderer/pages/HomePage';
 import ScanPage from '../renderer/pages/ScanPage';
 import SettingsPage from '../renderer/pages/SettingsPage';
-import { getElectronApi } from '../../lib/electronApiShim';
+import { getElectronAPI } from '@/lib/electronApiShim';
 import type { AgentConfig } from '../../shared/types';
 import { Page } from '../../shared/types';
 
 export default function App() {
-  const electronAPI = getElectronApi();
+  const electronAPI = getElectronAPI();
   const [currentPage, setCurrentPage] = useState<Page>('auth');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [config, setConfig] = useState<any>(null);

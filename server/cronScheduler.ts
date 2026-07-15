@@ -92,7 +92,9 @@ export async function runJob(
 }
 
 function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 // Date.now via a helper so it is easy to reason about / stub if needed.

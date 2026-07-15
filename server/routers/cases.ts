@@ -157,7 +157,7 @@ export const casesRouter = router({
 
       return {
         format: "laro-case-export/v1",
-        exportedAt: null as unknown as string, // stamped by the caller/UI (no Date.now in pure layer)
+        exportedAt: new Date().toISOString(),
         case: caseRows[0] ?? null,
         evidence: evidenceRows,
         outreach: outreachRows,

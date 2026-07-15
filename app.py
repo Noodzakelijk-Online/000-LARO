@@ -14,7 +14,7 @@ import ipaddress
 import json
 import re
 from concurrent.futures import ThreadPoolExecutor
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 from flask import Flask, request, jsonify, render_template, render_template_string, send_from_directory, send_file, session, redirect
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -72,6 +72,12 @@ app.config.setdefault('SQLALCHEMY_DATABASE_URI', os.environ.get('LARO_APP_DB_URL
 app.config.setdefault('SQLALCHEMY_TRACK_MODIFICATIONS', False)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=0, x_proto=0, x_host=0, x_port=0, x_prefix=0)
 db = SQLAlchemy(app)
+
+
+@app.route('/favicon.ico')
+def favicon():
+    """Avoid a noisy browser 404 when a deployment has no custom icon."""
+    return '', 204
 
 
 def create_app(**config):
@@ -393,7 +399,7 @@ def _store_upload_in_directory(directory, storage, *, stable_name=False):
     if stable_name:
         stored_name = f"{digest[:20]}{extension.lower()}"
     else:
-        prefix = f"{datetime.datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{digest[:12]}"
+        prefix = f"{datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%d%H%M%S')}_{digest[:12]}"
         stored_name = f"{prefix}_{stem[:80]}{extension.lower()}"
     local_path = os.path.join(directory, stored_name)
     if not os.path.isfile(local_path):
@@ -450,7 +456,7 @@ def _timeline_suggestions_from_analysis(case_id, document, analysis, actor):
             'recipient': document.get('recipient') or '',
         })
         event = legal_ledger.add_event(case_id, {
-            'event_date': item.get('date') or datetime.datetime.utcnow().date().isoformat(),
+            'event_date': item.get('date') or datetime.datetime.now(datetime.timezone.utc).date().isoformat(),
             'title': description or 'Timeline suggestion',
             'description': description,
             'event_type': 'suggested_from_document',
@@ -3031,19 +3037,28 @@ def serve_static(path):
     return send_from_directory('frontend', path)
 
 
+def _safe_local_return_to(return_to):
+    candidate = str(return_to or '/dashboard_dark.html').strip()
+    parsed = urlsplit(candidate)
+    if parsed.scheme or parsed.netloc or not parsed.path.startswith('/') or candidate.startswith('//'):
+        return '/dashboard_dark.html'
+    return candidate
+
+
 def _google_oauth_result_page(return_to, status, message=None):
+    return_to = _safe_local_return_to(return_to)
     status_text = 'Google connected' if status == 'connected' else 'Google connection needs attention'
     message_text = message or (
         'Google is connected. LARO can now pull Gmail and Drive evidence.'
         if status == 'connected'
         else 'Google OAuth did not complete.'
     )
-    payload = json.dumps({
+    payload = {
         'type': 'laro-google-oauth',
         'status': status,
         'message': message_text,
-        'returnTo': return_to or '/dashboard_dark.html',
-    })
+        'returnTo': return_to,
+    }
     return render_template_string("""
 <!doctype html>
 <html lang="en">
@@ -3105,7 +3120,7 @@ def _google_oauth_result_page(return_to, status, message=None):
         </div>
     </main>
     <script>
-        const payload = {{ payload|safe }};
+        const payload = {{ payload|tojson }};
         if (window.opener && !window.opener.closed) {
             window.opener.postMessage(payload, window.location.origin);
         }
@@ -3119,11 +3134,11 @@ def _google_oauth_result_page(return_to, status, message=None):
     </script>
 </body>
 </html>
-""", status_text=status_text, message_text=message_text, return_to=return_to or '/dashboard_dark.html', payload=payload)
+""", status_text=status_text, message_text=message_text, return_to=return_to, payload=payload)
 
 
 def _dashboard_redirect(return_to, status, message=None, popup=False):
-    target = return_to or '/dashboard_dark.html'
+    target = _safe_local_return_to(return_to)
     if popup:
         return _google_oauth_result_page(target, status, message)
     separator = '&' if '?' in target else '?'
@@ -3134,6 +3149,7 @@ def _dashboard_redirect(return_to, status, message=None, popup=False):
 
 
 @app.route('/api/google/oauth/status', methods=['GET'])
+@auth_system._require_auth
 def google_oauth_status():
     """Expose Google OAuth connection state for auto-updating dashboard UI."""
     user_key = _ledger_actor()
@@ -3161,8 +3177,10 @@ def google_oauth_status():
 @app.route('/api/google/oauth/start', methods=['GET'])
 def start_google_oauth():
     """Start the real Google OAuth authorization-code flow."""
-    return_to = request.args.get('return_to') or '/dashboard_dark.html'
+    return_to = _safe_local_return_to(request.args.get('return_to'))
     popup = request.args.get('popup') in {'1', 'true', 'yes'}
+    if not session.get('user_email'):
+        return _dashboard_redirect(return_to, 'oauth_error', 'Authenticate with LARO before connecting Google.', popup=popup)
     state = build_google_oauth_state()
     session['google_oauth_state'] = state
     session['google_oauth_return_to'] = return_to
@@ -3181,6 +3199,9 @@ def google_oauth_callback():
     popup = bool(session.get('google_oauth_popup'))
     expected_state = session.get('google_oauth_state')
     received_state = request.args.get('state')
+
+    if not session.get('user_email'):
+        return _dashboard_redirect(return_to, 'oauth_error', 'The LARO session expired before Google OAuth completed.', popup=popup)
 
     if request.args.get('error'):
         return _dashboard_redirect(return_to, 'oauth_error', request.args.get('error'), popup=popup)
@@ -3352,7 +3373,7 @@ def aggregate_documents():
         if days_back is None:
             return items
         cutoff_days = _coerce_int(days_back, 3650, 1, 3650)
-        cutoff = datetime.datetime.utcnow() - datetime.timedelta(days=cutoff_days)
+        cutoff = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None) - datetime.timedelta(days=cutoff_days)
         filtered = []
         for item in items:
             raw_date = (

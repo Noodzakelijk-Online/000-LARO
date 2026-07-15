@@ -164,7 +164,9 @@ export class FileScanner extends EventEmitter {
   private async scanDirectory(dirPath: string): Promise<void> {
     // Check if we should stop or pause
     while (this.isPaused && !this.shouldStop) {
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => {
+        setTimeout(resolve, 100);
+      });
     }
     
     if (this.shouldStop) return;
@@ -183,7 +185,9 @@ export class FileScanner extends EventEmitter {
         
         // Wait if paused
         while (this.isPaused && !this.shouldStop) {
-          await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise(resolve => {
+            setTimeout(resolve, 100);
+          });
         }
         
         const fullPath = path.join(dirPath, entry.name);

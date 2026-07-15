@@ -1,276 +1,88 @@
-import { useParams } from "wouter";
+import { useLocation, useParams } from "wouter";
+import { ArrowLeft, Building2, ExternalLink, Mail, MapPin, Phone, Scale } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import {
-  Building2,
-  MapPin,
-  Mail,
-  Phone,
-  Globe,
-  Briefcase,
-  Award,
-  Star,
-  ArrowLeft,
-  ExternalLink
-} from "lucide-react";
-import { useLocation } from "wouter";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 
-export default function LawyerProfile() {
-  const { id } = useParams();
-  const [, setLocation] = useLocation();
-  
-  const { data: lawyer, isLoading } = trpc.lawyers.byId.useQuery({
-    id: parseInt(id || "0")
-  });
-
-  if (isLoading) {
-    return (
-      <div className="container mx-auto py-8">
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-        </div>
-      </div>
-    );
+function parseList(value: string | null): string[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
+  } catch {
+    return value.split(",").map((item) => item.trim()).filter(Boolean);
   }
-
-  if (!lawyer) {
-    return (
-      <div className="container mx-auto py-8">
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <p className="text-muted-foreground">Lawyer not found</p>
-            <Button className="mt-4" onClick={() => setLocation("/lawyers")}>
-              Back to Lawyers
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  return (
-    <div className="container mx-auto py-8 space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="sm" onClick={() => setLocation("/lawyers")}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Lawyers
-        </Button>
-      </div>
-
-      <div className="grid gap-6 md:grid-cols-3">
-        {/* Main Profile Card */}
-        <div className="md:col-span-2 space-y-6">
-          <Card>
-            <CardHeader>
-              <div className="flex items-start justify-between">
-                <div className="space-y-2">
-                  <CardTitle className="text-2xl">{lawyer.name}</CardTitle>
-                  {lawyer.firmName && (
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Building2 className="h-4 w-4" />
-                      <span>{lawyer.firmName}</span>
-                    </div>
-                  )}
-                  {lawyer.city && (
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <MapPin className="h-4 w-4" />
-                      <span>{lawyer.city}</span>
-                    </div>
-                  )}
-                </div>
-                {lawyer.novaId && (
-                  <Badge variant="secondary">
-                    NOvA #{lawyer.novaId}
-                  </Badge>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Contact Information */}
-              {(lawyer.email || lawyer.phone || lawyer.website) && (
-                <div className="space-y-3">
-                  <h3 className="font-medium flex items-center gap-2">
-                    <Mail className="h-4 w-4" />
-                    Contact Information
-                  </h3>
-                  <div className="space-y-2 pl-6">
-                    {lawyer.email && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <Mail className="h-3 w-3 text-muted-foreground" />
-                        <a href={`mailto:${lawyer.email}`} className="text-primary hover:underline">
-                          {lawyer.email}
-                        </a>
-                      </div>
-                    )}
-                    {lawyer.phone && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <Phone className="h-3 w-3 text-muted-foreground" />
-                        <a href={`tel:${lawyer.phone}`} className="text-primary hover:underline">
-                          {lawyer.phone}
-                        </a>
-                      </div>
-                    )}
-                    {lawyer.website && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <Globe className="h-3 w-3 text-muted-foreground" />
-                        <a 
-                          href={lawyer.website} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-primary hover:underline flex items-center gap-1"
-                        >
-                          {lawyer.website}
-                          <ExternalLink className="h-3 w-3" />
-                        </a>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              <Separator />
-
-              {/* Legal Areas */}
-              {lawyer.legalAreas && lawyer.legalAreas.length > 0 && (
-                <div className="space-y-3">
-                  <h3 className="font-medium flex items-center gap-2">
-                    <Briefcase className="h-4 w-4" />
-                    Practice Areas
-                  </h3>
-                  <div className="flex flex-wrap gap-2 pl-6">
-                    {lawyer.legalAreas.map((area, index) => (
-                      <Badge key={index} variant="secondary">
-                        {area}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Profile URL */}
-              {lawyer.profileUrl && (
-                <>
-                  <Separator />
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">
-                      View full profile on NOvA
-                    </span>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => window.open(lawyer.profileUrl, '_blank')}
-                    >
-                      <ExternalLink className="h-4 w-4 mr-2" />
-                      NOvA Profile
-                    </Button>
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Statistics Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Performance Metrics</CardTitle>
-              <CardDescription>Based on platform activity</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">Cases Handled</p>
-                  <p className="text-2xl font-bold">{lawyer.casesHandled || 0}</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">Response Rate</p>
-                  <p className="text-2xl font-bold">{lawyer.responseRate || 0}%</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">Acceptance Rate</p>
-                  <p className="text-2xl font-bold">{lawyer.acceptanceRate || 0}%</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">Avg Response</p>
-                  <p className="text-2xl font-bold">{lawyer.avgResponseTime || "N/A"}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Sidebar */}
-        <div className="space-y-6">
-          {/* Quick Actions */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Quick Actions</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <Button className="w-full" size="lg">
-                <Mail className="h-4 w-4 mr-2" />
-                Contact Lawyer
-              </Button>
-              <Button variant="outline" className="w-full">
-                <Star className="h-4 w-4 mr-2" />
-                Add to Favorites
-              </Button>
-            </CardContent>
-          </Card>
-
-          {/* Verification Status */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Verification</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Award className="h-5 w-5 text-green-600" />
-                <div>
-                  <p className="font-medium text-sm">NOvA Verified</p>
-                  <p className="text-xs text-muted-foreground">
-                    Registered with Nederlandse Orde van Advocaten
-                  </p>
-                </div>
-              </div>
-              {lawyer.barNumber && (
-                <div className="pt-2 border-t">
-                  <p className="text-xs text-muted-foreground">Bar Number</p>
-                  <p className="font-mono text-sm">{lawyer.barNumber}</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Location */}
-          {lawyer.city && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Location</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <div className="flex items-start gap-2">
-                    <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
-                    <div>
-                      <p className="font-medium">{lawyer.city}</p>
-                      {lawyer.address && (
-                        <p className="text-sm text-muted-foreground mt-1">
-                          {lawyer.address}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      </div>
-    </div>
-  );
 }
 
+export default function LawyerProfile() {
+  const { id } = useParams<{ id: string }>();
+  const [, setLocation] = useLocation();
+  const query = trpc.lawyers.byId.useQuery(id || "", { enabled: Boolean(id) });
+  const lawyer = query.data;
+
+  if (query.isLoading) {
+    return <main className="mx-auto max-w-5xl p-6"><Skeleton className="h-48 w-full" /></main>;
+  }
+  if (!lawyer) {
+    return (
+      <main className="mx-auto max-w-5xl p-6">
+        <p className="text-muted-foreground">Lawyer not found.</p>
+        <Button className="mt-4" variant="outline" onClick={() => setLocation("/lawyers")}><ArrowLeft />Back</Button>
+      </main>
+    );
+  }
+
+  const legalAreas = parseList(lawyer.legalAreas);
+  const languages = parseList(lawyer.languages);
+  const totalOutreach = Number(lawyer.totalOutreaches || 0);
+  const totalResponses = Number(lawyer.totalResponses || 0);
+  const responseRate = totalOutreach > 0 ? Math.round((totalResponses / totalOutreach) * 100) : null;
+
+  return (
+    <main className="mx-auto max-w-5xl space-y-5 p-4 md:p-6">
+      <Button variant="ghost" onClick={() => setLocation("/lawyers")}><ArrowLeft />Lawyers</Button>
+      <header className="border-b pb-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold">{lawyer.name || "Unnamed lawyer"}</h1>
+            <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground"><Building2 className="h-4 w-4" />{lawyer.firmName || lawyer.firm || "Independent practice"}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {lawyer.barAssociationStatus && <Badge variant="outline">{lawyer.barAssociationStatus}</Badge>}
+            {lawyer.currentlyAccepting && <Badge variant="secondary">Accepting: {lawyer.currentlyAccepting}</Badge>}
+          </div>
+        </div>
+      </header>
+
+      <section className="grid gap-5 md:grid-cols-[1.4fr_0.6fr]">
+        <Card>
+          <CardHeader><CardTitle className="text-base">Practice profile</CardTitle></CardHeader>
+          <CardContent className="space-y-5">
+            <div><p className="mb-2 text-sm font-medium">Legal areas</p><div className="flex flex-wrap gap-2">{legalAreas.length ? legalAreas.map((area) => <Badge key={area} variant="secondary">{area}</Badge>) : <span className="text-sm text-muted-foreground">No legal areas recorded.</span>}</div></div>
+            {languages.length > 0 && <div><p className="mb-2 text-sm font-medium">Languages</p><p className="text-sm text-muted-foreground">{languages.join(", ")}</p></div>}
+            <dl className="grid grid-cols-2 gap-3 text-sm">
+              <div><dt className="text-muted-foreground">Experience</dt><dd className="font-medium">{lawyer.experienceYears || "Not recorded"}{lawyer.experienceYears ? " years" : ""}</dd></div>
+              <div><dt className="text-muted-foreground">Current case load</dt><dd className="font-medium">{lawyer.caseLoad || "Not recorded"}</dd></div>
+              <div><dt className="text-muted-foreground">Recorded outreaches</dt><dd className="font-medium">{totalOutreach}</dd></div>
+              <div><dt className="text-muted-foreground">Recorded response rate</dt><dd className="font-medium">{responseRate == null ? "Not available" : `${responseRate}%`}</dd></div>
+            </dl>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle className="text-base">Contact</CardTitle></CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            {lawyer.city && <p className="flex items-start gap-2"><MapPin className="mt-0.5 h-4 w-4" /><span>{lawyer.address ? `${lawyer.address}, ` : ""}{lawyer.city}</span></p>}
+            {lawyer.email && <a className="flex items-center gap-2 text-primary hover:underline" href={`mailto:${lawyer.email}`}><Mail className="h-4 w-4" />{lawyer.email}</a>}
+            {lawyer.phone && <a className="flex items-center gap-2 text-primary hover:underline" href={`tel:${lawyer.phone}`}><Phone className="h-4 w-4" />{lawyer.phone}</a>}
+            {lawyer.website && <a className="flex items-center gap-2 text-primary hover:underline" href={lawyer.website} target="_blank" rel="noreferrer"><ExternalLink className="h-4 w-4" />Website</a>}
+            {lawyer.novaId && <p className="flex items-center gap-2"><Scale className="h-4 w-4" />NOvA identifier {lawyer.novaId}</p>}
+            {!lawyer.city && !lawyer.email && !lawyer.phone && !lawyer.website && !lawyer.novaId && <p className="text-muted-foreground">No contact details recorded.</p>}
+          </CardContent>
+        </Card>
+      </section>
+    </main>
+  );
+}

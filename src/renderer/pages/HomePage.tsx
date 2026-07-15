@@ -15,7 +15,7 @@ interface Case {
   caseType: string;
   urgency: string;
   status: string;
-  createdAt: string;
+  createdAt: string | Date | null;
 }
 
 function isPlaceholderAgentToken(token: string | null | undefined): boolean {
@@ -71,7 +71,7 @@ export default function HomePage({ onNavigate, config }: HomePageProps) {
       try {
         const data = await apiClient.cases.list.query({ page: 1, limit: 100 });
         if (cancelled) return;
-        setCases((data.cases ?? []) as Case[]);
+        setCases((data.cases ?? []) as unknown as Case[]);
       } catch (err: unknown) {
         console.error("Failed to load cases:", err);
         if (!cancelled) {
@@ -103,7 +103,7 @@ export default function HomePage({ onNavigate, config }: HomePageProps) {
     void apiClient.cases.list
       .query({ page: 1, limit: 100 })
       .then((data) => {
-        setCases((data.cases ?? []) as Case[]);
+        setCases((data.cases ?? []) as unknown as Case[]);
       })
       .catch((err: unknown) => {
         console.error("Failed to load cases:", err);

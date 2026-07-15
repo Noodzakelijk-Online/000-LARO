@@ -14,7 +14,6 @@ import Help from "@/components/Help";
 import Settings from "@/components/Settings";
 import Privacy from "@/components/Privacy";
 import Admin from "@/components/Admin";
-import AdminAnalytics from "@/components/AdminAnalytics";
 import LawyerProfile from "@/components/LawyerProfile";
 import Messages from "@/components/Messages";
 import RoutePlaceholder from "@/components/RoutePlaceholder";
@@ -54,7 +53,7 @@ export default function DashboardApp() {
       <Route path="/privacy" component={Privacy} />
 
       <Route path="/admin" component={Admin} />
-      <Route path="/admin-analytics" component={AdminAnalytics} />
+      <Route path="/admin-analytics" component={Admin} />
 
       <Route path="/messages" component={Messages} />
       <Route path="/email" component={Messages} />

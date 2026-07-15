@@ -54,6 +54,7 @@ class GoogleOAuthRouteTests(unittest.TestCase):
             sess["google_oauth_return_to"] = "/dashboard_dark.html"
             sess["google_oauth_popup"] = True
             sess["user_email"] = "robert.local@laro"
+        self.auth_token = self.app_module.auth_system._create_session("robert.local@laro", "user")
 
         with patch.object(self.app_module, "exchange_google_oauth_code", return_value={"access_token": "raw-access-token"}):
             response = self.client.get("/api/google/oauth/callback?state=state-token&code=auth-code")
@@ -64,12 +65,13 @@ class GoogleOAuthRouteTests(unittest.TestCase):
         self.assertIn("window.opener.postMessage", body)
         self.assertIn("Close", body)
 
-        status = self.client.get("/api/google/oauth/status").get_json()
+        headers = {"Authorization": f"Bearer {self.auth_token}"}
+        status = self.client.get("/api/google/oauth/status", headers=headers).get_json()
         self.assertTrue(status["connected"])
         self.assertEqual(status["status_source"], "legal_ledger")
         self.assertTrue(status["credential_vault"]["available"])
 
-        restarted_status = self.client.get("/api/google/oauth/status").get_json()
+        restarted_status = self.client.get("/api/google/oauth/status", headers=headers).get_json()
         self.assertTrue(restarted_status["connected"])
         self.assertEqual(restarted_status["status_source"], "legal_ledger")
 
@@ -82,6 +84,17 @@ class GoogleOAuthRouteTests(unittest.TestCase):
         self.assertNotIn("token", connection["metadata"])
         self.assertNotIn("raw-access-token", serialized)
         self.assertNotIn("auth-code", serialized)
+
+    def test_status_requires_authentication_and_oauth_return_is_local_only(self):
+        self.assertEqual(self.client.get("/api/google/oauth/status").status_code, 401)
+        with self.client.session_transaction() as sess:
+            sess["user_email"] = "robert.local@laro"
+        response = self.client.get(
+            "/api/google/oauth/start?return_to=https://attacker.example/collect",
+            follow_redirects=False,
+        )
+        self.assertIn(response.status_code, {302, 303})
+        self.assertNotIn("attacker.example", response.headers.get("Location", ""))
 
 
 if __name__ == "__main__":

@@ -1,11 +1,11 @@
 # Technical Debt Register
 
-Updated: 2026-07-13
+Updated: 2026-07-15
 
 | # | Debt | Impact | Status / next step |
 |---|---|---|---|
 | D1 | All 14 routers are implemented, typed, mounted, and connected to UI actions | - | Resolved |
-| D2 | Dedicated renderer `tsc` reports historical API-contract errors | Medium - UI contracts are only production-build checked | Consolidate router and component contracts, then make blocking |
+| D2 | Dedicated renderer `tsc` and ESLint are release-blocking | - | Resolved |
 | D3 | Approved outreach uses the provider-backed, ownership-checked, emergency-stop and idempotency-gated send path | - | Resolved |
 | D4 | OAuth token encryption uses authenticated AES-256-GCM | - | Resolved |
 | D5 | CSRF origin guard, strict CORS, and JWT revocation are implemented | - | Resolved |
@@ -15,7 +15,7 @@ Updated: 2026-07-13
 | D9 | Historical `tests/*.test.ts` imports are excluded and replaced by current suites | Low - historical maintenance burden | Remove only after traceability review |
 | D10 | Database integrity is primarily application-enforced rather than declared with foreign keys | Medium - reconciliation required | Add constraints through reviewed migrations |
 | D11 | A top-level proprietary `LICENSE` is present | - | Resolved |
-| D12 | Evidence export is JSON only; PDF/zip export is not implemented | Low | Add only with provenance-preserving manifests |
+| D12 | Provenance-preserving ZIP evidence export is implemented; PDF remains intentionally unavailable | Low | Keep unavailable formats labelled honestly |
 | D13 | Some money and count fields are stored as text | Low | Normalize through reviewed migrations |
 | D14 | Renderer strings are not fully migrated to `t()` | Low | Complete i18n pass |
 

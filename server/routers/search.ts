@@ -50,7 +50,7 @@ export const searchRouter = router({
       const identifier = getRateLimitIdentifier(ctx);
       checkRateLimit(identifier, RATE_LIMITS.general);
 
-      const suggestions = await getSearchSuggestions(input.query, input.limit);
+      const suggestions = await getSearchSuggestions(input.query, input.limit, ctx.user.id);
 
       return {
         query: input.query,

@@ -6,11 +6,13 @@
  * run. No fake success (Phase 014).
  */
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure, adminProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import {
   cases as casesTable,
-  evidence as evidenceItemsTable,
+  evidence as evidenceRecords,
+  evidenceItems,
   outreachStatus,
   lawyers as lawyersTable,
   users as usersTable,
@@ -20,11 +22,13 @@ import {
   conversationThreads,
   unifiedMessages,
   emailSyncJobs,
+  emailAccounts,
   channelIntegrations,
 } from "../schema";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { assertCaseOwnership } from "../_core/authz";
 import { nanoid } from "nanoid";
+import { assertCaseTransition } from "../stateMachines";
 
 const count = sql<number>`count(*)`;
 async function n(q: Promise<Array<{ c: number }>>): Promise<number> {
@@ -51,7 +55,7 @@ export const adminAnalyticsRouter = router({
     return [
       { metric: "users", value: await n(db.select({ c: count }).from(usersTable)) },
       { metric: "cases", value: await n(db.select({ c: count }).from(casesTable)) },
-      { metric: "evidence", value: await n(db.select({ c: count }).from(evidenceItemsTable)) },
+      { metric: "evidence", value: await n(db.select({ c: count }).from(evidenceRecords)) },
     ];
   }),
   // No billing/revenue data source yet — honest empty typed series, not fabricated.
@@ -154,7 +158,7 @@ export const enrichmentRouter = router({
   getStats: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) return { enriched: 0, pending: 0 };
-    const total = await n(db.select({ c: count }).from(evidenceItemsTable).where(eq(evidenceItemsTable.userId, ctx.user.id)));
+    const total = await n(db.select({ c: count }).from(evidenceRecords).where(eq(evidenceRecords.userId, ctx.user.id)));
     return { enriched: total, pending: 0 };
   }),
   scheduler: protectedProcedure.query(() => ({ enabled: false, note: "Enrichment scheduling runs with the job scheduler; no external enrichment provider is configured." })),
@@ -211,33 +215,37 @@ export const bulkFileOperationsRouter = router({
     await assertCaseOwnership(input.caseId, ctx.user.id);
     const db = await getDb();
     if (!db) return [] as any[];
-    return db.select().from(evidenceItemsTable).where(and(eq(evidenceItemsTable.caseId, input.caseId), eq(evidenceItemsTable.userId, ctx.user.id)));
+    return db.select().from(evidenceItems).where(and(eq(evidenceItems.caseId, input.caseId), eq(evidenceItems.userId, ctx.user.id)));
   }),
-  deleteItems: protectedProcedure.input(z.object({ ids: z.array(z.string()) })).mutation(async ({ input, ctx }) => {
+  deleteItems: protectedProcedure.input(z.object({ ids: z.array(z.string()).min(1).max(500) })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) return { deleted: 0 };
     let deleted = 0;
     for (const id of input.ids) {
-      const res = await db.delete(evidenceItemsTable).where(and(eq(evidenceItemsTable.id, id), eq(evidenceItemsTable.userId, ctx.user.id)));
+      const res = await db.delete(evidenceItems).where(and(eq(evidenceItems.id, id), eq(evidenceItems.userId, ctx.user.id)));
       deleted += (res as any)?.changes ?? 0;
     }
     return { deleted };
   }),
-  addTags: protectedProcedure.input(z.object({ ids: z.array(z.string()), tags: z.array(z.string()) })).mutation(async ({ input, ctx }) => {
+  addTags: protectedProcedure.input(z.object({ ids: z.array(z.string()).min(1).max(500), tags: z.array(z.string().min(1).max(80)).max(50) })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) return { updated: 0 };
     let updated = 0;
     for (const id of input.ids) {
-      const res = await db.update(evidenceItemsTable).set({ tags: JSON.stringify(input.tags) } as any).where(and(eq(evidenceItemsTable.id, id), eq(evidenceItemsTable.userId, ctx.user.id)));
+      const res = await db.update(evidenceItems).set({ tags: JSON.stringify(input.tags) } as any).where(and(eq(evidenceItems.id, id), eq(evidenceItems.userId, ctx.user.id)));
       updated += (res as any)?.changes ?? 0;
     }
     return { updated };
   }),
-  setRelevanceScore: protectedProcedure.input(z.object({ id: z.string(), score: z.number() })).mutation(async ({ input, ctx }) => {
+  setRelevanceScore: protectedProcedure.input(z.object({ ids: z.array(z.string()).min(1).max(500), score: z.number().int().min(0).max(100) })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) return { ok: false as const };
-    await db.update(evidenceItemsTable).set({ relevanceScore: input.score } as any).where(and(eq(evidenceItemsTable.id, input.id), eq(evidenceItemsTable.userId, ctx.user.id)));
-    return { ok: true as const };
+    if (!db) return { updated: 0 };
+    let updated = 0;
+    for (const id of input.ids) {
+      const result = await db.update(evidenceItems).set({ relevanceScore: input.score } as any).where(and(eq(evidenceItems.id, id), eq(evidenceItems.userId, ctx.user.id)));
+      updated += (result as any)?.changes ?? 0;
+    }
+    return { updated };
   }),
 });
 
@@ -247,7 +255,9 @@ export const caseManagementRouter = router({
     await assertCaseOwnership(input.caseId, ctx.user.id);
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    await db.update(casesTable).set({ status: input.status, updatedAt: new Date() } as any).where(eq(casesTable.id, input.caseId));
+    const [current] = await db.select({ status: casesTable.status }).from(casesTable).where(eq(casesTable.id, input.caseId)).limit(1);
+    assertCaseTransition(current?.status ?? null, input.status);
+    await db.update(casesTable).set({ status: input.status, updatedAt: new Date() } as any).where(and(eq(casesTable.id, input.caseId), eq(casesTable.userId, ctx.user.id)));
     return { ok: true as const, status: input.status };
   }),
   getStatusHistory: protectedProcedure.input(z.object({ caseId: z.string() })).query(async ({ input, ctx }) => {
@@ -262,7 +272,7 @@ export const caseManagementRouter = router({
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     const [c] = await db.select().from(casesTable).where(eq(casesTable.id, input.caseId)).limit(1);
-    const ev = await db.select().from(evidenceItemsTable).where(eq(evidenceItemsTable.caseId, input.caseId));
+    const ev = await db.select().from(evidenceRecords).where(eq(evidenceRecords.caseId, input.caseId));
     return { format: "laro-case-export/v1", case: c ?? null, evidence: ev };
   }),
   getUpcomingDeadlines: protectedProcedure.input(z.object({ caseId: z.string().optional() }).optional()).query(async ({ input, ctx }) => {
@@ -282,8 +292,8 @@ export const caseManagementRouter = router({
   completeDeadline: protectedProcedure.input(z.object({ id: z.string() })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    await db.update(deadlinesTable).set({ completed: true, updatedAt: new Date() } as any).where(and(eq(deadlinesTable.id, input.id), eq(deadlinesTable.userId, ctx.user.id)));
-    return { ok: true as const };
+    const result = await db.update(deadlinesTable).set({ completed: true, updatedAt: new Date() } as any).where(and(eq(deadlinesTable.id, input.id), eq(deadlinesTable.userId, ctx.user.id)));
+    return { ok: ((result as any)?.changes ?? 0) > 0 };
   }),
   getCommunicationHistory: protectedProcedure.input(z.object({ caseId: z.string() })).query(async ({ input, ctx }) => {
     await assertCaseOwnership(input.caseId, ctx.user.id);
@@ -303,14 +313,14 @@ export const caseManagementRouter = router({
     await assertCaseOwnership(input.caseId, ctx.user.id);
     const db = await getDb();
     if (!db) return [] as any[];
-    const rows = await db.select().from(evidenceItemsTable).where(and(eq(evidenceItemsTable.caseId, input.caseId), eq(evidenceItemsTable.userId, ctx.user.id)));
+    const rows = await db.select().from(evidenceItems).where(and(eq(evidenceItems.caseId, input.caseId), eq(evidenceItems.userId, ctx.user.id)));
     return input.folder ? rows.filter((r: any) => r.folder === input.folder) : rows;
   }),
   organizeDocument: protectedProcedure.input(z.object({ id: z.string(), folder: z.string() })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    await db.update(evidenceItemsTable).set({ folder: input.folder, updatedAt: new Date() } as any).where(and(eq(evidenceItemsTable.id, input.id), eq(evidenceItemsTable.userId, ctx.user.id)));
-    return { ok: true as const };
+    const result = await db.update(evidenceItems).set({ folder: input.folder, updatedAt: new Date() } as any).where(and(eq(evidenceItems.id, input.id), eq(evidenceItems.userId, ctx.user.id)));
+    return { ok: ((result as any)?.changes ?? 0) > 0 };
   }),
 });
 
@@ -329,7 +339,7 @@ export const legalChecklistsRouter = router({
     const db = await getDb();
     if (!db) return { complete: false, missing: ["database unavailable"] };
     const [c] = await db.select().from(casesTable).where(eq(casesTable.id, input.caseId)).limit(1);
-    const evCount = await n(db.select({ c: count }).from(evidenceItemsTable).where(eq(evidenceItemsTable.caseId, input.caseId)));
+    const evCount = await n(db.select({ c: count }).from(evidenceRecords).where(eq(evidenceRecords.caseId, input.caseId)));
     const missing: string[] = [];
     if (!c?.clientEmail) missing.push("Client contact email");
     let areas: string[] = []; try { areas = JSON.parse((c as any)?.legalAreas || "[]"); } catch { areas = []; }
@@ -349,7 +359,21 @@ export const emailMessagesRouter = router({
   getSyncJob: protectedProcedure.input(z.object({ jobId: z.string() }).optional()).query(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db || !input?.jobId) return null;
-    const [row] = await db.select().from(emailSyncJobs).where(eq(emailSyncJobs.id, input.jobId)).limit(1);
+    const [row] = await db
+      .select({
+        id: emailSyncJobs.id,
+        accountId: emailSyncJobs.accountId,
+        caseId: emailSyncJobs.caseId,
+        status: emailSyncJobs.status,
+        startDate: emailSyncJobs.startDate,
+        endDate: emailSyncJobs.endDate,
+        keywords: emailSyncJobs.keywords,
+        createdAt: emailSyncJobs.createdAt,
+      })
+      .from(emailSyncJobs)
+      .innerJoin(emailAccounts, eq(emailSyncJobs.accountId, emailAccounts.id))
+      .where(and(eq(emailSyncJobs.id, input.jobId), eq(emailAccounts.userId, ctx.user.id)))
+      .limit(1);
     return row ?? null;
   }),
 });
@@ -410,18 +434,39 @@ export const unifiedInboxRouter = router({
     return { ok: true as const };
   }),
   createMessageWithThreading: protectedProcedure
-    .input(z.object({ caseId: z.string().optional(), threadId: z.string().optional(), channel: z.string().default("internal"), subject: z.string().optional(), body: z.string() }))
+    .input(z.object({
+      caseId: z.string().optional(),
+      threadId: z.string().optional(),
+      channel: z.string().min(1).max(40).default("internal"),
+      subject: z.string().max(500).optional(),
+      body: z.string().min(1).max(100_000),
+    }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       let threadId = input.threadId;
+      let caseId = input.caseId ?? null;
       if (!threadId) {
+        if (caseId) await assertCaseOwnership(caseId, ctx.user.id);
         threadId = nanoid();
-        await db.insert(conversationThreads).values({ id: threadId, userId: ctx.user.id, caseId: input.caseId ?? null, title: input.subject ?? "Conversation", status: "active", channels: JSON.stringify([input.channel]), messageCount: 0, unreadCount: 0, firstMessageAt: new Date(), lastMessageAt: new Date(), createdAt: new Date(), updatedAt: new Date() } as any);
+        await db.insert(conversationThreads).values({ id: threadId, userId: ctx.user.id, caseId, title: input.subject ?? "Conversation", status: "active", channels: JSON.stringify([input.channel]), messageCount: 0, unreadCount: 0, firstMessageAt: new Date(), lastMessageAt: new Date(), createdAt: new Date(), updatedAt: new Date() } as any);
+      } else {
+        const [thread] = await db
+          .select({ caseId: conversationThreads.caseId })
+          .from(conversationThreads)
+          .where(and(eq(conversationThreads.id, threadId), eq(conversationThreads.userId, ctx.user.id)))
+          .limit(1);
+        if (!thread) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Conversation not found or inaccessible" });
+        }
+        if (input.caseId && input.caseId !== thread.caseId) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Conversation does not belong to the requested case" });
+        }
+        caseId = thread.caseId;
       }
       const id = nanoid();
-      await db.insert(unifiedMessages).values({ id, userId: ctx.user.id, caseId: input.caseId ?? null, threadId, channel: input.channel, subject: input.subject ?? null, body: input.body, direction: "outbound", status: "draft", createdAt: new Date() } as any);
-      await db.update(conversationThreads).set({ lastMessageAt: new Date(), messageCount: sql`${conversationThreads.messageCount} + 1` } as any).where(eq(conversationThreads.id, threadId));
-      return { id, threadId, ok: true as const };
+      await db.insert(unifiedMessages).values({ id, userId: ctx.user.id, caseId, threadId, channel: input.channel, subject: input.subject ?? null, body: input.body, direction: "outbound", status: "draft", createdAt: new Date() } as any);
+      await db.update(conversationThreads).set({ lastMessageAt: new Date(), messageCount: sql`${conversationThreads.messageCount} + 1`, updatedAt: new Date() } as any).where(and(eq(conversationThreads.id, threadId), eq(conversationThreads.userId, ctx.user.id)));
+      return { id, threadId, status: "draft" as const, ok: true as const };
     }),
 });

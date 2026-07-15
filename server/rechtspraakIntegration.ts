@@ -363,7 +363,9 @@ class RechtspraakIntegrationService {
 
     if (timeSinceLastRequest < this.RATE_LIMIT_MS) {
       const waitTime = this.RATE_LIMIT_MS - timeSinceLastRequest;
-      await new Promise((resolve) => setTimeout(resolve, waitTime));
+      await new Promise((resolve) => {
+        setTimeout(resolve, waitTime);
+      });
     }
 
     this.lastRequestTime = Date.now();
