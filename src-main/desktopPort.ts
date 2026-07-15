@@ -14,3 +14,15 @@ export function resolveDesktopServerPort(redirectBase: string | undefined): numb
     return 0;
   }
 }
+
+/**
+ * A packaged executable must never inherit development-only renderer behavior
+ * from the launching shell. In particular, NODE_ENV=development must not make
+ * a release build try to load the Vite server or expose development menus.
+ */
+export function isDesktopDevelopmentMode(
+  isPackaged: boolean,
+  nodeEnv: string | undefined
+): boolean {
+  return !isPackaged && nodeEnv === 'development';
+}

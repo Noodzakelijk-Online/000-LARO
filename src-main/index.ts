@@ -13,7 +13,7 @@ import {
 } from './database';
 import { FileScanner } from './scanner';
 import { FileUploader } from './uploader';
-import { resolveDesktopServerPort } from './desktopPort';
+import { isDesktopDevelopmentMode, resolveDesktopServerPort } from './desktopPort';
 // NOTE: server/index.ts reads `.env` (dotenv) at import time, so it is imported
 // lazily in startApp() AFTER we pin NODE_ENV from app.isPackaged. This guarantees
 // a packaged build runs the server in production mode even if the bundled .env
@@ -21,7 +21,7 @@ import { resolveDesktopServerPort } from './desktopPort';
 
 const DEFAULT_PORT = 3000;
 let laroUrl = `http://127.0.0.1:${DEFAULT_PORT}`;
-const isDev = process.env.NODE_ENV === 'development';
+const isDev = isDesktopDevelopmentMode(app.isPackaged, process.env.NODE_ENV);
 
 /**
  * Phase 006/007 — per-install secret bootstrap.

@@ -1,8 +1,8 @@
 # Final Verification Report
 
-Date: 2026-07-15
+Date: 2026-07-16
 Branch: `main`
-Commit: `677a46a62577792c4acf2811b475ca2f1bf4d040`
+Commit: `39cea391a88f9733f141e69328e9679cae2aab4a`
 
 This report separates reproducible repository evidence from target-environment
 acceptance. It supersedes the 2026-07-06 phase snapshot.
@@ -24,9 +24,10 @@ acceptance. It supersedes the 2026-07-06 phase snapshot.
 | Unpacked Windows packaging | Pass with tracked LARO icon |
 | Packaged `/api/health` | `healthy`, database ready, version 1.3.0, production |
 | Desktop scanner contract | Scoped 15-minute token; real bytes/hash; owner/MIME enforcement |
-| Protected-main CI | Actions run `29455232706`; Node and Python jobs passed |
-| Windows package workflow | Actions run `29455232654`; gate, build, ABI check, package, checksum, and artifact upload passed |
+| Protected-main CI | Actions run `29457000334`; Node and Python jobs passed |
+| Windows package workflow | Actions run `29457000381`; gate, build, ABI check, package, checksum, and artifact upload passed |
 | Packaged matching assets | Seven aligned legal categories; invalid legacy dataset absent |
+| Dependency graph | One canonical Node workspace; 0 open Dependabot alerts |
 
 `npm run readiness:production` also passed with strong target-like secrets. The
 readiness command now restores the Node SQLite ABI itself after Electron
@@ -58,8 +59,8 @@ A second packaged-window run exercised the rebuilt scanner surface:
 - Settings opened and returned to evidence collection; the viewport had no
   horizontal overflow or overlapping controls.
 
-The CI portable artifact is 104,514,968 bytes with SHA-256
-`c6cf367f112b4dc4fd64d749666f00ae169a175a4f2a168aaf1159a06dc3cb38`.
+The CI portable artifact is 104,512,348 bytes with SHA-256
+`af901f1624b0f394c624b297492d2f7622f942ec8d6c3ca850bceee6476bbdfa`.
 The downloaded executable matched its published checksum, launched the real
 dashboard window with an active renderer, and did not reproduce the obsolete
 `dist/main/index.js` startup error. Its packaged resources contain the current
@@ -87,6 +88,8 @@ reports `NotSigned`, matching the external signing gate below.
 - Lawyer matching loads a valid curated terminology dataset whose seven category
   keys are checked against the specialization taxonomy. It no longer silently
   falls back around the truncated asset or claims unsupported 877k-case scoring.
+- The obsolete nested `assets` npm/Electron workspace was removed. It was not a
+  runnable product surface and was the sole source of 72 stale dependency alerts.
 - `main` requires pull requests, strict Node/Python status checks, stale-review
   dismissal, resolved review conversations, and disallows force pushes/deletion.
 

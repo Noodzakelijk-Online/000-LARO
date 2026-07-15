@@ -1,7 +1,10 @@
 import { createServer, type Server } from 'http';
 import { afterEach, describe, expect, it } from 'vitest';
 import { listenHttpServer } from '../../server/listen';
-import { resolveDesktopServerPort } from '../../src-main/desktopPort';
+import {
+  isDesktopDevelopmentMode,
+  resolveDesktopServerPort,
+} from '../../src-main/desktopPort';
 
 const servers: Server[] = [];
 
@@ -44,5 +47,18 @@ describe('packaged desktop port selection', () => {
   it('preserves the port registered for a loopback OAuth callback', () => {
     expect(resolveDesktopServerPort('http://localhost:3000')).toBe(3000);
     expect(resolveDesktopServerPort('http://127.0.0.1:8768/api/oauth/callback')).toBe(8768);
+  });
+});
+
+describe('desktop runtime mode', () => {
+  it('honors development mode only for an unpackaged Electron process', () => {
+    expect(isDesktopDevelopmentMode(false, 'development')).toBe(true);
+    expect(isDesktopDevelopmentMode(false, 'production')).toBe(false);
+  });
+
+  it('never enables development behavior in a packaged executable', () => {
+    expect(isDesktopDevelopmentMode(true, 'development')).toBe(false);
+    expect(isDesktopDevelopmentMode(true, 'production')).toBe(false);
+    expect(isDesktopDevelopmentMode(true, undefined)).toBe(false);
   });
 });
