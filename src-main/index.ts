@@ -4,10 +4,15 @@ import os from 'os';
 import fs from 'fs';
 import { nanoid } from 'nanoid';
 import { IPC_CHANNELS, Platform, ScanConfig, AgentConfig } from '../shared/types';
-import { initDatabase as initAgentDb, closeDatabase as closeAgentDb, createScan, getScanFiles } from './database';
+import {
+  initDatabase as initAgentDb,
+  closeDatabase as closeAgentDb,
+  createScan,
+  getScanFiles,
+  setScanFileSelection,
+} from './database';
 import { FileScanner } from './scanner';
 import { FileUploader } from './uploader';
-import { initAutoUpdater } from './autoUpdater';
 import { resolveDesktopServerPort } from './desktopPort';
 // NOTE: server/index.ts reads `.env` (dotenv) at import time, so it is imported
 // lazily in startApp() AFTER we pin NODE_ENV from app.isPackaged. This guarantees
@@ -24,9 +29,7 @@ const isDev = process.env.NODE_ENV === 'development';
  * Generates strong random secrets on first run and persists them to the user's
  * private app-data directory (never committed, never shipped). This makes the
  * desktop app secure-by-default: sessions are signed with a per-install
- * JWT_SECRET (so tokens cannot be forged with the old shared default), and the
- * desktop scanner authenticates with a per-install LOCAL_AGENT_TOKEN instead of
- * the well-known "local-default" string.
+ * JWT_SECRET and COOKIE_SECRET so sessions cannot be forged with shared defaults.
  *
  * Only fills a value if it is not already provided by the environment (a real
  * deployment can still inject its own secrets).
@@ -34,7 +37,7 @@ const isDev = process.env.NODE_ENV === 'development';
 function bootstrapSecrets(userDataPath: string) {
   const crypto = require('crypto') as typeof import('crypto');
   const secretsPath = path.join(userDataPath, 'laro-secrets.json');
-  let store: { jwtSecret?: string; cookieSecret?: string; localAgentToken?: string } = {};
+  let store: { jwtSecret?: string; cookieSecret?: string } = {};
   try {
     if (fs.existsSync(secretsPath)) {
       store = JSON.parse(fs.readFileSync(secretsPath, 'utf8'));
@@ -48,7 +51,6 @@ function bootstrapSecrets(userDataPath: string) {
   let changed = false;
   if (!store.jwtSecret) { store.jwtSecret = gen(); changed = true; }
   if (!store.cookieSecret) { store.cookieSecret = gen(); changed = true; }
-  if (!store.localAgentToken) { store.localAgentToken = gen(); changed = true; }
 
   if (changed) {
     try {
@@ -62,7 +64,6 @@ function bootstrapSecrets(userDataPath: string) {
   // Only set if not already provided by a real .env / deployment.
   if (!process.env.JWT_SECRET) process.env.JWT_SECRET = store.jwtSecret;
   if (!process.env.COOKIE_SECRET) process.env.COOKIE_SECRET = store.cookieSecret;
-  if (!process.env.LOCAL_AGENT_TOKEN) process.env.LOCAL_AGENT_TOKEN = store.localAgentToken;
 }
 
 // ─── Error Handling ─────────────────────────────────────────────────────────
@@ -79,6 +80,7 @@ let mainWindow: BrowserWindow | null = null;
 let scanPanel: BrowserWindow | null = null;
 let currentScanner: FileScanner | null = null;
 let currentUploader: FileUploader | null = null;
+const approvedScanFolders = new Set<string>();
 
 let agentConfig: AgentConfig = {
   caseId: null,
@@ -97,10 +99,35 @@ function getPlatform(): Platform {
 
 function isTrustedAppUrl(rawUrl: string): boolean {
   try {
-    return new URL(rawUrl).origin === new URL(laroUrl).origin;
+    const origin = new URL(rawUrl).origin;
+    if (origin === new URL(laroUrl).origin) return true;
+    return isDev && (origin === 'http://localhost:5173' || origin === 'http://127.0.0.1:5173');
   } catch {
     return false;
   }
+}
+
+function assertTrustedIpc(event: Electron.IpcMainInvokeEvent): void {
+  const senderUrl = event.senderFrame?.url || event.sender.getURL();
+  if (!isTrustedAppUrl(senderUrl)) throw new Error('Blocked IPC from an untrusted renderer');
+}
+
+function hardenWindowNavigation(window: BrowserWindow): void {
+  window.webContents.on('will-navigate', (event, url) => {
+    if (url.includes('/api/oauth/') || !isTrustedAppUrl(url)) {
+      event.preventDefault();
+      void openExternalUrl(url).catch((error) => console.error('[Electron] Blocked navigation:', error));
+    }
+  });
+  window.webContents.setWindowOpenHandler(({ url }: { url: string }) => {
+    if (url.includes('/api/oauth/')) {
+      void openExternalUrl(url).catch((error) => console.error('[Electron] Blocked OAuth URL:', error));
+      return { action: 'deny' };
+    }
+    if (isTrustedAppUrl(url)) return { action: 'allow' };
+    void openExternalUrl(url).catch((error) => console.error('[Electron] Blocked external URL:', error));
+    return { action: 'deny' };
+  });
 }
 
 async function openExternalUrl(rawUrl: string): Promise<void> {
@@ -133,16 +160,7 @@ async function createMainWindow(): Promise<void> {
     scanPanel?.close();
   });
 
-  mainWindow.webContents.setWindowOpenHandler(({ url }: { url: string }) => {
-    // Force OAuth flows to open in external browser to avoid Google's "disallowed_useragent" error
-    if (url.includes('/api/oauth/')) {
-      void openExternalUrl(url).catch((error) => console.error('[Electron] Blocked OAuth URL:', error));
-      return { action: 'deny' };
-    }
-    if (isTrustedAppUrl(url)) return { action: 'allow' };
-    void openExternalUrl(url).catch((error) => console.error('[Electron] Blocked external URL:', error));
-    return { action: 'deny' };
-  });
+  hardenWindowNavigation(mainWindow);
 
   console.log(`[Electron] NODE_ENV: ${process.env.NODE_ENV}`);
   console.log(`[Electron] isDev: ${isDev}`);
@@ -185,9 +203,12 @@ function createScanPanel(): void {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: true,
       preload: path.join(__dirname, 'preload.js'),
     },
   });
+
+  hardenWindowNavigation(scanPanel);
 
   if (isDev) {
     scanPanel.loadURL('http://localhost:5173/?mode=scanner');
@@ -195,7 +216,11 @@ function createScanPanel(): void {
     scanPanel.loadURL(`${laroUrl}/?mode=scanner`);
   }
   scanPanel.on('closed', () => {
+    currentScanner?.stop();
+    currentUploader?.stop();
     scanPanel = null;
+    approvedScanFolders.clear();
+    agentConfig = { ...agentConfig, token: null, deviceId: null, userId: null, caseId: null };
   });
 }
 
@@ -218,10 +243,7 @@ function buildMenu(): void {
     {
       label: 'View',
       submenu: [
-        { role: 'reload' },
-        { role: 'forceReload' },
-        { role: 'toggleDevTools' },
-        { type: 'separator' },
+        ...(isDev ? [{ role: 'reload' as const }, { role: 'toggleDevTools' as const }, { type: 'separator' as const }] : []),
         { role: 'resetZoom' },
         { role: 'zoomIn' },
         { role: 'zoomOut' },
@@ -273,11 +295,7 @@ app.whenReady().then(async () => {
   // the production security guard passes with strong, non-forgeable values.
   bootstrapSecrets(userDataPath);
   process.env.LARO_APP_VERSION = app.getVersion();
-  // Default the desktop scanner's token to the per-install agent token so it
-  // authenticates without the well-known "local-default" string.
-  if (process.env.LOCAL_AGENT_TOKEN) {
-    agentConfig.token = agentConfig.token ?? process.env.LOCAL_AGENT_TOKEN;
-  }
+  process.env.HOST = '127.0.0.1';
 
   try {
     const { startServer } = await import('../server/index');
@@ -323,55 +341,86 @@ app.on('before-quit', () => {
 });
 
 function setupIPC(): void {
-  ipcMain.handle(IPC_CHANNELS.CONFIG_GET, () => ({ ...agentConfig }));
-  ipcMain.handle(IPC_CHANNELS.CONFIG_SET, (_: any, c: Partial<AgentConfig>) => {
-    agentConfig = { ...agentConfig, ...c };
+  ipcMain.handle(IPC_CHANNELS.CONFIG_GET, (event) => {
+    assertTrustedIpc(event);
     return { ...agentConfig };
   });
-  ipcMain.handle(IPC_CHANNELS.SYSTEM_INFO, () => ({
-    platform: getPlatform(),
-    arch: process.arch,
-    hostname: os.hostname(),
-    username: os.userInfo().username,
-    homeDir: os.homedir(),
-    totalMemory: os.totalmem(),
-    freeMemory: os.freemem(),
-    cpus: os.cpus().length,
-    version: app.getVersion(),
-  }));
-  ipcMain.handle(IPC_CHANNELS.APP_VERSION, () => app.getVersion());
-  // Phase 007: hand the renderer the per-install agent token so the scanner UI
-  // authenticates with it instead of the well-known "local-default" string.
-  ipcMain.handle('agent:token', () => process.env.LOCAL_AGENT_TOKEN || null);
-  ipcMain.handle(IPC_CHANNELS.OPEN_EXTERNAL, (_: any, url: string) => openExternalUrl(url));
-  ipcMain.handle(IPC_CHANNELS.SCAN_OPEN_PANEL, () => createScanPanel());
-  ipcMain.handle(IPC_CHANNELS.FOLDER_SELECT, async () => {
+  ipcMain.handle(IPC_CHANNELS.CONFIG_SET, (event, c: Partial<AgentConfig>) => {
+    assertTrustedIpc(event);
+    const next: Partial<AgentConfig> = {};
+    if (c.token === null || (typeof c.token === 'string' && c.token.length <= 4096)) next.token = c.token;
+    if (c.userId === null || (typeof c.userId === 'string' && c.userId.length <= 200)) next.userId = c.userId;
+    if (c.deviceId === null || (typeof c.deviceId === 'string' && c.deviceId.length <= 200)) next.deviceId = c.deviceId;
+    if (c.caseId === null || (typeof c.caseId === 'string' && c.caseId.length <= 200)) next.caseId = c.caseId;
+    agentConfig = { ...agentConfig, ...next };
+    return { ...agentConfig };
+  });
+  ipcMain.handle(IPC_CHANNELS.SYSTEM_INFO, (event) => {
+    assertTrustedIpc(event);
+    return {
+      platform: getPlatform(),
+      arch: process.arch,
+      hostname: os.hostname(),
+      username: os.userInfo().username,
+      homeDir: os.homedir(),
+      totalMemory: os.totalmem(),
+      freeMemory: os.freemem(),
+      cpus: os.cpus().length,
+      version: app.getVersion(),
+    };
+  });
+  ipcMain.handle(IPC_CHANNELS.APP_VERSION, (event) => { assertTrustedIpc(event); return app.getVersion(); });
+  ipcMain.handle(IPC_CHANNELS.OPEN_EXTERNAL, (event, url: string) => {
+    assertTrustedIpc(event);
+    return openExternalUrl(url);
+  });
+  ipcMain.handle(IPC_CHANNELS.SCAN_OPEN_PANEL, (event) => {
+    assertTrustedIpc(event);
+    return createScanPanel();
+  });
+  ipcMain.handle(IPC_CHANNELS.FOLDER_SELECT, async (event) => {
+    assertTrustedIpc(event);
     const parent = scanPanel ?? mainWindow;
     if (!parent) return null;
     const result = await dialog.showOpenDialog(parent, {
       properties: ['openDirectory', 'multiSelections'],
       title: 'Select folders to scan',
     });
-    return result.canceled ? null : result.filePaths;
+    if (result.canceled) return null;
+    const folders = result.filePaths.map((folder) => path.resolve(folder));
+    for (const folder of folders) approvedScanFolders.add(folder);
+    return folders;
   });
-  ipcMain.handle(IPC_CHANNELS.UPDATE_CHECK, () => ({ currentVersion: app.getVersion(), updateAvailable: false }));
   
-  ipcMain.handle(IPC_CHANNELS.SCAN_START, async (_: any, config: ScanConfig) => {
+  ipcMain.handle(IPC_CHANNELS.SCAN_START, async (event, config: ScanConfig) => {
+    assertTrustedIpc(event);
     if (currentScanner) throw new Error('Scan already in progress');
+    if (!config || typeof config.caseId !== 'string' || !config.caseId.trim()) throw new Error('Select a case first');
+    const folders = Array.isArray(config.folders) ? config.folders.map((folder) => path.resolve(String(folder))) : [];
+    if (!folders.length) throw new Error('Select at least one folder to scan');
+    for (const folder of folders) {
+      if (!approvedScanFolders.has(folder)) throw new Error('Every scan folder must be selected through the folder picker');
+      if (!fs.statSync(folder).isDirectory()) throw new Error(`Scan path is not a directory: ${folder}`);
+    }
+    approvedScanFolders.clear();
+    const safeConfig: ScanConfig = {
+      caseId: config.caseId.trim(),
+      caseName: String(config.caseName || config.caseId).slice(0, 500),
+      autoUpload: false,
+      folders,
+      excludedFolders: [],
+    };
     const scanId = nanoid();
-    createScan(scanId, config.caseId, config.caseName, config.autoUpload, config.excludedFolders);
-    currentScanner = new FileScanner({ scanId, config, platform: getPlatform() });
-    currentScanner.on('progress', (p) => scanPanel?.webContents.send(IPC_CHANNELS.SCAN_PROGRESS, p));
+    createScan(scanId, safeConfig.caseId, safeConfig.caseName, false, []);
+    currentScanner = new FileScanner({ scanId, config: safeConfig, platform: getPlatform() });
+    currentScanner.on('progress', (p) => scanPanel?.webContents.send(IPC_CHANNELS.SCAN_PROGRESS, { scanId, ...p }));
     currentScanner.on('completed', async (result) => {
       scanPanel?.webContents.send(IPC_CHANNELS.SCAN_PROGRESS, {
         scanId,
-        status: config.autoUpload ? 'uploading' : 'review',
+        status: 'review',
         ...result,
       });
-      mainWindow?.webContents.executeJavaScript(
-        `window.dispatchEvent(new CustomEvent('laro:evidence-updated',{detail:{scanId:'${scanId}'}}))`
-      ).catch(() => {});
-      if (config.autoUpload && agentConfig.token) await startUpload(scanId).catch(console.error);
+      mainWindow?.webContents.send(IPC_CHANNELS.EVIDENCE_UPDATED, { scanId });
       currentScanner = null;
     });
     currentScanner.on('cancelled', () => {
@@ -386,35 +435,61 @@ function setupIPC(): void {
     return { scanId };
   });
 
-  ipcMain.handle(IPC_CHANNELS.SCAN_STOP, () => { currentScanner?.stop(); return { success: true }; });
-  ipcMain.handle(IPC_CHANNELS.SCAN_PAUSE, () => { currentScanner?.pause(); return { success: true }; });
-  ipcMain.handle(IPC_CHANNELS.SCAN_RESUME, () => { currentScanner?.resume(); return { success: true }; });
-  ipcMain.handle(IPC_CHANNELS.SCAN_FILES_GET, (_: any, id: string) => ({ files: getScanFiles(id) }));
-  ipcMain.handle(IPC_CHANNELS.UPLOAD_START, (_: any, id: string) => startUpload(id));
-  ipcMain.handle(IPC_CHANNELS.UPLOAD_PAUSE, () => { currentUploader?.pause(); return { success: true }; });
-  ipcMain.handle(IPC_CHANNELS.UPLOAD_RESUME, () => { currentUploader?.resume(); return { success: true }; });
+  ipcMain.handle(IPC_CHANNELS.SCAN_STOP, (event) => { assertTrustedIpc(event); currentScanner?.stop(); return { success: true }; });
+  ipcMain.handle(IPC_CHANNELS.SCAN_PAUSE, (event) => { assertTrustedIpc(event); currentScanner?.pause(); return { success: true }; });
+  ipcMain.handle(IPC_CHANNELS.SCAN_RESUME, (event) => { assertTrustedIpc(event); currentScanner?.resume(); return { success: true }; });
+  ipcMain.handle(IPC_CHANNELS.SCAN_FILES_GET, (event, id: string) => {
+    assertTrustedIpc(event);
+    return { files: getScanFiles(String(id).slice(0, 200)) };
+  });
+  ipcMain.handle(IPC_CHANNELS.SCAN_FILES_SELECT, (event, id: string, fileIds: string[]) => {
+    assertTrustedIpc(event);
+    const safeIds = Array.isArray(fileIds) ? fileIds.map(String).filter((value) => value.length <= 200) : [];
+    const selected = setScanFileSelection(String(id).slice(0, 200), safeIds);
+    return { selected };
+  });
+  ipcMain.handle(IPC_CHANNELS.UPLOAD_START, (event, id: string) => { assertTrustedIpc(event); return startUpload(id); });
+  ipcMain.handle(IPC_CHANNELS.UPLOAD_PAUSE, (event) => { assertTrustedIpc(event); currentUploader?.pause(); return { success: true }; });
+  ipcMain.handle(IPC_CHANNELS.UPLOAD_RESUME, (event) => { assertTrustedIpc(event); currentUploader?.resume(); return { success: true }; });
 }
 
 async function startUpload(scanId: string): Promise<{ success: boolean }> {
   if (currentUploader) throw new Error('Upload in progress');
-  if (!agentConfig.token) throw new Error('Not authenticated');
+  if (!agentConfig.token || !agentConfig.userId) throw new Error('Sign in to LARO before uploading evidence');
+  if (!isTrustedAppUrl(agentConfig.apiUrl)) throw new Error('Scanner API URL is not trusted');
+  const safeScanId = String(scanId).slice(0, 200);
   currentUploader = new FileUploader({
-    scanId,
+    scanId: safeScanId,
     apiUrl: agentConfig.apiUrl,
     token: agentConfig.token,
     concurrency: 3,
     maxRetries: 3,
   });
-  currentUploader.on('progress', (p) => scanPanel?.webContents.send(IPC_CHANNELS.UPLOAD_PROGRESS, { scanId, ...p }));
+  currentUploader.on('progress', (p) => scanPanel?.webContents.send(IPC_CHANNELS.UPLOAD_PROGRESS, { scanId: safeScanId, ...p }));
   currentUploader.on('completed', (r) => {
-    scanPanel?.webContents.send(IPC_CHANNELS.UPLOAD_PROGRESS, { scanId, done: true, ...r });
-    mainWindow?.webContents.executeJavaScript(
-      `window.dispatchEvent(new CustomEvent('laro:evidence-updated',{detail:{scanId:'${scanId}'}}))`
-    ).catch(() => {});
+    scanPanel?.webContents.send(IPC_CHANNELS.UPLOAD_PROGRESS, { scanId: safeScanId, done: true, ...r });
+    mainWindow?.webContents.send(IPC_CHANNELS.EVIDENCE_UPDATED, { scanId: safeScanId });
     currentUploader = null;
   });
+  currentUploader.on('file-failed', (failure) => {
+    scanPanel?.webContents.send(IPC_CHANNELS.UPLOAD_PROGRESS, {
+      scanId: safeScanId,
+      fileId: failure.fileId,
+      failed: true,
+      errorMessage: failure.error,
+    });
+  });
   currentUploader.on('cancelled', () => { currentUploader = null; });
-  currentUploader.on('error', () => { currentUploader = null; });
+  currentUploader.on('error', (error: Error) => {
+    scanPanel?.webContents.send(IPC_CHANNELS.UPLOAD_PROGRESS, {
+      scanId: safeScanId,
+      done: true,
+      failed: true,
+      failedFiles: 1,
+      errorMessage: error.message,
+    });
+    currentUploader = null;
+  });
   currentUploader.start().catch(console.error);
   return { success: true };
 }

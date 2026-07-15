@@ -23,7 +23,7 @@ export default function NewCaseDialog({ open, onOpenChange }: NewCaseDialogProps
   const utils = trpc.useUtils();
   const createCase = trpc.cases.create.useMutation({
     onSuccess: () => {
-      toast.success("Your case has been created! We're analyzing it and will find the right lawyers for you.");
+      toast.success("Case created and classified. Review it to match lawyers.");
       utils.cases.list.invalidate();
       utils.dashboard.recentCases.invalidate();
       utils.dashboard.stats.invalidate();
@@ -52,13 +52,11 @@ export default function NewCaseDialog({ open, onOpenChange }: NewCaseDialogProps
       return;
     }
 
-    // For now, set caseType to "General" - AI will infer actual legal areas later
-    // User data (name, email) comes from auth context automatically
-    // Urgency is fixed to Medium per client requirements - AI determines actual urgency
+    // Legal areas are deterministically classified by the create endpoint.
     createCase.mutate({
       clientName: user.name || "User",
       clientEmail: user.email || "",
-      caseType: "General", // Placeholder - will be replaced by AI inference
+      caseType: "General",
       caseSummary: formData.caseSummary,
       urgency: "Medium", // Fixed value per client requirements
     });
@@ -109,9 +107,6 @@ export default function NewCaseDialog({ open, onOpenChange }: NewCaseDialogProps
                   {formData.caseSummary.length} characters {formData.caseSummary.length < 50 ? `(minimum 50)` : "✓"}
                 </span>
               </div>
-              <p className="text-xs text-muted-foreground italic">
-                Note: LARO AI will automatically determine case urgency and priority based on your description.
-              </p>
             </div>
           </div>
           <DialogFooter>
@@ -123,7 +118,7 @@ export default function NewCaseDialog({ open, onOpenChange }: NewCaseDialogProps
               disabled={createCase.isPending || formData.caseSummary.length < 50} 
               className="bg-gradient-to-r from-purple-500 to-pink-500"
             >
-              {createCase.isPending ? "Analyzing..." : "Find Lawyers for Me"}
+              {createCase.isPending ? "Creating..." : "Create case"}
             </Button>
           </DialogFooter>
         </form>

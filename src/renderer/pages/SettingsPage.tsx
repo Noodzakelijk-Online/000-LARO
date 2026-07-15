@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
-import type { AgentConfig } from '../../shared/types';
+import type { AgentConfig } from '../../../shared/types';
 import { getElectronAPI } from '@/lib/electronApiShim';
 
 interface Props {
@@ -11,8 +11,6 @@ interface Props {
 
 export default function SettingsPage({ config, onNavigate, onSave }: Props) {
   const electronAPI = getElectronAPI();
-  const [apiUrl, setApiUrl]     = useState(config?.apiUrl ?? 'http://localhost:3000');
-  const [token, setToken]       = useState(config?.token ?? '');
   const [caseId, setCaseId]     = useState(config?.caseId ?? '');
   const [saving, setSaving]     = useState(false);
   const [sysInfo, setSysInfo]   = useState<any>(null);
@@ -27,7 +25,7 @@ export default function SettingsPage({ config, onNavigate, onSave }: Props) {
     e.preventDefault();
     setSaving(true);
     try {
-      await onSave({ apiUrl, token: token || null, caseId: caseId || null });
+      await onSave({ caseId: caseId || null });
       toast.success('Settings saved');
     } catch {
       toast.error('Failed to save settings');
@@ -51,27 +49,6 @@ export default function SettingsPage({ config, onNavigate, onSave }: Props) {
 
       <main className="flex-1 p-6 max-w-2xl mx-auto w-full space-y-6">
         <form onSubmit={handleSave} className="space-y-6">
-          <Section title="Connection">
-            <Field label="LARO server URL">
-              <input
-                type="url"
-                value={apiUrl}
-                onChange={e => setApiUrl(e.target.value)}
-                className="input"
-                placeholder="http://localhost:3000"
-              />
-            </Field>
-            <Field label="API Token">
-              <input
-                type="password"
-                value={token}
-                onChange={e => setToken(e.target.value)}
-                className="input"
-                placeholder="Your LARO token"
-              />
-            </Field>
-          </Section>
-
           <Section title="Default case">
             <Field label="Default Case ID" hint="Used when uploading without specifying a case">
               <input

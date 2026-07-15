@@ -24,6 +24,8 @@ The Electron main process starts the Express/tRPC server and React renderer toge
 - Keep case-neutral documents in an inbox until a user reviews deterministic case suggestions and explicitly links them.
 - Pull selected Gmail and Google Drive records through real read-only OAuth when credentials are configured.
 - Deduplicate imported evidence while preserving source URIs and locally retrievable files.
+- Scan only folders selected through the native desktop picker, review the discovered files, and upload only the selected evidence.
+- Store actual scanner bytes under the owned case with SHA-256 provenance; scanner credentials expire after 15 minutes and cannot call other protected APIs.
 
 ### Document intelligence and Papertrail
 
@@ -62,7 +64,7 @@ npm run setup
 npm run dev
 ```
 
-`npm run setup` creates `.env` from `.env.example` only when `.env` does not already exist. It never overwrites existing configuration. The packaged desktop app generates local JWT, cookie, and local-agent secrets in its Electron user-data directory; standalone production server operation requires strong values in `.env`.
+`npm run setup` creates `.env` from `.env.example` only when `.env` does not already exist. It never overwrites existing configuration. The packaged desktop app generates local JWT and cookie secrets in its Electron user-data directory; standalone production server operation requires strong values in `.env`.
 
 Useful desktop commands:
 
@@ -100,7 +102,7 @@ Copy `.env.example` to `.env`; never commit real secrets. The template is groupe
 
 | Area | Important variables |
 | --- | --- |
-| Desktop server | `NODE_ENV`, `HOST`, `PORT`, `API_BODY_LIMIT`, `JWT_SECRET`, `COOKIE_SECRET`, `LOCAL_AGENT_TOKEN` |
+| Desktop server | `NODE_ENV`, `HOST`, `PORT`, `API_BODY_LIMIT`, `JWT_SECRET`, `COOKIE_SECRET` |
 | Desktop data | `DATABASE_URL`, `LOCAL_STORAGE_DIR`, `AWS_S3_*` |
 | Provider-backed desktop AI | `FORGE_API_URL`, `FORGE_API_KEY` |
 | Optional connectors | `MICROSOFT_*`, `TELEGRAM_BOT_TOKEN`, `SENDGRID_API_KEY`, `SMTP_*` |
@@ -142,15 +144,16 @@ See [Operator Runbook](docs/OPERATOR_RUNBOOK.md), [Security](docs/SECURITY.md), 
 
 ## Verification
 
-The production-readiness branch was verified on 2026-07-15 against the Node 22 toolchain:
+The production-readiness branch was verified locally on 2026-07-15. CI repeats the Node checks on the supported Node 22 toolchain:
 
 - `npm run gate`: all blocking gates passed.
 - Server, Electron main-process, and shipped renderer TypeScript checks passed; ESLint passed.
 - Traceability reported 116 rows, 93 cited, and 0 broken references.
 - Runtime no-excuses scan reported 0 suspect findings; account safety reported 0 high-severity findings.
-- Vitest reported 31 passing files, 212 passing tests, and no skipped or todo tests.
+- Vitest reported 32 passing files, 217 passing tests, and no skipped or todo tests.
 - Full Python discovery reported 202 passing tests. Warning-focused optimization and UCID tests also passed with deprecations promoted to errors.
 - The Vite 8 renderer, Electron 43 main process, and standalone server builds completed successfully.
+- The scanner integration test verified scoped-token isolation, owner checks, supported MIME enforcement, exact stored bytes, and SHA-256 readback.
 
 The packaged desktop ignores `.env` files in its launch directory and normally
 asks Windows for an available loopback port. Setting
@@ -160,6 +163,8 @@ desktop server to that registered OAuth callback port instead.
 - Production preflight and operator-readiness diagnostics reported no blockers;
   the isolated backup/delete/restore/reopen drill passed.
 - Playwright smoke tests passed at 1440x900 and 390x844 with clean consoles, one coalesced local-session bootstrap, live command-center and Google-status responses, responsive depth controls, a closable Google dialog, and a functional password-visibility control.
+- Packaged Electron scanner QA passed signup, shared-session authorization, empty-state rendering, disabled unsafe scan state, Settings navigation, and clean renderer console checks.
+- A packaged launch from a directory containing hostile development `.env` values still reported production mode, database readiness, and a random `127.0.0.1` port.
 
 Run the same checks locally:
 

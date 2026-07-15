@@ -7,6 +7,17 @@ versioning; dates are ISO. Version is sourced from `package.json` and surfaced b
 ## Unreleased
 
 ### Fixed
+- Replaced the desktop scanner's false offline login and fabricated upload path
+  with shared-session authorization, explicit native folder consent, per-file
+  review, real byte persistence, and SHA-256 provenance.
+- Restricted 15-minute scanner JWTs to the evidence upload mutation and bound
+  `desktop_scanner` provenance to those credentials; removed the obsolete
+  all-access local-agent bearer path.
+- Removed unreachable scanner, sync, mobile, OCR, annotation, and inbox
+  prototypes, and removed filename-based confidence labels and invented upload
+  progress from reachable evidence controls.
+- Removed seven unused runtime packages and their obsolete type packages,
+  reducing the install by 33 transitive packages.
 - Lawyer search now stores filters under the correct directory type, removes
   fabricated recent-search counts, exposes real filters without a second panel,
   and opens the selected lawyer profile.

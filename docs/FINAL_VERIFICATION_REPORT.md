@@ -16,12 +16,13 @@ acceptance. It supersedes the 2026-07-06 phase snapshot.
 | Runtime no-excuses scan | 0 suspect findings |
 | Account-safety scan | 0 high-severity findings |
 | Isolated backup/delete/restore/reopen drill | Pass |
-| Vitest | 31 files, 212 tests passed, 0 todo |
+| Vitest | 32 files, 217 tests passed, 0 todo |
 | Python unittest discovery | 202 tests passed |
 | Runtime dependency audit | 0 known vulnerabilities |
 | Renderer, main, and server production builds | Pass |
 | Unpacked Windows packaging | Pass with tracked LARO icon |
 | Packaged `/api/health` | `healthy`, database ready, version 1.3.0, production |
+| Desktop scanner contract | Scoped 15-minute token; real bytes/hash; owner/MIME enforcement |
 
 `npm run readiness:production` also passed with strong target-like secrets. The
 readiness command now restores the Node SQLite ABI itself after Electron
@@ -43,6 +44,20 @@ Playwright exercised the unpacked Windows application at 1440x900 and 390x844:
 - development proxy, CSRF, and authenticated Socket.IO negotiation completed on
   `127.0.0.1` with no console errors or warnings.
 
+A second packaged-window run exercised the rebuilt scanner surface:
+
+- account signup established the shared authenticated desktop session;
+- the scanner opened on the package-selected loopback port and loaded the real
+  empty case state without console warnings or errors;
+- folder selection remained available, while scan execution stayed disabled
+  without both a selected case and a native-picker-approved folder;
+- Settings opened and returned to evidence collection; the viewport had no
+  horizontal overflow or overlapping controls.
+
+The portable artifact is 104,455,151 bytes with SHA-256
+`82C414C21AD53BE17EA656BC1257B69886182BC8C9C21DDA1B836622E0A683EA`.
+Windows reports `NotSigned`, matching the external signing gate below.
+
 ## Verified product path
 
 - Case creation, deterministic classification, lawyer matching, and idempotent
@@ -57,6 +72,10 @@ Playwright exercised the unpacked Windows application at 1440x900 and 390x844:
   than mock counters.
 - Persisted notifications are emitted only to the authenticated user's realtime
   room; the client retains polling as a recovery path.
+- Desktop scanning requires explicit native folder consent and per-file review;
+  selected bytes are persisted through the canonical evidence upload route with
+  content-hash provenance. Scanner bearer tokens cannot access other protected
+  procedures.
 
 ## External acceptance still required
 

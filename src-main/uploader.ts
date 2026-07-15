@@ -5,9 +5,12 @@
 
 import * as fs from 'fs/promises';
 import { EventEmitter } from 'events';
-import axios, { AxiosError } from 'axios';
+import { createTRPCProxyClient, httpBatchLink } from '@trpc/client';
+import superjson from 'superjson';
+import type { AppRouter } from '../server/routers';
 import { FileItem } from '../shared/types';
-import { updateFileStatus, updateScanProgress, getPendingFiles } from './database';
+import { evidenceTypeForMime, MAX_EVIDENCE_FILE_BYTES } from '../shared/evidenceFiles';
+import { updateFileStatus, updateScanProgress, getPendingFiles, getScanCaseId } from './database';
 
 export interface UploaderOptions {
   scanId: string;
@@ -33,6 +36,7 @@ export class FileUploader extends EventEmitter {
   private uploadedSize: number = 0;
   
   private activeUploads: Set<string> = new Set();
+  private client: ReturnType<typeof createTRPCProxyClient<AppRouter>>;
   
   constructor(options: UploaderOptions) {
     super();
@@ -41,6 +45,15 @@ export class FileUploader extends EventEmitter {
     this.token = options.token;
     this.concurrency = options.concurrency || 3;
     this.maxRetries = options.maxRetries || 3;
+    this.client = createTRPCProxyClient<AppRouter>({
+      transformer: superjson,
+      links: [
+        httpBatchLink({
+          url: `${this.apiUrl.replace(/\/$/, '')}/api/trpc`,
+          headers: { Authorization: `Bearer ${this.token}` },
+        }),
+      ],
+    });
   }
   
   /**
@@ -163,70 +176,22 @@ export class FileUploader extends EventEmitter {
       // Update status to uploading
       updateFileStatus(file.id, 'uploading', 0);
       
-      // Step 1: Add file to backend
-      const addFileResponse = await axios.post(
-        `${this.apiUrl}/api/trpc/agent.addFile`,
-        {
-          token: this.token,
-          scanId: this.scanId,
-          filePath: file.path,
-          fileName: file.name,
-          fileSize: file.size,
-          mimeType: file.mimeType,
-          fileModifiedAt: file.modifiedAt,
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-      
-      const backendFileId = addFileResponse.data.result.data.fileId;
-      
-      // Step 2: Request upload URL
-      const uploadUrlResponse = await axios.post(
-        `${this.apiUrl}/api/trpc/agent.requestUploadUrl`,
-        {
-          token: this.token,
-          fileId: backendFileId,
-          fileName: file.name,
-          mimeType: file.mimeType,
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-      
-      const { s3Key } = uploadUrlResponse.data.result.data;
-      
-      // Step 3: Read and upload file
       const fileBuffer = await fs.readFile(file.path);
-      
-      // For now, we'll simulate S3 upload by storing locally
-      // In production, this would upload to actual S3
-      const s3Url = `https://s3.example.com/${s3Key}`;
-      
-      // Update progress
+      if (!fileBuffer.length || fileBuffer.length > MAX_EVIDENCE_FILE_BYTES) {
+        throw new Error('Evidence files must be between 1 byte and 7 MB');
+      }
+
       updateFileStatus(file.id, 'uploading', 50);
-      
-      // Step 4: Confirm upload
-      await axios.post(
-        `${this.apiUrl}/api/trpc/agent.confirmUpload`,
-        {
-          token: this.token,
-          fileId: backendFileId,
-          s3Key,
-          s3Url,
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        }
-      );
+
+      await this.client.evidenceFiles.upload.mutate({
+        caseId: this.getCaseId(),
+        title: file.name,
+        type: evidenceTypeForMime(file.mimeType),
+        fileName: file.name,
+        mimeType: file.mimeType,
+        source: 'desktop_scanner',
+        base64: fileBuffer.toString('base64'),
+      });
       
       // Mark as completed
       updateFileStatus(file.id, 'completed', 100);
@@ -256,7 +221,9 @@ export class FileUploader extends EventEmitter {
       console.error(`[Uploader] Error uploading ${file.name}:`, error.message);
       
       // Retry logic
-      if (retryCount < this.maxRetries) {
+      const message = error instanceof Error ? error.message : String(error);
+      const nonRetryable = /(?:unauthorized|forbidden|not authenticated|not found|between 1 byte|file type)/i.test(message);
+      if (retryCount < this.maxRetries && !nonRetryable) {
         console.log(`[Uploader] Retrying upload (${retryCount + 1}/${this.maxRetries}): ${file.name}`);
         
         // Exponential backoff
@@ -270,36 +237,23 @@ export class FileUploader extends EventEmitter {
         return this.uploadFile(file, retryCount + 1);
       } else {
         // Max retries exceeded
-        updateFileStatus(file.id, 'failed', 0, error.message);
+        updateFileStatus(file.id, 'failed', 0, message);
         this.failedFiles++;
-        
-        // Report failure to backend
-        try {
-          await axios.post(
-            `${this.apiUrl}/api/trpc/agent.reportUploadFailure`,
-            {
-              token: this.token,
-              fileId: file.id,
-              errorMessage: error.message,
-            },
-            {
-              headers: {
-                'Content-Type': 'application/json',
-              },
-            }
-          );
-        } catch (reportError) {
-          console.error('[Uploader] Failed to report upload failure:', reportError);
-        }
-        
+
         this.emit('file-failed', {
           fileId: file.id,
           fileName: file.name,
-          error: error.message,
+          error: message,
         });
       }
     } finally {
       this.activeUploads.delete(file.id);
     }
+  }
+
+  private getCaseId(): string {
+    const caseId = getScanCaseId(this.scanId);
+    if (!caseId) throw new Error('Scan is not linked to a case');
+    return caseId;
   }
 }

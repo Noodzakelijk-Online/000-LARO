@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 
 const ROOT = join(__dirname, '..', '..');
@@ -205,5 +205,41 @@ describe('production readiness regressions', () => {
     expect(dashboard).not.toContain('/reports');
     expect(dashboard).toContain('lazy(() => import("@/components/Cases"))');
     expect(dashboard).toContain('<Suspense fallback={<DashboardSkeleton />}>');
+  });
+
+  it('keeps the desktop scanner consent-gated and fail-closed', () => {
+    const main = readFileSync(join(ROOT, 'src-main/index.ts'), 'utf8');
+    const app = readFileSync(join(ROOT, 'src/renderer/App.tsx'), 'utf8');
+    const home = readFileSync(join(ROOT, 'src/renderer/pages/HomePage.tsx'), 'utf8');
+    const scan = readFileSync(join(ROOT, 'src/renderer/pages/ScanPage.tsx'), 'utf8');
+    const uploader = readFileSync(join(ROOT, 'src-main/uploader.ts'), 'utf8');
+    const routers = readFileSync(join(ROOT, 'server/routers/index.ts'), 'utf8');
+
+    expect(existsSync(join(ROOT, 'src/renderer/pages/AuthPage.tsx'))).toBe(false);
+    expect(app).toContain('getScannerToken');
+    expect(app).toContain('scanner never creates an offline or anonymous session');
+    expect(home).toContain('Nothing uploads until you review the results');
+    expect(home).toContain('folders: scanFolders');
+    expect(home).toContain('autoUpload: false');
+    expect(scan).toContain('setScanFileSelection');
+    expect(scan).toContain('Upload selected');
+    expect(main).toContain('approvedScanFolders');
+    expect(main).toContain("autoUpload: false");
+    expect(main).toContain("process.env.HOST = '127.0.0.1'");
+    expect(main).not.toContain("ipcMain.handle('agent:token'");
+    expect(uploader).toContain('evidenceFiles.upload.mutate');
+    expect(uploader).not.toContain('s3.example.com');
+    expect(uploader).not.toMatch(/simulat(?:e|ed|ing) S3 upload/i);
+    expect(routers).not.toContain('localFileUpload: router');
+    expect(existsSync(join(ROOT, 'src/renderer/components/LocalFileUpload.tsx'))).toBe(false);
+  });
+
+  it('accepts only bounded supported evidence files', async () => {
+    const rules = await import('../../shared/evidenceFiles');
+    expect(rules.MAX_EVIDENCE_FILE_BYTES).toBe(7 * 1024 * 1024);
+    expect(rules.isSupportedEvidenceMimeType('application/pdf')).toBe(true);
+    expect(rules.isSupportedEvidenceMimeType('image/png')).toBe(true);
+    expect(rules.isSupportedEvidenceMimeType('application/x-msdownload')).toBe(false);
+    expect(rules.evidenceTypeForMime('message/rfc822')).toBe('email');
   });
 });

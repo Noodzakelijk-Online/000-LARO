@@ -1,48 +1,65 @@
-import { useState, useCallback, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
+import { AlertCircle, Camera, Check, File, FileText, Image, Loader2, Upload, Video } from "lucide-react";
+import { toast } from "sonner";
+import { evidenceTypeForMime, isSupportedEvidenceMimeType, MAX_EVIDENCE_FILE_BYTES } from "../../../shared/evidenceFiles";
+import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import {
-  Upload,
-  File,
-  FileText,
-  Image as ImageIcon,
-  Video,
-  X,
-  Check,
-  AlertCircle,
-  Camera,
-  Sparkles,
-  Loader2,
-} from "lucide-react";
-import { toast } from "sonner";
-import { trpc } from "@/lib/trpc";
+
+type UploadState = "uploading" | "complete" | "error";
 
 interface UploadedFile {
   id: string;
   file: File;
-  preview?: string;
-  category?: string;
-  confidence?: number;
-  status: "uploading" | "analyzing" | "complete" | "error";
-  progress: number;
-  analysis?: {
-    type: string;
-    extractedInfo?: string[];
-    suggestedCategory?: string;
-  };
+  mimeType: string;
+  status: UploadState;
+  error?: string;
 }
 
-const FILE_CATEGORIES = [
-  { value: "contract", label: "Contract", icon: FileText },
-  { value: "correspondence", label: "Correspondence", icon: FileText },
-  { value: "photo", label: "Photo Evidence", icon: ImageIcon },
-  { value: "video", label: "Video Evidence", icon: Video },
-  { value: "receipt", label: "Receipt/Invoice", icon: FileText },
-  { value: "medical", label: "Medical Record", icon: FileText },
-  { value: "other", label: "Other", icon: File },
-];
+const MIME_BY_EXTENSION: Record<string, string> = {
+  csv: "text/csv",
+  doc: "application/msword",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  eml: "message/rfc822",
+  html: "text/html",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  mov: "video/quicktime",
+  mp3: "audio/mpeg",
+  mp4: "video/mp4",
+  msg: "application/vnd.ms-outlook",
+  pdf: "application/pdf",
+  png: "image/png",
+  txt: "text/plain",
+  wav: "audio/wav",
+  xls: "application/vnd.ms-excel",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+};
+
+function mimeForFile(file: File): string {
+  if (file.type) return file.type.toLowerCase();
+  const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+  return MIME_BY_EXTENSION[extension] ?? "";
+}
+
+async function fileToBase64(file: File): Promise<string> {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+  }
+  return btoa(binary);
+}
+
+function FileIcon({ mimeType }: { mimeType: string }) {
+  if (mimeType.startsWith("image/")) return <Image className="h-6 w-6 text-emerald-500" />;
+  if (mimeType.startsWith("video/")) return <Video className="h-6 w-6 text-violet-500" />;
+  if (mimeType.includes("pdf") || mimeType.includes("word") || mimeType.startsWith("text/")) {
+    return <FileText className="h-6 w-6 text-blue-500" />;
+  }
+  return <File className="h-6 w-6 text-muted-foreground" />;
+}
 
 export default function EnhancedEvidenceUpload({ caseId }: { caseId?: string }) {
   const [files, setFiles] = useState<UploadedFile[]>([]);
@@ -51,399 +68,112 @@ export default function EnhancedEvidenceUpload({ caseId }: { caseId?: string }) 
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const uploadEvidenceFile = trpc.evidenceFiles.upload.useMutation();
 
-  const fileToBase64 = async (file: File) => {
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    let binary = "";
-    for (let offset = 0; offset < bytes.length; offset += 0x8000) {
-      binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
-    }
-    return btoa(binary);
-  };
-
-  const evidenceType = (file: File): "document" | "photo" | "video" | "audio" | "other" => {
-    if (file.type.startsWith("image/")) return "photo";
-    if (file.type.startsWith("video/")) return "video";
-    if (file.type.startsWith("audio/")) return "audio";
-    if (file.type.includes("pdf") || file.type.includes("word") || file.type.startsWith("text/")) return "document";
-    return "other";
-  };
-
-  const categorizeFile = async (file: File): Promise<{ category: string; confidence: number }> => {
-    // Simple file type based categorization
-    const extension = file.name.split('.').pop()?.toLowerCase();
-    const type = file.type;
-
-    if (type.startsWith('image/')) {
-      return { category: 'photo', confidence: 0.9 };
-    }
-    
-    if (type.startsWith('video/')) {
-      return { category: 'video', confidence: 0.9 };
-    }
-
-    if (extension === 'pdf' || type.includes('pdf')) {
-      // Could be contract, correspondence, or medical
-      const name = file.name.toLowerCase();
-      if (name.includes('contract') || name.includes('agreement')) {
-        return { category: 'contract', confidence: 0.8 };
-      }
-      if (name.includes('email') || name.includes('letter')) {
-        return { category: 'correspondence', confidence: 0.7 };
-      }
-      if (name.includes('invoice') || name.includes('receipt')) {
-        return { category: 'receipt', confidence: 0.8 };
-      }
-      if (name.includes('medical') || name.includes('doctor')) {
-        return { category: 'medical', confidence: 0.8 };
-      }
-      return { category: 'other', confidence: 0.5 };
-    }
-
-    return { category: 'other', confidence: 0.5 };
-  };
-
   const handleFiles = useCallback(async (fileList: FileList) => {
     if (!caseId) {
       toast.error("Select a case before uploading evidence");
       return;
     }
 
-    const selectedFiles = Array.from(fileList);
-    const oversized = selectedFiles.filter((file) => file.size > 7 * 1024 * 1024);
-    if (oversized.length > 0) {
-      toast.error(`${oversized.length} file(s) exceed the 7 MB upload limit`);
+    const accepted: UploadedFile[] = [];
+    let rejected = 0;
+    for (const file of Array.from(fileList)) {
+      const mimeType = mimeForFile(file);
+      if (!file.size || file.size > MAX_EVIDENCE_FILE_BYTES || !isSupportedEvidenceMimeType(mimeType)) {
+        rejected += 1;
+        continue;
+      }
+      accepted.push({ id: crypto.randomUUID(), file, mimeType, status: "uploading" });
     }
 
-    const newFiles: UploadedFile[] = selectedFiles.filter((file) => file.size <= 7 * 1024 * 1024).map(file => ({
-      id: Math.random().toString(36).substr(2, 9),
-      file,
-      preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined,
-      status: "uploading" as const,
-      progress: 0,
-    }));
+    if (rejected) toast.error(`${rejected} unsupported, empty, or oversized file${rejected === 1 ? " was" : "s were"} skipped`);
+    if (!accepted.length) return;
+    setFiles((previous) => [...previous, ...accepted]);
 
-    setFiles(prev => [...prev, ...newFiles]);
-
-    // Process each file
-    for (const uploadedFile of newFiles) {
+    for (const item of accepted) {
       try {
-        const base64 = await fileToBase64(uploadedFile.file);
-        setFiles(prev => prev.map(f =>
-          f.id === uploadedFile.id ? { ...f, progress: 50 } : f
-        ));
-
         await uploadEvidenceFile.mutateAsync({
           caseId,
-          title: uploadedFile.file.name,
-          type: evidenceType(uploadedFile.file),
-          fileName: uploadedFile.file.name,
-          mimeType: uploadedFile.file.type || "application/octet-stream",
-          base64,
+          title: item.file.name,
+          type: evidenceTypeForMime(item.mimeType),
+          fileName: item.file.name,
+          mimeType: item.mimeType,
+          base64: await fileToBase64(item.file),
         });
-
-        // Categorize file
-        setFiles(prev => prev.map(f => 
-          f.id === uploadedFile.id ? { ...f, status: "analyzing" as const } : f
-        ));
-
-        const { category, confidence } = await categorizeFile(uploadedFile.file);
-
-        setFiles(prev => prev.map(f => 
-          f.id === uploadedFile.id ? {
-            ...f,
-            status: "complete" as const,
-            category,
-            confidence,
-            analysis: {
-              type: uploadedFile.file.type,
-              suggestedCategory: category,
-              extractedInfo: [
-                `File size: ${(uploadedFile.file.size / 1024).toFixed(2)} KB`,
-                `Type: ${uploadedFile.file.type || 'Unknown'}`,
-                `Uploaded: ${new Date().toLocaleString()}`,
-              ],
-            },
-          } : f
-        ));
-
-        toast.success(`${uploadedFile.file.name} uploaded with a suggested category`);
+        setFiles((previous) => previous.map((file) => file.id === item.id ? { ...file, status: "complete" } : file));
+        toast.success(`${item.file.name} stored as evidence`);
       } catch (error) {
-        setFiles(prev => prev.map(f => 
-          f.id === uploadedFile.id ? { ...f, status: "error" as const } : f
-        ));
-        toast.error(`Failed to upload ${uploadedFile.file.name}`);
+        const message = error instanceof Error ? error.message : "Upload failed";
+        setFiles((previous) => previous.map((file) => file.id === item.id ? { ...file, status: "error", error: message } : file));
+        toast.error(`${item.file.name}: ${message}`);
       }
     }
   }, [caseId, uploadEvidenceFile]);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      handleFiles(e.dataTransfer.files);
-    }
-  }, [handleFiles]);
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  }, []);
-
-  const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      handleFiles(e.target.files);
-    }
-  }, [handleFiles]);
-
-  const removeFile = (id: string) => {
-    setFiles(prev => prev.filter(f => f.id !== id));
-    toast.info("File removed");
-  };
-
-  const updateCategory = (id: string, category: string) => {
-    setFiles(prev => prev.map(f => 
-      f.id === id ? { ...f, category, confidence: 1.0 } : f
-    ));
-    toast.success("Category updated");
-  };
-
-  const getCategoryIcon = (category?: string) => {
-    const cat = FILE_CATEGORIES.find(c => c.value === category);
-    return cat?.icon || File;
-  };
-
-  const completedFiles = files.filter(f => f.status === "complete").length;
-  const totalFiles = files.length;
+  const completeCount = files.filter((file) => file.status === "complete").length;
+  const settledCount = files.filter((file) => file.status !== "uploading").length;
 
   return (
-    <div className="space-y-6">
-      {/* Upload Area */}
+    <div className="space-y-5">
       <Card
-        className={`border-2 border-dashed transition-colors ${
-          isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/25"
-        }`}
-        onDrop={handleDrop}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
+        className={`border-2 border-dashed transition-colors ${isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/25"}`}
+        onDrop={(event) => {
+          event.preventDefault();
+          setIsDragging(false);
+          if (event.dataTransfer.files.length) void handleFiles(event.dataTransfer.files);
+        }}
+        onDragOver={(event) => { event.preventDefault(); setIsDragging(true); }}
+        onDragLeave={(event) => { event.preventDefault(); setIsDragging(false); }}
       >
-        <CardContent className="p-12">
-          <div className="flex flex-col items-center justify-center text-center space-y-4">
-            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-              <Upload className="w-8 h-8 text-primary" />
+        <CardContent className="p-8 sm:p-10">
+          <div className="flex flex-col items-center gap-4 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+              <Upload className="h-6 w-6 text-primary" />
             </div>
-            
             <div>
-              <h3 className="text-lg font-semibold mb-1">
-                Drag and drop files here
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                or click to browse from your device
-              </p>
+              <h3 className="font-semibold">Add evidence files</h3>
+              <p className="mt-1 text-sm text-muted-foreground">Drag files here or select them from this device.</p>
             </div>
-
-            <div className="flex gap-3">
-              <Button
-                variant="default"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <Upload className="w-4 h-4 mr-2" />
-                Browse Files
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button type="button" onClick={() => fileInputRef.current?.click()}>
+                <Upload className="mr-2 h-4 w-4" /> Select files
               </Button>
-
-              <Button
-                variant="outline"
-                onClick={() => cameraInputRef.current?.click()}
-              >
-                <Camera className="w-4 h-4 mr-2" />
-                Take Photo
+              <Button type="button" variant="outline" onClick={() => cameraInputRef.current?.click()}>
+                <Camera className="mr-2 h-4 w-4" /> Take photo
               </Button>
             </div>
-
-            <p className="text-xs text-muted-foreground">
-              Supports files up to 7 MB: PDF, images, videos, and documents
-            </p>
+            <p className="text-xs text-muted-foreground">PDF, Office documents, email, text, image, audio, and video up to 7 MB each</p>
           </div>
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            className="hidden"
-            onChange={handleFileInput}
-            accept=".pdf,.jpg,.jpeg,.png,.mp4,.mov,.docx,.doc"
-          />
-
-          <input
-            ref={cameraInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="hidden"
-            onChange={handleFileInput}
-          />
+          <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(event) => event.target.files && void handleFiles(event.target.files)} />
+          <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(event) => event.target.files && void handleFiles(event.target.files)} />
         </CardContent>
       </Card>
 
-      {/* Progress Summary */}
-      {totalFiles > 0 && (
-        <div className="bg-muted/30 rounded-lg p-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium">
-              Upload Progress: {completedFiles} of {totalFiles} files
-            </span>
-            <span className="text-sm text-muted-foreground">
-              {Math.round((completedFiles / totalFiles) * 100)}%
-            </span>
+      {files.length > 0 ? (
+        <section className="space-y-3" aria-live="polite">
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <span className="font-medium">{completeCount} of {files.length} stored</span>
+            <span className="text-muted-foreground">{settledCount} processed</span>
           </div>
-          <Progress value={(completedFiles / totalFiles) * 100} className="h-2" />
-        </div>
-      )}
-
-      {/* Uploaded Files List */}
-      {files.length > 0 && (
-        <div className="space-y-3">
-          <h3 className="font-semibold">Uploaded Files ({files.length})</h3>
-          
-          <div className="grid gap-3">
-            {files.map((uploadedFile) => {
-              const CategoryIcon = getCategoryIcon(uploadedFile.category);
-              
-              return (
-                <Card key={uploadedFile.id}>
-                  <CardContent className="p-4">
-                    <div className="flex items-start gap-4">
-                      {/* Preview or Icon */}
-                      <div className="w-16 h-16 rounded-lg bg-muted flex items-center justify-center overflow-hidden flex-shrink-0">
-                        {uploadedFile.preview ? (
-                          <img
-                            src={uploadedFile.preview}
-                            alt={uploadedFile.file.name}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <CategoryIcon className="w-8 h-8 text-muted-foreground" />
-                        )}
-                      </div>
-
-                      {/* File Info */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2 mb-2">
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium truncate">{uploadedFile.file.name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {(uploadedFile.file.size / 1024).toFixed(2)} KB
-                            </p>
-                          </div>
-
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 flex-shrink-0"
-                            onClick={() => removeFile(uploadedFile.id)}
-                          >
-                            <X className="w-4 h-4" />
-                          </Button>
-                        </div>
-
-                        {/* Status */}
-                        {uploadedFile.status === "uploading" && (
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <Loader2 className="w-3 h-3 animate-spin" />
-                              Uploading...
-                            </div>
-                            <Progress value={uploadedFile.progress} className="h-1" />
-                          </div>
-                        )}
-
-                        {uploadedFile.status === "analyzing" && (
-                          <div className="flex items-center gap-2 text-sm text-primary">
-                            <Sparkles className="w-3 h-3 animate-pulse" />
-                            Suggesting a category...
-                          </div>
-                        )}
-
-                        {uploadedFile.status === "complete" && (
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2">
-                              <Check className="w-4 h-4 text-green-500" />
-                              <span className="text-sm text-green-600 dark:text-green-400">
-                                Upload complete
-                              </span>
-                            </div>
-
-                            {/* Filename/type-based category suggestion */}
-                            {uploadedFile.category && (
-                              <div className="bg-primary/5 border border-primary/20 rounded-md p-2">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <Sparkles className="w-3 h-3 text-primary" />
-                                  <span className="text-xs font-medium">Suggested category</span>
-                                  {uploadedFile.confidence && (
-                                    <Badge variant="secondary" className="text-xs">
-                                      {Math.round(uploadedFile.confidence * 100)}% confident
-                                    </Badge>
-                                  )}
-                                </div>
-                                
-                                <div className="flex flex-wrap gap-1">
-                                  {FILE_CATEGORIES.map((cat) => (
-                                    <Button
-                                      key={cat.value}
-                                      variant={uploadedFile.category === cat.value ? "default" : "outline"}
-                                      size="sm"
-                                      className="h-7 text-xs"
-                                      onClick={() => updateCategory(uploadedFile.id, cat.value)}
-                                    >
-                                      {cat.label}
-                                    </Button>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {uploadedFile.status === "error" && (
-                          <div className="flex items-center gap-2 text-sm text-destructive">
-                            <AlertCircle className="w-4 h-4" />
-                            Upload failed
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
+          <Progress value={(settledCount / files.length) * 100} className="h-2" />
+          <div className="grid gap-2">
+            {files.map((item) => (
+              <Card key={item.id} className="border-border/60">
+                <CardContent className="flex items-center gap-3 p-3">
+                  <FileIcon mimeType={item.mimeType} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{item.file.name}</p>
+                    <p className="text-xs text-muted-foreground">{(item.file.size / 1024).toFixed(1)} KB</p>
+                    {item.error ? <p className="mt-1 text-xs text-destructive">{item.error}</p> : null}
+                  </div>
+                  {item.status === "uploading" ? <Loader2 className="h-5 w-5 animate-spin text-primary" aria-label="Uploading" /> : null}
+                  {item.status === "complete" ? <Check className="h-5 w-5 text-emerald-500" aria-label="Stored" /> : null}
+                  {item.status === "error" ? <AlertCircle className="h-5 w-5 text-destructive" aria-label="Failed" /> : null}
+                </CardContent>
+              </Card>
+            ))}
           </div>
-        </div>
-      )}
-
-      {/* Missing Evidence Alerts */}
-      {completedFiles > 0 && (
-        <Card className="bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900">
-          <CardContent className="p-4">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-500 mt-0.5" />
-              <div className="flex-1">
-                <p className="font-medium text-sm mb-1">Suggested Additional Evidence</p>
-                <ul className="text-sm text-muted-foreground space-y-1">
-                  <li>• Signed contract or agreement</li>
-                  <li>• Email correspondence with the other party</li>
-                  <li>• Payment records or receipts</li>
-                </ul>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+        </section>
+      ) : null}
     </div>
   );
 }
-

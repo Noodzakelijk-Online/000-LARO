@@ -56,10 +56,12 @@ describe('Phase 008 — case-scoped routers enforce ownership', () => {
 });
 
 describe('Phase 007 — no well-known bearer accepted in production', () => {
-  it('context gates the legacy local tokens to development only', () => {
+  it('removes local bypass tokens and restricts scanner credentials', () => {
     const src = read('server/context.ts');
-    // The legacy constants must be gated behind ENV.isDev (dev-only).
-    expect(src).toContain('LOCAL_AGENT_TOKEN');
-    expect(src).toMatch(/isLegacyLocalToken\s*&&\s*ENV\.isDev/);
+    const trpc = read('server/_core/trpc.ts');
+    expect(src).not.toContain('LOCAL_AGENT_TOKEN');
+    expect(src).not.toContain('local-default');
+    expect(src).toContain('evidence-scanner');
+    expect(trpc).toContain("ctx.authScope === 'evidence-scanner'");
   });
 });

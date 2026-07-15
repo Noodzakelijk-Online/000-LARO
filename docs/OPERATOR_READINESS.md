@@ -23,11 +23,15 @@ user-data directory.
 - [ ] `npm run readiness` passes, including the recovery drill.
 - [ ] `npm run readiness:production` passes for an API deployment.
 - [ ] The Windows portable artifact builds and launches on a clean profile.
+- [ ] The scanner requires a selected case and native-picker-approved folder,
+      exposes a review list, and persists a test file with matching SHA-256.
 - [ ] Demo data is absent from the target database.
 - [ ] `admin.invariants` and `admin.reconcileReport` are clean.
 - [ ] A target-data backup is validated before migration or release.
 - [ ] The emergency stop and `outreach.send.enabled` state are confirmed.
 - [ ] Google, storage, LLM, and outreach providers show their intended state.
+- [ ] The tagged portable executable reports Authenticode `Valid` and its
+      published SHA-256 matches the release checksum.
 
 ## Supported Operating Modes
 

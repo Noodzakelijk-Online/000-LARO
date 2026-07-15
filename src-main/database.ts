@@ -17,6 +17,9 @@ export function initDatabase(): void {
   const dbPath = path.join(userDataPath, 'laro-agent.db');
   
   db = new Database(dbPath);
+  db.pragma('journal_mode = WAL');
+  db.pragma('foreign_keys = ON');
+  db.pragma('busy_timeout = 5000');
   
   // Create tables
   db.exec(`
@@ -270,6 +273,29 @@ export function getScanFiles(scanId: string): FileItem[] {
     uploadProgress: row.uploadProgress,
     errorMessage: row.errorMessage,
   }));
+}
+
+export function getScanCaseId(scanId: string): string | null {
+  if (!db) throw new Error('Database not initialized');
+  const row = db.prepare('SELECT caseId FROM scans WHERE id = ?').get(scanId) as { caseId: string } | undefined;
+  return row?.caseId ?? null;
+}
+
+/** Persist the user's review decision before any upload starts. */
+export function setScanFileSelection(scanId: string, selectedFileIds: string[]): number {
+  if (!db) throw new Error('Database not initialized');
+
+  const selected = new Set(selectedFileIds);
+  const rows = db
+    .prepare("SELECT id FROM files WHERE scanId = ? AND uploadStatus IN ('pending', 'excluded')")
+    .all(scanId) as Array<{ id: string }>;
+
+  const update = db.prepare('UPDATE files SET uploadStatus = ?, uploadProgress = 0, errorMessage = NULL WHERE id = ?');
+  const transaction = db.transaction(() => {
+    for (const row of rows) update.run(selected.has(row.id) ? 'pending' : 'excluded', row.id);
+  });
+  transaction();
+  return rows.filter((row) => selected.has(row.id)).length;
 }
 
 /**

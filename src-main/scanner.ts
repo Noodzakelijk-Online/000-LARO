@@ -8,9 +8,9 @@ import * as path from 'path';
 import { EventEmitter } from 'events';
 import { nanoid } from 'nanoid';
 import mime from 'mime-types';
-import os from 'os';
 import { FileItem, Platform, ScanConfig } from '../shared/types';
 import { shouldExcludePath, shouldExcludeFile } from '../shared/exclusions';
+import { isSupportedEvidenceMimeType, MAX_EVIDENCE_FILE_BYTES } from '../shared/evidenceFiles';
 import { addFile, updateScanProgress } from './database';
 
 export interface ScannerOptions {
@@ -130,32 +130,10 @@ export class FileScanner extends EventEmitter {
    * Get root paths to scan based on platform
    */
   private getRootPaths(): string[] {
-    // If folders are provided in config, use them
-    if (this.config.folders && this.config.folders.length > 0) {
-      return this.config.folders;
+    if (!this.config.folders?.length) {
+      throw new Error('Select at least one folder before starting a scan');
     }
-
-    switch (this.platform) {
-      case 'windows':
-        // Scan user's home directory and common document locations
-        return [
-          os.homedir(),
-          path.join('C:', 'Users', 'Public'),
-        ];
-      
-      case 'macos':
-        return [
-          os.homedir(),
-        ];
-      
-      case 'linux':
-        return [
-          os.homedir(),
-        ];
-      
-      default:
-        return [os.homedir()];
-    }
+    return this.config.folders;
   }
   
   /**
@@ -228,15 +206,14 @@ export class FileScanner extends EventEmitter {
         return;
       }
       
-      // Skip very large files (> 1GB) - could be configurable
-      const MAX_FILE_SIZE = 1024 * 1024 * 1024; // 1GB
-      if (stats.size > MAX_FILE_SIZE) {
+      if (stats.size > MAX_EVIDENCE_FILE_BYTES) {
         console.log(`[Scanner] Skipping large file (${stats.size} bytes): ${filePath}`);
         return;
       }
       
       // Determine MIME type
       const mimeType = mime.lookup(filePath) || 'application/octet-stream';
+      if (!isSupportedEvidenceMimeType(mimeType)) return;
       
       // Create file item
       const fileItem: FileItem = {

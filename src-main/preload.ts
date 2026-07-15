@@ -16,13 +16,18 @@ const IPC_CHANNELS = {
   SCAN_RESUME: 'scan:resume',
   SCAN_PROGRESS: 'scan:progress',
   SCAN_FILES_GET: 'scan:files:get',
+  SCAN_FILES_SELECT: 'scan:files:select',
   UPLOAD_START: 'upload:start',
   UPLOAD_PAUSE: 'upload:pause',
   UPLOAD_RESUME: 'upload:resume',
   UPLOAD_PROGRESS: 'upload:progress',
-  UPDATE_CHECK: 'update:check',
+  EVIDENCE_UPDATED: 'evidence:updated',
   OPEN_EXTERNAL: 'open:external',
 };
+
+ipcRenderer.on(IPC_CHANNELS.EVIDENCE_UPDATED, (_event, detail) => {
+  window.dispatchEvent(new CustomEvent('laro:evidence-updated', { detail }));
+});
 
 // Expose protected methods that allow the renderer process to use
 // ipcRenderer without exposing the entire object
@@ -34,6 +39,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // System info
   getSystemInfo: () => ipcRenderer.invoke(IPC_CHANNELS.SYSTEM_INFO),
   getAppVersion: () => ipcRenderer.invoke(IPC_CHANNELS.APP_VERSION),
+  openExternal: (url: string) => ipcRenderer.invoke(IPC_CHANNELS.OPEN_EXTERNAL, url),
   
   // Folder selection
   selectFolder: () => ipcRenderer.invoke(IPC_CHANNELS.FOLDER_SELECT),
@@ -44,6 +50,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   pauseScan: () => ipcRenderer.invoke(IPC_CHANNELS.SCAN_PAUSE),
   resumeScan: () => ipcRenderer.invoke(IPC_CHANNELS.SCAN_RESUME),
   getScanFiles: (scanId: string) => ipcRenderer.invoke(IPC_CHANNELS.SCAN_FILES_GET, scanId),
+  setScanFileSelection: (scanId: string, fileIds: string[]) =>
+    ipcRenderer.invoke(IPC_CHANNELS.SCAN_FILES_SELECT, scanId, fileIds),
   
   // Upload
   startUpload: (scanId: string) => ipcRenderer.invoke(IPC_CHANNELS.UPLOAD_START, scanId),
@@ -54,19 +62,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onScanProgress(callback: (progress: any) => void) {
     ipcRenderer.on(IPC_CHANNELS.SCAN_PROGRESS, (_: any, progress: any) => callback(progress));
   },
-  
-  // Remove event listeners
-  removeAllListeners: (channel: string) => {
-    ipcRenderer.removeAllListeners(channel);
+  onUploadProgress(callback: (progress: any) => void) {
+    ipcRenderer.on(IPC_CHANNELS.UPLOAD_PROGRESS, (_: any, progress: any) => callback(progress));
   },
-
-  checkForUpdates: () => ipcRenderer.invoke(IPC_CHANNELS.UPDATE_CHECK),
+  clearScanProgressListeners: () => ipcRenderer.removeAllListeners(IPC_CHANNELS.SCAN_PROGRESS),
+  clearUploadProgressListeners: () => ipcRenderer.removeAllListeners(IPC_CHANNELS.UPLOAD_PROGRESS),
 
   // Open scan panel — added to electronAPI
   openScanPanel: () => ipcRenderer.invoke('scan:open-panel'),
 
-  // Phase 007: per-install desktop agent token (replaces the "local-default" constant)
-  getAgentToken: () => ipcRenderer.invoke('agent:token'),
 });
 
 // TypeScript declaration for window.electronAPI
@@ -77,20 +81,22 @@ declare global {
       setConfig: (config: any) => Promise<any>;
       getSystemInfo: () => Promise<any>;
       getAppVersion: () => Promise<string>;
+      openExternal: (url: string) => Promise<void>;
       selectFolder: () => Promise<string[] | null>;
       startScan: (config: any) => Promise<{ scanId: string }>;
       stopScan: () => Promise<{ success: boolean }>;
       pauseScan: () => Promise<{ success: boolean }>;
       resumeScan: () => Promise<{ success: boolean }>;
       getScanFiles: (scanId: string) => Promise<{ files: any[] }>;
+      setScanFileSelection: (scanId: string, fileIds: string[]) => Promise<{ selected: number }>;
       startUpload: (scanId: string) => Promise<{ success: boolean }>;
       pauseUpload: () => Promise<{ success: boolean }>;
       resumeUpload: () => Promise<{ success: boolean }>;
       onScanProgress: (callback: (progress: any) => void) => void;
-      removeAllListeners: (channel: string) => void;
-      checkForUpdates: () => Promise<{ currentVersion: string; updateAvailable: boolean }>;
+      onUploadProgress: (callback: (progress: any) => void) => void;
+      clearScanProgressListeners: () => void;
+      clearUploadProgressListeners: () => void;
       openScanPanel: () => Promise<void>;
-      getAgentToken: () => Promise<string | null>;
     };
   }
 }

@@ -1,6 +1,6 @@
 export type Platform = 'windows' | 'macos' | 'linux';
 
-export type Page = 'auth' | 'home' | 'scan' | 'settings';
+export type Page = 'home' | 'scan' | 'settings';
 export type ScanStatus =
   | 'idle'
   | 'scanning'
@@ -15,7 +15,7 @@ export type ScanStatus =
   | 'error'
   | 'cancelled';
 
-export type UploadStatus = 'pending' | 'uploading' | 'done' | 'completed' | 'failed';
+export type UploadStatus = 'pending' | 'excluded' | 'uploading' | 'done' | 'completed' | 'failed';
 
 export interface AgentConfig {
   apiUrl: string;
@@ -86,16 +86,14 @@ export const IPC = {
   SCAN_RESUME:     'scan:resume',
   SCAN_PROGRESS:   'scan:progress',
   SCAN_FILES_GET:  'scan:files:get',
+  SCAN_FILES_SELECT: 'scan:files:select',
   UPLOAD_START:    'upload:start',
   UPLOAD_PAUSE:    'upload:pause',
   UPLOAD_RESUME:   'upload:resume',
   UPLOAD_PROGRESS: 'upload:progress',
-  UPDATE_CHECK:    'update:check',
+  EVIDENCE_UPDATED: 'evidence:updated',
   OPEN_EXTERNAL:   'open:external',
   SCAN_OPEN_PANEL: 'scan:open-panel',
-  DB_GET:          'db:get',
-  DB_SET:          'db:set',
-  DB_DELETE:       'db:delete',
 } as const;
 
 // Backward-compatible exports used by the Electron process.

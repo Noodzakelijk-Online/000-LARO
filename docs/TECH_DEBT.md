@@ -3,22 +3,25 @@
 Updated: 2026-07-15
 
 | # | Debt | Impact | Status / next step |
-|---|---|---|---|
-| D1 | All 14 routers are implemented, typed, mounted, and connected to UI actions | - | Resolved |
-| D2 | Dedicated renderer `tsc` and ESLint are release-blocking | - | Resolved |
-| D3 | Approved outreach uses the provider-backed, ownership-checked, emergency-stop and idempotency-gated send path | - | Resolved |
+| --- | --- | --- | --- |
+| D1 | All mounted routers are typed and connected to supported UI actions | - | Resolved |
+| D2 | Renderer TypeScript and ESLint are release-blocking | - | Resolved |
+| D3 | Approved outreach uses provider, ownership, emergency-stop and idempotency gates | - | Resolved |
 | D4 | OAuth token encryption uses authenticated AES-256-GCM | - | Resolved |
-| D5 | CSRF origin guard, strict CORS, and JWT revocation are implemented | - | Resolved |
-| D6 | `archiver` remains because evidence export uses it | Low - monitor runtime surface | Reassess each release |
-| D7 | Current lockfile reports no known npm advisories | - | Re-audit each release |
-| D8 | `shared/` and `src/shared/` overlap | Low - drift risk | Consolidate after import inventory |
-| D9 | Historical `tests/*.test.ts` imports are excluded and replaced by current suites | Low - historical maintenance burden | Remove only after traceability review |
-| D10 | Database integrity is primarily application-enforced rather than declared with foreign keys | Medium - reconciliation required | Add constraints through reviewed migrations |
-| D11 | A top-level proprietary `LICENSE` is present | - | Resolved |
-| D12 | Provenance-preserving ZIP evidence export is implemented; PDF remains intentionally unavailable | Low | Keep unavailable formats labelled honestly |
+| D5 | CSRF origin checks, strict CORS and JWT revocation are implemented | - | Resolved |
+| D6 | `archiver` remains for evidence ZIP export | Low | Reassess each release |
+| D7 | Current runtime lockfile has no known advisory | - | Re-audit each release |
+| D8 | Duplicate `shared/` and `src/shared/` contracts | - | Resolved; `shared/` is canonical |
+| D9 | Historical excluded tests and audit snapshots remain for traceability | Low | Keep clearly dated; remove only through reviewed archive work |
+| D10 | Many database relationships are application-enforced rather than declared foreign keys | Medium | Reconcile installed data, then add reviewed constraints |
+| D11 | Top-level proprietary license | - | Resolved |
+| D12 | ZIP evidence export is implemented; unavailable formats remain explicit | Low | Keep capability labels honest |
 | D13 | Some money and count fields are stored as text | Low | Normalize through reviewed migrations |
 | D14 | Renderer strings are not fully migrated to `t()` | Low | Complete i18n pass |
+| D15 | Desktop scanner previously accepted false connection success and fabricated uploads | - | Resolved with session auth, folder consent, review selection and real evidence storage |
+| D16 | Full cross-browser and automated accessibility coverage is incomplete | Low | Expand in subsequent release cycles |
 
-Current priorities are D10 for data integrity, D8 for shared-contract drift, and
-broader cross-browser and accessibility automation. Provider work must retain explicit credential,
-consent, approval, and audit gates.
+The highest remaining engineering priority is D10. It requires migration
+planning and installed-data reconciliation, not an unreviewed boot-time table
+rewrite. D14 and D16 are incremental quality work. Provider rollout must retain
+credential, consent, approval and audit gates.

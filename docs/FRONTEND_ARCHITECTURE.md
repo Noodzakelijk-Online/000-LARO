@@ -2,39 +2,50 @@
 
 Current as of 2026-07-15.
 
-## Surfaces
+## Shipped surfaces
 
-`src/renderer/main.tsx` selects two shipped React surfaces:
+`src/renderer/main.tsx` selects two React surfaces:
 
-- `DashboardApp`: the authenticated case, evidence, matching, outreach, settings,
-  privacy, messaging, help, and administration product.
-- `App`: the scanner mini-app, loaded only with `?mode=scanner`.
+- `DashboardApp`: the authenticated case, evidence, timeline, matching,
+  outreach, analytics, messaging, settings, privacy, help, and administration
+  workspace.
+- `App`: the desktop evidence scanner, loaded only with `?mode=scanner`.
 
-Both use the same integrated loopback API. Packaged Desktop uses the current
-window origin, including an OS-assigned port. The scanner receives the per-install
-agent token through context-isolated IPC.
+Both use the Electron-owned loopback API origin. Major dashboard routes are
+lazy-loaded. The packaged entry bundle is approximately 274 KB before gzip.
 
-## Dashboard Routes
+## Dashboard routes
 
-| Route | Status |
+| Route | Purpose |
 | --- | --- |
-| `/` | Real dashboard and next actions |
-| `/cases` | Real owned case workflow |
-| `/lawyers`, `/lawyers/:id` | Real lawyer data and matching |
-| `/outreach`, `/analytics` | Real outreach pipeline and owned performance metrics |
-| `/messages`, `/email` | Real persisted communication surface |
-| `/settings`, `/privacy` | Real user and data controls |
-| `/admin`, `/admin-analytics` | Server role-gated administration |
-| `/help` | Real help and error catalog |
+| `/` | Owned dashboard and next actions |
+| `/cases`, `/cases/:id` | Case workflow and case command center |
+| `/lawyers`, `/lawyers/:id` | Persisted lawyer directory and profiles |
+| `/outreach`, `/analytics` | Outreach workflow and owned analytics |
+| `/messages`, `/email` | Persisted communications |
+| `/settings`, `/privacy` | User, provider, and data controls |
+| `/admin`, `/admin-analytics` | Role-gated operator controls |
+| `/help` | Product help and legal boundary |
 
-Evidence is case-centric and intentionally redirects users into a case rather
-than maintaining a second global evidence workflow. Billing, reports, and email
-automation routes remain honest placeholders and are not primary sidebar items.
+Unfinished billing, reports, and email-automation routes are not mounted in the
+production router.
 
-## Quality Boundary
+## Scanner boundary
 
-- Dashboard auth is gated by `auth.me`; server procedures enforce ownership.
-- Renderer TypeScript and ESLint are blocking release gates.
-- The dashboard mark is shipped locally; startup does not depend on a CDN.
-- External links are protocol-checked by Electron before opening.
-- Responsive desktop and mobile browser checks are part of release verification.
+- The scanner reuses the authenticated main-window session; it never creates an
+  offline or anonymous identity.
+- It receives a 15-minute user JWT only after `auth.me` succeeds.
+- Folder access is allowed only for paths returned by the native folder picker.
+- Empty folder selections and implicit whole-home scans are rejected.
+- Files are reviewed and selected before upload; automatic upload is forced off.
+- The main process uploads real bytes through `evidenceFiles.upload`, which
+  rechecks ownership and persists SHA-256 provenance.
+- The scanner window uses context isolation, sandboxing, restricted navigation,
+  and a narrow validated IPC bridge.
+
+## Quality boundary
+
+Renderer TypeScript, Electron/server TypeScript, ESLint, security scans, tests,
+and recovery verification are release-blocking. External links are
+protocol-checked by Electron, local API traffic is loopback-bound, and OAuth
+authorization opens in the system browser.

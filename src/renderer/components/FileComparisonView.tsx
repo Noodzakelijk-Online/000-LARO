@@ -3,11 +3,10 @@
  * Side-by-side comparison of two files
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { trpc } from '@/lib/trpc';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Slider } from '@/components/ui/slider';
 import {
   Select,
@@ -25,8 +24,6 @@ import {
   Image,
   Video,
   Music,
-  Loader2,
-  ArrowLeftRight,
 } from 'lucide-react';
 
 interface FileItem {
@@ -59,7 +56,6 @@ export default function FileComparisonView({
 }: FileComparisonViewProps) {
   const [compareFile, setCompareFile] = useState<FileItem | null>(null);
   const [zoom, setZoom] = useState(100);
-  const [syncScroll, setSyncScroll] = useState(true);
 
   // Fetch all files for this case
   const { data: filesData, isLoading } = trpc.bulkFileOperations.getCaseItems.useQuery({
@@ -73,14 +69,6 @@ export default function FileComparisonView({
 
   const handleZoomIn = () => setZoom((prev) => Math.min(prev + 10, 200));
   const handleZoomOut = () => setZoom((prev) => Math.max(prev - 10, 50));
-
-  const handleSwap = () => {
-    if (compareFile) {
-      const temp = compareFile;
-      setCompareFile(currentFile);
-      // Note: This would require parent component to update currentFile
-    }
-  };
 
   const isImageFile = (mimeType: string) => mimeType.startsWith('image/');
 
@@ -154,13 +142,6 @@ export default function FileComparisonView({
             </Button>
           </div>
 
-          {/* Swap Button */}
-          {compareFile && (
-            <Button variant="outline" size="sm" onClick={handleSwap} className="gap-2">
-              <ArrowLeftRight className="w-4 h-4" />
-              Swap
-            </Button>
-          )}
         </div>
 
         {/* Comparison View */}

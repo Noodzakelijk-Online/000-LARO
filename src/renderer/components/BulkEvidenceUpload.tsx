@@ -2,7 +2,6 @@ import { useState, useCallback, useEffect } from "react";
 import { useDropzone } from "react-dropzone";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -25,7 +24,6 @@ interface FileWithPreview {
   id: string;
   preview?: string;
   status: "pending" | "uploading" | "completed" | "failed";
-  progress: number;
   error?: string;
 }
 
@@ -50,10 +48,9 @@ export default function BulkEvidenceUpload({
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const newFiles: FileWithPreview[] = acceptedFiles.map((file) => ({
       file,
-      id: Math.random().toString(36).substring(7),
+      id: crypto.randomUUID(),
       preview: file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined,
       status: "pending",
-      progress: 0,
     }));
 
     setFiles((prev) => [...prev, ...newFiles]);
@@ -126,10 +123,6 @@ export default function BulkEvidenceUpload({
         binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
       }
       const base64 = btoa(binary);
-      setFiles((prev) =>
-        prev.map((f) => (f.id === fileWithPreview.id ? { ...f, progress: 50 } : f))
-      );
-
       await uploadEvidenceFile.mutateAsync({
         caseId,
         title: fileWithPreview.file.name,
@@ -142,7 +135,7 @@ export default function BulkEvidenceUpload({
       // Update status to completed
       setFiles((prev) =>
         prev.map((f) =>
-          f.id === fileWithPreview.id ? { ...f, status: "completed", progress: 100 } : f
+          f.id === fileWithPreview.id ? { ...f, status: "completed" } : f
         )
       );
     } catch (error) {
@@ -280,11 +273,6 @@ export default function BulkEvidenceUpload({
                         <p className="text-sm text-muted-foreground">
                           {formatFileSize(fileWithPreview.file.size)}
                         </p>
-
-                        {/* Progress Bar */}
-                        {fileWithPreview.status === "uploading" && (
-                          <Progress value={fileWithPreview.progress} className="mt-2" />
-                        )}
 
                         {/* Error Message */}
                         {fileWithPreview.status === "failed" && fileWithPreview.error && (

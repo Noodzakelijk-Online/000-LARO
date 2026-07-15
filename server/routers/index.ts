@@ -50,7 +50,6 @@ import {
   oneDriveEnhancedRouter,
   slackEnhancedRouter,
 } from "./enhancedConnections";
-import { createEvidenceFile, getEvidenceStats } from "../evidence";
 import { z } from "zod";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
@@ -140,57 +139,6 @@ export const appRouter = router({
   googleDriveEnhanced: googleDriveEnhancedRouter,
   oneDriveEnhanced: oneDriveEnhancedRouter,
   slackEnhanced: slackEnhancedRouter,
-
-  // Evidence Upload & Local Scanner specific router
-  localFileUpload: router({
-    getSupportedTypes: publicProcedure.query(() => [
-      "document", "email", "chat", "photo", "video", "audio", "other"
-    ]),
-    uploadFile: protectedProcedure
-      .input(z.object({
-        caseId: z.string(),
-        title: z.string(),
-        type: z.enum(["document", "email", "chat", "photo", "video", "audio", "other"]),
-        fileName: z.string(),
-        fileSize: z.string(),
-        mimeType: z.string(),
-      }))
-      .mutation(async ({ ctx, input }) => {
-        const userId = ctx.user.id;
-        const id = await createEvidenceFile(userId, {
-          ...input,
-          source: "manual_upload",
-        });
-        return { id };
-      }),
-    uploadFiles: protectedProcedure
-      .input(z.array(z.object({
-        caseId: z.string(),
-        title: z.string(),
-        type: z.enum(["document", "email", "chat", "photo", "video", "audio", "other"]),
-        fileName: z.string(),
-        fileSize: z.string(),
-        mimeType: z.string(),
-      })))
-      .mutation(async ({ ctx, input }) => {
-        const userId = ctx.user.id;
-        const results = [];
-        for (const item of input) {
-          const id = await createEvidenceFile(userId, {
-            ...item,
-            source: "manual_upload",
-          });
-          results.push({ id });
-        }
-        return results;
-      }),
-    getStats: protectedProcedure
-      .input(z.object({ caseId: z.string().optional() }))
-      .query(async ({ ctx }) => {
-        const userId = ctx.user.id;
-        return getEvidenceStats(userId);
-      }),
-  }),
 
   // Auth procedures
   auth: router({
@@ -385,6 +333,14 @@ export const appRouter = router({
         expiresIn: SESSION_EXPIRES_IN,
       });
       return { token };
+    }),
+    getScannerToken: protectedProcedure.query(({ ctx }) => {
+      const token = jwt.sign(
+        { userId: ctx.user.id, scope: "evidence-scanner" },
+        ENV.JWT_SECRET,
+        { expiresIn: "15m" }
+      );
+      return { token, expiresInSeconds: 15 * 60 };
     }),
   }),
 
