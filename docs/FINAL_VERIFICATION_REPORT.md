@@ -2,7 +2,7 @@
 
 Date: 2026-07-16
 Branch: `main`
-Commit: `39cea391a88f9733f141e69328e9679cae2aab4a`
+Verified runtime commit: `7a02d2a9a33e45dad6d67b47cfd5c6446c34849d`
 
 This report separates reproducible repository evidence from target-environment
 acceptance. It supersedes the 2026-07-06 phase snapshot.
@@ -24,8 +24,8 @@ acceptance. It supersedes the 2026-07-06 phase snapshot.
 | Unpacked Windows packaging | Pass with tracked LARO icon |
 | Packaged `/api/health` | `healthy`, database ready, version 1.3.0, production |
 | Desktop scanner contract | Scoped 15-minute token; real bytes/hash; owner/MIME enforcement |
-| Protected-main CI | Actions run `29457000334`; Node and Python jobs passed |
-| Windows package workflow | Actions run `29457000381`; gate, build, ABI check, package, checksum, and artifact upload passed |
+| Protected-main CI | Actions run `29458340785`; Node and Python jobs passed |
+| Windows package workflow | Actions run `29458340759`; gate, build, ABI check, package, checksum, and artifact upload passed |
 | Packaged matching assets | Seven aligned legal categories; invalid legacy dataset absent |
 | Dependency graph | One canonical Node workspace; 0 open Dependabot alerts |
 
@@ -59,13 +59,19 @@ A second packaged-window run exercised the rebuilt scanner surface:
 - Settings opened and returned to evidence collection; the viewport had no
   horizontal overflow or overlapping controls.
 
-The CI portable artifact is 104,512,348 bytes with SHA-256
-`af901f1624b0f394c624b297492d2f7622f942ec8d6c3ca850bceee6476bbdfa`.
+The CI portable artifact is 104,516,282 bytes with SHA-256
+`33f71f3391537df0e2f55af289a2e06762932e54501b453247c4d300abae654c`.
 The downloaded executable matched its published checksum, launched the real
 dashboard window with an active renderer, and did not reproduce the obsolete
 `dist/main/index.js` startup error. Its packaged resources contain the current
 seven-category `legal-keywords.json` and no truncated legacy dataset. Windows
 reports `NotSigned`, matching the external signing gate below.
+
+The same CI artifact was launched with `NODE_ENV=development` deliberately
+injected by its parent process. It still served `/api/health` as `healthy`,
+`production`, version `1.3.0`, opened only the dashboard window, and created no
+DevTools or startup-error window. Packaged builds therefore cannot inherit a
+development renderer path from the launching shell.
 
 ## Verified product path
 
