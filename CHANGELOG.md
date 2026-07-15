@@ -14,6 +14,12 @@ versioning; dates are ISO. Version is sourced from `package.json` and surfaced b
 - Operator readiness includes an isolated backup/restore drill.
 - Desktop packaging allowlists matcher data instead of shipping the unrelated
   development service and cached Python files under `assets`.
+- Packaged Desktop binds to an available loopback port instead of failing when
+  port 3000 is occupied.
+- Explicit loopback OAuth callback configuration preserves its registered port,
+  and operational endpoints report the package version consistently.
+- Tagged Windows releases now fail closed on tag/version mismatch, missing
+  signing credentials, or an invalid signature and publish a SHA-256 checksum.
 
 ## [1.3.0] — 2026-07-06
 Closing renderer-independent Partials with real code.

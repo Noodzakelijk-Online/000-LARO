@@ -7,6 +7,12 @@ semantic versions from `package.json`, add the matching changelog entry, and tag
 the accepted main commit as `vX.Y.Z`. Tags build and publish the Windows portable
 artifact through `.github/workflows/build.yml`.
 
+Tagged releases fail closed unless the tag exactly matches `package.json`,
+`WINDOWS_CSC_LINK` and `WINDOWS_CSC_KEY_PASSWORD` repository secrets are set,
+and Windows reports the executable's Authenticode signature as `Valid`. The
+workflow publishes only the versioned portable executable and its SHA-256
+checksum. Main-branch and manual builds remain internal validation artifacts.
+
 ## Pre-release Gates
 
 ```powershell
@@ -19,7 +25,7 @@ npm run dist:win
 
 For an API deployment, also run `npm run readiness:production` with the target
 environment. Confirm no `.env`, database, upload, token, or unrelated development
-asset appears in the package.
+asset appears in the package. Confirm the signature and checksum before rollout.
 
 ## Canary
 

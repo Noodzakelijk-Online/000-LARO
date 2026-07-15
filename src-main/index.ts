@@ -8,13 +8,14 @@ import { initDatabase as initAgentDb, closeDatabase as closeAgentDb, createScan,
 import { FileScanner } from './scanner';
 import { FileUploader } from './uploader';
 import { initAutoUpdater } from './autoUpdater';
+import { resolveDesktopServerPort } from './desktopPort';
 // NOTE: server/index.ts reads `.env` (dotenv) at import time, so it is imported
 // lazily in startApp() AFTER we pin NODE_ENV from app.isPackaged. This guarantees
 // a packaged build runs the server in production mode even if the bundled .env
 // (or DOTENV secret) mistakenly contains NODE_ENV=development.
 
-const PORT = 3000;
-const LARO_URL = `http://localhost:${PORT}`;
+const DEFAULT_PORT = 3000;
+let laroUrl = `http://127.0.0.1:${DEFAULT_PORT}`;
 const isDev = process.env.NODE_ENV === 'development';
 
 /**
@@ -81,7 +82,7 @@ let currentUploader: FileUploader | null = null;
 
 let agentConfig: AgentConfig = {
   caseId: null,
-  apiUrl: LARO_URL,
+  apiUrl: laroUrl,
   token: null,
   deviceId: null,
   deviceName: os.hostname(),
@@ -96,7 +97,7 @@ function getPlatform(): Platform {
 
 function isTrustedAppUrl(rawUrl: string): boolean {
   try {
-    return new URL(rawUrl).origin === new URL(LARO_URL).origin;
+    return new URL(rawUrl).origin === new URL(laroUrl).origin;
   } catch {
     return false;
   }
@@ -156,12 +157,12 @@ async function createMainWindow(): Promise<void> {
     } catch (err) {
       console.error('[Electron] Failed to load Vite Dev Server. Is it running? Error:', err);
       // Fallback to production URL if Vite fails in dev
-      await mainWindow.loadURL(LARO_URL);
+      await mainWindow.loadURL(laroUrl);
     }
   } else {
-    console.log(`[Electron] Loading Production URL: ${LARO_URL}`);
+    console.log(`[Electron] Loading Production URL: ${laroUrl}`);
     try {
-      await mainWindow.loadURL(LARO_URL);
+      await mainWindow.loadURL(laroUrl);
     } catch (err) {
       console.error('[Electron] Failed to load Production URL. Did you run npm run build? Error:', err);
     }
@@ -191,7 +192,7 @@ function createScanPanel(): void {
   if (isDev) {
     scanPanel.loadURL('http://localhost:5173/?mode=scanner');
   } else {
-    scanPanel.loadURL(`${LARO_URL}/?mode=scanner`);
+    scanPanel.loadURL(`${laroUrl}/?mode=scanner`);
   }
   scanPanel.on('closed', () => {
     scanPanel = null;
@@ -203,7 +204,7 @@ function buildMenu(): void {
     {
       label: 'LARO',
       submenu: [
-        { label: 'Reload', accelerator: 'CmdOrCtrl+R', click: () => mainWindow?.loadURL(LARO_URL) },
+        { label: 'Reload', accelerator: 'CmdOrCtrl+R', click: () => mainWindow?.loadURL(laroUrl) },
         { type: 'separator' },
         { label: 'Quit', accelerator: 'CmdOrCtrl+Q', click: () => app.quit() },
       ],
@@ -270,6 +271,7 @@ app.whenReady().then(async () => {
   // environment BEFORE importing the server, so env.ts reads real secrets and
   // the production security guard passes with strong, non-forgeable values.
   bootstrapSecrets(userDataPath);
+  process.env.LARO_APP_VERSION = app.getVersion();
   // Default the desktop scanner's token to the per-install agent token so it
   // authenticates without the well-known "local-default" string.
   if (process.env.LOCAL_AGENT_TOKEN) {
@@ -278,8 +280,19 @@ app.whenReady().then(async () => {
 
   try {
     const { startServer } = await import('../server/index');
-    await startServer(PORT);
-    console.log('[Electron] Integrated server started on port', PORT);
+    const requestedPort = app.isPackaged
+      ? resolveDesktopServerPort(process.env.OAUTH_REDIRECT_BASE_URL)
+      : DEFAULT_PORT;
+    const actualPort = await startServer(requestedPort);
+    laroUrl = `http://127.0.0.1:${actualPort}`;
+    agentConfig.apiUrl = laroUrl;
+    const allowedOrigins = new Set(
+      (process.env.ALLOWED_ORIGINS || '').split(',').map((origin) => origin.trim()).filter(Boolean)
+    );
+    allowedOrigins.add(laroUrl);
+    process.env.ALLOWED_ORIGINS = [...allowedOrigins].join(',');
+    if (!process.env.OAUTH_REDIRECT_BASE_URL) process.env.OAUTH_REDIRECT_BASE_URL = laroUrl;
+    console.log('[Electron] Integrated server started on port', actualPort);
   } catch (err) {
     console.error('[Electron] Failed to start integrated server:', err);
     dialog.showErrorBox('Server Error', 'Failed to start the integrated backend server.');

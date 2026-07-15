@@ -56,6 +56,15 @@ describe('production readiness regressions', () => {
     expect(readFileSync(join(ROOT, 'assets/rechtspraak-keywords-analysis.json'), 'utf8')).toContain('keywords_by_area');
   });
 
+  it('fails closed for unsigned or version-mismatched tagged releases', () => {
+    const workflow = readFileSync(join(ROOT, '.github/workflows/build.yml'), 'utf8');
+    expect(workflow).toContain('WINDOWS_CSC_LINK is required for tagged releases');
+    expect(workflow).toContain("Tag ${{ github.ref_name }} does not match package version");
+    expect(workflow).toContain("$signature.Status -ne 'Valid'");
+    expect(workflow).toContain('release-artifacts/*');
+    expect(workflow).not.toContain('path: release/**/*.exe');
+  });
+
   it('does not invent an active dashboard case or preserve unverified OAuth status', () => {
     const dashboard = readFileSync(join(ROOT, 'frontend/dashboard_dark.html'), 'utf8');
     expect(dashboard).toContain('No case selected');
@@ -68,6 +77,28 @@ describe('production readiness regressions', () => {
     const database = readFileSync(join(ROOT, 'server/db.ts'), 'utf8');
     expect(server).toContain('!ENV.SERVER_ONLY');
     expect(database.indexOf('migrate(_db')).toBeLessThan(database.lastIndexOf('ensureSupportTicketsTable(sqlite)'));
+  });
+
+  it('binds packaged Desktop to an available loopback port', () => {
+    const main = readFileSync(join(ROOT, 'src-main/index.ts'), 'utf8');
+    const provider = readFileSync(join(ROOT, 'src/renderer/providers/TrpcProvider.tsx'), 'utf8');
+    expect(main).toContain('resolveDesktopServerPort(process.env.OAUTH_REDIRECT_BASE_URL)');
+    expect(main).toContain('const actualPort = await startServer(requestedPort)');
+    expect(main).toContain('agentConfig.apiUrl = laroUrl');
+    expect(main).toContain('process.env.OAUTH_REDIRECT_BASE_URL = laroUrl');
+    expect(provider).toContain('window.location.origin');
+    expect(main).not.toContain('await startServer(PORT)');
+  });
+
+  it('reports the package version consistently across operational endpoints', () => {
+    const health = readFileSync(join(ROOT, 'server/index.ts'), 'utf8');
+    const system = readFileSync(join(ROOT, 'server/_core/systemRouter.ts'), 'utf8');
+    const admin = readFileSync(join(ROOT, 'server/routers/admin.ts'), 'utf8');
+    const main = readFileSync(join(ROOT, 'src-main/index.ts'), 'utf8');
+    expect(health).toContain('version: APP_VERSION');
+    expect(system.match(/version: APP_VERSION/g)).toHaveLength(2);
+    expect(admin).toContain('appVersion: APP_VERSION');
+    expect(main).toContain('process.env.LARO_APP_VERSION = app.getVersion()');
   });
 
   it('generates collision-resistant case identifiers', async () => {

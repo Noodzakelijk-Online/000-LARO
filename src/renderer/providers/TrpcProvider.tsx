@@ -8,6 +8,11 @@ function apiBase(): string {
   if (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_URL) {
     return String(import.meta.env.VITE_API_URL).replace(/\/$/, "");
   }
+  if (typeof window !== "undefined" && window.location.protocol.startsWith("http")) {
+    // Packaged Desktop serves the renderer and API from one ephemeral loopback
+    // origin. Vite development remains on 5173 and proxies to the fixed API port.
+    if (window.location.port !== "5173") return window.location.origin;
+  }
   return "http://localhost:3000";
 }
 

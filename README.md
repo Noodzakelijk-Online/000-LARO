@@ -148,9 +148,13 @@ The production-readiness branch was verified on 2026-07-15 against the Node 22 t
 - Server, Electron main-process, and shipped renderer TypeScript checks passed; ESLint passed.
 - Traceability reported 116 rows, 93 cited, and 0 broken references.
 - Runtime no-excuses scan reported 0 suspect findings; account safety reported 0 high-severity findings.
-- Vitest reported 30 passing files, 196 passing tests, and 9 explicit todos.
+- Vitest reported 31 passing files, 204 passing tests, and 9 explicit todos.
 - Full Python discovery reported 202 passing tests. Warning-focused optimization and UCID tests also passed with deprecations promoted to errors.
 - The Vite 8 renderer, Electron 43 main process, and standalone server builds completed successfully.
+
+The packaged desktop normally asks Windows for an available loopback port. Setting
+`OAUTH_REDIRECT_BASE_URL` to an explicit `localhost` or `127.0.0.1` port pins the
+desktop server to that registered OAuth callback port instead.
 - `npm audit` reported 0 known vulnerabilities.
 - Production preflight and operator-readiness diagnostics reported no blockers;
   the isolated backup/delete/restore/reopen drill passed.
@@ -192,7 +196,10 @@ The package includes only the two matcher datasets from `assets/`; the legacy
 development service, Python cache files, and local configuration are excluded.
 See [Backup and Restore](docs/BACKUP_RESTORE.md) for verified database recovery.
 
-CI runs Node and Python gates for pushes and pull requests to `main`. The release workflow targets Node 22 and publishes a Windows portable artifact without writing provider secrets into the build workspace.
+CI runs Node and Python gates for pushes and pull requests to `main`. The release
+workflow targets Node 22. Tagged releases require a version-matched tag and
+Windows signing secrets, verify the Authenticode signature, and publish only the
+portable executable plus its SHA-256 checksum.
 
 ## Repository Map
 

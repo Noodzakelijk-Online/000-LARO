@@ -1,11 +1,12 @@
 import { router, publicProcedure, protectedProcedure } from './trpc';
 import { ENV } from './env';
 import { capabilitiesFor, normalizeRole } from './roles';
+import { APP_VERSION } from './version';
 
 export const systemRouter = router({
   health: publicProcedure.query(() => ({
     status: 'ok',
-    version: process.env.npm_package_version || '1.0.0',
+    version: APP_VERSION,
     env: ENV.NODE_ENV,
     timestamp: new Date().toISOString(),
   })),
@@ -14,7 +15,7 @@ export const systemRouter = router({
   // banner. `demoMode` is forced false in production so demo behaviour can never
   // be confused with real production.
   appInfo: publicProcedure.query(() => ({
-    version: process.env.npm_package_version || '1.0.0',
+    version: APP_VERSION,
     env: ENV.NODE_ENV,
     isProduction: ENV.isProd,
     demoMode: ENV.isDemo,

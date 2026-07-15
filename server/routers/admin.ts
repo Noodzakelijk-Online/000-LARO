@@ -7,6 +7,7 @@ import { isEmergencyStopped, setEmergencyStop } from "../systemState";
 import { runRetentionSweep, previewRetentionSweep, RETENTION_POLICY } from "../retention";
 import { getAllFlags } from "../featureFlags";
 import { createAuditLog } from "../audit";
+import { APP_VERSION } from "../_core/version";
 
 /**
  * Phase 036 — admin/operator diagnostics.
@@ -137,7 +138,7 @@ export const adminRouter = router({
         node: process.version, platform: process.platform,
         uptimeSeconds: Math.round(process.uptime()),
         env: ENV.NODE_ENV, isProduction: ENV.isProd, demoMode: ENV.isDemo,
-        appVersion: process.env.npm_package_version || "1.0.0",
+        appVersion: APP_VERSION,
       },
       db: { ready: dbReady },
       tableCounts: counts,

@@ -34,6 +34,8 @@ import { initCronScheduler } from './cronScheduler';
 import oauth2CallbacksRouter from './oauth2Callbacks';
 import { getDb } from './db';
 import { assertSecurityConfig, ENV } from './_core/env';
+import { listenHttpServer } from './listen';
+import { APP_VERSION } from './_core/version';
 
 // ─── Environment ──────────────────────────────────────────────────────────────
 
@@ -124,7 +126,7 @@ app.get('/api/health', async (_req, res) => {
   res.status(dbReady ? 200 : 503).json({
     status: dbReady ? 'healthy' : 'degraded',
     dbReady,
-    version: process.env.npm_package_version || '1.0.0',
+    version: APP_VERSION,
     env: ENV.NODE_ENV,
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
@@ -183,7 +185,7 @@ if (!isDev && !ENV.SERVER_ONLY) {
 }
 // ─── Lifecycle ──────────────────────────────────────────────────────────────
 
-export async function startServer(port: number = PORT) {
+export async function startServer(port: number = PORT): Promise<number> {
   // Phase 006: validate security-critical configuration BEFORE accepting any
   // request. In production this throws (fail-safe) if secrets are insecure; in
   // development it returns warnings we log loudly so the mode is unmistakable.
@@ -204,16 +206,10 @@ export async function startServer(port: number = PORT) {
     console.warn('[Server] Development mode will continue without a ready database.');
   }
 
-  return new Promise<void>((resolve) => {
-    httpServer.listen(port, ENV.HOST, () => {
-      console.log(`[Server] Integrated backend listening on http://${ENV.HOST}:${port}`);
-
-      // Initialize background cron jobs
-      initCronScheduler();
-
-      resolve();
-    });
-  });
+  const actualPort = await listenHttpServer(httpServer, port, ENV.HOST);
+  console.log(`[Server] Integrated backend listening on http://${ENV.HOST}:${actualPort}`);
+  initCronScheduler();
+  return actualPort;
 }
 
 // Start if run directly (though Electron usually calls startServer)
