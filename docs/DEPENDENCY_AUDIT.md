@@ -2,6 +2,10 @@
 
 Current as of 2026-07-15.
 
+The repository has one active Node workspace at the root. The obsolete duplicate
+manifest and lockfile formerly stored under `assets/` were removed; `assets/`
+now contains only the two validated JSON datasets copied into Desktop builds.
+
 ## Shipped source roots
 
 | Root | Purpose |
