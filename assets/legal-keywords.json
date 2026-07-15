@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "source": "Curated Dutch legal terminology aligned with LARO's NOvA specialization mapping",
+  "updatedAt": "2026-07-15",
+  "categories": {
+    "Civiel procesrecht": {
+      "keywords": [
+        "aansprakelijkheid",
+        "beslag",
+        "contract",
+        "dagvaarding",
+        "executie",
+        "geschil",
+        "nakoming",
+        "ontbinding",
+        "overeenkomst",
+        "schadevergoeding",
+        "verzoekschrift",
+        "wanprestatie"
+      ]
+    },
+    "Bestuursrecht": {
+      "keywords": [
+        "bestuursorgaan",
+        "besluit",
+        "bezwaar",
+        "beroep",
+        "gemeente",
+        "handhaving",
+        "omgevingsvergunning",
+        "overheid",
+        "subsidie",
+        "uitkering",
+        "uwv",
+        "verblijfsvergunning"
+      ]
+    },
+    "Strafrecht": {
+      "keywords": [
+        "aangifte",
+        "benadeelde partij",
+        "boete",
+        "gevangenis",
+        "misdrijf",
+        "officier van justitie",
+        "politie",
+        "strafbaar",
+        "strafzaak",
+        "verdachte",
+        "vervolging"
+      ]
+    },
+    "Arbeidsrecht": {
+      "keywords": [
+        "arbeidsovereenkomst",
+        "cao",
+        "collectief ontslag",
+        "loon",
+        "medezeggenschap",
+        "ontslag",
+        "pensioen",
+        "vakbond",
+        "werkgever",
+        "werknemer"
+      ]
+    },
+    "Belastingrecht": {
+      "keywords": [
+        "aanslag",
+        "belasting",
+        "belastingdienst",
+        "btw",
+        "heffing",
+        "inkomstenbelasting",
+        "invordering",
+        "toeslag"
+      ]
+    },
+    "Huurrecht": {
+      "keywords": [
+        "bedrijfsruimte",
+        "gebrek",
+        "huur",
+        "huurder",
+        "huurwoning",
+        "ontruiming",
+        "servicekosten",
+        "verhuurder",
+        "woonruimte"
+      ]
+    },
+    "Insolventierecht": {
+      "keywords": [
+        "curator",
+        "faillissement",
+        "insolventie",
+        "schuldeiser",
+        "schulden",
+        "surseance",
+        "wsnp"
+      ]
+    }
+  }
+}

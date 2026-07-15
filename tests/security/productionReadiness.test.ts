@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
+import { spawnSync } from 'child_process';
+import { tmpdir } from 'os';
 import { join } from 'path';
 
 const ROOT = join(__dirname, '..', '..');
@@ -56,18 +58,38 @@ describe('production readiness regressions', () => {
     expect(matching).toContain('assets');
     expect(packagedAssets.filter).toEqual([
       'legal-taxonomy-mapping.json',
-      'rechtspraak-keywords-analysis.json',
+      'legal-keywords.json',
     ]);
     expect(packagedAssets.filter).not.toContain('**/*');
     expect(readFileSync(join(ROOT, 'assets/legal-taxonomy-mapping.json'), 'utf8')).toContain('specializationToCourtCategories');
-    expect(readFileSync(join(ROOT, 'assets/rechtspraak-keywords-analysis.json'), 'utf8')).toContain('keywords_by_area');
+    const keywordData = JSON.parse(readFileSync(join(ROOT, 'assets/legal-keywords.json'), 'utf8'));
+    expect(keywordData.schemaVersion).toBe(1);
+    const categoryNames = Object.keys(keywordData.categories);
+    expect(categoryNames).toEqual([
+      'Civiel procesrecht',
+      'Bestuursrecht',
+      'Strafrecht',
+      'Arbeidsrecht',
+      'Belastingrecht',
+      'Huurrecht',
+      'Insolventierecht',
+    ]);
+    expect(Object.values(keywordData.categories).every(
+      (category: any) => Array.isArray(category.keywords) && category.keywords.length > 0,
+    )).toBe(true);
+    const taxonomy = JSON.parse(readFileSync(join(ROOT, 'assets/legal-taxonomy-mapping.json'), 'utf8'));
+    expect(Object.keys(taxonomy.courtCategoryToSpecializations).every(
+      (category) => categoryNames.includes(category),
+    )).toBe(true);
+    const matchingSource = readFileSync(join(ROOT, 'server/matching.ts'), 'utf8');
+    expect(matchingSource).toContain('matchingDataPath("legal-keywords.json")');
+    expect(matchingSource).not.toContain('877k court cases');
   });
 
   it('fails closed for unsigned, unaccepted, or version-mismatched tagged releases', async () => {
     const workflow = readFileSync(join(ROOT, '.github/workflows/build.yml'), 'utf8');
     const acceptance = JSON.parse(readFileSync(join(ROOT, 'release-acceptance.json'), 'utf8'));
     const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
-    const { validateReleaseAcceptance } = await import('../../scripts/release-acceptance.mjs');
     expect(workflow).toContain('WINDOWS_CSC_LINK is required for tagged releases');
     expect(workflow).toContain("Tag ${{ github.ref_name }} does not match package version");
     expect(workflow).toContain('release-acceptance.mjs --require-approved --tag');
@@ -78,20 +100,28 @@ describe('production readiness regressions', () => {
     expect(['pending', 'approved']).toContain(acceptance.gates.publicBrand.status);
     expect(['pending', 'approved']).toContain(acceptance.gates.liveProviders.status);
 
-    const rejected = validateReleaseAcceptance({
-      record: {
+    const tempDirectory = mkdtempSync(join(tmpdir(), 'laro-release-acceptance-'));
+    try {
+      const pendingPath = join(tempDirectory, 'pending.json');
+      writeFileSync(pendingPath, JSON.stringify({
         schemaVersion: 1,
         version: pkg.version,
         gates: {
           publicBrand: { status: 'pending' },
           liveProviders: { status: 'pending', providerScope: [] },
         },
-      },
-      packageVersion: pkg.version,
-      tag: `v${pkg.version}`,
-      requireApproved: true,
-    });
-    expect(rejected.errors).toContain('release acceptance pending: publicBrand, liveProviders');
+      }));
+      const rejected = spawnSync(process.execPath, [
+        join(ROOT, 'scripts/release-acceptance.mjs'),
+        '--require-approved',
+        '--tag', `v${pkg.version}`,
+        '--file', pendingPath,
+      ], { encoding: 'utf8' });
+      expect(rejected.status).toBe(1);
+      expect(rejected.stderr).toContain('release acceptance pending: publicBrand, liveProviders');
+    } finally {
+      rmSync(tempDirectory, { recursive: true, force: true });
+    }
   });
 
   it('does not invent an active dashboard case or preserve unverified OAuth status', () => {
