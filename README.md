@@ -184,12 +184,12 @@ desktop server to that registered OAuth callback port instead.
   checks also remain covered.
 - Packaged Electron scanner QA passed signup, shared-session authorization, empty-state rendering, disabled unsafe scan state, Settings navigation, and clean renderer console checks.
 - A packaged launch from a directory containing hostile development `.env` values still reported production mode, database readiness, and a random `127.0.0.1` port.
-- The current unsigned portable executable is 118,987,499 bytes with SHA-256
-  `5B7460B39A970A23784FEE4DE37BD576B7FACEF8ACC8E7179C16B3299301F6A7`.
+- The current unsigned portable executable is 118,880,896 bytes with SHA-256
+  `5A38A99448D1972F51FAC929924048BC8784F5B13D84A20914AAA76ADC638689`.
   Windows reports `NotSigned`, as intended. An isolated-profile launch applied
   all five migrations, including the document-analysis, NOvA, and Outreach
   directory schemas, served the renderer, and returned healthy production status
-  on automatically selected loopback port 51819. Direct database inspection
+  on automatically selected loopback port 50183. Direct database inspection
   confirmed `outreach_directory_targets` and `case_outreach_target_matches`.
 - PR #19 requires the Node and Python branch checks before merge. Windows
   workflow `29455232654` passed the gate, build,
@@ -232,6 +232,10 @@ Windows desktop packaging uses:
 ```powershell
 npm run dist:win
 ```
+
+LARO's supported local workflows are unmetered. There is no checkout, paid tier,
+usage quota, or upgrade gate; persisted usage data is operational count telemetry
+only.
 
 The package includes only the two matcher datasets from `assets/`; the legacy
 development service, Python cache files, and local configuration are excluded.

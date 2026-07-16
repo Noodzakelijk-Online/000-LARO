@@ -42,10 +42,6 @@ export const ENV = {
   AWS_SES_SECRET_KEY: process.env.AWS_SES_SECRET_KEY || '',
   AWS_SES_REGION:     process.env.AWS_SES_REGION || 'eu-west-1',
 
-  // Stripe
-  STRIPE_SECRET_KEY:      process.env.STRIPE_SECRET_KEY || '',
-  STRIPE_WEBHOOK_SECRET:  process.env.STRIPE_WEBHOOK_SECRET || '',
-
   // Storage (S3)
   AWS_S3_BUCKET:          process.env.AWS_S3_BUCKET || '',
   AWS_S3_ACCESS_KEY:      process.env.AWS_S3_ACCESS_KEY || '',

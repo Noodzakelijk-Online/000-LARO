@@ -28,8 +28,8 @@ lazy-loaded. The packaged entry bundle is approximately 274 KB before gzip.
 | `/admin`, `/admin-analytics` | Role-gated operator controls |
 | `/help` | Product help and legal boundary |
 
-Unfinished billing, reports, and email-automation routes are not mounted in the
-production router.
+Pricing, checkout, quota, and upgrade prototypes have been removed. Unfinished
+reports and email-automation routes are not mounted in the production router.
 
 The Outreach tabs use progressive disclosure: Overview shows current results,
 Lawyers embeds the official NOvA-backed directory, and Media/Organizations expose

@@ -113,22 +113,20 @@ export const appRouter = router({
   trello: trelloRouter,
   unifiedInbox: unifiedInboxRouter,
 
-  // Phase 056 — SaaS readiness WITHOUT forced billing. Core features work on the
-  // free tier; Stripe is optional and unconfigured by default. This endpoint
-  // reports plan/usage honestly rather than gating access behind a paywall.
+  // Local operation has no paid tier or quota gate. Usage is observational and
+  // helps the owner understand workload without blocking a core action.
   billing: router({
     status: protectedProcedure.query(async ({ ctx }) => {
-      const stripeConfigured = !!ENV.STRIPE_SECRET_KEY;
       let usage: unknown = null;
       try {
         const mod: any = await import("../usageTracking");
         usage = typeof mod.getUsageSummary === "function" ? await mod.getUsageSummary(ctx.user.id) : null;
       } catch { usage = null; }
       return {
-        plan: "free" as const,
-        billingConfigured: stripeConfigured,
+        plan: "local" as const,
+        billingConfigured: false as const,
         forcedBilling: false as const,
-        note: "All core features are available without billing. Stripe is optional.",
+        note: "All core features are available without billing or usage quotas.",
         usage,
       };
     }),

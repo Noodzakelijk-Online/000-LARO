@@ -16,7 +16,7 @@ Updated: 2026-07-16
 | D10 | Many historical database relationships are application-enforced rather than declared foreign keys | Medium | `db:readiness` now blocks on integrity, invariant, reconciliation, and declared-FK violations; add remaining constraints only after installed-data reconciliation |
 | D11 | Top-level proprietary license | - | Resolved |
 | D12 | ZIP evidence export is implemented; unavailable formats remain explicit | Low | Keep capability labels honest |
-| D13 | Some money and count fields are stored as text | Low | Normalize through reviewed migrations |
+| D13 | Historical subscription, usage-limit, and monetary usage columns remain in installed schemas | Low | Keep for compatibility; new telemetry writes quantity counts only and leaves monetary fields null |
 | D14 | Renderer strings are not fully migrated to `t()` | Low | Complete i18n pass |
 | D15 | Desktop scanner previously accepted false connection success and fabricated uploads | - | Resolved with session auth, folder consent, review selection and real evidence storage |
 | D16 | Full cross-browser and automated accessibility coverage is incomplete | Low | Expand in subsequent release cycles |

@@ -70,7 +70,7 @@ Ledger reconciled: 2026-07-15.
 | 053 | Backup & restore procedures | **Implemented** | `server/backup.ts` (online backup/validate/restore) + CLI + `docs/BACKUP_RESTORE.md`; tested. |
 | 054 | Data reconciliation & repair | **Implemented** | `server/reconcile.ts` orphan detect+repair; tested; `docs/DATA_RECONCILIATION.md`. |
 | 055 | Product analytics local-first | **Implemented** | `server/analytics.ts` real metrics wired into `analytics.*`; `docs/ANALYTICS.md`. |
-| 056 | SaaS readiness without forced billing | **Implemented** | `billing.status` free tier, no paywall; `docs/SAAS_READINESS.md`. |
+| 056 | Local operation without forced billing | **Implemented** | `billing.status` reports a local unmetered plan; usage is observational and core actions have no payment or quota gate; `docs/SAAS_READINESS.md`. |
 | 057 | Internationalization (NL/EN) | **Partial** | `shared/i18n.ts` catalog + t(); renderer string migration pending; `docs/I18N.md`. |
 | 058 | Feature flags & rollout controls | **Implemented** | `server/featureFlags.ts` + router; `outreach.send.enabled` default OFF; `docs/FEATURE_FLAGS.md`. |
 | 059 | Formal state machines | **Implemented** | `server/stateMachines.ts` enforced in cases.update + approval gate; `docs/STATE_MACHINES.md`. |

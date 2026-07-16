@@ -8,8 +8,8 @@ import { and, desc, eq, sql } from "drizzle-orm";
  * Notifications router — minimal implementation backed by the
  * `notifications` table. Surfaces the bell-icon list, unread count, and
  * mark-as-read actions used by `NotificationCenter.tsx`. Notifications
- * themselves are written by the rest of the server (auto-collection
- * results, outreach updates, etc.) through `userNotification.ts`.
+ * themselves are written by the rest of the server (auto-collection,
+ * reminders, outreach updates, etc.) as persisted in-app records.
  */
 export const notificationsRouter = router({
   // Phase 027 — run the reminder sweep for the caller: creates notifications for

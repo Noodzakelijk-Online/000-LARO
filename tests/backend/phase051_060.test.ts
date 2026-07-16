@@ -112,10 +112,11 @@ suite('Phases 051–060 — services', () => {
     expect(validateBackup(corrupt).valid).toBe(false);
   });
 
-  it('Phase 056 — billing status reports free tier, no forced billing', async () => {
+  it('Phase 056 — billing status reports local unmetered operation', async () => {
     const caller = app.makeCaller(U);
     const b = await caller.billing.status();
-    expect(b.plan).toBe('free');
+    expect(b.plan).toBe('local');
+    expect(b.billingConfigured).toBe(false);
     expect(b.forcedBilling).toBe(false);
   });
 });

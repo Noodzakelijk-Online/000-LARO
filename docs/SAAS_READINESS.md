@@ -1,15 +1,20 @@
-# SaaS Readiness Without Forced Billing (Phase 056)
+# Local Operation Without Billing (Phase 056)
 
-Date: 2026-07-06 · Branch `Phase-Imp`
+Current as of 2026-07-16.
 
-LARO is fully usable **without any billing configured**. There is no paywall on
-core features.
+LARO's supported product is fully usable without billing. Core case, evidence,
+analysis, matching, timeline, review, and export workflows have no payment or
+quota gate.
 
-- `billing.status` reports `{ plan: "free", billingConfigured, forcedBilling:false, usage }`.
-  `billingConfigured` reflects whether `STRIPE_SECRET_KEY` is set (it is optional).
-- Usage tracking (`server/usageTracking.ts`) records metered usage but does not
-  hard-block core actions when Stripe is unconfigured.
-- Stripe SDK is **not** instantiated anywhere; wiring real subscriptions is a
-  future opt-in (not required for the product to function).
+- `billing.status` reports `plan: "local"`, `billingConfigured:false`, and
+  `forcedBilling:false`.
+- `server/usageTracking.ts` stores operation and quantity counts as local
+  operational telemetry. It does not calculate charges, report to a payment
+  provider, send quota alerts, or block an action.
+- Pricing, checkout, upgrade, grace-period, and usage-quota prototypes are not
+  part of the production renderer or server runtime.
+- Historical subscription and usage-limit database columns remain in migrations
+  for compatibility with existing installations. They are not product policy.
 
-Verified in `tests/backend/phase051_060.test.ts` (free tier, `forcedBilling:false`).
+This contract is verified in `tests/backend/phase051_060.test.ts` and
+`tests/backend/usageTelemetry.test.ts`.

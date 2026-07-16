@@ -537,20 +537,6 @@ export const gapAnalysisRouter = router({
         })),
       };
 
-      // Check usage limit (if user is authenticated)
-      if (ctx.user) {
-        const { checkUsageLimit } = await import('../usageTracking');
-        const limitCheck = await checkUsageLimit(ctx.user.id, 'document_generation');
-        
-        if (!limitCheck.allowed) {
-          return {
-            success: false,
-            error: `Document generation limit exceeded. You have used ${limitCheck.used} of ${limitCheck.limit} documents this month. Upgrade to Pro for unlimited document generation.`,
-            limitExceeded: true,
-          };
-        }
-      }
-
       // Generate document
       let document;
       switch (input.documentType) {
