@@ -5,15 +5,59 @@ import {
   listGoogleDriveFolders,
   getAllFilesInFolder,
   searchGoogleDriveFiles,
-  getGoogleDriveFileMetadata,
   downloadAndUploadGoogleDriveFile,
 } from "../googleDriveService";
 import { getDb } from "../db";
 import { emailAccounts, evidence } from "../schema";
 import { eq, and } from "drizzle-orm";
-import { v4 as uuidv4 } from "uuid";
 import { beginOAuthFlow } from "../oauth2";
 import { pullEvidenceByKeywords } from "../autoCollectionService";
+import { assertCaseOwnership } from "../_core/authz";
+import { createEvidenceFile } from "../evidence";
+import { analyzeStoredEvidence } from "../documentAnalysisService";
+import { supportsDocumentAnalysisMime } from "../documentIntelligence";
+
+async function ingestDriveEvidence(options: {
+  userId: string;
+  caseId: string;
+  fileId: string;
+  title: string;
+  description: string;
+  metadata?: Record<string, unknown>;
+}) {
+  await assertCaseOwnership(options.caseId, options.userId);
+  const fileData = await downloadAndUploadGoogleDriveFile(options.fileId, options.caseId, options.userId);
+  const evidenceId = await createEvidenceFile(options.userId, {
+    caseId: options.caseId,
+    type: determineEvidenceType(fileData.mimeType),
+    source: "google_drive",
+    title: options.title,
+    description: options.description,
+    fileUrl: fileData.url,
+    fileName: fileData.fileName,
+    fileSize: fileData.size,
+    mimeType: fileData.mimeType,
+    metadata: JSON.stringify({
+      ...options.metadata,
+      storageKey: fileData.key,
+      driveFileId: options.fileId,
+      sourceMimeType: fileData.sourceMimeType,
+      importedAt: new Date().toISOString(),
+      modifiedTime: fileData.modifiedTime,
+    }),
+    contentHash: fileData.sha256,
+    relevant: true,
+  });
+  let analysisError: string | null = null;
+  if (supportsDocumentAnalysisMime(fileData.mimeType)) {
+    try {
+      await analyzeStoredEvidence({ userId: options.userId, evidenceId, deepAnalysis: false });
+    } catch (error) {
+      analysisError = error instanceof Error ? error.message : "Automatic document analysis failed";
+    }
+  }
+  return { evidenceId, analysisError };
+}
 
 /**
  * Google Drive Router
@@ -28,6 +72,7 @@ export const googleDriveRouter = router({
   getStatus: protectedProcedure
     .input(z.object({ caseId: z.string() }))
     .query(async ({ ctx, input }) => {
+      await assertCaseOwnership(input.caseId, ctx.user.id);
       const db = await getDb();
       if (!db) {
         return { connected: false, status: null };
@@ -46,7 +91,11 @@ export const googleDriveRouter = router({
         const rows = await db
           .select()
           .from(evidence)
-          .where(and(eq(evidence.caseId, input.caseId), eq(evidence.source, "google_drive")));
+          .where(and(
+            eq(evidence.caseId, input.caseId),
+            eq(evidence.userId, ctx.user.id),
+            eq(evidence.source, "google_drive")
+          ));
         itemsCollected = rows.length;
       } catch {
         itemsCollected = 0;
@@ -98,6 +147,7 @@ export const googleDriveRouter = router({
   startSync: protectedProcedure
     .input(z.object({ caseId: z.string(), sourceId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
+      await assertCaseOwnership(input.caseId, ctx.user.id);
       // Best effort: if the case has saved auto-collection keywords, use them.
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
@@ -127,6 +177,9 @@ export const googleDriveRouter = router({
         caseId: input.caseId,
         userId: ctx.user.id,
         keywords,
+        includeGmail: false,
+        includeDrive: true,
+        includeLocal: false,
       });
 
       return {
@@ -239,8 +292,7 @@ export const googleDriveRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+      await assertCaseOwnership(input.caseId, ctx.user.id);
 
       const imported: string[] = [];
       const errors: string[] = [];
@@ -250,34 +302,16 @@ export const googleDriveRouter = router({
         const fileName = input.fileNames[i];
 
         try {
-          // Download file to storage
-          const fileData = await downloadAndUploadGoogleDriveFile(fileId, input.caseId, ctx.user.id);
-
-          // Create evidence record
-          const evidenceId = uuidv4();
-          await db.insert(evidence).values({
-            id: evidenceId,
-            caseId: input.caseId,
+          const result = await ingestDriveEvidence({
             userId: ctx.user.id,
-            type: determineEvidenceType(fileData.mimeType),
-            source: "google_drive",
+            caseId: input.caseId,
+            fileId,
             title: fileName,
-            description: `Imported from Google Drive`,
-            fileUrl: fileData.url,
-            fileName: fileData.fileName,
-            fileSize: fileData.size,
-            mimeType: fileData.mimeType,
-            metadata: JSON.stringify({
-              driveFileId: fileId,
-              importedAt: new Date().toISOString(),
-              modifiedTime: fileData.modifiedTime,
-            }),
-            relevant: true,
-            createdAt: new Date(),
-            updatedAt: new Date(),
+            description: "Imported from Google Drive",
           });
 
           imported.push(fileName);
+          if (result.analysisError) errors.push(`${fileName} analysis: ${result.analysisError}`);
         } catch (error) {
           errors.push(`${fileName}: ${error instanceof Error ? error.message : "Unknown error"}`);
         }
@@ -304,6 +338,7 @@ export const googleDriveRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      await assertCaseOwnership(input.caseId, ctx.user.id);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
 
@@ -348,35 +383,17 @@ export const googleDriveRouter = router({
               continue;
             }
 
-            // Download and create evidence
-            const fileData = await downloadAndUploadGoogleDriveFile(file.id!, input.caseId, ctx.user.id);
-
-            const evidenceId = uuidv4();
-            await db.insert(evidence).values({
-              id: evidenceId,
-              caseId: input.caseId,
+            const result = await ingestDriveEvidence({
               userId: ctx.user.id,
-              type: determineEvidenceType(fileData.mimeType),
-              source: "google_drive",
+              caseId: input.caseId,
+              fileId: file.id!,
               title: file.name || "Untitled",
               description: `Imported from Google Drive folder: ${input.folderName}`,
-              fileUrl: fileData.url,
-              fileName: fileData.fileName,
-              fileSize: fileData.size,
-              mimeType: fileData.mimeType,
-              metadata: JSON.stringify({
-                driveFileId: file.id,
-                folderId: input.folderId,
-                folderName: input.folderName,
-                importedAt: new Date().toISOString(),
-                modifiedTime: fileData.modifiedTime,
-              }),
-              relevant: true,
-              createdAt: new Date(),
-              updatedAt: new Date(),
+              metadata: { folderId: input.folderId, folderName: input.folderName },
             });
 
             imported.push(file.name || "Unknown");
+            if (result.analysisError) errors.push(`${file.name} analysis: ${result.analysisError}`);
           } catch (error) {
             errors.push(`${file.name}: ${error instanceof Error ? error.message : "Unknown error"}`);
           }
@@ -402,10 +419,11 @@ export const googleDriveRouter = router({
 /**
  * Determine evidence type from MIME type
  */
-function determineEvidenceType(mimeType?: string): string {
+function determineEvidenceType(mimeType?: string): "document" | "email" | "photo" | "video" | "audio" | "other" {
   if (!mimeType) return "document";
 
-  if (mimeType.startsWith("image/")) return "image";
+  if (mimeType === "message/rfc822") return "email";
+  if (mimeType.startsWith("image/")) return "photo";
   if (mimeType.startsWith("video/")) return "video";
   if (mimeType.startsWith("audio/")) return "audio";
   if (mimeType.includes("pdf")) return "document";
@@ -414,5 +432,5 @@ function determineEvidenceType(mimeType?: string): string {
   if (mimeType.includes("presentation") || mimeType.includes("powerpoint")) return "document";
   if (mimeType.includes("text")) return "document";
 
-  return "document";
+  return "other";
 }

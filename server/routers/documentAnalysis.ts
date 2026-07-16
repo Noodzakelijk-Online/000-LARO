@@ -1,58 +1,103 @@
+import { TRPCError } from "@trpc/server";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { z } from "zod";
+import { assertCaseOwnership } from "../_core/authz";
 import { protectedProcedure, router } from "../_core/trpc";
-import { invokeLLM } from "../llm";
+import { analyzeStoredEvidence, parseDocumentAnalysisResult } from "../documentAnalysisService";
+import { DOCUMENT_ANALYSIS_VERSION } from "../documentIntelligence";
+import { getDb } from "../db";
+import { documentAnalyses, evidence } from "../schema";
 
-/**
- * Document analysis router — stub. The previous module file was truncated in the workspace.
- * Restore LLM-backed analysis flows here when you have the full implementation.
- */
 export const documentAnalysisRouter = router({
-  ping: protectedProcedure.query(() => ({
-    ok: true as const,
-    message: "documentAnalysis stub — implement analysis procedures as needed",
+  capabilities: protectedProcedure.query(() => ({
+    version: DOCUMENT_ANALYSIS_VERSION,
+    localAnalysis: true,
+    deepAnalysisConfigured: Boolean(process.env.FORGE_API_KEY),
+    supportedMimeTypes: [
+      "text/plain",
+      "text/csv",
+      "text/html",
+      "message/rfc822",
+      "application/pdf",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ],
+    ocrAvailable: false,
   })),
 
-  analyzeText: protectedProcedure
-    .input(z.object({ text: z.string().max(50_000) }))
-    .mutation(async ({ input }) => {
-      const response = await invokeLLM({
-        messages: [
-          { 
-            role: "system", 
-            content: "You are a legal document analyst. Summarize the following document and extract key entities (people, companies, dates, amounts)." 
-          },
-          { role: "user", content: input.text }
-        ],
-        response_format: {
-          type: "json_schema",
-          json_schema: {
-            name: "document_analysis",
-            strict: true,
-            schema: {
-              type: "object",
-              properties: {
-                summary: { type: "string" },
-                entities: { type: "array", items: { type: "string" } },
-                keyDates: { type: "array", items: { type: "string" } },
-                legalSignificance: { type: "string" }
-              },
-              required: ["summary", "entities", "keyDates", "legalSignificance"],
-              additionalProperties: false
-            }
-          }
-        }
-      });
-
+  analyzeEvidence: protectedProcedure
+    .input(z.object({
+      evidenceId: z.string().min(1),
+      deepAnalysis: z.boolean().default(true),
+      force: z.boolean().default(false),
+    }))
+    .mutation(async ({ ctx, input }) => {
       try {
-        const content = response.choices[0].message.content;
-        return typeof content === "string" ? JSON.parse(content) : content;
-      } catch (e) {
-        return {
-          summary: "Analysis failed or returned invalid format.",
-          entities: [],
-          keyDates: [],
-          legalSignificance: "N/A"
-        };
+        return await analyzeStoredEvidence({ userId: ctx.user.id, ...input });
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        const message = error instanceof Error ? error.message : "Document analysis failed";
+        throw new TRPCError({
+          code: message === "Evidence file not found" ? "NOT_FOUND" : "PRECONDITION_FAILED",
+          message,
+        });
       }
+    }),
+
+  byEvidence: protectedProcedure
+    .input(z.object({ evidenceId: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      const [row] = await db
+        .select()
+        .from(documentAnalyses)
+        .where(and(eq(documentAnalyses.evidenceId, input.evidenceId), eq(documentAnalyses.userId, ctx.user.id)))
+        .orderBy(desc(documentAnalyses.updatedAt))
+        .limit(1);
+      return row ? { id: row.id, result: parseDocumentAnalysisResult(row.result), updatedAt: row.updatedAt } : null;
+    }),
+
+  generateCaseTimeline: protectedProcedure
+    .input(z.object({ caseId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      await assertCaseOwnership(input.caseId, ctx.user.id);
+      const db = await getDb();
+      const rows = await db
+        .select({ analysis: documentAnalyses, evidenceTitle: evidence.title })
+        .from(documentAnalyses)
+        .innerJoin(evidence, eq(documentAnalyses.evidenceId, evidence.id))
+        .where(and(eq(documentAnalyses.caseId, input.caseId), eq(documentAnalyses.userId, ctx.user.id)))
+        .orderBy(asc(documentAnalyses.createdAt));
+
+      const events = rows.flatMap(({ analysis, evidenceTitle }) => {
+        const result = parseDocumentAnalysisResult(analysis.result);
+        const citations = new Map(result.citations.map((citation) => [citation.id, citation]));
+        return result.timelineEvents.map((event) => ({
+          ...event,
+          description: event.text,
+          source: {
+            evidenceId: analysis.evidenceId,
+            title: evidenceTitle,
+            citation: citations.get(event.citations[0]) ?? null,
+          },
+        }));
+      }).sort((left, right) => left.date.localeCompare(right.date));
+
+      const parseTime = (value: string) => {
+        const match = value.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+        if (match) return Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+        const time = Date.parse(value);
+        return Number.isFinite(time) ? time : null;
+      };
+      const times = events.map((event) => parseTime(event.date)).filter((value): value is number => value !== null);
+      const durationDays = times.length > 1 ? Math.ceil((Math.max(...times) - Math.min(...times)) / 86_400_000) : 0;
+      return {
+        events,
+        duration_days: durationDays,
+        key_dates: [...new Set(events.map((event) => event.date))],
+        summary: events.length
+          ? `${events.length} source-linked event${events.length === 1 ? "" : "s"} from ${rows.length} analyzed document${rows.length === 1 ? "" : "s"}.`
+          : "No dated events are available. Analyze case documents first.",
+        gaps: rows.length === 0 ? ["No analyzed source documents are available for this case."] : [],
+      };
     }),
 });

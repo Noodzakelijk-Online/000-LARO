@@ -20,6 +20,9 @@ import { decryptToken, encryptToken, refreshGmailToken } from './emailOAuth';
 import { searchGmailEmails, getGmailMessage, getGmailAttachment } from './gmailService';
 import { getAllFilesInFolder } from './googleDriveService';
 import { storagePut } from './storage';
+import { createEvidenceFile } from './evidence';
+import { analyzeStoredEvidence } from './documentAnalysisService';
+import { supportsDocumentAnalysisMime } from './documentIntelligence';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as nodeFs from 'fs';
@@ -40,6 +43,21 @@ interface AutoCollectionConfig {
   googleDriveFolderIds?: string[];
   autoDownloadAttachments: boolean;
   autoDownloadGoogleDriveFiles: boolean;
+}
+
+async function analyzeImportedEvidence(
+  evidenceId: string,
+  userId: string,
+  mimeType: string,
+  label: string,
+  errors: string[],
+): Promise<void> {
+  if (!supportsDocumentAnalysisMime(mimeType)) return;
+  try {
+    await analyzeStoredEvidence({ userId, evidenceId, deepAnalysis: false });
+  } catch (error) {
+    errors.push(`Analysis for "${label}" failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 /**
@@ -116,7 +134,7 @@ function matchesKeywords(text: string, keywords: string[], mode: 'all' | 'any'):
 /**
  * Run auto-collection for a case
  */
-export async function runAutoCollection(caseId: string): Promise<{
+async function runAutoCollectionLegacy(caseId: string): Promise<{
   emailsFound: number;
   emailsProcessed: number;
   filesFound: number;
@@ -639,6 +657,7 @@ async function pullFromGmail(
   errors: string[],
   dateStart?: Date,
   dateEnd?: Date,
+  includeAttachments = true,
 ): Promise<{ messages: number; attachments: number }> {
   const db = await getDb();
   if (!db) return { messages: 0, attachments: 0 };
@@ -730,19 +749,27 @@ async function pullFromGmail(
       };
       collectBody(msg.payload);
 
-      await db.insert(evidenceTable).values({
-        id: uuidv4(),
+      const messageSource = [
+        `From: ${from}`,
+        `Subject: ${subject}`,
+        `Date: ${date.toISOString()}`,
+        '',
+        body,
+      ].join('\n');
+      const messageStorageKey = `evidence/${caseId}/gmail/${uuidv4()}-${msg.id}.eml`;
+      const storedMessage = await storagePut(messageStorageKey, Buffer.from(messageSource), 'message/rfc822');
+      const messageEvidenceId = await createEvidenceFile(userId, {
         caseId,
-        userId,
         type: 'email',
         source: 'gmail',
         title: subject,
         description: `From ${from} on ${date.toISOString()}`,
-        fileUrl: null,
-        fileName: null,
-        fileSize: null,
+        fileUrl: storedMessage.url,
+        fileName: `${msg.id}.eml`,
+        fileSize: String(Buffer.byteLength(messageSource)),
         mimeType: 'message/rfc822',
         metadata: JSON.stringify({
+          storageKey: storedMessage.key,
           gmailMessageId: msg.id,
           gmailThreadId: (msg as any).threadId,
           from,
@@ -752,10 +779,10 @@ async function pullFromGmail(
           accountId: cred.accountId,
           autoCollected: true,
         }),
+        contentHash: storedMessage.sha256,
         relevant: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
       });
+      await analyzeImportedEvidence(messageEvidenceId, userId, 'message/rfc822', subject, errors);
       messagesIngested++;
 
       // Download attachments.
@@ -773,6 +800,7 @@ async function pullFromGmail(
         if (payload.parts) payload.parts.forEach(collectAttachments);
       };
       collectAttachments(msg.payload);
+      if (!includeAttachments) attachments.length = 0;
 
       for (const att of attachments) {
         try {
@@ -781,30 +809,30 @@ async function pullFromGmail(
           // Gmail uses URL-safe base64.
           const normalized = a.data.replace(/-/g, '+').replace(/_/g, '/');
           const buf = Buffer.from(normalized, 'base64');
-          const storageKey = `evidence/${caseId}/gmail/${uuidv4()}-${att.filename}`;
-          const { url } = await storagePut(storageKey, buf, att.mimeType);
-          await db.insert(evidenceTable).values({
-            id: uuidv4(),
+          const safeName = path.basename(att.filename.replace(/\\/g, '/')) || 'attachment';
+          const storageKey = `evidence/${caseId}/gmail/${uuidv4()}-${safeName}`;
+          const storedAttachment = await storagePut(storageKey, buf, att.mimeType);
+          const attachmentEvidenceId = await createEvidenceFile(userId, {
             caseId,
-            userId,
             type: determineEvidenceType(att.mimeType),
             source: 'gmail',
-            title: att.filename,
+            title: safeName,
             description: `Attachment from email "${subject}"`,
-            fileUrl: url,
-            fileName: att.filename,
+            fileUrl: storedAttachment.url,
+            fileName: safeName,
             fileSize: String(buf.length),
             mimeType: att.mimeType,
             metadata: JSON.stringify({
+              storageKey: storedAttachment.key,
               gmailMessageId: msg.id,
               attachmentId: att.attachmentId,
               parentSubject: subject,
               autoCollected: true,
             }),
+            contentHash: storedAttachment.sha256,
             relevant: true,
-            createdAt: new Date(),
-            updatedAt: new Date(),
           });
+          await analyzeImportedEvidence(attachmentEvidenceId, userId, att.mimeType, safeName, errors);
           attachmentsIngested++;
         } catch (err) {
           errors.push(`Attachment "${att.filename}" failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -870,10 +898,8 @@ async function pullFromDrive(
 
         try {
           const fileData = await downloadAndUploadGoogleDriveFile(file.id, caseId, userId);
-          await db.insert(evidenceTable).values({
-            id: uuidv4(),
+          const evidenceId = await createEvidenceFile(userId, {
             caseId,
-            userId,
             type: determineEvidenceType(fileData.mimeType),
             source: 'google_drive',
             title: file.name,
@@ -883,15 +909,33 @@ async function pullFromDrive(
             fileSize: fileData.size,
             mimeType: fileData.mimeType,
             metadata: JSON.stringify({
+              storageKey: fileData.key,
               driveFileId: file.id,
               folderId,
+              sourceMimeType: fileData.sourceMimeType,
               autoCollected: true,
               collectedAt: new Date().toISOString(),
               modifiedTime: fileData.modifiedTime,
             }),
+            contentHash: fileData.sha256,
             relevant: true,
-            createdAt: new Date(),
-            updatedAt: new Date(),
+          });
+          await analyzeImportedEvidence(evidenceId, userId, fileData.mimeType, file.name, errors);
+          await db.insert(googleDriveFiles).values({
+            id: uuidv4(),
+            userId,
+            caseId,
+            googleFileId: file.id,
+            fileName: fileData.fileName,
+            mimeType: fileData.mimeType,
+            fileSize: fileData.size,
+            s3Key: fileData.key,
+            s3Url: fileData.url,
+            googleWebViewLink: file.webViewLink || null,
+            googleModifiedTime: fileData.modifiedTime,
+            evidenceType: determineEvidenceType(fileData.mimeType),
+            isIncluded: 'Yes',
+            metadata: JSON.stringify({ sourceMimeType: fileData.sourceMimeType }),
           });
           downloaded++;
         } catch (err) {
@@ -1001,31 +1045,30 @@ async function pullFromLocalFolders(
         const ext = path.extname(file.name).toLowerCase();
         const mimeType = guessMimeFromExt(ext);
         const storageKey = `evidence/${caseId}/local/${uuidv4()}-${file.name}`;
-        const { url } = await storagePut(storageKey, buf, mimeType);
+        const storedFile = await storagePut(storageKey, buf, mimeType);
 
-        await db.insert(evidenceTable).values({
-          id: uuidv4(),
+        const evidenceId = await createEvidenceFile(userId, {
           caseId,
-          userId,
           type: determineEvidenceType(mimeType),
           source: 'local',
           title: file.name,
           description: `Auto-collected from local folder ${folderPath}`,
-          fileUrl: url,
+          fileUrl: storedFile.url,
           fileName: file.name,
           fileSize: String(stat.size),
           mimeType,
           metadata: JSON.stringify({
+            storageKey: storedFile.key,
             absPath: file.absPath,
             sourceFolder: folderPath,
             autoCollected: true,
             collectedAt: new Date().toISOString(),
             modifiedTime: stat.mtime.toISOString(),
           }),
+          contentHash: storedFile.sha256,
           relevant: true,
-          createdAt: new Date(),
-          updatedAt: new Date(),
         });
+        await analyzeImportedEvidence(evidenceId, userId, mimeType, file.name, errors);
         ingested++;
       } catch (err) {
         errors.push(`Local file "${file.absPath}" failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -1089,6 +1132,10 @@ export async function pullEvidenceByKeywords(params: {
   localFolderPaths?: string[];
   dateStart?: Date;
   dateEnd?: Date;
+  includeGmail?: boolean;
+  includeGmailAttachments?: boolean;
+  includeDrive?: boolean;
+  includeLocal?: boolean;
 }): Promise<PullByKeywordsResult> {
   const matchMode = params.matchMode || 'any';
   const errors: string[] = [];
@@ -1121,15 +1168,15 @@ export async function pullEvidenceByKeywords(params: {
   }
 
   const [gmail, drive, local] = await Promise.all([
-    pullFromGmail(params.caseId, params.userId, params.keywords, matchMode, errors, params.dateStart, params.dateEnd).catch((err) => {
+    (params.includeGmail === false ? Promise.resolve({ messages: 0, attachments: 0 }) : pullFromGmail(params.caseId, params.userId, params.keywords, matchMode, errors, params.dateStart, params.dateEnd, params.includeGmailAttachments !== false)).catch((err) => {
       errors.push(`Gmail pull failed: ${err instanceof Error ? err.message : String(err)}`);
       return { messages: 0, attachments: 0 };
     }),
-    pullFromDrive(params.caseId, params.userId, params.keywords, matchMode, driveFolderIds, errors, params.dateStart, params.dateEnd).catch((err) => {
+    (params.includeDrive === false ? Promise.resolve({ files: 0 }) : pullFromDrive(params.caseId, params.userId, params.keywords, matchMode, driveFolderIds, errors, params.dateStart, params.dateEnd)).catch((err) => {
       errors.push(`Drive pull failed: ${err instanceof Error ? err.message : String(err)}`);
       return { files: 0 };
     }),
-    pullFromLocalFolders(params.caseId, params.userId, params.keywords, matchMode, localFolderPaths, errors, params.dateStart, params.dateEnd).catch((err) => {
+    (params.includeLocal === false ? Promise.resolve({ files: 0 }) : pullFromLocalFolders(params.caseId, params.userId, params.keywords, matchMode, localFolderPaths, errors, params.dateStart, params.dateEnd)).catch((err) => {
       errors.push(`Local pull failed: ${err instanceof Error ? err.message : String(err)}`);
       return { files: 0 };
     }),
@@ -1163,6 +1210,48 @@ export async function pullEvidenceByKeywords(params: {
     driveFiles: drive.files,
     localFiles: local.files,
     errors,
+  };
+}
+
+export async function runAutoCollection(caseId: string): Promise<{
+  emailsFound: number;
+  emailsProcessed: number;
+  filesFound: number;
+  filesDownloaded: number;
+  errors: string[];
+}> {
+  const settings = await getAutoCollectionSettings(caseId);
+  if (!settings?.userId) throw new Error('Auto-collection settings not found for case');
+  const keywords = JSON.parse(settings.keywords || '[]') as string[];
+  const accountIds = JSON.parse(settings.emailAccountIds || '[]') as string[];
+  const driveFolderIds = JSON.parse(settings.googleDriveFolderIds || '[]') as string[];
+  const result = await pullEvidenceByKeywords({
+    caseId,
+    userId: settings.userId,
+    keywords,
+    matchMode: settings.keywordMatchMode === 'all' ? 'all' : 'any',
+    driveFolderIds,
+    dateStart: settings.dateRangeStart || undefined,
+    dateEnd: settings.dateRangeEnd || undefined,
+    includeGmail: accountIds.length > 0,
+    includeGmailAttachments: Boolean(settings.autoDownloadAttachments),
+    includeDrive: Boolean(settings.autoDownloadGoogleDriveFiles),
+    includeLocal: true,
+  });
+  const files = result.gmailAttachments + result.driveFiles + result.localFiles;
+  const db = await getDb();
+  await db.update(autoCollectionSettings).set({
+    lastRunAt: new Date(),
+    totalItemsCollected: String(result.gmailMessages + files),
+    totalEmailsCollected: String(result.gmailMessages),
+    totalFilesCollected: String(files),
+  }).where(eq(autoCollectionSettings.caseId, caseId));
+  return {
+    emailsFound: result.gmailMessages,
+    emailsProcessed: result.gmailMessages,
+    filesFound: files,
+    filesDownloaded: files,
+    errors: result.errors,
   };
 }
 

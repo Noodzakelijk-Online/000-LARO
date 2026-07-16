@@ -9,6 +9,7 @@ export function getElectronAPI() {
     getSystemInfo:      () => Promise.resolve({ platform: 'browser', hostname: 'browser', username: 'browser', homeDir: '/', version: '0.0.0' }),
     getAppVersion:      () => Promise.resolve('0.0.0'),
     openExternal:       (url: string) => { window.open(url, '_blank'); return Promise.resolve(); },
+    reportRendererError: (report: unknown) => { console.error('Renderer error report', report); return Promise.resolve(); },
     selectFolder:       () => Promise.resolve(null),
     startScan:          () => Promise.reject(new Error('Folder scanning requires LARO Desktop')),
     stopScan:           () => Promise.reject(new Error('Folder scanning requires LARO Desktop')),

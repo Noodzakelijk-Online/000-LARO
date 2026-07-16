@@ -43,7 +43,7 @@ provide definitive legal advice.
 | Gmail and Google Drive intake | Implemented when OAuth credentials and user consent are present |
 | Local evidence upload | Implemented with bounded file types/sizes, local or S3 persistence, SHA-256 provenance, and rollback on record failure |
 | Desktop folder scanner | Implemented with shared-session authentication, explicit folder consent, review and per-file selection, short-lived upload credentials, and real owner-scoped storage |
-| Document intelligence | Deterministic extraction is implemented; optional loopback Ollama analysis is citation-gated; OCR remains explicitly unavailable |
+| Document intelligence | Desktop TXT/CSV/HTML/EML/PDF/DOCX extraction, versioned persisted findings, automatic import analysis, and citation-validated optional deep analysis are implemented; Flask also supports citation-gated loopback Ollama; OCR remains explicitly unavailable |
 | Evidence timeline | Implemented with story, horizontal, and vertical views plus direct source access |
 | Lawyer matching | Implemented against persisted lawyer records and case-derived legal fields |
 | Media and organization matching | Implemented as reviewable target matching; discovery is not represented as exhaustive |
@@ -55,8 +55,8 @@ provide definitive legal advice.
 
 ## Production boundary
 
-The repository can produce an internally verified Windows release candidate.
-Public distribution additionally requires Microsoft Store certification and
-Store signing, or a valid Authenticode signature for direct portable delivery,
-plus product-owner approval of the public brand mark and live target-account
-acceptance for every enabled external provider.
+The repository can produce an internally deployable unsigned Windows build. The
+owner has chosen not to pursue Store certification or a recurring certificate,
+so public trusted Windows distribution is not currently an accepted deployment
+target. Live target-account acceptance is still required for every enabled
+external provider.

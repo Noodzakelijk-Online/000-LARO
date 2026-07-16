@@ -31,15 +31,13 @@ export class PageErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: any) {
     console.error("Error caught by boundary:", error, errorInfo);
-    
-    // Log to error tracking service in production
     if (import.meta.env.PROD) {
-      // TODO: Send to error tracking service (e.g., Sentry)
-      console.error("Production error:", {
-        error: error.message,
+      void window.electronAPI?.reportRendererError({
+        message: error.message,
         stack: error.stack,
         componentStack: errorInfo.componentStack,
-      });
+        route: window.location.pathname,
+      }).catch((reportError) => console.error("Could not persist renderer error report:", reportError));
     }
   }
 

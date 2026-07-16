@@ -4,9 +4,9 @@
 
 Changes enter `main` through a reviewed pull request with passing CI. Use
 semantic versions from `package.json` and add the matching changelog entry.
-Public Windows releases use the Microsoft Store submission workflow when
-`WINDOWS_SIGNING_PROVIDER=microsoft-store`. Direct `vX.Y.Z` tags are reserved
-for externally signed portable releases and fail closed in Store-only mode.
+Normal Windows builds are unsigned internal artifacts. No signing provider is
+currently selected. Public `vX.Y.Z` tags remain disabled until an operator
+deliberately configures one of the optional trust routes below.
 
 Tagged releases fail closed unless the tag exactly matches `package.json`, a
 supported signing provider is fully configured, `release-acceptance.json`
@@ -19,9 +19,10 @@ validation artifacts.
 
 ## Windows Signing
 
-Set the repository variable `WINDOWS_SIGNING_PROVIDER` to one of:
+Only when public trusted distribution is required, set the repository variable
+`WINDOWS_SIGNING_PROVIDER` to one of:
 
-- `microsoft-store` (preferred, no recurring signing fee): creates an unsigned
+- `microsoft-store` (optional, no recurring signing fee): creates an unsigned
   APPX submission package whose identity must exactly match Partner Center.
   Microsoft re-signs accepted Store packages with its own trusted certificate.
   Store `MICROSOFT_STORE_IDENTITY_NAME`, `MICROSOFT_STORE_PUBLISHER`, and
@@ -34,7 +35,7 @@ Set the repository variable `WINDOWS_SIGNING_PROVIDER` to one of:
   `SSL_COM_CREDENTIAL_ID`, and `SSL_COM_TOTP_SECRET` as repository secrets.
   Obtain an organization-validated code-signing certificate with eSigner cloud
   signing, enable automated signing, and use the production credential ID.
-- `azure-artifact-signing` (preferred): uses Microsoft Artifact Signing with
+- `azure-artifact-signing`: uses Microsoft Artifact Signing with
   GitHub OIDC. Store `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and
   `AZURE_SUBSCRIPTION_ID` as repository secrets. Store
   `AZURE_ARTIFACT_SIGNING_ENDPOINT`, `AZURE_ARTIFACT_SIGNING_ACCOUNT`, and
@@ -49,7 +50,7 @@ with `Get-AuthenticodeSignature` before GitHub may publish it. Azure signing
 uses Microsoft's RFC 3161 timestamp service; eSigner signs and timestamps
 through SSL.com's cloud-HSM service.
 
-The Microsoft Store route is intentionally different: the repository produces
+The optional Microsoft Store route is intentionally different: the repository produces
 an unsigned submission package and validates its manifest identity. Microsoft
 signs the package only after Store certification. The Store package must not be
 distributed directly before Microsoft signs it.

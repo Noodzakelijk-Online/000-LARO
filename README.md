@@ -26,10 +26,13 @@ The Electron main process starts the Express/tRPC server and React renderer toge
 - Deduplicate imported evidence while preserving source URIs and locally retrievable files.
 - Scan only folders selected through the native desktop picker, review the discovered files, and upload only the selected evidence.
 - Store actual scanner bytes under the owned case with SHA-256 provenance; scanner credentials expire after 15 minutes and cannot call other protected APIs.
+- Persist Gmail messages, attachments, local files, and Drive files under the same evidence contract; Google-native documents are exported to analyzable PDF while retaining their source identity.
 
 ### Document intelligence and Papertrail
 
 - Extract readable text and create review-only suggestions for events, claims, evidence links, contradictions, deadlines, obligations, and missing evidence.
+- Analyze TXT, CSV, HTML, EML, PDF, and DOCX evidence locally in the desktop runtime; persist versioned summaries, parties, dates, amounts, claims, obligations, legal issues, risks, and source spans.
+- Run local citation extraction automatically for supported Gmail, Drive, and folder imports; optional deep analysis is accepted only when every finding cites a real extracted source segment.
 - Run full-source deterministic comparisons or optional loopback-only Ollama analysis in bounded batches.
 - Reject uncited model observations; retained suggestions include literal source support and remain unconfirmed until reviewed.
 - Build who-said-or-did-what-and-when timelines with actor, action, affected party, event type, date, summary, and direct document access.
@@ -144,14 +147,14 @@ See [Operator Runbook](docs/OPERATOR_RUNBOOK.md), [Security](docs/SECURITY.md), 
 
 ## Verification
 
-Protected `main` commit `677a46a` was verified locally and in GitHub Actions on
-2026-07-15. CI repeats the Node checks on the supported Node 22 toolchain:
+The current production-readiness candidate was verified locally on 2026-07-16.
+GitHub Actions repeats the Node checks on the supported Node 22 toolchain:
 
 - `npm run gate`: all blocking gates passed.
 - Server, Electron main-process, and shipped renderer TypeScript checks passed; ESLint passed.
 - Traceability reported 116 rows, 93 cited, and 0 broken references.
 - Runtime no-excuses scan reported 0 suspect findings; account safety reported 0 high-severity findings.
-- Vitest reported 32 passing files, 220 passing tests, and no skipped or todo tests.
+- Vitest reported 33 passing files, 224 passing tests, and no skipped or todo tests.
 - Full Python discovery reported 202 passing tests. Warning-focused optimization and UCID tests also passed with deprecations promoted to errors.
 - The Vite 8 renderer, Electron 43 main process, and standalone server builds completed successfully.
 - The scanner integration test verified scoped-token isolation, owner checks, supported MIME enforcement, exact stored bytes, and SHA-256 readback.
@@ -166,9 +169,13 @@ desktop server to that registered OAuth callback port instead.
 - Playwright smoke tests passed at 1440x900 and 390x844 with clean consoles, one coalesced local-session bootstrap, live command-center and Google-status responses, responsive depth controls, a closable Google dialog, and a functional password-visibility control.
 - Packaged Electron scanner QA passed signup, shared-session authorization, empty-state rendering, disabled unsafe scan state, Settings navigation, and clean renderer console checks.
 - A packaged launch from a directory containing hostile development `.env` values still reported production mode, database readiness, and a random `127.0.0.1` port.
+- The current unsigned portable executable is 118,308,427 bytes with SHA-256
+  `0fb4f180aa3a3fd609ff1deef69724aad6e40a64a18482b34de3e4001056f39d`.
+  An isolated-profile launch applied the document-analysis migration and returned
+  healthy production status on an automatically selected loopback port.
 - Main CI run `29455232706` passed Node and Python; Windows workflow
   `29455232654` passed the gate, build, Electron ABI check, package, checksum,
-  and upload stages.
+  and upload stages for the preceding protected-main baseline.
 - The downloaded CI executable matched SHA-256
   `c6cf367f112b4dc4fd64d749666f00ae169a175a4f2a168aaf1159a06dc3cb38`,
   launched the dashboard, and contained the validated seven-category matching
@@ -211,10 +218,10 @@ development service, Python cache files, and local configuration are excluded.
 See [Backup and Restore](docs/BACKUP_RESTORE.md) for verified database recovery.
 
 CI runs Node and Python gates for pushes and pull requests to `main`. The release
-workflows target Node 22. Public Windows delivery defaults to Microsoft Store:
-CI builds an identity-bound APPX submission, verifies its manifest and checksum,
-and Microsoft applies the trusted signature after certification. Direct portable
-releases remain available only when a supported signing provider is configured.
+workflows target Node 22. Current Windows builds are unsigned internal artifacts;
+no Store certification or paid signing provider is active. Optional Store and
+direct-signing workflows remain available, but public tagged releases fail closed
+until an operator deliberately configures and accepts one of those trust routes.
 
 ## Repository Map
 
@@ -246,7 +253,7 @@ releases remain available only when a supported signing provider is configured.
 - Real external sending is intentionally disabled by default and should remain disabled until the target environment, provider, approval UI, emergency stop, and audit trail have been reviewed.
 - The current lockfile audits cleanly; run `npm run audit:deps` again for every release because registry advisories change over time.
 - Dashboard routes are loaded on demand. The production entry chunk is about 274 KB before gzip (85 KB gzip); the largest route chunk is about 230 KB before gzip.
-- The internal portable Windows artifact is not Authenticode-signed and must not be distributed publicly. Store delivery avoids a recurring certificate purchase; Partner Center identity, Store certification, and product-owner confirmation of the public brand asset are still required.
+- The internal portable Windows artifact is not Authenticode-signed and must not be distributed as a trusted public installer. No Store or paid-certificate route is currently active; Windows may display an unknown-publisher warning for internal builds.
 - Historical phase and verification documents in `docs/` are dated snapshots. Prefer current code, tests, this README, and a fresh `npm run gate` when status statements differ.
 
 ## Further Documentation

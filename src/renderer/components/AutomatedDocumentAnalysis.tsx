@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Upload, FileText, CheckCircle2, AlertTriangle, Loader2, Calendar, Users, DollarSign, MapPin } from "lucide-react";
+import { Upload, FileText, CheckCircle2, AlertTriangle, Loader2, Calendar, Users, DollarSign, MapPin, Scale, Clock } from "lucide-react";
 
 interface AutomatedDocumentAnalysisProps {
   caseId: string;
@@ -19,28 +19,46 @@ type AnalysisView = {
   extracted_entities: {
     parties: string[];
     dates: string[];
-    amounts: number[];
+    amounts: string[];
     locations: string[];
     key_terms: string[];
   };
   red_flags: string[];
   matches_evidence_item: string | null;
+  provider_status: string;
+  provider_message: string | null;
+  citation_count: number;
+  claims: string[];
+  obligations: string[];
 };
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 32_768;
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+  }
+  return btoa(binary);
+}
 
 export function AutomatedDocumentAnalysis({ caseId, onAnalysisComplete }: AutomatedDocumentAnalysisProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<AnalysisView | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const createFile = trpc.evidenceFiles.create.useMutation();
-  const analyzeMutation = trpc.documentAnalysis.analyzeText.useMutation();
+  const capabilities = trpc.documentAnalysis.capabilities.useQuery();
+  const uploadFile = trpc.evidenceFiles.upload.useMutation();
+  const analyzeMutation = trpc.documentAnalysis.analyzeEvidence.useMutation();
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       setSelectedFile(file);
       setAnalysisResult(null);
+      setErrorMessage(null);
     }
   };
 
@@ -49,47 +67,53 @@ export function AutomatedDocumentAnalysis({ caseId, onAnalysisComplete }: Automa
 
     try {
       setUploading(true);
-      const text = await selectedFile.text().catch(() => "");
-
-      const uploadResult = await createFile.mutateAsync({
+      setErrorMessage(null);
+      const base64 = arrayBufferToBase64(await selectedFile.arrayBuffer());
+      const uploadResult = await uploadFile.mutateAsync({
         caseId,
         title: selectedFile.name,
         type: "document",
         fileName: selectedFile.name,
-        fileSize: selectedFile.size.toString(),
         mimeType: selectedFile.type || "application/octet-stream",
-        source: "analysis_upload",
-        description: text.slice(0, 500),
+        source: "manual",
+        base64,
       });
 
       setUploading(false);
       setAnalyzing(true);
 
       const analysis = await analyzeMutation.mutateAsync({
-        text: text.slice(0, 50_000) || selectedFile.name,
+        evidenceId: uploadResult.id,
+        deepAnalysis: true,
       });
+      const result = analysis.result;
 
-      const parties = (analysis.entities ?? []).filter((e: string) => /person|party|client|employer/i.test(e) || e.length > 2).slice(0, 12);
-      const keyTerms = (analysis.entities ?? []).slice(0, 15);
+      const parties = result.parties.map((item) => item.text).slice(0, 12);
+      const keyTerms = result.legalIssues.map((item) => item.text).slice(0, 15);
 
       const view: AnalysisView = {
-        detected_type: "legal_document",
-        confidence: 82,
-        relevance_to_case: analysis.legalSignificance?.toLowerCase().includes("high")
+        detected_type: result.documentType,
+        confidence: result.confidence,
+        relevance_to_case: result.riskFlags.length > 0 || result.obligations.length > 2
           ? "high"
-          : analysis.legalSignificance?.toLowerCase().includes("low")
+          : result.legalIssues.length === 0
             ? "low"
             : "medium",
-        summary: analysis.summary ?? "No summary returned.",
+        summary: result.summary,
         extracted_entities: {
-          parties: parties.length ? parties : (analysis.entities ?? []).slice(0, 5),
-          dates: analysis.keyDates ?? [],
-          amounts: [],
+          parties,
+          dates: result.dates.map((item) => item.text),
+          amounts: result.amounts.map((item) => item.text),
           locations: [],
           key_terms: keyTerms,
         },
-        red_flags: [],
-        matches_evidence_item: null,
+        red_flags: result.riskFlags.map((item) => item.text),
+        matches_evidence_item: selectedFile.name,
+        provider_status: result.providerStatus,
+        provider_message: result.providerMessage,
+        citation_count: result.citations.length,
+        claims: result.claims.map((item) => item.text),
+        obligations: result.obligations.map((item) => item.text),
       };
 
       setAnalyzing(false);
@@ -97,6 +121,7 @@ export function AutomatedDocumentAnalysis({ caseId, onAnalysisComplete }: Automa
       onAnalysisComplete?.(uploadResult.id);
     } catch (error) {
       console.error("Error uploading/analyzing document:", error);
+      setErrorMessage(error instanceof Error ? error.message : "Document analysis failed.");
       setUploading(false);
       setAnalyzing(false);
     }
@@ -127,7 +152,7 @@ export function AutomatedDocumentAnalysis({ caseId, onAnalysisComplete }: Automa
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <input
               type="file"
-              accept=".pdf,.doc,.docx,.txt"
+              accept=".pdf,.docx,.txt,.csv,.html,.eml"
               onChange={handleFileSelect}
               className="min-w-0 flex-1 text-sm"
               disabled={uploading || analyzing}
@@ -150,6 +175,16 @@ export function AutomatedDocumentAnalysis({ caseId, onAnalysisComplete }: Automa
             <div className="text-sm text-muted-foreground">
               Selected: {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)
             </div>
+          )}
+          <p className="text-xs text-muted-foreground">
+            Local source extraction is always used. Deep analysis is {capabilities.data?.deepAnalysisConfigured ? "configured" : "not configured"}; findings remain linked to extracted source passages.
+          </p>
+          {errorMessage && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Analysis could not complete</AlertTitle>
+              <AlertDescription>{errorMessage}</AlertDescription>
+            </Alert>
           )}
         </CardContent>
       </Card>
@@ -186,6 +221,13 @@ export function AutomatedDocumentAnalysis({ caseId, onAnalysisComplete }: Automa
                 <div className="mb-2 font-medium">Summary</div>
                 <p className="text-sm text-muted-foreground">{analysisResult.summary}</p>
               </div>
+              <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                <Badge variant="outline">{analysisResult.citation_count} source passages</Badge>
+                <Badge variant="outline">{analysisResult.provider_status.replace(/_/g, " ")}</Badge>
+              </div>
+              {analysisResult.provider_message && (
+                <p className="text-xs text-muted-foreground">{analysisResult.provider_message}</p>
+              )}
             </CardContent>
           </Card>
 
@@ -231,9 +273,9 @@ export function AutomatedDocumentAnalysis({ caseId, onAnalysisComplete }: Automa
                     Amounts
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {analysisResult.extracted_entities.amounts.map((amount: number, idx: number) => (
+                    {analysisResult.extracted_entities.amounts.map((amount: string, idx: number) => (
                       <Badge key={idx} variant="outline">
-                        €{amount.toLocaleString()}
+                        {amount}
                       </Badge>
                     ))}
                   </div>
@@ -268,6 +310,36 @@ export function AutomatedDocumentAnalysis({ caseId, onAnalysisComplete }: Automa
               )}
             </CardContent>
           </Card>
+
+          {(analysisResult.claims.length > 0 || analysisResult.obligations.length > 0) && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Legal reading</CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-5 lg:grid-cols-2">
+                <div>
+                  <div className="mb-2 flex items-center gap-2 font-medium">
+                    <Scale className="h-4 w-4" /> Claims and positions
+                  </div>
+                  {analysisResult.claims.length ? (
+                    <ul className="space-y-2 text-sm text-muted-foreground">
+                      {analysisResult.claims.map((claim, index) => <li key={index}>{claim}</li>)}
+                    </ul>
+                  ) : <p className="text-sm text-muted-foreground">No explicit claims detected.</p>}
+                </div>
+                <div>
+                  <div className="mb-2 flex items-center gap-2 font-medium">
+                    <Clock className="h-4 w-4" /> Obligations and deadlines
+                  </div>
+                  {analysisResult.obligations.length ? (
+                    <ul className="space-y-2 text-sm text-muted-foreground">
+                      {analysisResult.obligations.map((obligation, index) => <li key={index}>{obligation}</li>)}
+                    </ul>
+                  ) : <p className="text-sm text-muted-foreground">No explicit obligations detected.</p>}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {analysisResult.red_flags && analysisResult.red_flags.length > 0 && (
             <Alert variant="destructive">

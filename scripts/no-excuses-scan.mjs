@@ -116,9 +116,9 @@ function main() {
     'Descriptive words (mock/stub/placeholder/fake) needing human judgement. Triage of the ' +
       'current hits: **all are honest** — descriptive comments (e.g. `env.ts` documenting ' +
       'insecure placeholder secrets, `gdpr.ts` SQL `?` placeholders), an explicit honest ' +
-      '`{url: null, message}` in `evidenceFiles.ts` (no fake URL), a labelled demo-mode LLM ' +
-      'fallback in `llm.ts` (returns clearly-marked "mock response", never silently), and a ' +
-      'labelled `documentAnalysis` ping stub (its `analyzeText` is real LLM). None fake success.',
+      '`{url: null, message}` in `evidenceFiles.ts` (no fake URL), and test-injection comments ' +
+      'around outreach providers. Document analysis is persisted and source-grounded; optional ' +
+      'provider enrichment fails closed. None of the current markers represents fake success.',
   );
   out.push('');
   if (runtimeReview.length > 0) {
