@@ -67,10 +67,23 @@ export const lawyers = sqliteTable(
     capacityPercentage: text("capacityPercentage").default("0"),
     languages: text("languages"), // JSON string
     novaId: text("novaId"),
+    officialProfileUrl: text("officialProfileUrl"),
+    officialLegalAreas: text("officialLegalAreas"),
+    specializationAssociations: text("specializationAssociations"),
+    admissionDate: text("admissionDate"),
+    district: text("district"),
+    financedLegalAid: text("financedLegalAid"),
+    directorySource: text("directorySource"),
+    directoryRetrievedAt: integer("directoryRetrievedAt", { mode: "timestamp" }),
+    directoryDistanceKm: text("directoryDistanceKm"),
+    directorySearchLocation: text("directorySearchLocation"),
     createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
     updatedAt: integer("updatedAt", { mode: "timestamp" }).default(new Date()),
   },
-  (t) => ({ cityIdx: index("lawyers_city_idx").on(t.city) })
+  (t) => ({
+    cityIdx: index("lawyers_city_idx").on(t.city),
+    novaIdIdx: index("lawyers_novaId_idx").on(t.novaId),
+  })
 );
 
 export type Lawyer = typeof lawyers.$inferSelect;
@@ -315,6 +328,71 @@ export const outreachStatus = sqliteTable("outreach_status", {
   updatedAt: integer("updatedAt", { mode: "timestamp" }).default(new Date()),
   createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
 });
+
+export const outreachDirectoryTargets = sqliteTable(
+  "outreach_directory_targets",
+  {
+    id: text("id").primaryKey(),
+    userId: text("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+    targetType: text("targetType").notNull(),
+    name: text("name").notNull(),
+    subtype: text("subtype"),
+    description: text("description"),
+    topics: text("topics"),
+    legalAreas: text("legalAreas"),
+    audience: text("audience"),
+    channels: text("channels"),
+    region: text("region"),
+    url: text("url").notNull(),
+    contactUrl: text("contactUrl"),
+    sourceUrl: text("sourceUrl"),
+    sourceLabel: text("sourceLabel"),
+    sourceRetrievedAt: integer("sourceRetrievedAt", { mode: "timestamp" }),
+    status: text("status").notNull().default("pending"),
+    confidence: text("confidence").notNull().default("discovery_candidate"),
+    reviewNotes: text("reviewNotes"),
+    reviewedAt: integer("reviewedAt", { mode: "timestamp" }),
+    createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
+    updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull(),
+  },
+  (table) => ({
+    userTypeUrlUnique: uniqueIndex("outreach_targets_user_type_url_unique").on(
+      table.userId,
+      table.targetType,
+      table.url,
+    ),
+    userTypeStatusIdx: index("outreach_targets_user_type_status_idx").on(
+      table.userId,
+      table.targetType,
+      table.status,
+    ),
+  }),
+);
+
+export const caseOutreachTargetMatches = sqliteTable(
+  "case_outreach_target_matches",
+  {
+    id: text("id").primaryKey(),
+    userId: text("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+    caseId: text("caseId").notNull().references(() => cases.id, { onDelete: "cascade" }),
+    targetId: text("targetId").notNull().references(() => outreachDirectoryTargets.id, { onDelete: "cascade" }),
+    targetType: text("targetType").notNull(),
+    matchScore: integer("matchScore").notNull(),
+    scoreBreakdown: text("scoreBreakdown").notNull(),
+    matchReasons: text("matchReasons").notNull(),
+    status: text("status").notNull().default("suggested"),
+    createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
+    updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull(),
+  },
+  (table) => ({
+    caseTargetUnique: uniqueIndex("case_outreach_matches_case_target_unique").on(table.caseId, table.targetId),
+    userCaseTypeIdx: index("case_outreach_matches_user_case_type_idx").on(
+      table.userId,
+      table.caseId,
+      table.targetType,
+    ),
+  }),
+);
 
 export const messages = sqliteTable("messages", {
   id: text("id").primaryKey(),

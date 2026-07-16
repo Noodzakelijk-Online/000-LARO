@@ -130,7 +130,12 @@ suite("persisted document analysis and source-linked timeline", () => {
       force: false,
     })).rejects.toMatchObject({ code: "NOT_FOUND" });
 
+    const [uploadedRow] = await app.db.select().from(app.schema.evidence).where(eq(app.schema.evidence.id, uploaded.id));
+    const storageKey = JSON.parse(uploadedRow.metadata).storageKey;
+    const { storageRead } = await import("../../server/storage");
+    await expect(storageRead(storageKey)).resolves.toEqual(Buffer.from(sourceText));
     expect((await caller.evidenceFiles.delete({ id: uploaded.id })).success).toBe(true);
+    await expect(storageRead(storageKey)).rejects.toThrow("not found");
     expect(await caller.documentAnalysis.byEvidence({ evidenceId: uploaded.id })).toBeNull();
   });
 });

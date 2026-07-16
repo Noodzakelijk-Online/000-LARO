@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BarChart3, CheckCircle2, Clock, Mail, Target, TrendingUp, Users } from "lucide-react";
+import { Building2, CheckCircle2, Clock, Mail, Newspaper, Scale, Target, TrendingUp, Users } from "lucide-react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +8,8 @@ import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { LawyersDirectoryContent } from "@/components/Lawyers";
+import OutreachTargetWorkspace from "@/components/OutreachTargetWorkspace";
 
 function percent(value: number | undefined): string {
   return `${(value ?? 0).toFixed(1)}%`;
@@ -38,12 +40,15 @@ export default function OutreachAnalytics() {
   const lawyers = trpc.outreachAnalytics.getResponseRateByLawyer.useQuery({ limit: 20 });
   const legalAreas = trpc.outreachAnalytics.getTimeToMatchByLegalArea.useQuery();
   const regions = trpc.outreachAnalytics.getMatchSuccessByRegion.useQuery();
+  const directory = trpc.outreachDirectory.summary.useQuery();
   const data = metrics.data;
   const pipelineMax = Math.max(1, data?.prepared ?? 0);
+  const directoryCount = (targetType: string, status: string) =>
+    directory.data?.find((item) => item.targetType === targetType && item.status === status)?.count || 0;
 
   return (
     <DashboardLayout>
-      <div className="space-y-6 p-4 md:p-6">
+      <div className="min-w-0 space-y-6 p-0 sm:p-4 md:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold">Outreach</h1>
@@ -68,9 +73,11 @@ export default function OutreachAnalytics() {
         </div>
 
         <Tabs defaultValue="overview" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="breakdown">Breakdown</TabsTrigger>
+          <TabsList className="grid !h-auto w-full grid-cols-2 lg:w-fit lg:grid-cols-4">
+            <TabsTrigger className="min-h-8" value="overview">Overview</TabsTrigger>
+            <TabsTrigger className="min-h-8" value="lawyers"><Scale className="mr-2 h-4 w-4" />Lawyers</TabsTrigger>
+            <TabsTrigger className="min-h-8" value="media"><Newspaper className="mr-2 h-4 w-4" />Media</TabsTrigger>
+            <TabsTrigger className="min-h-8" value="organizations"><Building2 className="mr-2 h-4 w-4" />Organizations</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-4">
@@ -114,33 +121,44 @@ export default function OutreachAnalytics() {
                 </CardContent>
               </Card>
             </div>
-          </TabsContent>
 
-          <TabsContent value="breakdown" className="grid gap-4 xl:grid-cols-3">
-            <Card className="border-border/50 xl:col-span-2">
-              <CardHeader><CardTitle className="text-base">Lawyer performance</CardTitle></CardHeader>
-              <CardContent className="space-y-2">
-                {lawyers.isLoading ? <Skeleton className="h-32 w-full" /> : lawyers.data?.length ? lawyers.data.map((lawyer) => (
-                  <div key={lawyer.lawyerId} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-b border-border/40 py-2 last:border-0">
-                    <span className="truncate text-sm font-medium">{lawyer.name}</span>
-                    <span className="text-xs text-muted-foreground">{lawyer.responses}/{lawyer.totalOutreach} responses</span>
-                    <Badge variant="outline">{percent(lawyer.responseRate)}</Badge>
-                  </div>
-                )) : <p className="py-8 text-center text-sm text-muted-foreground">No sent outreach yet.</p>}
-              </CardContent>
-            </Card>
+            <div className="grid gap-4 xl:grid-cols-3">
+              <Card className="border-border/50 xl:col-span-2">
+                <CardHeader><CardTitle className="text-base">Lawyer performance</CardTitle></CardHeader>
+                <CardContent className="space-y-2">
+                  {lawyers.isLoading ? <Skeleton className="h-32 w-full" /> : lawyers.data?.length ? lawyers.data.map((lawyer) => (
+                    <div key={lawyer.lawyerId} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-b border-border/40 py-2 last:border-0">
+                      <span className="truncate text-sm font-medium">{lawyer.name}</span>
+                      <span className="text-xs text-muted-foreground">{lawyer.responses}/{lawyer.totalOutreach} responses</span>
+                      <Badge variant="outline">{percent(lawyer.responseRate)}</Badge>
+                    </div>
+                  )) : <p className="py-8 text-center text-sm text-muted-foreground">No sent outreach yet.</p>}
+                </CardContent>
+              </Card>
 
-            <div className="space-y-4">
-              <Card className="border-border/50">
-                <CardHeader><CardTitle className="text-base">Time to match</CardTitle></CardHeader>
-                <CardContent className="space-y-2">{legalAreas.data?.length ? legalAreas.data.map((area) => <div key={area.legalArea} className="flex justify-between gap-3 text-sm"><span className="truncate">{area.legalArea}</span><strong>{area.avgDays.toFixed(1)}d</strong></div>) : <p className="text-sm text-muted-foreground">No accepted matches yet.</p>}</CardContent>
-              </Card>
-              <Card className="border-border/50">
-                <CardHeader><CardTitle className="text-base">Interested by region</CardTitle></CardHeader>
-                <CardContent className="space-y-2">{regions.data?.length ? regions.data.map((region) => <div key={region.region} className="flex justify-between gap-3 text-sm"><span className="truncate">{region.region}</span><Badge variant="secondary">{region.matches}</Badge></div>) : <p className="text-sm text-muted-foreground">No regional results yet.</p>}</CardContent>
-              </Card>
+              <div className="space-y-4">
+                <Card className="border-border/50">
+                  <CardHeader><CardTitle className="text-base">Directory review</CardTitle></CardHeader>
+                  <CardContent className="space-y-3 text-sm">
+                    <div className="flex items-center justify-between"><span>Media</span><span><strong>{directoryCount("media", "approved")}</strong> approved, {directoryCount("media", "pending")} pending</span></div>
+                    <div className="flex items-center justify-between"><span>Organizations</span><span><strong>{directoryCount("organization", "approved")}</strong> approved, {directoryCount("organization", "pending")} pending</span></div>
+                  </CardContent>
+                </Card>
+                <Card className="border-border/50">
+                  <CardHeader><CardTitle className="text-base">Time to match</CardTitle></CardHeader>
+                  <CardContent className="space-y-2">{legalAreas.data?.length ? legalAreas.data.map((area) => <div key={area.legalArea} className="flex justify-between gap-3 text-sm"><span className="truncate">{area.legalArea}</span><strong>{area.avgDays.toFixed(1)}d</strong></div>) : <p className="text-sm text-muted-foreground">No accepted matches yet.</p>}</CardContent>
+                </Card>
+                <Card className="border-border/50">
+                  <CardHeader><CardTitle className="text-base">Interested by region</CardTitle></CardHeader>
+                  <CardContent className="space-y-2">{regions.data?.length ? regions.data.map((region) => <div key={region.region} className="flex justify-between gap-3 text-sm"><span className="truncate">{region.region}</span><Badge variant="secondary">{region.matches}</Badge></div>) : <p className="text-sm text-muted-foreground">No regional results yet.</p>}</CardContent>
+                </Card>
+              </div>
             </div>
           </TabsContent>
+
+          <TabsContent value="lawyers"><LawyersDirectoryContent embedded /></TabsContent>
+          <TabsContent value="media"><OutreachTargetWorkspace targetType="media" /></TabsContent>
+          <TabsContent value="organizations"><OutreachTargetWorkspace targetType="organization" /></TabsContent>
         </Tabs>
       </div>
     </DashboardLayout>

@@ -1,38 +1,29 @@
-# UI Action Audit (Phase 073)
+# UI Action Audit
 
-Date: 2026-07-06 · Branch `Phase-Imp`
-Method: static scan of `src/renderer` tRPC calls vs the 46 routers / 187
-procedures actually mounted in `server/routers/index.ts`.
+Current as of 2026-07-16. This supersedes the original phase-073 snapshot that
+identified fourteen missing router groups.
 
-## Headline finding — broken UI actions
-The renderer references **14 top-level routers that do not exist on the backend**.
-Any UI action wired to these will error at runtime — they must be **implemented or
-hidden** (ties to Phase 010 placeholder routes and Phase 014 no-fake-success):
+## Current Supported Surface
 
-```
-adminAnalytics, bulkFileOperations, caseManagement, emailMessages, enrichment,
-evidence, evidenceAggregation, evidenceExport, legalChecklists, outreachAnalytics,
-relevanceScoring, syncScheduler, trello, unifiedInbox
-```
+| Area | User action | Backing behavior |
+| --- | --- | --- |
+| Authentication | Sign up, sign in, reset, sign out | Real sessions and revocation |
+| Cases | Create, autosave draft, update, delete, export | Owner-scoped database actions |
+| Evidence | Upload/import, analyze, search, open source, delete | Persisted bytes, provenance, owner checks |
+| Timeline | Review chronology and open source | Source-linked document analysis |
+| Outreach | Match, prepare, approve, reject, review, deliver, record reply | Real gated workflows; delivery disabled by default |
+| Directories | Search lawyers, discover media/organizations, review candidates | Official/public sources with review gates |
+| Privacy | Export and erase account data | Database and managed-blob erasure |
+| Operations | Diagnostics, readiness, backup, restore, emergency stop | Admin/operator controls |
 
-Plus method-level gaps on existing routers, e.g. `billing.createCheckoutSession /
-getSubscription / getUsage …` (backend `billing` only has `status`), and
-`agent.getDeviceScans / getScanFiles` (backend `agent` only has `listDevices /
-revokeDevice`).
+The fourteen router groups identified in the dated audit are now mounted and
+typed. Unfinished pricing and billing prototypes are not mounted in the
+production route tree. Reachable unsupported actions must remain hidden or
+return an explicit unavailable state; fabricated success is prohibited.
 
-## Wired & working (spot-check)
-| UI area | Action | Endpoint | Status |
-|---|---|---|---|
-| Auth | login/signup/logout/reset | `auth.*` | ✅ real |
-| Cases | list/create/update/delete/export | `cases.*` | ✅ real (owner-scoped) |
-| Case detail | matched lawyers | `matching.findLawyers` | ✅ real engine |
-| Outreach | prepare/approve/reject/review | `workflow.*` | ✅ real (no send) |
-| Dashboard | stats / next actions | `dashboard.*` | ✅ real (some fields honest-zero) |
-| Privacy | export / delete | `gdpr.*` | ✅ real |
-| Help | topics / errors | `help.*` | ✅ real |
+## Regression Rules
 
-## Recommended remediation
-1. Hide/disable the 14 dead-router screens behind a feature flag (058) until
-   implemented, so no button implies a working action (014/037).
-2. Reconcile `billing.*`/`agent.*` method names, or stub them honestly.
-3. Track each in the tech-debt register (docs/TECH_DEBT.md).
+- Renderer TypeScript and ESLint are release-blocking.
+- Mounted routes are exercised through browser QA for the release-critical path.
+- Any new irreversible action requires explicit confirmation, owner scope,
+  audit, idempotency, and a visible error state.

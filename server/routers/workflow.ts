@@ -11,7 +11,7 @@ import { assertNotEmergencyStopped } from "../systemState";
 import { assertOutreachTransition } from "../stateMachines";
 import { cases as casesTable, outreachStatus, lawyers } from '../schema';
 import { eq, and, inArray } from "drizzle-orm";
-import { findMatchingLawyers } from "../matching";
+import { findCaseLawyersWithOfficialDirectory } from "../matching";
 
 // Phase 026 — outreach review/approval states.
 const OUTREACH_PENDING = "PendingApproval";
@@ -23,8 +23,11 @@ async function prepareOutreachDraftRows(caseId: string, maxResults: number) {
   if (!db) throw new Error("Database not available");
 
   let matches: Array<{ id: string; name: string }>;
+  let directoryStatus = "not_applicable";
   try {
-    matches = (await findMatchingLawyers(caseId, { maxResults, sortBy: "score" })) as any[];
+    const result = await findCaseLawyersWithOfficialDirectory(caseId, { maxResults, sortBy: "score" });
+    matches = result.lawyers;
+    directoryStatus = result.directory.status;
   } catch (error) {
     return { created: 0, candidates: 0, reason: error instanceof Error ? error.message : "No matches" };
   }
@@ -41,7 +44,7 @@ async function prepareOutreachDraftRows(caseId: string, maxResults: number) {
     } as any).onConflictDoNothing();
     if ((result as any)?.changes ?? 1) created += 1;
   }
-  return { created, candidates: matches.length };
+  return { created, candidates: matches.length, directoryStatus };
 }
 
 export const workflowRouter = router({

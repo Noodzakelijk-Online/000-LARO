@@ -2,7 +2,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { assertCaseOwnership } from "../_core/authz";
 import { enforceRateLimit, RATE_LIMITS } from "../rateLimit";
-import { findMatchingLawyers } from "../matching";
+import { findCaseLawyersWithOfficialDirectory, findMatchingLawyers, MATCH_SCORE_MAX } from "../matching";
 
 /**
  * Phase 011 — Core workflow vertical slice.
@@ -22,6 +22,33 @@ import { findMatchingLawyers } from "../matching";
  *  - If no lawyers are seeded/entered, the result is genuinely empty (no fakes).
  */
 export const matchingRouter = router({
+  findOfficialLawyers: protectedProcedure
+    .input(z.object({
+      caseId: z.string(),
+      maxDistance: z.number().min(5).max(200).optional().default(50),
+      maxResults: z.number().min(1).max(50).optional().default(10),
+      location: z.string().trim().max(160).optional(),
+      requireSpecializationAssociation: z.boolean().optional().default(false),
+      requiresFinancedLegalAid: z.boolean().optional().default(false),
+      refreshOfficialDirectory: z.boolean().optional().default(true),
+    }))
+    .query(async ({ input, ctx }) => {
+      await assertCaseOwnership(input.caseId, ctx.user.id);
+      enforceRateLimit(ctx, "lawyerSearch", RATE_LIMITS.lawyerSearch);
+      const result = await findCaseLawyersWithOfficialDirectory(input.caseId, input);
+      const { scoreToConfidence } = await import("../confidence");
+      return {
+        ...result,
+        lawyers: result.lawyers.map((lawyer) => ({
+          ...lawyer,
+          confidence: scoreToConfidence(Number(lawyer.matchScore || 0), {
+            max: MATCH_SCORE_MAX,
+            basis: "verified match data",
+          }),
+        })),
+      };
+    }),
+
   findLawyers: protectedProcedure
     .input(z.object({
       caseId: z.string(),
@@ -42,7 +69,10 @@ export const matchingRouter = router({
         const { scoreToConfidence } = await import("../confidence");
         return (matched as any[]).map((m) => ({
           ...m,
-          confidence: scoreToConfidence(Number(m.matchScore ?? m.score ?? 0)),
+          confidence: scoreToConfidence(Number(m.matchScore ?? m.score ?? 0), {
+            max: MATCH_SCORE_MAX,
+            basis: "verified match data",
+          }),
         }));
       } catch (err) {
         // Real engine throws e.g. "Case must have at least one legal area

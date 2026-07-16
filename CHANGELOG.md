@@ -7,6 +7,12 @@ versioning; dates are ISO. Version is sourced from `package.json` and surfaced b
 ## Unreleased
 
 ### Added
+- Added owner-scoped case-intake draft autosave with restoration across dialog
+  close and reload, serialized saves, and clear-on-success semantics.
+- Added target database readiness checks for SQLite integrity, foreign keys,
+  invariants, reconciliation, duplicates, and known demo markers.
+- Added official NOvA-backed matching and review-gated media and organization
+  directories inside the consolidated Outreach workspace.
 - Added persisted source-grounded desktop document intelligence for TXT, CSV,
   HTML, EML, PDF, and DOCX evidence, with versioned findings, source spans,
   citation validation, and optional deep provider enrichment.
@@ -16,6 +22,10 @@ versioning; dates are ISO. Version is sourced from `package.json` and surfaced b
   compact source controls that open the owning document.
 
 ### Fixed
+- Evidence, case, and GDPR erasure now delete managed objects referenced by
+  canonical, scanner, Google, Gmail, and legacy storage records before deleting
+  metadata; storage or database failures abort instead of silently leaving
+  partial data.
 - Evidence analysis uploads now persist the actual source bytes and SHA-256 hash
   instead of creating metadata-only rows or treating binary files as plain text.
 - Scheduled Gmail collection now honors every selected account ID, and enabling
@@ -101,8 +111,9 @@ Closing renderer-independent Partials with real code.
   runtime exposure (critical is dev-only vitest; 4 runtime deps scheduled).
 
 ### Status
-- Matrix: **109 Implemented / 7 Partial / 0 Missing**. Tech-debt D1 RESOLVED.
-- Remaining 7 Partials are all renderer/UI layer (010/013/021/041/049/050/057).
+- Historical phase-closure snapshot: **109 Implemented / 7 Partial / 0 Missing**.
+  Those renderer residuals were resolved after 1.3.0; current release status is
+  maintained in `docs/FINAL_VERIFICATION_REPORT.md`, not this dated snapshot.
 
 ## [1.2.0] — 2026-07-06
 Closing Partial phases with real code (security & data hardening).

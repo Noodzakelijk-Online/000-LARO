@@ -15,6 +15,12 @@ with the target API environment, including strong `JWT_SECRET` and
 `COOKIE_SECRET`. LARO Desktop generates equivalent per-install secrets in its
 user-data directory.
 
+Production mode also runs the `db:readiness` checks against the configured
+database. It blocks on SQLite integrity errors, declared foreign-key violations,
+failed invariants, reconciliation findings, duplicate emails, or exact known
+demo/test account markers. The report contains counts only and does not print
+case or user data.
+
 ## Release Checklist
 
 - [ ] `npm ci` succeeds on supported Node 22.
@@ -26,15 +32,18 @@ user-data directory.
 - [ ] The scanner requires a selected case and native-picker-approved folder,
       exposes a review list, and persists a test file with matching SHA-256.
 - [ ] Demo data is absent from the target database.
-- [ ] `admin.invariants` and `admin.reconcileReport` are clean.
+- [ ] `npm run db:readiness` passes; equivalently, `admin.invariants` and
+      `admin.reconcileReport` are clean and SQLite checks pass.
 - [ ] A target-data backup is validated before migration or release.
 - [ ] The emergency stop and `outreach.send.enabled` state are confirmed.
 - [ ] Google, storage, LLM, and outreach providers show their intended state.
-- [ ] `release-acceptance.json` matches the package version and records reviewed
-      brand and enabled-provider evidence; the tagged workflow rejects pending gates.
-- [ ] The Microsoft Store package has passed certification and its published
-      identity and SHA-256 match the verified submission; or the tagged portable
-      executable reports Authenticode `Valid` with a matching release checksum.
+- [ ] Every provider intended to be enabled has target-account evidence. Missing
+      optional providers remain disabled and visibly unavailable.
+- [ ] For internal unsigned distribution, the artifact reports `NotSigned`, its
+      SHA-256 matches the reviewed checksum, and the recipient accepts the normal
+      Windows publisher warning.
+- [ ] For trusted public distribution only, `release-acceptance.json` is approved
+      and the Store or Authenticode identity and checksum match the submission.
 
 ## Supported Operating Modes
 
@@ -44,3 +53,7 @@ when absent, those actions fail explicitly rather than fabricating results.
 Outreach delivery remains disabled by default and requires operator approval,
 the feature flag, provider readiness, ownership checks, idempotency, and a
 released emergency stop.
+
+The current owner-selected target is unsigned internal distribution. Store
+certification and a recurring certificate are intentionally outside that target;
+they become requirements only if trusted public distribution is selected.

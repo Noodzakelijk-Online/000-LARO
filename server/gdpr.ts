@@ -13,6 +13,8 @@
  * schema grows, mirroring the cascade approach already used by cases.delete.
  */
 import { getDb } from "./db";
+import { collectManagedStorageKeys } from "./managedStorage";
+import { storageDelete } from "./storage";
 
 function rawClient(db: any): any {
   return db.$client ?? db.session?.client ?? null;
@@ -98,35 +100,32 @@ export async function deleteUserData(userId: string): Promise<{ deleted: Record<
     (t) => t !== "cases" && !tableColumns(sqlite, t).includes("userId") && tableColumns(sqlite, t).includes("caseId")
   );
 
+  const userCaseIds = (sqlite.prepare("SELECT id FROM cases WHERE userId = ?").all(userId) as Array<{ id: string }>).map((r) => r.id);
+  const storageKeys = collectManagedStorageKeys(sqlite, { userId, caseIds: userCaseIds });
+
+  // Storage cannot participate in the SQLite transaction. Delete every owned
+  // object before removing its metadata, and abort the erasure if any provider
+  // refuses a deletion. A retry is then safe because storageDelete is idempotent.
+  for (const key of storageKeys) await storageDelete(key);
+
   const deleted: Record<string, number> = {};
   const tx = sqlite.transaction(() => {
-    // 1. Which cases belong to this user (captured before anything is deleted)?
-    const userCaseIds = (sqlite.prepare("SELECT id FROM cases WHERE userId = ?").all(userId) as Array<{ id: string }>).map((r) => r.id);
-
-    // 2. Purge caseId-scoped children for those cases.
+    // 1. Purge caseId-scoped children for the cases captured above.
     if (userCaseIds.length > 0) {
       const placeholders = userCaseIds.map(() => "?").join(",");
       for (const table of caseScoped) {
-        try {
-          const info = sqlite.prepare(`DELETE FROM "${table}" WHERE caseId IN (${placeholders})`).run(...userCaseIds);
-          if (info.changes) deleted[table] = info.changes;
-        } catch (e) {
-          console.warn(`[GDPR] delete: skipped caseId child ${table}:`, e instanceof Error ? e.message : e);
-        }
+        const info = sqlite.prepare(`DELETE FROM "${table}" WHERE caseId IN (${placeholders})`).run(...userCaseIds);
+        if (info.changes) deleted[table] = info.changes;
       }
     }
 
-    // 3. Delete userId-scoped rows (includes cases).
+    // 2. Delete userId-scoped rows (includes cases).
     for (const table of userScoped) {
-      try {
-        const info = sqlite.prepare(`DELETE FROM "${table}" WHERE userId = ?`).run(userId);
-        if (info.changes) deleted[table] = (deleted[table] ?? 0) + info.changes;
-      } catch (e) {
-        console.warn(`[GDPR] delete: skipped ${table}:`, e instanceof Error ? e.message : e);
-      }
+      const info = sqlite.prepare(`DELETE FROM "${table}" WHERE userId = ?`).run(userId);
+      if (info.changes) deleted[table] = (deleted[table] ?? 0) + info.changes;
     }
 
-    // 4. Delete the user record itself.
+    // 3. Delete the user record itself.
     const userInfo = sqlite.prepare(`DELETE FROM "users" WHERE id = ?`).run(userId);
     if (userInfo.changes) deleted.users = userInfo.changes;
   });

@@ -1,8 +1,9 @@
 /**
  * New case dialog — compact form (full multi-step wizard can be restored later).
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { trpc } from "@/lib/trpc";
 import {
   Dialog,
   DialogContent,
@@ -37,7 +38,7 @@ export interface CaseData {
 interface CaseCreationWizardProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onComplete?: (caseData: CaseData) => void;
+  onComplete?: (caseData: CaseData) => boolean | void | Promise<boolean | void>;
 }
 
 const LEGAL_AREAS = [
@@ -54,13 +55,8 @@ const LEGAL_AREAS = [
   "Other",
 ];
 
-export default function CaseCreationWizard({
-  open,
-  onOpenChange,
-  onComplete,
-}: CaseCreationWizardProps) {
-  const { user } = useAuth();
-  const [caseData, setCaseData] = useState<CaseData>({
+function defaultCaseData(user: { name?: string | null; email?: string | null } | null | undefined): CaseData {
+  return {
     clientName: user?.name || "",
     clientEmail: user?.email || "",
     clientPhone: "",
@@ -69,42 +65,156 @@ export default function CaseCreationWizard({
     urgency: "Medium",
     profileSource: "account",
     uploadDocumentsAfterCreate: false,
+  };
+}
+
+export function normalizeCaseDraft(
+  value: unknown,
+  user: { name?: string | null; email?: string | null } | null | undefined,
+): CaseData | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const draft = value as Record<string, unknown>;
+  const profileSource = draft.profileSource === "custom" ? "custom" : "account";
+  const text = (key: string) => typeof draft[key] === "string" ? String(draft[key]).slice(0, 20_000) : "";
+  return {
+    clientName: profileSource === "account" ? user?.name || "" : text("clientName"),
+    clientEmail: profileSource === "account" ? user?.email || "" : text("clientEmail"),
+    clientPhone: text("clientPhone").slice(0, 80),
+    legalArea: LEGAL_AREAS.includes(text("legalArea")) ? text("legalArea") : "",
+    summary: text("summary"),
+    urgency: "Medium",
+    profileSource,
+    uploadDocumentsAfterCreate: draft.uploadDocumentsAfterCreate === true,
+  };
+}
+
+export function hasCaseDraftInput(
+  draft: CaseData,
+  user: { name?: string | null; email?: string | null } | null | undefined,
+): boolean {
+  return Boolean(
+    draft.clientPhone.trim() ||
+    draft.legalArea ||
+    draft.summary.trim() ||
+    draft.uploadDocumentsAfterCreate ||
+    draft.profileSource === "custom" ||
+    draft.clientName !== (user?.name || "") ||
+    draft.clientEmail !== (user?.email || ""),
+  );
+}
+
+export default function CaseCreationWizard({
+  open,
+  onOpenChange,
+  onComplete,
+}: CaseCreationWizardProps) {
+  const { user } = useAuth();
+  const [caseData, setCaseData] = useState<CaseData>(() => defaultCaseData(user));
+  const [draftReady, setDraftReady] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const editRevision = useRef(0);
+  const pendingSave = useRef<Promise<unknown> | null>(null);
+  const { refetch: refetchDraft } = trpc.cases.getDraft.useQuery(undefined, {
+    enabled: false,
+    staleTime: 0,
   });
+  const { mutateAsync: saveDraftAsync } = trpc.cases.saveDraft.useMutation();
+  const { mutateAsync: clearDraftAsync } = trpc.cases.clearDraft.useMutation();
 
   useEffect(() => {
     if (!open) {
-      setCaseData({
-        clientName: user?.name || "",
-        clientEmail: user?.email || "",
-        clientPhone: "",
-        legalArea: "",
-        summary: "",
-        urgency: "Medium",
-        profileSource: "account",
-        uploadDocumentsAfterCreate: false,
-      });
-    } else {
-      setCaseData(prev => ({
-        ...prev,
-        clientName: prev.clientName || user?.name || "",
-        clientEmail: prev.clientEmail || user?.email || "",
-      }));
+      setCaseData(defaultCaseData(user));
+      setDraftReady(false);
+      setDirty(false);
+      setIsSubmitting(false);
+      editRevision.current = 0;
+      return;
     }
-  }, [open, user]);
+    if (draftReady) return;
+    let cancelled = false;
+    void (async () => {
+      if (pendingSave.current) await pendingSave.current.catch(() => undefined);
+      const result = await refetchDraft();
+      if (cancelled) return;
+      setCaseData(normalizeCaseDraft(result.data?.draft, user) || defaultCaseData(user));
+      setDraftReady(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [draftReady, open, refetchDraft, user]);
 
-  const submit = () => {
+  useEffect(() => {
+    if (!open || !draftReady || !dirty || !hasCaseDraftInput(caseData, user)) return;
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    const revision = editRevision.current;
+    autosaveTimer.current = setTimeout(() => {
+      const operation = saveDraftAsync({ draft: caseData });
+      pendingSave.current = operation;
+      void operation
+        .then(() => {
+          if (editRevision.current === revision) setDirty(false);
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          if (pendingSave.current === operation) pendingSave.current = null;
+        });
+      autosaveTimer.current = null;
+    }, 600);
+    return () => {
+      if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    };
+  }, [caseData, dirty, draftReady, open, saveDraftAsync, user]);
+
+  const updateCaseData = (update: (current: CaseData) => CaseData) => {
+    editRevision.current += 1;
+    setDirty(true);
+    setCaseData(update);
+  };
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen && dirty && hasCaseDraftInput(caseData, user)) {
+      if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+      const operation = saveDraftAsync({ draft: caseData });
+      pendingSave.current = operation;
+      void operation.catch(() => undefined).finally(() => {
+        if (pendingSave.current === operation) pendingSave.current = null;
+      });
+    }
+    onOpenChange(nextOpen);
+  };
+
+  const submit = async () => {
     if (!caseData.clientName.trim() || !caseData.clientEmail.trim()) {
       return;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(caseData.clientEmail)) {
       return;
     }
-    onComplete?.({ ...caseData });
-    onOpenChange(false);
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    setIsSubmitting(true);
+    try {
+      if (pendingSave.current) {
+        await pendingSave.current.catch(() => undefined);
+      }
+      if (hasCaseDraftInput(caseData, user)) {
+        await saveDraftAsync({ draft: caseData });
+      }
+      const completed = await onComplete?.({ ...caseData });
+      if (completed === false) return;
+      await clearDraftAsync();
+      editRevision.current = 0;
+      setDirty(false);
+      onOpenChange(false);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>New case</DialogTitle>
@@ -119,14 +229,14 @@ export default function CaseCreationWizard({
               value={caseData.profileSource}
               onValueChange={(v: "account" | "custom") => {
                 if (v === "account") {
-                  setCaseData((d) => ({
+                  updateCaseData((d) => ({
                     ...d,
                     profileSource: "account",
                     clientName: user?.name || "",
                     clientEmail: user?.email || "",
                   }));
                 } else {
-                  setCaseData((d) => ({
+                  updateCaseData((d) => ({
                     ...d,
                     profileSource: "custom",
                     clientName: "",
@@ -156,7 +266,7 @@ export default function CaseCreationWizard({
               value={caseData.clientName}
               disabled={caseData.profileSource === "account"}
               onChange={(e) =>
-                setCaseData((d) => ({ ...d, clientName: e.target.value }))
+                updateCaseData((d) => ({ ...d, clientName: e.target.value }))
               }
             />
           </div>
@@ -168,7 +278,7 @@ export default function CaseCreationWizard({
               value={caseData.clientEmail}
               disabled={caseData.profileSource === "account"}
               onChange={(e) =>
-                setCaseData((d) => ({ ...d, clientEmail: e.target.value }))
+                updateCaseData((d) => ({ ...d, clientEmail: e.target.value }))
               }
             />
           </div>
@@ -178,7 +288,7 @@ export default function CaseCreationWizard({
               id="ccw-phone"
               value={caseData.clientPhone}
               onChange={(e) =>
-                setCaseData((d) => ({ ...d, clientPhone: e.target.value }))
+                updateCaseData((d) => ({ ...d, clientPhone: e.target.value }))
               }
             />
           </div>
@@ -187,7 +297,7 @@ export default function CaseCreationWizard({
             <Select
               value={caseData.legalArea || undefined}
               onValueChange={(v: string) =>
-                setCaseData((d) => ({ ...d, legalArea: v }))
+                updateCaseData((d) => ({ ...d, legalArea: v }))
               }
             >
               <SelectTrigger>
@@ -209,7 +319,7 @@ export default function CaseCreationWizard({
               rows={16}
               value={caseData.summary}
               onChange={(e) =>
-                setCaseData((d) => ({ ...d, summary: e.target.value }))
+                updateCaseData((d) => ({ ...d, summary: e.target.value }))
               }
               placeholder="Describe the case details here. LARO will analyze the description and automatically determine relevant legal areas from uploaded evidence."
               className="min-h-[240px]"
@@ -223,7 +333,7 @@ export default function CaseCreationWizard({
               type="checkbox"
               checked={caseData.uploadDocumentsAfterCreate}
               onChange={(e) =>
-                setCaseData((d) => ({ ...d, uploadDocumentsAfterCreate: e.target.checked }))
+                updateCaseData((d) => ({ ...d, uploadDocumentsAfterCreate: e.target.checked }))
               }
               className="mt-1 h-4 w-4"
             />
@@ -233,10 +343,12 @@ export default function CaseCreationWizard({
           </label>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={isSubmitting}>
             Cancel
           </Button>
-          <Button onClick={submit}>Create case</Button>
+          <Button onClick={submit} disabled={isSubmitting || !draftReady}>
+            {isSubmitting ? "Creating..." : "Create case"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

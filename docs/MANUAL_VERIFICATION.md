@@ -1,49 +1,33 @@
-# Manual Verification Evidence (Phase 093)
+# Manual Verification Evidence
 
-Date: 2026-07-06 · Branch `Phase-Imp`
+Current as of 2026-07-16. This document supersedes the 2026-07-06 phase
+snapshot; exact release evidence is maintained in
+`docs/FINAL_VERIFICATION_REPORT.md`.
 
-Real commands run and their real results (captured, not asserted from memory). Any
-reader can re-run these to reproduce.
+## Verified Locally
 
-## 1. Stabilization gate — `npm run gate`
-```
-▶ server typecheck        ✅ passed  (tsc -p tsconfig.server.json)
-▶ main typecheck          ✅ passed  (tsc -p tsconfig.main.json)
-▶ traceability            ✅ 91 rows, 69 cited, 0 broken
-▶ no-excuses scan         ✅ 0 suspect in runtime, 194 informational
-▶ account safety          ✅ 0 HIGH, 4 OK
-▶ tests                   ✅ 24 files, 154 passed | 9 todo
-▶ renderer typecheck      ⚠️  known debt D2 (non-blocking)
-ALL BLOCKING STABILIZATION GATES PASSED
-```
+- The blocking gate covers server, Electron main, and renderer TypeScript;
+  ESLint; traceability; no-excuses and account-safety scans; recovery; runtime
+  dependency audit; production builds; and the complete Node test baseline.
+- Production readiness has run with strong target-like secrets and an explicit
+  clean database, including integrity, foreign-key, invariant, reconciliation,
+  duplicate, and demo-marker checks.
+- The unsigned portable app has launched with isolated user data and returned a
+  healthy production response after applying all packaged migrations.
+- Browser QA covered authenticated desktop and mobile layouts, Outreach,
+  lawyer filtering, case-intake autosave across close and reload, immediate case
+  list refresh, and scanner consent controls without console errors.
+- Packaging contents, SQLite schema, document parsers, matching data, checksum,
+  and Windows signature state were inspected directly.
 
-## 2. Test suite — `npx vitest run`
-- **24 test files, 154 passed, 9 todo, 0 failed.**
-- Real DB-backed integration tests against a temp SQLite DB (not mocks), including:
-  - critical-path e2e (signup→case→match→approve, no send),
-  - non-technical user simulation (Phase 081),
-  - security: isolation, adversarial, file-safety, provider-failure,
-  - GDPR erasure completeness (caseId-scoped children removed).
+## Not Yet Verified
 
-## 3. Traceability — `node scripts/traceability.mjs`
-- Parses the completion matrix; **every** cited artifact (server/docs/tests/scripts)
-  exists on disk. 0 broken references across 91 phase rows.
+- Production Google, outbound/inbound email, optional S3, and optional
+  provider-backed AI accounts have not completed target acceptance.
+- Public branding awaits owner confirmation.
+- Trusted public Windows distribution is not selected; the supported artifact
+  is unsigned and intended for internal delivery.
 
-## 4. No-excuses scan — `node scripts/no-excuses-scan.mjs`
-- **0 actionable markers** (TODO/FIXME/HACK/XXX) in runtime code (server, src-main,
-  shared). Descriptive "mock/stub/placeholder" hits triaged as honest (labelled
-  fallbacks / comments); test-only fake-provider lab excluded by design.
-
-## 5. Account safety — `node scripts/account-safety-check.mjs`
-- 0 HIGH findings: `.env` not tracked, gitignored, excluded from the installer
-  packaging, and no hardcoded secret patterns in 101 runtime files.
-
-## 6. Fresh clone — see docs/FRESH_CLONE.md
-- Clean clone builds/tests from tracked source; no secrets leak into the clone.
-
-## What was NOT verified manually (honest)
-- The Electron desktop UI was **not** click-tested end-to-end here; renderer has
-  known type debt (D2) and 14 dead-router screens (D1). Backend behaviour is
-  covered by the automated suite; full UI QA is future work (Phase 109+).
-- Real outreach **send** is not exercised because it is intentionally unbuilt
-  (D3, flag-gated OFF).
+Do not infer provider readiness from a successful build. Each enabled provider
+requires the acceptance evidence listed in `docs/ROADMAP.md` and
+`release-acceptance.json`.

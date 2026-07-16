@@ -22,6 +22,20 @@
       "when": 1784220467415,
       "tag": "0002_unknown_silver_samurai",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1784225825198,
+      "tag": "0003_amazing_nico_minoru",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1784228526359,
+      "tag": "0004_warm_corsair",
+      "breakpoints": true
     }
   ]
 }

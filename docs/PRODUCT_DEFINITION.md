@@ -1,6 +1,6 @@
 # Product Definition
 
-Current as of 2026-07-15.
+Current as of 2026-07-16.
 
 ## Purpose
 
@@ -39,7 +39,7 @@ provide definitive legal advice.
 | Capability | Current state |
 | --- | --- |
 | Account and session management | Implemented with bcrypt, signed cookies/JWTs, revocation, password reset, CSRF/origin controls, and role gates |
-| Case intake and ownership | Implemented and persisted |
+| Case intake and ownership | Implemented with owner-scoped draft restore/autosave, persisted creation, and immediate query refresh |
 | Gmail and Google Drive intake | Implemented when OAuth credentials and user consent are present |
 | Local evidence upload | Implemented with bounded file types/sizes, local or S3 persistence, SHA-256 provenance, and rollback on record failure |
 | Desktop folder scanner | Implemented with shared-session authentication, explicit folder consent, review and per-file selection, short-lived upload credentials, and real owner-scoped storage |

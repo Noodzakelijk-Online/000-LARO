@@ -418,11 +418,19 @@ export default function Cases() {
               clientName: caseData.clientName,
               clientEmail: caseData.clientEmail,
             });
+            setPage(1);
+            await Promise.all([
+              utils.cases.list.invalidate(),
+              utils.dashboard.stats.invalidate(),
+              utils.dashboard.recentCases.invalidate(),
+            ]);
             if (caseData.uploadDocumentsAfterCreate) {
               setEvidenceUploadCaseId(created.id);
             }
+            return true;
           } catch (error) {
             toast.error(error instanceof Error ? error.message : "Failed to create case");
+            return false;
           }
         }}
       />

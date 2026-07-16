@@ -14,6 +14,7 @@ import { eq, and, desc } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { assertCaseOwnership } from "../_core/authz";
 import { sanitizeFilename, storageDelete, storageGet, storagePut } from "../storage";
+import { managedStorageKeyFromMetadata } from "../managedStorage";
 import {
   isSupportedEvidenceMimeType,
   MAX_EVIDENCE_BASE64_CHARS,
@@ -138,15 +139,9 @@ export const evidenceFilesRouter = router({
       const userId = ctx.user.id;
       const file = await getEvidenceFile(userId, input.id);
       if (!file) return { success: false };
+      const storageKey = managedStorageKeyFromMetadata(file.metadata);
+      if (storageKey) await storageDelete(storageKey);
       const success = await deleteEvidenceFile(userId, input.id);
-      if (success && typeof file.metadata === "string") {
-        try {
-          const storageKey = JSON.parse(file.metadata)?.storageKey;
-          if (typeof storageKey === "string" && storageKey) await storageDelete(storageKey);
-        } catch {
-          // Legacy metadata may not be JSON or may not identify a managed object.
-        }
-      }
       return { success };
     }),
 

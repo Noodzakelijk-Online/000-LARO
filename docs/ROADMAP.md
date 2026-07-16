@@ -1,36 +1,45 @@
-# Roadmap & Blocked Items (Phase 099)
+# Roadmap and External Gates
 
-Date: 2026-07-06 · Branch `Phase-Imp`
+Current as of 2026-07-16.
 
-## Remaining phases (101–115) — planned
-| Phase | Theme | Depends on |
-|---|---|---|
-| 101 | Real-provider integration cleanup | 100 account safety |
-| 102 | Debug bundle / support export | 035 observability |
-| 103 | Data retention & lifecycle | 028/078 GDPR |
-| 104 | Production migration strategy | 033 migrations |
-| 105 | Emergency stop / kill switch | 058 flags, 016 jobs |
-| 106 | Onboarding flow | 071 help |
-| 107 | Roles & permissions (teams) | 008 authz |
-| 108 | Confidence display for AI/matching | 025 classify, 011 match |
-| 109 | Decision minimization / exception dashboard | 020 dashboard |
-| 110 | Safe retries & idempotency (send path) | 017, D3 |
-| 111 | Ambiguous-action handling | 062 pre-send review |
-| 112 | Versioning & compatibility | 009 API contract |
-| 113 | Regression baseline | 040–049 suites |
-| 114 | Maintenance review | 098 plan |
-| 115 | Operator-readiness sign-off | 070 runbook |
+## Completed Production Path
 
-## Blocked / gated items (with reason)
-| Item | Blocked by | Unblock when |
-|---|---|---|
-| Real outreach **send** (D3) | safety design + idempotency (110) | approval+flag+review proven, send path built & idempotent |
-| 14 renderer screens (D1) | missing backend routers | implement routers OR hide behind flags |
-| Teams/roles (107) | single-user authz model today | multi-tenant ownership design |
-| Reply tracking | email ingest partial | provider ingest + threading |
-| Distribution (D11) | no LICENSE (owner action) | owner adds LICENSE file |
+- Local-first Electron runtime with generated per-install secrets.
+- Authenticated case, evidence, document intelligence, source-linked timeline,
+  official NOvA matching, controlled outreach, responses, analytics, export,
+  scanner, audit, retention, backup, and recovery workflows.
+- Review-gated media and organization discovery and local case matching.
+- Emergency stop, feature flag, ownership, approval, provider, audit, and
+  idempotency controls around irreversible delivery.
+- Blocking TypeScript, lint, safety, traceability, recovery, Node, and Python
+  checks.
+- Target database integrity, invariant, reconciliation, foreign-key, and
+  demo-marker readiness checks.
 
-## Nearest high-value work
-1. **D1** — stop the renderer implying unbuilt features (hide or implement).
-2. **D3** — the real send loop (the core autonomy promise), behind its existing gate.
-3. **D4/D7** — token crypto + audit advisories before any real distribution.
+## External Acceptance
+
+| Item | Current state | Completion evidence |
+| --- | --- | --- |
+| Google Gmail/Drive | Pending target credentials and consent | Connect, import representative records, verify provenance and token lifecycle |
+| Outbound and inbound email | Pending target provider account | Deliver once, reject duplicate send, ingest and thread a reply |
+| Optional S3 | Pending only if enabled | Store, retrieve, hash-check, and delete a representative evidence file |
+| Optional provider-backed AI | Pending only if enabled | Retain only literal source-linked findings and fail closed on invalid citations |
+| Public brand approval | Pending owner review | Approved brand record in `release-acceptance.json` |
+| Trusted public Windows distribution | Not selected | Store certification or valid Authenticode signature and matching checksum |
+
+The owner selected unsigned internal distribution, so certificate procurement is
+not a current product requirement. Missing optional providers remain disabled and
+must not be represented as operational.
+
+## Engineering Follow-Up
+
+1. Expand declared foreign keys after installed-data reconciliation; the
+   production data-readiness gate now detects violations before migration.
+2. Complete renderer NL/EN string migration.
+3. Add component-level axe and visual-regression coverage across every mounted
+   screen.
+4. Normalize historical text-backed numeric fields through a reviewed migration.
+5. Continue renderer bundle splitting and dependency review.
+
+These items improve maintainability and coverage; they do not replace the
+target-account acceptance required for any enabled external provider.

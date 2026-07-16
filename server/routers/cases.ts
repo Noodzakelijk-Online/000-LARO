@@ -12,6 +12,8 @@ import { createNotification } from "../notifications";
 import { caseIntakeSchema } from "../../shared/validation";
 import { assertCaseTransition } from "../stateMachines";
 import { createCaseId } from "../ids";
+import { collectManagedStorageKeys } from "../managedStorage";
+import { storageDelete } from "../storage";
 
 export const casesRouter = router({
   // Phase 022 — search, filters, sorting, pagination. All server-side and
@@ -332,10 +334,11 @@ export const casesRouter = router({
       // transaction so partial failures roll back.
       const sqliteDb: any = (db as any).$client ?? (db as any).session?.client;
       if (!sqliteDb) {
-        // Fallback: use drizzle's raw SQL (better-sqlite3 driver is sync).
-        db.run(sql`DELETE FROM cases WHERE id = ${input.id} AND userId = ${ctx.user.id}`);
-        return { success: true };
+        throw new Error("Storage engine not available for complete case deletion");
       }
+
+      const storageKeys = collectManagedStorageKeys(sqliteDb, { caseIds: [input.id] });
+      for (const key of storageKeys) await storageDelete(key);
 
       // NB: filter internal tables in JS. A SQL `LIKE '__%'` would treat `_` as
       // a wildcard and exclude EVERY table (breaking the cascade) — that was a
@@ -360,11 +363,7 @@ export const casesRouter = router({
 
       const tx = sqliteDb.transaction((caseId: string, userId: string) => {
         for (const tableName of tablesWithCaseId) {
-          try {
-            sqliteDb.prepare(`DELETE FROM "${tableName}" WHERE caseId = ?`).run(caseId);
-          } catch (err) {
-            console.warn(`[cases.delete] Failed to delete from ${tableName}:`, err);
-          }
+          sqliteDb.prepare(`DELETE FROM "${tableName}" WHERE caseId = ?`).run(caseId);
         }
         sqliteDb
           .prepare(`DELETE FROM cases WHERE id = ? AND userId = ?`)
