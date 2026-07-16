@@ -24,6 +24,7 @@ acceptance. It supersedes the 2026-07-06 phase snapshot.
 | Packaged `/api/health` | `healthy`, database ready, version 1.3.0, production |
 | Packaged document intelligence and Outreach | Five migrations present; PDF, DOCX, native parser dependencies, and review-gated Outreach tables present; integrated server booted successfully |
 | Desktop scanner contract | Scoped 15-minute token; real bytes/hash; owner/MIME enforcement |
+| Current PR CI | Actions run `29530986324`; Node and Python jobs passed |
 | Protected-main CI | Actions run `29458340785`; Node and Python jobs passed |
 | Windows package workflow | Actions run `29458340759`; gate, build, ABI check, package, checksum, and artifact upload passed |
 | Packaged matching assets | Seven aligned legal categories; invalid legacy dataset absent |

@@ -186,9 +186,10 @@ desktop server to that registered OAuth callback port instead.
   directory schemas, served the renderer, and returned healthy production status
   on automatically selected loopback port 58220. Direct database inspection
   confirmed `outreach_directory_targets` and `case_outreach_target_matches`.
-- Main CI run `29455232706` passed Node and Python; Windows workflow
-  `29455232654` passed the gate, build, Electron ABI check, package, checksum,
-  and upload stages for the preceding protected-main baseline.
+- PR CI run `29530986324` passed the Node gate and all 202 Python tests for
+  this candidate. Windows workflow `29455232654` passed the gate, build,
+  Electron ABI check, package, checksum, and upload stages for the preceding
+  protected-main baseline.
 - The downloaded CI executable matched SHA-256
   `c6cf367f112b4dc4fd64d749666f00ae169a175a4f2a168aaf1159a06dc3cb38`,
   launched the dashboard, and contained the validated seven-category matching
