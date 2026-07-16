@@ -20,6 +20,11 @@ validation artifacts.
 
 Set the repository variable `WINDOWS_SIGNING_PROVIDER` to one of:
 
+- `sslcom-esigner`: uses SSL.com eSigner without Azure or a local hardware
+  token. Store `SSL_COM_USERNAME`, `SSL_COM_PASSWORD`,
+  `SSL_COM_CREDENTIAL_ID`, and `SSL_COM_TOTP_SECRET` as repository secrets.
+  Obtain an organization-validated code-signing certificate with eSigner cloud
+  signing, enable automated signing, and use the production credential ID.
 - `azure-artifact-signing` (preferred): uses Microsoft Artifact Signing with
   GitHub OIDC. Store `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and
   `AZURE_SUBSCRIPTION_ID` as repository secrets. Store
@@ -30,9 +35,10 @@ Set the repository variable `WINDOWS_SIGNING_PROVIDER` to one of:
 - `pfx`: store the base64-encoded certificate in `WINDOWS_CSC_LINK` and its
   password in `WINDOWS_CSC_KEY_PASSWORD` as repository secrets.
 
-Neither route permits an unsigned tagged release. Azure signing uses Microsoft's
-RFC 3161 timestamp service so the signature remains verifiable after the
-short-lived signing certificate expires.
+No route permits an unsigned tagged release. Every provider output is checked
+with `Get-AuthenticodeSignature` before GitHub may publish it. Azure signing
+uses Microsoft's RFC 3161 timestamp service; eSigner signs and timestamps
+through SSL.com's cloud-HSM service.
 
 ## Pre-release Gates
 
