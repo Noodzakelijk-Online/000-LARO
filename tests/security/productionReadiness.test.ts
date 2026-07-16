@@ -248,7 +248,20 @@ describe('production readiness regressions', () => {
     const readiness = readFileSync(join(ROOT, 'scripts/operator-readiness.mjs'), 'utf8');
     expect(pkg.scripts.readiness).toContain('npm run rebuild:node');
     expect(pkg.scripts['readiness:production']).toContain('npm run rebuild:node');
+    expect(pkg.scripts['db:readiness']).toContain('scripts/data-readiness.ts');
+    expect(readiness).toContain("name: 'target database readiness'");
+    expect(readiness).toContain("'scripts/data-readiness.ts'");
     expect(readiness).toContain('[result.stdout, result.stderr]');
+  });
+
+  it('wires case intake draft persistence into the mounted creation flow', () => {
+    const wizard = readFileSync(join(ROOT, 'src/renderer/components/CaseCreationWizard.tsx'), 'utf8');
+    const cases = readFileSync(join(ROOT, 'src/renderer/components/Cases.tsx'), 'utf8');
+    expect(wizard).toContain('trpc.cases.getDraft.useQuery');
+    expect(wizard).toContain('trpc.cases.saveDraft.useMutation');
+    expect(wizard).toContain('trpc.cases.clearDraft.useMutation');
+    expect(wizard).toContain('completed === false');
+    expect(cases).toContain('return false');
   });
 
   it('builds the shipped renderer with production React regardless of local env files', () => {

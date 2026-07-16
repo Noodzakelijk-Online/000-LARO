@@ -17,6 +17,12 @@ const checks = [
     cmd: process.execPath,
     args: [join(ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs'), 'scripts/recovery-drill.ts'],
   },
+  {
+    name: 'target database readiness',
+    required: productionMode,
+    cmd: process.execPath,
+    args: [join(ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs'), 'scripts/data-readiness.ts'],
+  },
   { name: 'production preflight', required: productionMode, cmd: 'node', args: ['scripts/prod-preflight.mjs'] },
 ];
 

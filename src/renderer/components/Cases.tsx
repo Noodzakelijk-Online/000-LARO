@@ -427,8 +427,10 @@ export default function Cases() {
             if (caseData.uploadDocumentsAfterCreate) {
               setEvidenceUploadCaseId(created.id);
             }
+            return true;
           } catch (error) {
             toast.error(error instanceof Error ? error.message : "Failed to create case");
+            return false;
           }
         }}
       />

@@ -1,38 +1,47 @@
-# Feature-Level Definition of Done (Phase 091)
+# Feature-Level Definition of Done
 
-Date: 2026-07-06 · Branch `Phase-Imp`
+Current as of 2026-07-16.
 
-A feature counts as **Done** only when every item below is true. "Visibly
-incomplete" features must be hidden behind a feature flag (Phase 058), not shipped
-looking finished (Phase 014/037/090).
+A feature is done only when all applicable conditions hold:
 
-## DoD checklist (per feature)
-1. **Real backend** — a real tRPC procedure with real logic (no stub returning a
-   success shape). Unbuilt behaviour throws `NOT_IMPLEMENTED`, never fakes success.
-2. **Ownership & auth** — `protectedProcedure` + `assertCaseOwnership` where user
-   data is involved; admin-only via `adminProcedure`.
-3. **Validation** — inputs validated with zod; illegal state transitions rejected.
-4. **Test** — at least one real (DB-backed) test proving the happy path AND a
-   failure/authz path.
-5. **Honest status** — a row in docs/GOAL_COMPLETION_MATRIX.md; Partial/Missing
-   name their residual.
-6. **UI truthfulness** — if surfaced in the renderer, the action maps to a real
-   endpoint (no dead-router buttons — docs/UI_ACTION_AUDIT.md).
-7. **Gate green** — `npm run gate` passes (tsc, traceability, scans, tests).
+1. A real backend or local implementation exists; unsupported behavior fails
+   explicitly instead of returning fabricated success.
+2. User data is authenticated and owner-scoped; administrative behavior is
+   role-gated.
+3. Inputs and state transitions are validated.
+4. Real database-backed tests cover the happy path and a failure or
+   authorization path.
+5. The UI action reaches the supported implementation and exposes honest empty,
+   loading, error, and disabled states.
+6. The blocking gate passes.
+7. Provider-dependent behavior has target-account evidence before that provider
+   is enabled in production.
 
-## DoD applied to the core features (real status)
-| Feature | 1 real | 2 authz | 3 valid | 4 test | 5 honest | 6 UI | Done? |
-|---|---|---|---|---|---|---|---|
-| Auth (signup/login/reset) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | **Done** |
-| Case CRUD + classify | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | **Done** |
-| Lawyer matching | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | **Done** |
-| Outreach prepare + approval gate | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | **Done** (no send by design) |
-| GDPR export/erase | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | **Done** |
-| Help / error catalog | ✅ | n/a | ✅ | ✅ | ✅ | ✅ | **Done** |
-| Outreach **send** | ❌ | — | — | — | ✅(Partial) | — | **Not done** (D3, flag OFF) |
-| Evidence auto-collect | ⚠️ | ✅ | ✅ | ⚠️ | ✅(Partial) | ⚠️ | **Partial** (provider-gated) |
-| 14 renderer-only screens | ❌ | — | — | — | ✅(documented) | ❌ | **Not done** (D1; hide) |
+## Current Core Features
 
-## Rule
-No feature is marked Implemented in the matrix unless columns 1–5 are ✅. Columns
-6–7 gate release, not the matrix status.
+| Feature | Repository status | Target-environment condition |
+| --- | --- | --- |
+| Authentication and sessions | Done | Strong standalone secrets or generated desktop secrets |
+| Case intake, draft autosave, CRUD, and classification | Done | Target database passes data-readiness checks |
+| Evidence storage and document intelligence | Done | Optional model provider must pass live acceptance before enrichment is enabled |
+| Source-linked timelines and exports | Done | Operator validates a representative target export |
+| Official NOvA lawyer matching | Done | Public directory remains reachable |
+| Media and organization discovery and matching | Done | Candidates remain review-gated; discovery is bounded, not exhaustive |
+| Outreach preparation and approval | Done | None; preparation and approval never send |
+| Outreach delivery | Done and disabled by default | Real provider, explicit approval, released emergency stop, enabled flag, ownership, audit, and idempotency |
+| Response tracking and analytics | Done | Enabled inbound provider must pass live threading acceptance |
+| Evidence, case, and account managed-object erasure | Done | Target backup, storage credentials, and retention policy reviewed |
+| Scanner | Done | Clean-profile native folder and byte/hash acceptance |
+| Operator diagnostics and recovery | Done | Production preflight, data readiness, backup drill, and health probe pass |
+
+## Release Boundary
+
+The supported current distribution is an internally distributed unsigned
+Windows portable executable. Trusted public Windows distribution is a separate
+target and requires Store or Authenticode acceptance. Optional providers that
+have no target credentials remain visibly unavailable and do not block local
+case, evidence, timeline, matching, review, or export workflows.
+
+Low-risk follow-up work is tracked in [TECH_DEBT.md](TECH_DEBT.md). Historical
+phase snapshots do not override current code, tests, this document, or a fresh
+release gate.

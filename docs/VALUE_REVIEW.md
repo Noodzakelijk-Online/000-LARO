@@ -1,31 +1,31 @@
-# Value Review (Phase 083)
+# Value Review
 
-Date: 2026-07-06 · Branch `Phase-Imp`
+Current as of 2026-07-16.
 
-Does the product deliver real user value *today*, with the send loop unfinished?
+## User Outcome
 
-## Job-to-be-done
-A person with a legal problem wants to (a) understand what kind of case they have,
-(b) find the right lawyer, and (c) prepare to reach out — without legal expertise.
+LARO helps a user turn a legal matter into an inspectable case record: collect
+real documents, understand source-grounded contents, reconstruct chronology,
+find relevant support, prepare controlled outreach, and track responses.
 
-## Value delivered NOW (verifiable)
-| Value | Delivered by | Evidence |
-|---|---|---|
-| "What kind of case is this?" | auto-classification into legal areas | `classification.ts`, tested |
-| "Which lawyers fit?" | ranked matches (expertise/availability/response/distance) | `matching`, e2e test |
-| "Help me prepare outreach" | generated, reviewable drafts | `workflow.prepareDrafts` |
-| "Keep my data private/portable" | local-first, real export + erasure | `gdpr.ts`, sim test |
-| "Don't let me make a mistake" | approval gate + pre-send safety review | `workflow.approveDraft/preSendReview` |
+| User need | Current delivery |
+| --- | --- |
+| Understand the case | Classification plus persisted document analysis |
+| Know what happened and when | Evidence timeline with direct source controls |
+| Find a suitable lawyer | Ranked matching against official NOvA profiles |
+| Find outside support | Review-gated media and organization discovery/matching |
+| Contact the right people safely | Draft, approval, pre-send review, gated delivery, and response tracking |
+| Retain control of personal data | Owner isolation, export, managed-blob erasure, retention, backup, and recovery |
+| See progress | Real outreach pipeline, response, quality, and trend analytics |
 
-A non-technical user can complete steps (a)–(c) end to end — proven by
-`tests/sim/nonTechnicalUser.test.ts` (7/7).
+## Honest Boundary
 
-## Value NOT yet delivered (honest)
-- One-click *sending* and automatic follow-up (D3) — the user still sends manually.
-- Evidence auto-collection only when a provider is configured (else unavailable).
-- Reply tracking / status automation.
+Local case, evidence, analysis, timeline, matching, review, and export workflows
+do not require a live external provider. Google collection, email delivery and
+reply ingestion, optional S3, and optional provider-backed AI remain unavailable
+until configured and accepted against the target account. Delivery is real but
+disabled by default; it is never automatic and cannot bypass approval or
+operator controls.
 
-## Net assessment
-Real, usable value today for *triage + match + prepare*. The unfinished send loop
-caps it at "prepared, not delivered" — valuable but not the full promise. The
-value is honestly bounded, not overstated (see docs/PRODUCT_REALISM.md).
+The supported current distribution is an unsigned internal Windows artifact,
+not a trusted public installer.

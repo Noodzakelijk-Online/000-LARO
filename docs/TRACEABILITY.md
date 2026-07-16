@@ -26,7 +26,7 @@ None — every artifact cited in the matrix exists. ✅
 | 012 | External provider reality review | Implemented | ✅ `docs/PROVIDERS.md` |
 | 013 | Compliance & policy boundaries | Partial | ✅ `docs/COMPLIANCE.md` |
 | 014 | No fake success / no mock production | Implemented | ✅ `tests/smoke/noFakeSuccess.smoke.test.ts` |
-| 021 | Forms, validation, autosave | Partial | ✅ `shared/validation.ts` |
+| 021 | Forms, validation, autosave | Implemented | ✅ `shared/validation.ts` |
 | 023 | Import & export | Implemented | ✅ `server/evidenceExport.ts` |
 | 025 | AI/provider abstraction & deterministic fallback | Implemented | ✅ `server/classification.ts` |
 | 027 | Notifications & reminders | Implemented | ✅ `server/reminders.ts` |

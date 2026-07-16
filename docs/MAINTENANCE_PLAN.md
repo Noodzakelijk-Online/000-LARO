@@ -1,28 +1,34 @@
-# Post-Completion Maintenance Plan (Phase 098)
+# Post-Completion Maintenance Plan
 
-Date: 2026-07-06 · Branch `Phase-Imp`
+Current as of 2026-07-16.
 
 ## Cadence
-| Interval | Task |
-|---|---|
-| Each change | `npm run gate` must pass before merge (CI enforces — Phase 068). |
-| Weekly | `npm audit` triage (D7); review new advisories; bump criticals. |
-| Weekly | Run `node scripts/traceability.mjs` + `no-excuses-scan` to catch drift. |
-| Monthly | Review docs/TECH_DEBT.md; burn down highest-severity item. |
-| Monthly | Verify backups restore (`server/backup.ts`) + run `admin.invariants`. |
-| Per release | docs/RELEASE_PROCESS.md + docs/ACCOUNT_SAFETY.md checklist. |
-| Quarterly | Dependency freshness; drop dead deps (D6); rotate provider keys. |
 
-## Ownership & escalation
-- Data-integrity drift → `admin.reconcileReport` / `admin.invariants`, then repair.
-- Security finding → docs/THREAT_MODEL.md owners; hotfix + release note.
-- Incident → docs/OPERATOR_RUNBOOK.md (health, emergency stop, rollback via backup).
+| Interval | Required work |
+| --- | --- |
+| Every change | Run `npm run gate`; CI must pass before merge. |
+| Weekly | Triage `npm audit`, provider failures, and delivery audit records. |
+| Monthly | Run target `npm run db:readiness`, review `docs/TECH_DEBT.md`, and verify backup restore. |
+| Every release | Run `npm run readiness:production`, package, launch with isolated user data, probe health, and record checksum. |
+| Quarterly | Review dependencies, rotate live-provider credentials, and exercise emergency stop and token revocation. |
 
-## Health signals to watch
-- `/api/ready` readiness + job status (Phase 016/035).
-- Feature-flag state (`outreach.send.enabled` must stay OFF until D3 is real).
-- Gate status in CI (red gate blocks release).
+## Operational Signals
 
-## Debt burn-down order
-D1 (dead UI routers) → D3 (real send) → D4 (token crypto) → D7 (audit) →
-D11 (LICENSE) → remainder. Rationale in docs/TECH_DEBT.md + docs/TASK_GRAPH.md.
+- `/api/health` and `/api/ready` must report the expected version and production
+  runtime.
+- `outreach.send.enabled` stays off unless a live provider has passed target
+  acceptance and the operator intends to permit delivery.
+- Database integrity, invariants, reconciliation, declared foreign keys, and
+  demo-marker checks must remain clean.
+- A red release gate, failed backup drill, or unresolved high-severity security
+  finding blocks release.
+
+## Priority Order
+
+1. Security, privacy, data-loss, and ownership defects.
+2. Target-provider failures and ambiguous irreversible actions.
+3. Declared foreign-key expansion after installed-data reconciliation.
+4. Accessibility, localization, bundle, and historical schema normalization.
+
+Incident and rollback procedures are in `docs/OPERATOR_RUNBOOK.md`; current
+engineering debt is in `docs/TECH_DEBT.md`.

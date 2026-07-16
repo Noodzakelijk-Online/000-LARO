@@ -35,7 +35,7 @@ Ledger reconciled: 2026-07-15.
 | 013 | Compliance & policy boundaries | **Partial** | `LEGAL_DISCLAIMER` appended to generated legal docs; `docs/COMPLIANCE.md`. Residual: UI-wide disclaimer (037), GDPR (028), i18n (057). |
 | 014 | No fake success / no mock production | **Implemented** | Fake OCR, hardcoded dashboard stats, and mocked `outreachProgress` replaced with honest/real behavior; anti-regression guards in `tests/smoke/noFakeSuccess.smoke.test.ts`. |
 | 015 | Storage, files, uploads & media safety | **Implemented** | `storage.ts` sanitization + real local fallback + sha256; content hash now persisted on the primary evidence write (`createEvidenceFile` → metadata `contentHash`); zip export (023). Tested. Narrow follow-up: provider auto-collected items hash-on-store. |
-| 021 | Forms, validation, autosave | **Partial** | `shared/validation.ts` caseIntakeSchema applied to create; case-draft autosave (`system_config`). UI autosave wiring pending (041). |
+| 021 | Forms, validation, autosave | **Implemented** | `shared/validation.ts` validates case intake; the mounted creation wizard restores, debounces, flushes, and clears owner-scoped drafts through `cases.getDraft/saveDraft/clearDraft`. Failed creation preserves the open form. API and browser acceptance cover the lifecycle. |
 | 022 | Search, filters, sorting, pagination | **Implemented** | `cases.list` filters (status/urgency/search) + sort + pagination, owner-scoped. |
 | 023 | Import & export | **Implemented** | `cases.export` (JSON) + `cases.exportCsv` + **`cases.exportZip`** (real `archiver` ZIP: manifest + per-item metadata + provenance hashes, `server/evidenceExport.ts`); CSV import existed. Tested. (PDF rendering optional/deferred.) |
 | 024 | Templates, presets, defaults | **Implemented** | `messageTemplates` real per-user CRUD. |
@@ -132,7 +132,7 @@ Ledger reconciled: 2026-07-15.
 | 110 | Safe retries & recovery | **Implemented** | `server/retry.ts` `retryWithBackoff` (isRetryable/cancel/jitter); live job runner delegates to it. Tested. |
 | 111 | Ambiguous external-action resolution | **Implemented** | `clarifications.pending/answer` — real ambiguities from case state (multi-area, missing contact), resolvable + persisted. Tested (was empty stub). |
 | 112 | Versioning & changelog discipline | **Implemented** | `CHANGELOG.md` + version bump 1.1.0; preflight checks the version has an entry. |
-| 113 | Regression baseline | **Implemented** | `scripts/regression-baseline.mjs` + `docs/regression-baseline.json` (25 files) — fails if a baselined test file is removed. |
+| 113 | Regression baseline | **Implemented** | `scripts/regression-baseline.mjs` + `docs/regression-baseline.json` enroll every currently blocking test file and fail if any enrolled file is removed. |
 | 114 | Maintenance & refactoring review | **Implemented** | `docs/MAINTENANCE_REVIEW.md` — completed refactors (shared retry/system-state) + maintainability backlog. |
 | 115 | Final human-operator readiness | **Implemented** | `scripts/operator-readiness.mjs` (all green) + `docs/OPERATOR_READINESS.md`. D1 (14 routers) + D3 (gated real send) now done; end-to-end path exists behind the safety flag. |
 

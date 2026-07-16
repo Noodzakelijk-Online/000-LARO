@@ -132,7 +132,7 @@ function main() {
   out.push(`## Markers in tests / scripts / renderer (${reportHits.length}) — reported, not failing`);
   out.push('');
   out.push(
-    'These are informational. Renderer debt is tracked separately (docs/TECH_DEBT.md D1/D2); ' +
+    'These are informational and do not identify unsupported runtime behavior by themselves; ' +
       'test/script occurrences are usually the words "mock"/"fake" used descriptively.',
   );
   out.push('');

@@ -32,6 +32,7 @@
     "db:backup": "tsx scripts/backup.ts",
     "db:restore": "tsx scripts/backup.ts --restore",
     "db:validate": "tsx scripts/backup.ts --validate",
+    "db:readiness": "npm run rebuild:node && tsx scripts/data-readiness.ts",
     "recovery:drill": "tsx scripts/recovery-drill.ts",
     "serve": "npm run rebuild:node && npm run build:server && cross-env NODE_ENV=production node dist/server/server/index.js",
     "docker:build": "docker build -t laro-server .",

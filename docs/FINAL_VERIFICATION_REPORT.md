@@ -16,7 +16,8 @@ acceptance. It supersedes the 2026-07-06 phase snapshot.
 | Runtime no-excuses scan | 0 suspect findings |
 | Account-safety scan | 0 high-severity findings |
 | Isolated backup/delete/restore/reopen drill | Pass |
-| Vitest | 36 files, 236 tests passed, 0 todo |
+| Target database readiness | SQLite integrity, declared foreign keys, invariants, reconciliation, duplicates, and demo markers clean |
+| Vitest | 38 files, 241 tests passed, 0 todo |
 | Python unittest discovery | 202 tests passed |
 | Runtime dependency audit | 0 known vulnerabilities |
 | Renderer, main, and server production builds | Pass |
@@ -24,15 +25,16 @@ acceptance. It supersedes the 2026-07-06 phase snapshot.
 | Packaged `/api/health` | `healthy`, database ready, version 1.3.0, production |
 | Packaged document intelligence and Outreach | Five migrations present; PDF, DOCX, native parser dependencies, and review-gated Outreach tables present; integrated server booted successfully |
 | Desktop scanner contract | Scoped 15-minute token; real bytes/hash; owner/MIME enforcement |
-| Current PR CI | Actions run `29530986324`; Node and Python jobs passed |
+| PR CI | PR #19 requires current Node and Python branch checks before merge |
 | Protected-main CI | Actions run `29458340785`; Node and Python jobs passed |
 | Windows package workflow | Actions run `29458340759`; gate, build, ABI check, package, checksum, and artifact upload passed |
 | Packaged matching assets | Seven aligned legal categories; invalid legacy dataset absent |
 | Dependency graph | One canonical Node workspace; 0 open Dependabot alerts |
 
-`npm run readiness:production` also passed with strong target-like secrets. The
-readiness command now restores the Node SQLite ABI itself after Electron
-packaging and preserves complete stdout/stderr for any failed step.
+`npm run readiness:production` passed with strong target-like secrets and an
+explicit clean target database. The readiness command restores the Node SQLite
+ABI itself after Electron packaging, runs the data-readiness gate, and preserves
+complete stdout/stderr for any failed step.
 
 ## Packaged UI evidence
 
@@ -49,6 +51,10 @@ Playwright exercised the unpacked Windows application at 1440x900 and 390x844:
   updated the result set, and View Profile opened the selected persisted record;
 - development proxy, CSRF, and authenticated Socket.IO negotiation completed on
   `127.0.0.1` with no console errors or warnings.
+- case intake restored a draft after immediate close and full reload, retained
+  the dialog on failure by contract, updated the case list after successful
+  creation without a manual reload, and cleared the persisted draft only after
+  success.
 
 A second packaged-window run exercised the rebuilt scanner surface:
 
@@ -60,14 +66,15 @@ A second packaged-window run exercised the rebuilt scanner surface:
 - Settings opened and returned to evidence collection; the viewport had no
   horizontal overflow or overlapping controls.
 
-The current local portable artifact is 118,983,452 bytes with SHA-256
-`416A2960E77B84A9F3FF383F7CE4D9D895966FCA38F9965B5454610291D7AB65`.
+The current local portable artifact is 118,987,499 bytes with SHA-256
+`5B7460B39A970A23784FEE4DE37BD576B7FACEF8ACC8E7179C16B3299301F6A7`.
 It launched with an explicit isolated user-data directory, created fresh local
 secrets and databases, applied all five packaged migrations, and returned
-healthy production status on loopback port 58220. Direct SQLite inspection
+healthy production status on loopback port 51819. Direct SQLite inspection
 confirmed `outreach_directory_targets` and `case_outreach_target_matches`.
 Its packaged resources contain the current migrations, PDF/DOCX parsers, native
-parser dependency, and seven-category matching data. Windows reports
+parser dependency, consolidated managed-storage deletion, and seven-category
+matching data. Windows reports
 `NotSigned`, matching the selected unsigned internal distribution policy.
 
 The same CI artifact was launched with `NODE_ENV=development` deliberately
@@ -97,6 +104,9 @@ development renderer path from the launching shell.
 - Supported Gmail, Drive, local-folder, and direct uploads persist retrievable
   bytes and trigger versioned local analysis. Google-native documents are
   exported to PDF instead of being passed through an invalid media download.
+- Evidence, case, and account deletion remove owned managed-storage objects
+  before metadata and abort on storage or database failure instead of silently
+  leaving partial data.
 - TXT, CSV, HTML, EML, PDF, and DOCX evidence produces source-grounded parties,
   dates, amounts, claims, obligations, legal issues, risks, and chronology.
   Optional provider enrichment is retained only when every observation resolves

@@ -156,10 +156,10 @@ GitHub Actions repeats the Node checks on the supported Node 22 toolchain:
 - Server, Electron main-process, and shipped renderer TypeScript checks passed; ESLint passed.
 - Traceability reported 116 rows, 93 cited, and 0 broken references.
 - Runtime no-excuses scan reported 0 suspect findings; account safety reported 0 high-severity findings.
-- Vitest reported 36 passing files and 236 passing tests, including controlled
+- Vitest reported 38 passing files and 241 passing tests, including controlled
   NOvA parsing/filter, unknown-metric scoring, and review-gated
-  media/organization discovery and tenant-isolation tests, with no skipped or
-  todo tests.
+  media/organization discovery, tenant isolation, case-draft persistence, and
+  target-database readiness tests, with no skipped or todo tests.
 - Full Python discovery reported 202 passing tests. Warning-focused optimization and UCID tests also passed with deprecations promoted to errors.
 - The Vite 8 renderer, Electron 43 main process, and standalone server builds completed successfully.
 - The scanner integration test verified scoped-token isolation, owner checks, supported MIME enforcement, exact stored bytes, and SHA-256 readback.
@@ -169,25 +169,30 @@ asks Windows for an available loopback port. Setting
 `OAUTH_REDIRECT_BASE_URL` to an explicit `localhost` or `127.0.0.1` port pins the
 desktop server to that registered OAuth callback port instead.
 - `npm audit` reported 0 known vulnerabilities.
-- Production preflight and operator-readiness diagnostics reported no blockers;
-  the isolated backup/delete/restore/reopen drill passed.
+- Production preflight and operator-readiness diagnostics reported no blockers.
+  The isolated backup/delete/restore/reopen drill and target-database integrity,
+  foreign-key, invariant, reconciliation, duplicate, and demo-marker checks
+  passed.
 - Playwright smoke tests passed at desktop and 390x844 with clean consoles,
   responsive Outreach controls and no horizontal overflow. Live bounded public
   discovery produced pending organization candidates; approval immediately
   created an 80/100 case match and shortlist status updated without a reload.
+  Case intake also preserved an immediately closed draft, restored it after a
+  full reload, created the case without a page refresh, and cleared the draft
+  only after success.
   Existing command-center, Google-status, closable-dialog, and password-control
   checks also remain covered.
 - Packaged Electron scanner QA passed signup, shared-session authorization, empty-state rendering, disabled unsafe scan state, Settings navigation, and clean renderer console checks.
 - A packaged launch from a directory containing hostile development `.env` values still reported production mode, database readiness, and a random `127.0.0.1` port.
-- The current unsigned portable executable is 118,983,452 bytes with SHA-256
-  `416A2960E77B84A9F3FF383F7CE4D9D895966FCA38F9965B5454610291D7AB65`.
+- The current unsigned portable executable is 118,987,499 bytes with SHA-256
+  `5B7460B39A970A23784FEE4DE37BD576B7FACEF8ACC8E7179C16B3299301F6A7`.
   Windows reports `NotSigned`, as intended. An isolated-profile launch applied
   all five migrations, including the document-analysis, NOvA, and Outreach
   directory schemas, served the renderer, and returned healthy production status
-  on automatically selected loopback port 58220. Direct database inspection
+  on automatically selected loopback port 51819. Direct database inspection
   confirmed `outreach_directory_targets` and `case_outreach_target_matches`.
-- PR CI run `29530986324` passed the Node gate and all 202 Python tests for
-  this candidate. Windows workflow `29455232654` passed the gate, build,
+- PR #19 requires the Node and Python branch checks before merge. Windows
+  workflow `29455232654` passed the gate, build,
   Electron ABI check, package, checksum, and upload stages for the preceding
   protected-main baseline.
 - The downloaded CI executable matched SHA-256
@@ -200,6 +205,7 @@ Run the same checks locally:
 ```powershell
 npm run gate
 npm run readiness
+npm run db:readiness
 python -m unittest -v test_authentication test_document_intelligence test_google_oauth test_lawyer_matching test_legal_ledger test_outreach_targets
 ```
 
