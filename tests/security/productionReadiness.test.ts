@@ -90,7 +90,13 @@ describe('production readiness regressions', () => {
     const workflow = readFileSync(join(ROOT, '.github/workflows/build.yml'), 'utf8');
     const acceptance = JSON.parse(readFileSync(join(ROOT, 'release-acceptance.json'), 'utf8'));
     const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
-    expect(workflow).toContain('WINDOWS_CSC_LINK is required for tagged releases');
+    expect(workflow).toContain('WINDOWS_SIGNING_PROVIDER must be pfx or azure-artifact-signing');
+    expect(workflow).toContain('WINDOWS_CSC_LINK is required when WINDOWS_SIGNING_PROVIDER=pfx');
+    expect(workflow).toContain('Azure Artifact Signing configuration is incomplete');
+    expect(workflow).toContain('id-token: write');
+    expect(workflow).toContain('uses: azure/login@v3');
+    expect(workflow).toContain('uses: azure/artifact-signing-action@v2');
+    expect(workflow).toContain('timestamp-rfc3161: http://timestamp.acs.microsoft.com');
     expect(workflow).toContain("Tag ${{ github.ref_name }} does not match package version");
     expect(workflow).toContain('release-acceptance.mjs --require-approved --tag');
     expect(workflow).toContain("$signature.Status -ne 'Valid'");

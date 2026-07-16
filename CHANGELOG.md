@@ -59,6 +59,8 @@ versioning; dates are ISO. Version is sourced from `package.json` and surfaced b
   and operational endpoints report the package version consistently.
 - Tagged Windows releases now fail closed on tag/version mismatch, missing
   signing credentials, or an invalid signature and publish a SHA-256 checksum.
+- Tagged Windows releases support Microsoft Artifact Signing through GitHub OIDC
+  as the preferred alternative to storing a PFX certificate in GitHub secrets.
 
 ## [1.3.0] — 2026-07-06
 Closing renderer-independent Partials with real code.
