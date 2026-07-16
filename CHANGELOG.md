@@ -18,6 +18,8 @@ versioning; dates are ISO. Version is sourced from `package.json` and surfaced b
 ### Fixed
 - Evidence analysis uploads now persist the actual source bytes and SHA-256 hash
   instead of creating metadata-only rows or treating binary files as plain text.
+- Scheduled Gmail collection now honors every selected account ID, and enabling
+  attachment collection later backfills only the missing message attachments.
 - Local evidence links are allowed through Electron only when their resolved path
   remains inside LARO's configured evidence-storage directory.
 - Windows distribution documentation now reflects the owner's no-certification

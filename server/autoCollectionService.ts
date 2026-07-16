@@ -23,6 +23,7 @@ import { storagePut } from './storage';
 import { createEvidenceFile } from './evidence';
 import { analyzeStoredEvidence } from './documentAnalysisService';
 import { supportsDocumentAnalysisMime } from './documentIntelligence';
+import { getStoredGmailEvidenceState, resolveGmailAccountIds } from './gmailCollectionPolicy';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as nodeFs from 'fs';
@@ -607,14 +608,18 @@ export interface PullByKeywordsResult {
  * Read & decrypt a Gmail access token for the user, refreshing if expired.
  * Returns null when the user has no connected Gmail account.
  */
-async function getFreshGmailAccessToken(userId: string): Promise<{ accessToken: string; accountId: string; email: string } | null> {
+async function getFreshGmailAccessToken(userId: string, accountId?: string): Promise<{ accessToken: string; accountId: string; email: string } | null> {
   const db = await getDb();
   if (!db) return null;
 
   const rows = await db
     .select()
     .from(emailAccounts)
-    .where(and(eq(emailAccounts.userId, userId), eq(emailAccounts.provider, 'gmail')))
+    .where(and(
+      eq(emailAccounts.userId, userId),
+      eq(emailAccounts.provider, 'gmail'),
+      ...(accountId ? [eq(emailAccounts.id, accountId)] : []),
+    ))
     .limit(1);
 
   const account = rows[0];
@@ -658,12 +663,39 @@ async function pullFromGmail(
   dateStart?: Date,
   dateEnd?: Date,
   includeAttachments = true,
+  accountIds?: string[],
 ): Promise<{ messages: number; attachments: number }> {
   const db = await getDb();
   if (!db) return { messages: 0, attachments: 0 };
 
-  const cred = await getFreshGmailAccessToken(userId);
-  if (!cred) return { messages: 0, attachments: 0 };
+  const selectedAccountIds = [...new Set((accountIds || []).filter(Boolean))];
+  if (selectedAccountIds.length > 1) {
+    let messages = 0;
+    let attachments = 0;
+    for (const selectedAccountId of selectedAccountIds) {
+      const result = await pullFromGmail(
+        caseId,
+        userId,
+        keywords,
+        matchMode,
+        errors,
+        dateStart,
+        dateEnd,
+        includeAttachments,
+        [selectedAccountId],
+      );
+      messages += result.messages;
+      attachments += result.attachments;
+    }
+    return { messages, attachments };
+  }
+
+  const selectedAccountId = selectedAccountIds[0];
+  const cred = await getFreshGmailAccessToken(userId, selectedAccountId);
+  if (!cred) {
+    if (selectedAccountId) errors.push(`Selected Gmail account ${selectedAccountId} is unavailable.`);
+    return { messages: 0, attachments: 0 };
+  }
 
   // Build a Gmail-syntax query. For "any", OR keywords together; for "all",
   // AND them (Gmail's default is AND).
@@ -721,20 +753,17 @@ async function pullFromGmail(
         ? new Date(parseInt(msg.internalDate, 10))
         : new Date();
 
-      // Dedupe: skip if we already have an evidence row tagged with this gmailMessageId.
+      // Dedupe each message part independently so attachments can be backfilled
+      // after attachment collection is enabled for an already-known message.
       const existing = await db
         .select()
         .from(evidenceTable)
         .where(and(eq(evidenceTable.caseId, caseId), eq(evidenceTable.source, 'gmail')));
-      const already = existing.some((e) => {
-        try {
-          const meta = e.metadata ? JSON.parse(e.metadata) : {};
-          return meta.gmailMessageId === msg.id;
-        } catch {
-          return false;
-        }
-      });
-      if (already) continue;
+      const storedState = getStoredGmailEvidenceState(
+        existing.map((e) => e.metadata),
+        cred.accountId,
+        msg.id,
+      );
 
       // Build a plain-text body excerpt.
       let body = '';
@@ -749,41 +778,43 @@ async function pullFromGmail(
       };
       collectBody(msg.payload);
 
-      const messageSource = [
-        `From: ${from}`,
-        `Subject: ${subject}`,
-        `Date: ${date.toISOString()}`,
-        '',
-        body,
-      ].join('\n');
-      const messageStorageKey = `evidence/${caseId}/gmail/${uuidv4()}-${msg.id}.eml`;
-      const storedMessage = await storagePut(messageStorageKey, Buffer.from(messageSource), 'message/rfc822');
-      const messageEvidenceId = await createEvidenceFile(userId, {
-        caseId,
-        type: 'email',
-        source: 'gmail',
-        title: subject,
-        description: `From ${from} on ${date.toISOString()}`,
-        fileUrl: storedMessage.url,
-        fileName: `${msg.id}.eml`,
-        fileSize: String(Buffer.byteLength(messageSource)),
-        mimeType: 'message/rfc822',
-        metadata: JSON.stringify({
-          storageKey: storedMessage.key,
-          gmailMessageId: msg.id,
-          gmailThreadId: (msg as any).threadId,
-          from,
-          subject,
-          date: date.toISOString(),
-          bodyExcerpt: body.slice(0, 2000),
-          accountId: cred.accountId,
-          autoCollected: true,
-        }),
-        contentHash: storedMessage.sha256,
-        relevant: true,
-      });
-      await analyzeImportedEvidence(messageEvidenceId, userId, 'message/rfc822', subject, errors);
-      messagesIngested++;
+      if (!storedState.messageStored) {
+        const messageSource = [
+          `From: ${from}`,
+          `Subject: ${subject}`,
+          `Date: ${date.toISOString()}`,
+          '',
+          body,
+        ].join('\n');
+        const messageStorageKey = `evidence/${caseId}/gmail/${uuidv4()}-${msg.id}.eml`;
+        const storedMessage = await storagePut(messageStorageKey, Buffer.from(messageSource), 'message/rfc822');
+        const messageEvidenceId = await createEvidenceFile(userId, {
+          caseId,
+          type: 'email',
+          source: 'gmail',
+          title: subject,
+          description: `From ${from} on ${date.toISOString()}`,
+          fileUrl: storedMessage.url,
+          fileName: `${msg.id}.eml`,
+          fileSize: String(Buffer.byteLength(messageSource)),
+          mimeType: 'message/rfc822',
+          metadata: JSON.stringify({
+            storageKey: storedMessage.key,
+            gmailMessageId: msg.id,
+            gmailThreadId: (msg as any).threadId,
+            from,
+            subject,
+            date: date.toISOString(),
+            bodyExcerpt: body.slice(0, 2000),
+            accountId: cred.accountId,
+            autoCollected: true,
+          }),
+          contentHash: storedMessage.sha256,
+          relevant: true,
+        });
+        await analyzeImportedEvidence(messageEvidenceId, userId, 'message/rfc822', subject, errors);
+        messagesIngested++;
+      }
 
       // Download attachments.
       const attachments: { partId: string; filename: string; mimeType: string; attachmentId: string }[] = [];
@@ -804,6 +835,7 @@ async function pullFromGmail(
 
       for (const att of attachments) {
         try {
+          if (storedState.attachmentIds.has(att.attachmentId)) continue;
           const a = await getGmailAttachment(cred.accessToken, msg.id, att.attachmentId);
           if (!a?.data) continue;
           // Gmail uses URL-safe base64.
@@ -826,6 +858,7 @@ async function pullFromGmail(
               storageKey: storedAttachment.key,
               gmailMessageId: msg.id,
               attachmentId: att.attachmentId,
+              accountId: cred.accountId,
               parentSubject: subject,
               autoCollected: true,
             }),
@@ -833,6 +866,7 @@ async function pullFromGmail(
             relevant: true,
           });
           await analyzeImportedEvidence(attachmentEvidenceId, userId, att.mimeType, safeName, errors);
+          storedState.attachmentIds.add(att.attachmentId);
           attachmentsIngested++;
         } catch (err) {
           errors.push(`Attachment "${att.filename}" failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -1128,6 +1162,7 @@ export async function pullEvidenceByKeywords(params: {
   userId: string;
   keywords: string[];
   matchMode?: 'all' | 'any';
+  gmailAccountIds?: string[];
   driveFolderIds?: string[];
   localFolderPaths?: string[];
   dateStart?: Date;
@@ -1149,6 +1184,10 @@ export async function pullEvidenceByKeywords(params: {
 
   // Resolve sources. Fall back to settings-configured sources, then to defaults.
   const settings = await getAutoCollectionSettings(params.caseId);
+  const gmailAccountIds = resolveGmailAccountIds(
+    params.gmailAccountIds,
+    settings?.emailAccountIds,
+  );
 
   let driveFolderIds = params.driveFolderIds;
   if (!driveFolderIds || driveFolderIds.length === 0) {
@@ -1168,7 +1207,7 @@ export async function pullEvidenceByKeywords(params: {
   }
 
   const [gmail, drive, local] = await Promise.all([
-    (params.includeGmail === false ? Promise.resolve({ messages: 0, attachments: 0 }) : pullFromGmail(params.caseId, params.userId, params.keywords, matchMode, errors, params.dateStart, params.dateEnd, params.includeGmailAttachments !== false)).catch((err) => {
+    (params.includeGmail === false ? Promise.resolve({ messages: 0, attachments: 0 }) : pullFromGmail(params.caseId, params.userId, params.keywords, matchMode, errors, params.dateStart, params.dateEnd, params.includeGmailAttachments !== false, gmailAccountIds)).catch((err) => {
       errors.push(`Gmail pull failed: ${err instanceof Error ? err.message : String(err)}`);
       return { messages: 0, attachments: 0 };
     }),
@@ -1230,6 +1269,7 @@ export async function runAutoCollection(caseId: string): Promise<{
     userId: settings.userId,
     keywords,
     matchMode: settings.keywordMatchMode === 'all' ? 'all' : 'any',
+    gmailAccountIds: accountIds,
     driveFolderIds,
     dateStart: settings.dateRangeStart || undefined,
     dateEnd: settings.dateRangeEnd || undefined,
