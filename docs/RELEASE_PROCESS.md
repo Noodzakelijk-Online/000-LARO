@@ -7,14 +7,32 @@ semantic versions from `package.json`, add the matching changelog entry, and tag
 the accepted main commit as `vX.Y.Z`. Tags build and publish the Windows portable
 artifact through `.github/workflows/build.yml`.
 
-Tagged releases fail closed unless the tag exactly matches `package.json`,
-`WINDOWS_CSC_LINK` and `WINDOWS_CSC_KEY_PASSWORD` repository secrets are set,
-`release-acceptance.json` records approved public-brand and live-provider gates,
-and Windows reports the executable's Authenticode signature as `Valid`. Each
-approval must identify its approver, timestamp, evidence references, and, for
-providers, the tested provider scope. The workflow publishes only the versioned
-portable executable and its SHA-256 checksum. Main-branch and manual builds
-remain internal validation artifacts.
+Tagged releases fail closed unless the tag exactly matches `package.json`, a
+supported signing provider is fully configured, `release-acceptance.json`
+records approved public-brand and live-provider gates, and Windows reports the
+executable's Authenticode signature as `Valid`. Each approval must identify its
+approver, timestamp, evidence references, and, for providers, the tested
+provider scope. The workflow publishes only the versioned portable executable
+and its SHA-256 checksum. Main-branch and manual builds remain internal
+validation artifacts.
+
+## Windows Signing
+
+Set the repository variable `WINDOWS_SIGNING_PROVIDER` to one of:
+
+- `azure-artifact-signing` (preferred): uses Microsoft Artifact Signing with
+  GitHub OIDC. Store `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and
+  `AZURE_SUBSCRIPTION_ID` as repository secrets. Store
+  `AZURE_ARTIFACT_SIGNING_ENDPOINT`, `AZURE_ARTIFACT_SIGNING_ACCOUNT`, and
+  `AZURE_ARTIFACT_SIGNING_PROFILE` as repository variables. The Azure identity
+  needs the Artifact Signing Certificate Profile Signer role and a federated
+  credential for the release tag's GitHub OIDC subject.
+- `pfx`: store the base64-encoded certificate in `WINDOWS_CSC_LINK` and its
+  password in `WINDOWS_CSC_KEY_PASSWORD` as repository secrets.
+
+Neither route permits an unsigned tagged release. Azure signing uses Microsoft's
+RFC 3161 timestamp service so the signature remains verifiable after the
+short-lived signing certificate expires.
 
 ## Pre-release Gates
 
