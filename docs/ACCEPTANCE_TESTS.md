@@ -1,6 +1,6 @@
 # Acceptance Test Matrix
 
-Current as of 2026-07-15. Automated criteria exercise real tRPC procedures and
+Current as of 2026-07-16. Automated criteria exercise real tRPC procedures and
 temporary SQLite databases; they do not contact external people or accounts.
 
 | ID | Criterion | Evidence | Status |
@@ -20,6 +20,9 @@ temporary SQLite databases; they do not contact external people or accounts.
 | AC13 | Reject hostile input and unsafe paths | adversarial and file-safety suites | Automated |
 | AC14 | Recover a validated SQLite backup | blocking recovery drill | Automated |
 | AC15 | Boot the packaged desktop on a free loopback port | clean-profile packaged runtime probe | Automated locally |
+| AC16 | Discover media/organization candidates without sharing case prose | `tests/backend/outreachDirectory.test.ts` | Automated with a controlled public-search response |
+| AC17 | Prevent unreviewed or rejected targets from appearing as active case matches | `tests/backend/outreachDirectory.test.ts` | Automated |
+| AC18 | Keep outreach directory records and matches tenant-scoped | `tests/backend/outreachDirectory.test.ts` | Automated |
 
 ## Target-Environment Acceptance
 

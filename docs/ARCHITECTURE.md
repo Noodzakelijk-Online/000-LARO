@@ -1,6 +1,6 @@
 # LARO Architecture
 
-Updated: 2026-07-15
+Updated: 2026-07-16
 
 LARO contains two supported local-first runtimes. They share a repository and selected provider configuration, but they currently have separate schemas and databases. This is an explicit transitional constraint, not an implied synchronization mechanism.
 
@@ -34,6 +34,10 @@ Important boundaries:
   enrichment is discarded when any finding cites an unknown source span.
 - Gmail messages, attachments, local files, and Drive files use the same managed
   evidence storage. Google-native documents are exported to PDF before analysis.
+- Desktop Outreach consolidates analytics, the official NOvA lawyer directory,
+  and owner-scoped media/organization directories. Public discovery is bounded,
+  sends legal-area terms rather than case prose, and persists candidates behind
+  an explicit review gate before local case matching.
 - External outreach is disabled by default and requires ownership, approval, feature-flag, emergency-stop, provider, and idempotency checks.
 - Server, Electron main, renderer TypeScript, ESLint, safety scans, traceability,
   an isolated database recovery drill, and Vitest are blocking release gates.
@@ -65,7 +69,9 @@ The desktop and Flask schemas are not automatically synchronized. A case created
 
 Private records are scoped as follows:
 
-- Desktop cases, evidence, documents, communications, inbox threads, sync jobs, and search results are user- or case-owner scoped.
+- Desktop cases, evidence, documents, communications, inbox threads, sync jobs,
+  media/organization targets, case-target matches, and search results are user-
+  or case-owner scoped.
 - Global lawyer directory data can be read for matching, while lawyer mutation is administrative.
 - Flask ledger records are keyed to the authenticated external user identity.
 - API responses never include encrypted access or refresh token ciphertext.

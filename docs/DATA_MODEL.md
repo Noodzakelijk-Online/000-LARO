@@ -1,6 +1,6 @@
 # Data Model, Ownership, and Persistence
 
-Current as of 2026-07-15.
+Current as of 2026-07-16.
 
 ## Topology
 
@@ -22,12 +22,19 @@ timeout. The scanner database declares its scan-to-file foreign key.
 - Case-scoped operations call `assertCaseOwnership`.
 - Lawyer directory rows are global reference data; private case/outreach records
   remain owner-scoped.
+- Media and organization directory rows are owner-scoped. Their case matches
+  reference the owning user, case, and target with cascading foreign keys.
+- Publicly discovered or manually imported targets begin as `pending`; only
+  `approved` records are eligible for case matching. Revoking approval removes
+  persisted matches for that target.
 - Scanner uploads use a short-lived token for the signed-in user and pass through
   the same evidence ownership guard as manual uploads.
 
 ## Integrity
 
 - User email and case/lawyer outreach pairs have unique indexes.
+- Media/organization source URLs are unique per owner and category; case-target
+  matches are unique per case and target.
 - Evidence storage keys and filenames are sanitized and confined.
 - Evidence bytes produce SHA-256 provenance stored in metadata and projected as
   `contentHash` / `hashAlgo` on reads.

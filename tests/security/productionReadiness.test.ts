@@ -333,6 +333,29 @@ describe('production readiness regressions', () => {
     expect(dashboard).toContain('<Suspense fallback={<DashboardSkeleton />}>');
   });
 
+  it('ships review-gated media and organization matching inside Outreach', () => {
+    const routers = readFileSync(join(ROOT, 'server/routers/index.ts'), 'utf8');
+    const directory = readFileSync(join(ROOT, 'server/outreachDirectory.ts'), 'utf8');
+    const outreach = readFileSync(join(ROOT, 'src/renderer/components/OutreachAnalytics.tsx'), 'utf8');
+    const workspace = readFileSync(join(ROOT, 'src/renderer/components/OutreachTargetWorkspace.tsx'), 'utf8');
+    const migration = readFileSync(join(ROOT, 'drizzle/0004_warm_corsair.sql'), 'utf8');
+
+    expect(routers).toContain('outreachDirectory: outreachDirectoryRouter');
+    expect(outreach).toContain('<TabsTrigger className="min-h-8" value="lawyers">');
+    expect(outreach).toContain('<OutreachTargetWorkspace targetType="media" />');
+    expect(outreach).toContain('<OutreachTargetWorkspace targetType="organization" />');
+    expect(workspace).toContain('status: "approved"');
+    expect(workspace).toContain('status: "rejected"');
+    expect(workspace).toContain('status: "shortlisted"');
+    expect(directory).toContain('rawCaseTextShared: false');
+    expect(directory).toContain('eq(outreachDirectoryTargets.status, "approved")');
+    expect(directory).toContain('db.delete(caseOutreachTargetMatches)');
+    expect(migration).toContain('CREATE TABLE `outreach_directory_targets`');
+    expect(migration).toContain('CREATE TABLE `case_outreach_target_matches`');
+    expect(migration).not.toContain('__new_');
+    expect(migration).not.toContain('DROP TABLE');
+  });
+
   it('keeps the desktop scanner consent-gated and fail-closed', () => {
     const main = readFileSync(join(ROOT, 'src-main/index.ts'), 'utf8');
     const app = readFileSync(join(ROOT, 'src/renderer/App.tsx'), 'utf8');

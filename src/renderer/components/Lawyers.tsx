@@ -10,7 +10,7 @@ import LawyerComparisonView from "@/components/LawyerComparison";
 import SmartSearchFilters from "@/components/SmartSearchFilters";
 import { useLocation } from "wouter";
 
-export default function Lawyers() {
+export function LawyersDirectoryContent({ embedded = false }: { embedded?: boolean }) {
   const { data, isLoading } = trpc.lawyers.list.useQuery();
   const [, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
@@ -89,13 +89,16 @@ export default function Lawyers() {
   });
 
   return (
-    <DashboardLayout>
-      <div className="p-8 space-y-8">
+      <div className={embedded ? "space-y-6" : "p-8 space-y-8"}>
         {/* Header */}
         <div>
-          <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-purple-400 to-purple-600 bg-clip-text text-transparent">
-            Lawyers Database
-          </h1>
+          {embedded ? (
+            <h2 className="text-xl font-semibold">Lawyers Database</h2>
+          ) : (
+            <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-purple-400 to-purple-600 bg-clip-text text-transparent">
+              Lawyers Database
+            </h1>
+          )}
           <p className="text-muted-foreground mt-2 text-lg">
             Browse persisted lawyer profiles and records retrieved from the official NOvA public directory
           </p>
@@ -305,6 +308,13 @@ export default function Lawyers() {
           </div>
         )}
       </div>
+  );
+}
+
+export default function Lawyers() {
+  return (
+    <DashboardLayout>
+      <LawyersDirectoryContent />
     </DashboardLayout>
   );
 }

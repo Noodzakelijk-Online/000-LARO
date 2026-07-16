@@ -418,6 +418,12 @@ export default function Cases() {
               clientName: caseData.clientName,
               clientEmail: caseData.clientEmail,
             });
+            setPage(1);
+            await Promise.all([
+              utils.cases.list.invalidate(),
+              utils.dashboard.stats.invalidate(),
+              utils.dashboard.recentCases.invalidate(),
+            ]);
             if (caseData.uploadDocumentsAfterCreate) {
               setEvidenceUploadCaseId(created.id);
             }

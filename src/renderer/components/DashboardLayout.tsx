@@ -365,7 +365,7 @@ function DashboardLayoutContent({
             </div>
           </div>
         )}
-        <main id="main-content" className="flex-1 bg-black p-6 md:p-8">
+        <main id="main-content" className="min-w-0 flex-1 bg-black p-3 sm:p-6 md:p-8">
           {children}
         </main>
         {location !== "/" && <ChatWidget />}

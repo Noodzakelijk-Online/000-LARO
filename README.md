@@ -43,8 +43,9 @@ The Electron main process starts the Express/tRPC server and React renderer toge
 
 - Query the official NOvA public lawyer finder from the desktop case workspace, retain source/profile provenance, and rank lawyers using the case's legal fields plus only attributes that are actually available. Unknown capacity, availability, or performance receives no invented score.
 - Apply official legal-area, city/postcode, radius, specialization-association, and financed-legal-aid filters. City/postcode sharing is explicit; LARO does not send case prose or a client's stored address to NOvA.
-- In the Flask Case Command Center, match media and organizations as separate outreach categories and maintain a reviewable target directory. Those records are not silently synchronized into the Electron database.
-- Discover and import media/organization candidates from bounded public searches or configured sources; discovery does not claim exhaustive internet coverage and requires human review.
+- Use one desktop Outreach workspace for analytics, lawyers, media, and organizations. Media and organization candidates remain pending until a user approves or rejects their public source.
+- Discover or manually import media/organization candidates from bounded public searches, deduplicate them per owner and category, and rank only approved records against the selected case. Discovery sends canonical legal-area queries, never case prose, and does not claim exhaustive internet coverage.
+- The Flask Case Command Center retains its own reviewable target directory. Flask and Electron outreach records are not silently synchronized.
 - Track outreach totals, progress, responses, acceptance, and pending work per case.
 - Prepare and approve outreach drafts without sending them automatically.
 - Send an approved desktop-runtime lawyer outreach only when the global emergency stop is released, `outreach.send.enabled` is enabled, the caller owns the case, a real email provider is configured, and the idempotency guard has not already recorded the send.
@@ -155,7 +156,10 @@ GitHub Actions repeats the Node checks on the supported Node 22 toolchain:
 - Server, Electron main-process, and shipped renderer TypeScript checks passed; ESLint passed.
 - Traceability reported 116 rows, 93 cited, and 0 broken references.
 - Runtime no-excuses scan reported 0 suspect findings; account safety reported 0 high-severity findings.
-- Vitest reported 35 passing files and 232 passing tests, including controlled NOvA parsing/filter and unknown-metric scoring tests, with no skipped or todo tests.
+- Vitest reported 36 passing files and 236 passing tests, including controlled
+  NOvA parsing/filter, unknown-metric scoring, and review-gated
+  media/organization discovery and tenant-isolation tests, with no skipped or
+  todo tests.
 - Full Python discovery reported 202 passing tests. Warning-focused optimization and UCID tests also passed with deprecations promoted to errors.
 - The Vite 8 renderer, Electron 43 main process, and standalone server builds completed successfully.
 - The scanner integration test verified scoped-token isolation, owner checks, supported MIME enforcement, exact stored bytes, and SHA-256 readback.
@@ -167,14 +171,21 @@ desktop server to that registered OAuth callback port instead.
 - `npm audit` reported 0 known vulnerabilities.
 - Production preflight and operator-readiness diagnostics reported no blockers;
   the isolated backup/delete/restore/reopen drill passed.
-- Playwright smoke tests passed at 1440x900 and 390x844 with clean consoles, one coalesced local-session bootstrap, live command-center and Google-status responses, responsive depth controls, a closable Google dialog, and a functional password-visibility control.
+- Playwright smoke tests passed at desktop and 390x844 with clean consoles,
+  responsive Outreach controls and no horizontal overflow. Live bounded public
+  discovery produced pending organization candidates; approval immediately
+  created an 80/100 case match and shortlist status updated without a reload.
+  Existing command-center, Google-status, closable-dialog, and password-control
+  checks also remain covered.
 - Packaged Electron scanner QA passed signup, shared-session authorization, empty-state rendering, disabled unsafe scan state, Settings navigation, and clean renderer console checks.
 - A packaged launch from a directory containing hostile development `.env` values still reported production mode, database readiness, and a random `127.0.0.1` port.
-- The current unsigned portable executable is 118,966,658 bytes with SHA-256
-  `EBF16EE4B6980AE23B79A147A7DCC798148CD62680F0FF8B698D373113A5F6F0`.
+- The current unsigned portable executable is 118,983,452 bytes with SHA-256
+  `416A2960E77B84A9F3FF383F7CE4D9D895966FCA38F9965B5454610291D7AB65`.
   Windows reports `NotSigned`, as intended. An isolated-profile launch applied
-  the document-analysis and NOvA directory migrations, served the renderer, and
-  returned healthy production status on automatically selected loopback port 51188.
+  all five migrations, including the document-analysis, NOvA, and Outreach
+  directory schemas, served the renderer, and returned healthy production status
+  on automatically selected loopback port 58220. Direct database inspection
+  confirmed `outreach_directory_targets` and `case_outreach_target_matches`.
 - Main CI run `29455232706` passed Node and Python; Windows workflow
   `29455232654` passed the gate, build, Electron ABI check, package, checksum,
   and upload stages for the preceding protected-main baseline.

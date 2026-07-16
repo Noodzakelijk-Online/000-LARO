@@ -8,6 +8,7 @@ import { lawyersRouter } from "./lawyers";
 import { matchingRouter } from "./matching";
 import { dashboardRouter } from "./dashboard";
 import { outreachRouter } from "./outreach";
+import { outreachDirectoryRouter } from "./outreachDirectory";
 import { savedSearchesRouter } from "./savedSearches";
 import { workflowRouter } from "./workflow";
 import { evidenceFilesRouter } from "./evidenceFiles";
@@ -70,6 +71,7 @@ export const appRouter = router({
   matching: matchingRouter,
   dashboard: dashboardRouter,
   outreach: outreachRouter,
+  outreachDirectory: outreachDirectoryRouter,
   savedSearches: savedSearchesRouter,
   workflow: workflowRouter,
   evidenceFiles: evidenceFilesRouter,

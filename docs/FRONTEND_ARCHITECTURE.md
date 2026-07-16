@@ -1,6 +1,6 @@
 # Frontend Architecture
 
-Current as of 2026-07-15.
+Current as of 2026-07-16.
 
 ## Shipped surfaces
 
@@ -21,7 +21,8 @@ lazy-loaded. The packaged entry bundle is approximately 274 KB before gzip.
 | `/` | Owned dashboard and next actions |
 | `/cases`, `/cases/:id` | Case workflow and case command center |
 | `/lawyers`, `/lawyers/:id` | Persisted lawyer directory and profiles |
-| `/outreach`, `/analytics` | Outreach workflow and owned analytics |
+| `/outreach` | Consolidated owned analytics, lawyers, media, and organizations; public-source review and case matching |
+| `/analytics` | Case and platform analytics |
 | `/messages`, `/email` | Persisted communications |
 | `/settings`, `/privacy` | User, provider, and data controls |
 | `/admin`, `/admin-analytics` | Role-gated operator controls |
@@ -29,6 +30,13 @@ lazy-loaded. The packaged entry bundle is approximately 274 KB before gzip.
 
 Unfinished billing, reports, and email-automation routes are not mounted in the
 production router.
+
+The Outreach tabs use progressive disclosure: Overview shows current results,
+Lawyers embeds the official NOvA-backed directory, and Media/Organizations expose
+case selection, bounded discovery, manual source import, review, matching, and
+shortlist controls. Mutations invalidate the relevant queries so users do not
+need to reload the page. The workspace is verified without horizontal overflow
+at 390x844 and 1280x800.
 
 ## Scanner boundary
 

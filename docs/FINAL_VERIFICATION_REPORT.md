@@ -16,13 +16,13 @@ acceptance. It supersedes the 2026-07-06 phase snapshot.
 | Runtime no-excuses scan | 0 suspect findings |
 | Account-safety scan | 0 high-severity findings |
 | Isolated backup/delete/restore/reopen drill | Pass |
-| Vitest | 34 files, 228 tests passed, 0 todo |
+| Vitest | 36 files, 236 tests passed, 0 todo |
 | Python unittest discovery | 202 tests passed |
 | Runtime dependency audit | 0 known vulnerabilities |
 | Renderer, main, and server production builds | Pass |
 | Portable Windows packaging | Pass with tracked LARO icon; unsigned by policy |
 | Packaged `/api/health` | `healthy`, database ready, version 1.3.0, production |
-| Packaged document intelligence | Migration present; PDF, DOCX, and native parser dependencies present; integrated server booted successfully |
+| Packaged document intelligence and Outreach | Five migrations present; PDF, DOCX, native parser dependencies, and review-gated Outreach tables present; integrated server booted successfully |
 | Desktop scanner contract | Scoped 15-minute token; real bytes/hash; owner/MIME enforcement |
 | Protected-main CI | Actions run `29458340785`; Node and Python jobs passed |
 | Windows package workflow | Actions run `29458340759`; gate, build, ABI check, package, checksum, and artifact upload passed |
@@ -59,14 +59,15 @@ A second packaged-window run exercised the rebuilt scanner surface:
 - Settings opened and returned to evidence collection; the viewport had no
   horizontal overflow or overlapping controls.
 
-The current local portable artifact is 118,308,427 bytes with SHA-256
-`0fb4f180aa3a3fd609ff1deef69724aad6e40a64a18482b34de3e4001056f39d`.
+The current local portable artifact is 118,983,452 bytes with SHA-256
+`416A2960E77B84A9F3FF383F7CE4D9D895966FCA38F9965B5454610291D7AB65`.
 It launched with an explicit isolated user-data directory, created fresh local
-secrets and databases, applied the packaged `document_analyses` migration, and
-returned healthy production status on loopback port 59448. Its packaged resources
-contain the current migration, PDF/DOCX parsers, native parser dependency, and
-seven-category matching data. Windows reports `NotSigned`, matching the selected
-unsigned internal distribution policy.
+secrets and databases, applied all five packaged migrations, and returned
+healthy production status on loopback port 58220. Direct SQLite inspection
+confirmed `outreach_directory_targets` and `case_outreach_target_matches`.
+Its packaged resources contain the current migrations, PDF/DOCX parsers, native
+parser dependency, and seven-category matching data. Windows reports
+`NotSigned`, matching the selected unsigned internal distribution policy.
 
 The same CI artifact was launched with `NODE_ENV=development` deliberately
 injected by its parent process. It still served `/api/health` as `healthy`,
