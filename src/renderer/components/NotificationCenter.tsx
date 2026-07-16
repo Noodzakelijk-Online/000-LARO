@@ -23,7 +23,6 @@ import {
   FileText,
   AlertCircle,
   Calendar,
-  X,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -142,17 +141,13 @@ export default function NotificationCenter() {
     markAllAsReadMutation.mutate();
   };
 
-  const handleDelete = (notificationId: string) => {
-    // Mark as read when "deleting"
-    handleMarkAsRead(notificationId);
-  };
-
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
           variant="ghost"
           size="icon"
+          aria-label={unreadCount > 0 ? `Open notifications, ${unreadCount} unread` : "Open notifications"}
           className="relative"
         >
           <Bell className="w-5 h-5" />
@@ -165,7 +160,7 @@ export default function NotificationCenter() {
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-96 p-0" align="end">
+      <PopoverContent className="w-[calc(100vw-1rem)] p-0 sm:w-96" align="end">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-border">
           <div>
@@ -203,7 +198,7 @@ export default function NotificationCenter() {
                   <div
                     key={notification.id}
                     className={`p-4 hover:bg-accent/50 transition-colors ${
-                      !notification.read ? "bg-accent/20" : ""
+                      !notification.isRead ? "bg-accent/20" : ""
                     }`}
                   >
                     <div className="flex gap-3">
@@ -258,18 +253,11 @@ export default function NotificationCenter() {
                             size="icon"
                             className="h-6 w-6"
                             onClick={() => handleMarkAsRead(notification.id)}
+                            aria-label={`Mark ${notification.title} as read`}
                           >
                             <Check className="w-3 h-3" />
                           </Button>
                         )}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={() => handleDelete(notification.id)}
-                        >
-                          <X className="w-3 h-3" />
-                        </Button>
                       </div>
                     </div>
                   </div>

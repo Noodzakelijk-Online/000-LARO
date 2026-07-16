@@ -187,30 +187,30 @@ export default function Cases() {
 
   return (
     <DashboardLayout>
-      <div className="p-6 space-y-6">
+      <div className="space-y-6">
         {/* Top controls: title + actions + search/filter */}
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-orange-400 to-orange-600 bg-clip-text text-transparent">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-400 to-orange-600 bg-clip-text text-transparent sm:text-4xl">
                 Your Cases
               </h1>
               <p className="text-muted-foreground mt-2">
                 Track your legal matters and lawyer connections
               </p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex w-full gap-2 sm:w-auto">
               <Button
                 onClick={() => setBulkImportOpen(true)}
                 variant="outline"
-                className="border-orange-500/30 hover:bg-orange-500/10"
+                className="flex-1 border-orange-500/30 hover:bg-orange-500/10 sm:flex-none"
               >
                 <Upload className="w-4 h-4 mr-2" />
                 Bulk Import
               </Button>
               <Button
                 onClick={() => setNewCaseOpen(true)}
-                className="bg-orange-500 hover:bg-orange-600"
+                className="flex-1 bg-orange-500 hover:bg-orange-600 sm:flex-none"
               >
                 <Plus className="w-4 h-4 mr-2" />
                 New Case

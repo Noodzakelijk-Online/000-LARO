@@ -240,7 +240,9 @@ function DashboardLayoutContent({
                     alt="Logo"
                   />
                   <button
+                    type="button"
                     onClick={toggleSidebar}
+                    aria-label="Expand sidebar"
                     className="absolute inset-0 flex items-center justify-center rounded-lg bg-sidebar-accent/80 opacity-0 transition-opacity group-hover:opacity-100 focus:outline-none"
                   >
                     <PanelLeft className="h-4 w-4 text-sidebar-foreground" />
@@ -259,7 +261,9 @@ function DashboardLayoutContent({
                     </span>
                   </div>
                   <button
+                    type="button"
                     onClick={toggleSidebar}
+                    aria-label="Collapse sidebar"
                     className="ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus:outline-none"
                   >
                     <PanelLeft className="h-4 w-4" />
@@ -309,7 +313,11 @@ function DashboardLayoutContent({
           <SidebarFooter className="p-3">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-3 rounded-lg px-1 py-1 hover:bg-accent/50 transition-colors w-full text-left justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <button
+                  type="button"
+                  aria-label="Open account menu"
+                  className="flex items-center gap-3 rounded-lg px-1 py-1 hover:bg-accent/50 transition-colors w-full text-left justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
                   <Avatar className="h-9 w-9 border shrink-0">
                     <AvatarFallback className="text-xs font-medium">
                       {user?.name?.charAt(0).toUpperCase()}

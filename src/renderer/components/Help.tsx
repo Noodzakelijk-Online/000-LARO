@@ -36,19 +36,19 @@ export default function Help() {
   const faqs = [
     {
       question: "How does LARO find lawyers for my case?",
-      answer: "LARO uses AI to analyze your case details and match you with lawyers who specialize in your legal area, are located near you, and have the right expertise.",
+      answer: "LARO classifies the case, applies legal-area and location filters, and ranks the loaded lawyer directory records. Review the match reasons and source profile before contacting anyone.",
     },
     {
       question: "How long does it take to get a response from lawyers?",
-      answer: "Most lawyers respond within 24-48 hours. LARO sends automated follow-ups to ensure you get timely responses.",
+      answer: "Response times vary by lawyer and case. The Outreach workspace shows the status and recorded response time for each contact; LARO does not guarantee that a lawyer will respond.",
     },
     {
       question: "Is my information secure?",
-      answer: "Yes. All data is encrypted and stored securely. We comply with GDPR and Dutch data protection laws.",
+      answer: "LARO scopes records to the signed-in account and provides export, consent, and deletion controls. Security and legal compliance also depend on how the operator configures, hosts, and manages the installation.",
     },
     {
       question: "Can I upload evidence from my email or cloud storage?",
-      answer: "Yes! LARO can connect to Gmail, Google Drive, OneDrive, Slack, and other platforms to automatically collect relevant evidence.",
+      answer: "LARO supports direct uploads, the consent-based desktop folder scanner, and read-only Gmail and Google Drive collection when Google OAuth is configured. A connector is usable only when its provider status reports that it is available.",
     },
     {
       question: "What if I need to clarify something about my case?",
@@ -72,10 +72,10 @@ export default function Help() {
 
   return (
     <DashboardLayout>
-      <div className="p-8 space-y-8 max-w-5xl mx-auto">
+      <div className="mx-auto max-w-5xl space-y-8 p-1 sm:p-4">
         {/* Header */}
         <div className="text-center">
-          <h1 className="text-4xl font-bold tracking-tight text-foreground">
+          <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
             Help & Resources
           </h1>
           <p className="text-muted-foreground mt-2 text-lg">
@@ -92,16 +92,21 @@ export default function Help() {
           <div className="space-y-3">
             {faqs.map((faq, index) => (
               <Card
-                key={index}
-                className="overflow-hidden border-border/50 bg-card/50 backdrop-blur-sm cursor-pointer hover:border-orange-500/30 transition-all"
-                onClick={() => setExpandedFaq(expandedFaq === index ? null : index)}
+                key={faq.question}
+                className="overflow-hidden border-border/50 bg-card/50 backdrop-blur-sm transition-all hover:border-orange-500/30"
               >
-                <div className="p-4 flex items-center justify-between">
-                  <h4 className="font-semibold text-foreground">{faq.question}</h4>
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between gap-4 p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+                  aria-expanded={expandedFaq === index}
+                  aria-controls={`faq-answer-${index}`}
+                  onClick={() => setExpandedFaq(expandedFaq === index ? null : index)}
+                >
+                  <span className="font-semibold text-foreground">{faq.question}</span>
                   {expandedFaq === index ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                </div>
+                </button>
                 {expandedFaq === index && (
-                  <CardContent className="pt-0 pb-4 text-sm text-muted-foreground animate-in slide-in-from-top-2">
+                  <CardContent id={`faq-answer-${index}`} className="pt-0 pb-4 text-sm text-muted-foreground animate-in slide-in-from-top-2">
                     <p className="border-t border-border/50 pt-3">{faq.answer}</p>
                   </CardContent>
                 )}
@@ -119,7 +124,7 @@ export default function Help() {
           <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="text-lg">Open a Support Ticket</CardTitle>
-              <CardDescription>Tell us what you need help with and we'll get back to you within 24 hours.</CardDescription>
+              <CardDescription>Tickets are stored in this LARO installation for operator follow-up. Response time depends on the support process configured for your installation.</CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSupportSubmit} className="space-y-4">
@@ -130,14 +135,14 @@ export default function Help() {
                       value={supportForm.category}
                       onValueChange={(v: any) => setSupportForm({ ...supportForm, category: v })}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger id="category" aria-label="Support ticket category">
                         <SelectValue placeholder="Select a topic" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="account">Account Access</SelectItem>
                         <SelectItem value="matching">Lawyer Matching</SelectItem>
                         <SelectItem value="evidence">Evidence Collection</SelectItem>
-                        <SelectItem value="billing">Billing & Subscription</SelectItem>
+                        <SelectItem value="connections">Connections & Providers</SelectItem>
                         <SelectItem value="other">Other</SelectItem>
                       </SelectContent>
                     </Select>
