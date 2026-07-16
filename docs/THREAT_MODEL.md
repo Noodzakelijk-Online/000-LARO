@@ -13,7 +13,8 @@ Trust boundaries:
 1. sandboxed renderer to validated Electron IPC;
 2. loopback HTTP renderer/scanner to authenticated API;
 3. API to Google, Microsoft, S3, LLM, and email providers over TLS;
-4. signed release artifact to the end-user machine.
+4. Microsoft Store-signed or independently Authenticode-signed release artifact
+   to the end-user machine.
 
 ## STRIDE review
 

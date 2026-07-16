@@ -17,7 +17,7 @@ acceptance. It supersedes the 2026-07-06 phase snapshot.
 | Runtime no-excuses scan | 0 suspect findings |
 | Account-safety scan | 0 high-severity findings |
 | Isolated backup/delete/restore/reopen drill | Pass |
-| Vitest | 32 files, 217 tests passed, 0 todo |
+| Vitest | 32 files, 220 tests passed, 0 todo |
 | Python unittest discovery | 202 tests passed |
 | Runtime dependency audit | 0 known vulnerabilities |
 | Renderer, main, and server production builds | Pass |
@@ -103,7 +103,7 @@ development renderer path from the launching shell.
 
 | Gate | Current state | Required evidence |
 |---|---|---|
-| Windows signing | Blocked externally | `WINDOWS_CSC_LINK` and `WINDOWS_CSC_KEY_PASSWORD`; tagged artifact reports Authenticode `Valid` |
+| Trusted Windows distribution | Blocked externally | Partner Center product identity and successful Store certification, or a configured signing provider whose tagged portable artifact reports Authenticode `Valid` |
 | Public branding | Awaiting owner confirmation | Product owner confirms `build/icon.png` / `public/laro-logo.png` as the approved public mark |
 | Live providers | Not exercised with production accounts | Target Google OAuth, storage/LLM as used, and outbound email credentials pass consent, send, callback, and audit checks |
 
@@ -127,4 +127,7 @@ before it can publish.
 The repository is a verified internal release candidate: the code, tests,
 recovery path, packaged startup, authenticated realtime channel, and tested user
 flow are operational. It must not be represented as a publicly signed production
-release until the three external acceptance gates above are evidenced.
+release until the three external acceptance gates above are evidenced. The
+Microsoft Store route avoids a recurring certificate purchase because Microsoft
+signs the accepted Store package; the unsigned submission package is not itself
+a public artifact.

@@ -3,9 +3,10 @@
 ## Branches and Versions
 
 Changes enter `main` through a reviewed pull request with passing CI. Use
-semantic versions from `package.json`, add the matching changelog entry, and tag
-the accepted main commit as `vX.Y.Z`. Tags build and publish the Windows portable
-artifact through `.github/workflows/build.yml`.
+semantic versions from `package.json` and add the matching changelog entry.
+Public Windows releases use the Microsoft Store submission workflow when
+`WINDOWS_SIGNING_PROVIDER=microsoft-store`. Direct `vX.Y.Z` tags are reserved
+for externally signed portable releases and fail closed in Store-only mode.
 
 Tagged releases fail closed unless the tag exactly matches `package.json`, a
 supported signing provider is fully configured, `release-acceptance.json`
@@ -20,6 +21,14 @@ validation artifacts.
 
 Set the repository variable `WINDOWS_SIGNING_PROVIDER` to one of:
 
+- `microsoft-store` (preferred, no recurring signing fee): creates an unsigned
+  APPX submission package whose identity must exactly match Partner Center.
+  Microsoft re-signs accepted Store packages with its own trusted certificate.
+  Store `MICROSOFT_STORE_IDENTITY_NAME`, `MICROSOFT_STORE_PUBLISHER`, and
+  `MICROSOFT_STORE_PUBLISHER_DISPLAY_NAME` as repository variables, using the
+  exact values from the app's Partner Center Product identity page. Run the
+  `Build Microsoft Store Submission` workflow and upload its APPX artifact to
+  Partner Center. This trust applies to Store delivery, not portable EXEs.
 - `sslcom-esigner`: uses SSL.com eSigner without Azure or a local hardware
   token. Store `SSL_COM_USERNAME`, `SSL_COM_PASSWORD`,
   `SSL_COM_CREDENTIAL_ID`, and `SSL_COM_TOTP_SECRET` as repository secrets.
@@ -40,6 +49,11 @@ with `Get-AuthenticodeSignature` before GitHub may publish it. Azure signing
 uses Microsoft's RFC 3161 timestamp service; eSigner signs and timestamps
 through SSL.com's cloud-HSM service.
 
+The Microsoft Store route is intentionally different: the repository produces
+an unsigned submission package and validates its manifest identity. Microsoft
+signs the package only after Store certification. The Store package must not be
+distributed directly before Microsoft signs it.
+
 ## Pre-release Gates
 
 ```powershell
@@ -49,6 +63,13 @@ npm run readiness
 npm audit --omit=dev
 npm run dist:win
 npm run release:check
+```
+
+For Store submission, reserve the product name and copy the exact Partner Center
+identity values into the repository variables, then run:
+
+```powershell
+npm run dist:store
 ```
 
 For an API deployment, also run `npm run readiness:production` with the target

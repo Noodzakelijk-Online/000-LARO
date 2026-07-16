@@ -27,8 +27,9 @@ temporary SQLite databases; they do not contact external people or accounts.
 | --- | --- | --- |
 | M1 | Live outreach delivery | Approved test recipient receives one message; duplicate send produces no second message |
 | M2 | Gmail/Drive intake | Target OAuth client connects, pull completes, and imported records retain provenance |
-| M3 | Signed public Windows release | Version-matched tag, valid Authenticode signature, approved icon, and published SHA-256 checksum |
+| M3 | Trusted public Windows release | Microsoft Store certification and Store-signed package, or a version-matched portable release with valid Authenticode signature; approved icon and matching SHA-256 checksum in either route |
 
-M1-M3 require organization-controlled credentials, accounts, or signing material.
+M1-M3 require organization-controlled credentials and accounts; direct portable
+distribution additionally requires signing material.
 They must be recorded for the target environment and are not replaced by local
 test doubles.

@@ -50,4 +50,5 @@ dependencies in `requirements.txt`.
 - `npm audit --omit=dev` must have no unresolved runtime advisory.
 - The TypeScript and renderer builds prove every declared import resolves.
 - `npm run verify:electron-native` proves the packaged SQLite ABI.
-- Tagged public artifacts must be version-matched and Authenticode-valid.
+- Public artifacts must be Store-certified and Store-signed, or, for direct
+  portable releases, version-matched and Authenticode-valid.

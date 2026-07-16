@@ -151,7 +151,7 @@ Protected `main` commit `677a46a` was verified locally and in GitHub Actions on
 - Server, Electron main-process, and shipped renderer TypeScript checks passed; ESLint passed.
 - Traceability reported 116 rows, 93 cited, and 0 broken references.
 - Runtime no-excuses scan reported 0 suspect findings; account safety reported 0 high-severity findings.
-- Vitest reported 32 passing files, 217 passing tests, and no skipped or todo tests.
+- Vitest reported 32 passing files, 220 passing tests, and no skipped or todo tests.
 - Full Python discovery reported 202 passing tests. Warning-focused optimization and UCID tests also passed with deprecations promoted to errors.
 - The Vite 8 renderer, Electron 43 main process, and standalone server builds completed successfully.
 - The scanner integration test verified scoped-token isolation, owner checks, supported MIME enforcement, exact stored bytes, and SHA-256 readback.
@@ -211,9 +211,10 @@ development service, Python cache files, and local configuration are excluded.
 See [Backup and Restore](docs/BACKUP_RESTORE.md) for verified database recovery.
 
 CI runs Node and Python gates for pushes and pull requests to `main`. The release
-workflow targets Node 22. Tagged releases require a version-matched tag and
-Windows signing secrets, verify the Authenticode signature, and publish only the
-portable executable plus its SHA-256 checksum.
+workflows target Node 22. Public Windows delivery defaults to Microsoft Store:
+CI builds an identity-bound APPX submission, verifies its manifest and checksum,
+and Microsoft applies the trusted signature after certification. Direct portable
+releases remain available only when a supported signing provider is configured.
 
 ## Repository Map
 
@@ -245,7 +246,7 @@ portable executable plus its SHA-256 checksum.
 - Real external sending is intentionally disabled by default and should remain disabled until the target environment, provider, approval UI, emergency stop, and audit trail have been reviewed.
 - The current lockfile audits cleanly; run `npm run audit:deps` again for every release because registry advisories change over time.
 - Dashboard routes are loaded on demand. The production entry chunk is about 274 KB before gzip (85 KB gzip); the largest route chunk is about 230 KB before gzip.
-- The internal Windows artifact uses the tracked LARO mark but is not Authenticode-signed. A trusted signing certificate and product-owner confirmation of the public brand asset are prerequisites for public distribution.
+- The internal portable Windows artifact is not Authenticode-signed and must not be distributed publicly. Store delivery avoids a recurring certificate purchase; Partner Center identity, Store certification, and product-owner confirmation of the public brand asset are still required.
 - Historical phase and verification documents in `docs/` are dated snapshots. Prefer current code, tests, this README, and a fresh `npm run gate` when status statements differ.
 
 ## Further Documentation

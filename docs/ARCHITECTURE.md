@@ -81,7 +81,9 @@ Private records are scoped as follows:
 - SQLite files, uploads, token vaults, and generated secrets are runtime state and are ignored by Git.
 - Desktop packaging allowlists the two matcher datasets and excludes the legacy
   development service under `assets`.
-- Public Windows distribution still requires an approved icon and Authenticode signing certificate.
+- Public Windows distribution requires an approved icon and either Microsoft
+  Store certification, where Microsoft signs the accepted package, or a trusted
+  Authenticode signature for direct portable distribution.
 
 ## Current Architectural Risks
 

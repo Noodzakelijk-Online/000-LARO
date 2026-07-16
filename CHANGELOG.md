@@ -63,6 +63,9 @@ versioning; dates are ISO. Version is sourced from `package.json` and surfaced b
   as the preferred alternative to storing a PFX certificate in GitHub secrets.
 - Tagged Windows releases also support SSL.com eSigner as a cloud-HSM signing
   provider that does not require an Azure subscription or local hardware token.
+- Microsoft Store distribution is supported as the no-recurring-certificate
+  path: CI creates and verifies an identity-bound APPX submission package for
+  Microsoft to re-sign after Store certification.
 
 ## [1.3.0] — 2026-07-06
 Closing renderer-independent Partials with real code.

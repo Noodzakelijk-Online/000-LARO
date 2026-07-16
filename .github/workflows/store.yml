@@ -1,0 +1,85 @@
+name: Build Microsoft Store Submission
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-store-package:
+    runs-on: windows-latest
+    env:
+      STORE_IDENTITY_NAME: ${{ vars.MICROSOFT_STORE_IDENTITY_NAME }}
+      STORE_PUBLISHER: ${{ vars.MICROSOFT_STORE_PUBLISHER }}
+      STORE_PUBLISHER_DISPLAY_NAME: ${{ vars.MICROSOFT_STORE_PUBLISHER_DISPLAY_NAME }}
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Validate Partner Center identity
+        shell: pwsh
+        run: |
+          $required = @(
+            'STORE_IDENTITY_NAME',
+            'STORE_PUBLISHER',
+            'STORE_PUBLISHER_DISPLAY_NAME'
+          )
+          $missing = @($required | Where-Object {
+            [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($_))
+          })
+          if ($missing.Count -gt 0) {
+            throw "Partner Center identity is incomplete: $($missing -join ', ')"
+          }
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Validate external release acceptance
+        run: node scripts/release-acceptance.mjs --require-approved
+      - name: Run production quality gate
+        run: npm run gate
+      - name: Build Microsoft Store package
+        run: npm run dist:store
+      - name: Verify Store submission package
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $matches = @(Get-ChildItem "release/$version" -File -Filter 'LARO-Desktop-*-Store-*.appx')
+          if ($matches.Count -ne 1) {
+            throw "Expected one Store APPX package, found $($matches.Count)"
+          }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $archive = [IO.Compression.ZipFile]::OpenRead($matches[0].FullName)
+          try {
+            $manifestEntry = $archive.GetEntry('AppxManifest.xml')
+            if (-not $manifestEntry) { throw 'AppxManifest.xml is missing' }
+            $reader = [IO.StreamReader]::new($manifestEntry.Open())
+            try { [xml]$manifest = $reader.ReadToEnd() } finally { $reader.Dispose() }
+          } finally {
+            $archive.Dispose()
+          }
+          $identity = $manifest.Package.Identity
+          if ($identity.Name -ne $env:STORE_IDENTITY_NAME) {
+            throw "Store identity mismatch: $($identity.Name)"
+          }
+          if ($identity.Publisher -ne $env:STORE_PUBLISHER) {
+            throw "Store publisher mismatch: $($identity.Publisher)"
+          }
+          $publisherDisplayName = [string]$manifest.Package.Properties.PublisherDisplayName
+          if ($publisherDisplayName -ne $env:STORE_PUBLISHER_DISPLAY_NAME) {
+            throw "Store publisher display name mismatch: $publisherDisplayName"
+          }
+          New-Item -ItemType Directory -Force store-artifacts | Out-Null
+          Copy-Item -LiteralPath $matches[0].FullName -Destination store-artifacts
+          $published = Join-Path store-artifacts $matches[0].Name
+          $hash = (Get-FileHash -Algorithm SHA256 $published).Hash.ToLowerInvariant()
+          "$hash *$($matches[0].Name)" | Set-Content "$published.sha256" -Encoding ascii
+      - name: Upload Store submission artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: LARO-Microsoft-Store-Submission
+          path: store-artifacts/*
+          if-no-files-found: error
+          retention-days: 14

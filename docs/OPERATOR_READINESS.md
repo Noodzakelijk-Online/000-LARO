@@ -32,8 +32,9 @@ user-data directory.
 - [ ] Google, storage, LLM, and outreach providers show their intended state.
 - [ ] `release-acceptance.json` matches the package version and records reviewed
       brand and enabled-provider evidence; the tagged workflow rejects pending gates.
-- [ ] The tagged portable executable reports Authenticode `Valid` and its
-      published SHA-256 matches the release checksum.
+- [ ] The Microsoft Store package has passed certification and its published
+      identity and SHA-256 match the verified submission; or the tagged portable
+      executable reports Authenticode `Valid` with a matching release checksum.
 
 ## Supported Operating Modes
 

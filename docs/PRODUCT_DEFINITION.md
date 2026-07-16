@@ -56,6 +56,7 @@ provide definitive legal advice.
 ## Production boundary
 
 The repository can produce an internally verified Windows release candidate.
-Public distribution additionally requires a valid Authenticode signature,
-product-owner approval of the public brand mark, and live target-account
+Public distribution additionally requires Microsoft Store certification and
+Store signing, or a valid Authenticode signature for direct portable delivery,
+plus product-owner approval of the public brand mark and live target-account
 acceptance for every enabled external provider.

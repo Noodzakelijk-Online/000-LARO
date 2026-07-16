@@ -18,5 +18,6 @@ unimplemented operation. Unavailable OCR and optional providers report their
 state explicitly. Production routes for unfinished billing, reports, and email
 automation are not mounted.
 
-Public-release realism still depends on a signed Windows artifact, approved
-branding, and live acceptance evidence for each enabled provider.
+Public-release realism still depends on a Microsoft Store-certified package or
+independently signed portable artifact, approved branding, and live acceptance
+evidence for each enabled provider.

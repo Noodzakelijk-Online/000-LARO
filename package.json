@@ -20,6 +20,7 @@
     "typecheck:renderer": "tsc -p tsconfig.renderer.json --noEmit",
     "dist": "npm run build && npm run rebuild:electron && electron-builder",
     "dist:win": "npm run build && npm run rebuild:electron && electron-builder --win",
+    "dist:store": "npm run build && npm run rebuild:electron && electron-builder --config electron-builder.store.cjs --win appx --publish never",
     "dist:mac": "npm run build && npm run rebuild:electron && electron-builder --mac",
     "dist:linux": "npm run build && npm run rebuild:electron && electron-builder --linux",
     "lint": "eslint . --ext .ts,.tsx",
@@ -170,6 +171,15 @@
     "win": {
       "icon": "build/icon.png",
       "target": "portable"
+    },
+    "appx": {
+      "applicationId": "LARO.Desktop",
+      "displayName": "LARO Desktop",
+      "languages": [
+        "en-US",
+        "nl-NL"
+      ],
+      "artifactName": "LARO-Desktop-${version}-Store-${arch}.${ext}"
     }
   }
 }
