@@ -88,9 +88,9 @@ Private records are scoped as follows:
 - SQLite files, uploads, token vaults, and generated secrets are runtime state and are ignored by Git.
 - Desktop packaging allowlists the two matcher datasets and excludes the legacy
   development service under `assets`.
-- Current Windows artifacts are for internal deployment and are unsigned. Public
-  distribution is intentionally disabled unless an operator later chooses Store
-  certification or configures a trusted Authenticode provider.
+- Current Windows artifacts are unsigned portable builds. Signing is optional:
+  internal distribution can proceed with the normal Windows publisher warning,
+  while Store or Authenticode signing can be added later without changing the runtime.
 
 ## Current Architectural Risks
 

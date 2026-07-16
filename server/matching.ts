@@ -3,9 +3,12 @@
 // matching.ts
 import { getAllLawyers, getCaseById } from "./db";
 import { getLawyerRating } from "./routers/lawyerRating";
+import { syncNovaLawyersForCase, type NovaDirectoryReport } from "./novaDirectory";
 
 import * as fs from "fs";
 import * as path from "path";
+
+export const MATCH_SCORE_MAX = 245;
 
 interface TaxonomyMapping {
   courtCategoryToSpecializations: Record<string, string[]>;
@@ -186,6 +189,7 @@ export interface MatchedLawyer {
   legalAreas: string[];
   experienceYears: string | null;
   distance: number;
+  distanceKnown: boolean;
   matchScore: number;
   matchReasons: string[];
   // LARO Scoring Details
@@ -195,6 +199,22 @@ export interface MatchedLawyer {
   capacityScore: number;
   distanceScore: number;
   experienceScore: number;
+  officialProfileUrl: string | null;
+  directorySource: string | null;
+  directoryRetrievedAt: Date | null;
+  officialLegalAreas: string[];
+  specializationAssociations: string[];
+  financedLegalAid: string | null;
+}
+
+function parseJsonStringArray(value: string | null | undefined): string[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.map(String).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
 }
 
 export interface MatchingOptions {
@@ -202,6 +222,86 @@ export interface MatchingOptions {
   maxResults?: number; // Maximum number of lawyers to return
   requireLanguages?: string[]; // Required languages
   sortBy?: "distance" | "experience" | "score"; // Sort criteria
+  location?: string;
+  requireSpecializationAssociation?: boolean;
+  requiresFinancedLegalAid?: boolean;
+  refreshOfficialDirectory?: boolean;
+}
+
+export interface CaseLawyerMatches {
+  lawyers: MatchedLawyer[];
+  directory: NovaDirectoryReport;
+}
+
+function skippedDirectoryReport(caseData: { legalAreas?: string | null }): NovaDirectoryReport {
+  let legalAreas: string[] = [];
+  try {
+    const parsed = JSON.parse(caseData.legalAreas || "[]");
+    if (Array.isArray(parsed)) legalAreas = parsed.map(String);
+  } catch {}
+  return {
+    status: "not_applicable",
+    source: "NOvA public lawyer finder",
+    sourceHomeUrl: "https://zoekeenadvocaat.advocatenorde.nl",
+    retrievedAt: new Date().toISOString(),
+    requestedLegalAreas: legalAreas,
+    officialSubjectIds: [],
+    locationRequested: null,
+    resolvedLocation: null,
+    locationApplied: false,
+    radiusKm: null,
+    filtersApplied: {
+      legalAreas: false,
+      lawyerName: false,
+      location: false,
+      specializationAssociation: false,
+      financedLegalAid: false,
+    },
+    reportedTotal: null,
+    fetchedCandidates: 0,
+    persistedCandidates: 0,
+    partialResults: false,
+    searchUrls: [],
+    errors: [],
+    reason: "Live NOvA access is disabled in the automated test runtime.",
+  };
+}
+
+export async function findCaseLawyersWithOfficialDirectory(
+  caseId: string,
+  options: MatchingOptions = {},
+): Promise<CaseLawyerMatches> {
+  const caseData = await getCaseById(caseId);
+  if (!caseData) throw new Error(`Case not found: ${caseId}`);
+  const effectiveLocation = options.location?.trim() || undefined;
+  let directory = skippedDirectoryReport(caseData);
+  const shouldRefresh = options.refreshOfficialDirectory !== false && process.env.NODE_ENV !== "test";
+  if (shouldRefresh) {
+    try {
+      directory = await syncNovaLawyersForCase(caseData, {
+        location: effectiveLocation,
+        radiusKm: options.maxDistance,
+        maxResults: Math.max(options.maxResults || 10, 20),
+        requireSpecializationAssociation: options.requireSpecializationAssociation,
+        requiresFinancedLegalAid: options.requiresFinancedLegalAid,
+        enrichProfiles: true,
+      });
+    } catch (error) {
+      directory = {
+        ...skippedDirectoryReport(caseData),
+        status: "unavailable",
+        partialResults: true,
+        errors: [error instanceof Error ? error.message : String(error)],
+        reason: "The official NOvA directory was unavailable; only previously persisted records are shown.",
+      };
+    }
+  }
+  const lawyers = await findMatchingLawyers(caseId, {
+    ...options,
+    location: directory.resolvedLocation || effectiveLocation,
+    refreshOfficialDirectory: false,
+  });
+  return { lawyers, directory };
 }
 
 /**
@@ -214,7 +314,7 @@ export interface MatchingOptions {
  * 4. Not permanently filtered (0% response rate with 3+ contacts)
  * 5. Within maximum distance
  * 
- * SCORING SYSTEM (Max ~210 points):
+ * SCORING SYSTEM (Max 245 points):
  * - Case-load: 0-50 points (PRIMARY)
  * - Response Time: 0-50 points (PRIMARY)
  * - Acceptance Rate: 0-50 points (PRIMARY)
@@ -222,6 +322,9 @@ export interface MatchingOptions {
  * - Capacity Percentage: 0-20 points (TERTIARY)
  * - Distance: 0-10 points (LOW)
  * - Experience: 0-10 points (LOW)
+ * - Curated legal terminology: 0-20 points
+ * - Evidence-backed interaction rating: 0-15 points
+ * Unknown metrics receive zero points and remain visible as unavailable.
  */
 export async function findMatchingLawyers(
   caseId: string,
@@ -303,7 +406,8 @@ export async function findMatchingLawyers(
     }
 
     // MANDATORY FILTER 3: Check Bar Association status
-    if (lawyer.barAssociationStatus !== "Good Standing") {
+    const barStatus = String(lawyer.barAssociationStatus || "").toLowerCase();
+    if (barStatus && !barStatus.includes("good standing") && !barStatus.includes("registered in nova")) {
       continue;
     }
 
@@ -318,10 +422,22 @@ export async function findMatchingLawyers(
 
     // Calculate distance (only if both case and lawyer have coordinates)
     let distance = 0;
+    let distanceKnown = false;
     if (caseLat && caseLon && lawyerLat && lawyerLon) {
       distance = calculateDistance(caseLat, caseLon, lawyerLat, lawyerLon);
+      distanceKnown = true;
       
       // MANDATORY FILTER 5: Check distance limit (only if coordinates available)
+      if (distance > maxDistance) continue;
+    } else if (
+      options.location &&
+      lawyer.directorySearchLocation &&
+      lawyer.directorySearchLocation.toLowerCase() === options.location.toLowerCase() &&
+      lawyer.directoryDistanceKm !== null &&
+      Number.isFinite(Number(lawyer.directoryDistanceKm))
+    ) {
+      distance = Number(lawyer.directoryDistanceKm);
+      distanceKnown = true;
       if (distance > maxDistance) continue;
     }
 
@@ -339,9 +455,7 @@ export async function findMatchingLawyers(
     const caseLoad = lawyer.caseLoad ? parseInt(lawyer.caseLoad) : null;
     
     if (caseLoad === null) {
-      // No case-load data - give benefit of doubt
-      caseLoadScore = 25;
-      matchReasons.push("Case-load unknown (new lawyer)");
+      matchReasons.push("Case-load not available");
     } else if (caseLoad <= 10) {
       caseLoadScore = 50;
       matchReasons.push(`Excellent availability (${caseLoad} active cases)`);
@@ -364,9 +478,7 @@ export async function findMatchingLawyers(
       : null;
 
     if (avgResponseTime === null) {
-      // New lawyer, no history - give benefit of doubt
-      responseTimeScore = 25;
-      matchReasons.push("New lawyer (no response history)");
+      matchReasons.push("Response history not available");
     } else if (avgResponseTime <= 48) {
       responseTimeScore = 50;
       matchReasons.push("Excellent response time (≤48 hours)");
@@ -388,10 +500,7 @@ export async function findMatchingLawyers(
     const totalResponses = parseInt(lawyer.totalResponses || "0");
     const totalAcceptances = parseInt(lawyer.totalAcceptances || "0");
 
-    if (totalResponses === 0) {
-      // No history - give benefit of doubt
-      acceptanceRateScore = 25;
-    } else {
+    if (totalResponses > 0) {
       const acceptanceRate = (totalAcceptances / totalResponses) * 100;
       if (acceptanceRate >= 80) {
         acceptanceRateScore = 50;
@@ -422,8 +531,12 @@ export async function findMatchingLawyers(
 
     // TERTIARY METRIC: Capacity Percentage (0-20 points)
     let capacityScore = 0;
-    const capacityFilled = parseInt(lawyer.capacityPercentage || "0");
-    if (capacityFilled <= 25) {
+    const capacityFilled = lawyer.capacityPercentage === null || lawyer.capacityPercentage === undefined
+      ? null
+      : parseInt(lawyer.capacityPercentage);
+    if (capacityFilled === null || !Number.isFinite(capacityFilled)) {
+      matchReasons.push("Capacity not available");
+    } else if (capacityFilled <= 25) {
       capacityScore = 20;
       matchReasons.push(`Excellent capacity (${capacityFilled}% filled)`);
     } else if (capacityFilled <= 50) {
@@ -443,13 +556,13 @@ export async function findMatchingLawyers(
 
     // LOW WEIGHT: Distance (0-10 points)
     let distanceScore = 0;
-    if (distance <= 25) {
+    if (distanceKnown && distance <= 25) {
       distanceScore = 10;
       matchReasons.push(`Close proximity (${distance} km)`);
-    } else if (distance <= 50) {
+    } else if (distanceKnown && distance <= 50) {
       distanceScore = 5;
       matchReasons.push(`Reasonable distance (${distance} km)`);
-    } else if (distance <= 100) {
+    } else if (distanceKnown && distance <= 100) {
       distanceScore = 2;
       matchReasons.push(`Moderate distance (${distance} km)`);
     }
@@ -518,6 +631,7 @@ export async function findMatchingLawyers(
       legalAreas: lawyerAreas,
       experienceYears: lawyer.experienceYears,
       distance,
+      distanceKnown,
       matchScore,
       matchReasons,
       caseLoadScore,
@@ -526,6 +640,12 @@ export async function findMatchingLawyers(
       capacityScore,
       distanceScore,
       experienceScore,
+      officialProfileUrl: lawyer.officialProfileUrl,
+      directorySource: lawyer.directorySource,
+      directoryRetrievedAt: lawyer.directoryRetrievedAt,
+      officialLegalAreas: parseJsonStringArray(lawyer.officialLegalAreas),
+      specializationAssociations: parseJsonStringArray(lawyer.specializationAssociations),
+      financedLegalAid: lawyer.financedLegalAid,
     });
   }
 

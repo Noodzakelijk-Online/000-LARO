@@ -1,6 +1,6 @@
 # Critical Path
 
-Current as of 2026-07-15. This document describes the shipped Electron/tRPC
+Current as of 2026-07-16. This document describes the shipped Electron/tRPC
 runtime. Provider-backed steps remain conditional on target credentials.
 
 ## Canonical Flow
@@ -19,7 +19,7 @@ account -> case intake -> evidence -> analysis/classification -> matching
 | Case intake | Implemented | `server/routers/cases.ts`; acceptance AC1 |
 | Evidence ingestion and provenance | Implemented | `server/routers/evidenceFiles.ts`; local/S3 storage with SHA-256; file-safety and hardening suites |
 | Legal classification | Implemented | `server/classification.ts`; acceptance AC2 |
-| Lawyer matching | Implemented | `server/matching.ts`; acceptance AC3 and backend integration |
+| Lawyer matching | Implemented | `server/novaDirectory.ts`; official NOvA read-only lookup with source provenance; `server/matching.ts`; controlled adapter tests and live manual probe |
 | Outreach preparation | Implemented | `workflow.initiateOutreach` advances the case and prepares idempotent review drafts in one action |
 | Human review | Implemented | Pending drafts require explicit approve/reject; approval does not send |
 | Provider send | Implemented, gated | Emergency stop, feature flag, ownership, Approved state, configured provider, and idempotency are all required |
@@ -35,6 +35,7 @@ account -> case intake -> evidence -> analysis/classification -> matching
 - A provider failure never produces a Sent state.
 - Inbound outcomes cannot be recorded against another user's case.
 - Recording a decline does not automatically contact another lawyer.
+- NOvA receives only selected directory filters, never case prose or the stored client address; unknown lawyer metrics earn no score.
 
 ## External Acceptance
 

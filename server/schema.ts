@@ -67,10 +67,23 @@ export const lawyers = sqliteTable(
     capacityPercentage: text("capacityPercentage").default("0"),
     languages: text("languages"), // JSON string
     novaId: text("novaId"),
+    officialProfileUrl: text("officialProfileUrl"),
+    officialLegalAreas: text("officialLegalAreas"),
+    specializationAssociations: text("specializationAssociations"),
+    admissionDate: text("admissionDate"),
+    district: text("district"),
+    financedLegalAid: text("financedLegalAid"),
+    directorySource: text("directorySource"),
+    directoryRetrievedAt: integer("directoryRetrievedAt", { mode: "timestamp" }),
+    directoryDistanceKm: text("directoryDistanceKm"),
+    directorySearchLocation: text("directorySearchLocation"),
     createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
     updatedAt: integer("updatedAt", { mode: "timestamp" }).default(new Date()),
   },
-  (t) => ({ cityIdx: index("lawyers_city_idx").on(t.city) })
+  (t) => ({
+    cityIdx: index("lawyers_city_idx").on(t.city),
+    novaIdIdx: index("lawyers_novaId_idx").on(t.novaId),
+  })
 );
 
 export type Lawyer = typeof lawyers.$inferSelect;

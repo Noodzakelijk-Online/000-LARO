@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'fs';
 import { spawnSync } from 'child_process';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -50,9 +50,15 @@ describe('production readiness regressions', () => {
     expect(timelineUi).toContain('title="Open source document"');
     expect(migration).toContain('CREATE TABLE `document_analyses`');
     expect(migration).not.toContain('__new_');
+    const migrationFiles = readdirSync(join(ROOT, 'drizzle')).filter((file) => /^(?:000[2-9]|00[1-9]\d).*\.sql$/.test(file));
+    for (const file of migrationFiles) {
+      expect(readFileSync(join(ROOT, 'drizzle', file), 'utf8')).not.toContain('__new_');
+    }
     expect(main).toContain("url.protocol === 'file:'");
     expect(main).toContain("filePath.startsWith(storageBase + path.sep)");
     expect(main).toContain('IPC_CHANNELS.RENDERER_ERROR_REPORT');
+    const novaDirectory = readFileSync(join(ROOT, 'server/novaDirectory.ts'), 'utf8');
+    expect(novaDirectory).not.toContain('caseData.clientAddress');
     const boundary = readFileSync(join(ROOT, 'src/renderer/components/PageErrorBoundary.tsx'), 'utf8');
     expect(boundary).toContain('reportRendererError');
     expect(boundary).not.toContain('TODO: Send to error tracking service');

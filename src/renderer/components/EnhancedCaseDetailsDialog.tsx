@@ -15,6 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import {
   MapPin,
@@ -50,6 +51,9 @@ import {
   FolderPlus,
   Plus,
   Folder,
+  ExternalLink,
+  Database,
+  AlertTriangle,
 } from "lucide-react";
 import { LegalAreasSelect } from "@/components/LegalAreasSelect";
 import { EvidenceCollection } from "@/components/EvidenceCollection";
@@ -410,6 +414,15 @@ export default function EnhancedCaseDetailsDialog({
   onOpenChange,
 }: EnhancedCaseDetailsDialogProps) {
   const [selectedDistance, setSelectedDistance] = useState(50);
+  const [matchLocation, setMatchLocation] = useState("");
+  const [requireSpecializationAssociation, setRequireSpecializationAssociation] = useState(false);
+  const [requiresFinancedLegalAid, setRequiresFinancedLegalAid] = useState(false);
+  const [appliedMatchFilters, setAppliedMatchFilters] = useState({
+    maxDistance: 50,
+    location: "",
+    requireSpecializationAssociation: false,
+    requiresFinancedLegalAid: false,
+  });
   const [isEditing, setIsEditing] = useState(false);
   const [editedCase, setEditedCase] = useState<any>(null);
 
@@ -434,11 +447,39 @@ export default function EnhancedCaseDetailsDialog({
   const { data: caseData, isLoading: caseLoading, refetch: refetchCase } =
     trpc.cases.byId.useQuery(caseId, { enabled: open && !!caseId });
 
-  const { data: matchedLawyers, isLoading: matchingLoading, refetch: refetchMatches } =
-    trpc.matching.findLawyers.useQuery(
-      { caseId, maxDistance: selectedDistance, maxResults: 10 },
-      { enabled: open && !!caseId }
+  const { data: officialMatches, isLoading: matchingLoading, refetch: refetchMatches } =
+    trpc.matching.findOfficialLawyers.useQuery(
+      {
+        caseId,
+        maxDistance: appliedMatchFilters.maxDistance,
+        maxResults: 10,
+        location: appliedMatchFilters.location || undefined,
+        requireSpecializationAssociation: appliedMatchFilters.requireSpecializationAssociation,
+        requiresFinancedLegalAid: appliedMatchFilters.requiresFinancedLegalAid,
+      },
+      {
+        enabled: open && !!caseId,
+        staleTime: 10 * 60 * 1000,
+        refetchOnWindowFocus: false,
+        retry: false,
+      }
     );
+  const matchedLawyers = officialMatches?.lawyers;
+  const directoryReport = officialMatches?.directory;
+
+  const handleOfficialDirectorySearch = () => {
+    const nextFilters = {
+      maxDistance: selectedDistance,
+      location: matchLocation.trim(),
+      requireSpecializationAssociation,
+      requiresFinancedLegalAid,
+    };
+    if (JSON.stringify(nextFilters) === JSON.stringify(appliedMatchFilters)) {
+      void refetchMatches();
+      return;
+    }
+    setAppliedMatchFilters(nextFilters);
+  };
 
   const { data: outreachHistory, refetch: refetchOutreach } = trpc.outreach.byCaseId.useQuery(caseId, {
     enabled: open && !!caseId,
@@ -872,9 +913,10 @@ export default function EnhancedCaseDetailsDialog({
                       <Users className="w-5 h-5 text-orange-500" /> Lawyer Matching
                     </h2>
 
-                    {/* radius control */}
-                    <div className="flex items-center gap-4 rounded-xl border border-border/30 bg-card/40 p-4">
-                      <div className="flex-1">
+                    {/* Official directory controls */}
+                    <div className="space-y-4 rounded-xl border border-border/30 bg-card/40 p-4">
+                      <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(220px,0.7fr)_auto] md:items-end">
+                      <div>
                         <label className="text-xs font-medium text-muted-foreground block mb-2">
                           Search Radius: <span className="text-orange-400 font-semibold">{selectedDistance} km</span>
                         </label>
@@ -885,9 +927,61 @@ export default function EnhancedCaseDetailsDialog({
                           className="w-full accent-orange-500"
                         />
                       </div>
-                      <Button onClick={() => refetchMatches()} variant="outline" size="sm" className="border-border/50 hover:bg-card/60">
-                        <Target className="w-3.5 h-3.5 mr-1.5" /> Refresh
+                      <div>
+                        <Label htmlFor="nova-match-location" className="mb-2 block text-xs text-muted-foreground">
+                          City or postcode
+                        </Label>
+                        <Input
+                          id="nova-match-location"
+                          value={matchLocation}
+                          onChange={(event) => setMatchLocation(event.target.value)}
+                          placeholder="Optional; shared only when you search"
+                        />
+                      </div>
+                      <Button
+                        onClick={handleOfficialDirectorySearch}
+                        disabled={matchingLoading}
+                        variant="outline"
+                        size="sm"
+                        className="border-border/50 hover:bg-card/60"
+                      >
+                        <Target className="w-3.5 h-3.5 mr-1.5" /> {matchingLoading ? "Searching..." : "Search NOvA"}
                       </Button>
+                      </div>
+                      <div className="flex flex-wrap gap-x-5 gap-y-3 text-xs text-muted-foreground">
+                        <label className="flex items-center gap-2">
+                          <Checkbox
+                            checked={requireSpecializationAssociation}
+                            onCheckedChange={(checked) => setRequireSpecializationAssociation(checked === true)}
+                          />
+                          Require specialization association
+                        </label>
+                        <label className="flex items-center gap-2">
+                          <Checkbox
+                            checked={requiresFinancedLegalAid}
+                            onCheckedChange={(checked) => setRequiresFinancedLegalAid(checked === true)}
+                          />
+                          Accepts financed legal aid
+                        </label>
+                      </div>
+                      {directoryReport && (
+                        <div className="flex flex-wrap items-center gap-2 border-t border-border/30 pt-3 text-xs text-muted-foreground">
+                          {directoryReport.status === "unavailable" ? (
+                            <AlertTriangle className="h-4 w-4 text-amber-500" />
+                          ) : (
+                            <Database className="h-4 w-4 text-emerald-500" />
+                          )}
+                          <span>
+                            {directoryReport.status === "complete" ? "Official directory results loaded" :
+                              directoryReport.status === "partial" ? "Official directory window loaded; more results exist" :
+                              directoryReport.status === "unavailable" ? "Official directory unavailable; showing persisted records" :
+                              "Official directory lookup was not required"}
+                          </span>
+                          <Badge variant="outline">{directoryReport.fetchedCandidates} fetched</Badge>
+                          {directoryReport.reportedTotal !== null && <Badge variant="outline">{directoryReport.reportedTotal} reported</Badge>}
+                          {directoryReport.errors[0] && <span className="text-amber-500">{directoryReport.errors[0]}</span>}
+                        </div>
+                      )}
                     </div>
 
                     {/* header + outreach button */}
@@ -923,13 +1017,23 @@ export default function EnhancedCaseDetailsDialog({
                                   <div className="min-w-0">
                                     <h4 className="font-semibold text-sm text-foreground truncate">{lawyer.name}</h4>
                                     <p className="text-xs text-muted-foreground flex items-center gap-1">
-                                      <MapPin className="w-3 h-3" /> {lawyer.distance} km away
+                                      <MapPin className="w-3 h-3" /> {lawyer.distanceKnown ? `${lawyer.distance} km away` : "Distance not available"}
                                     </p>
                                   </div>
                                 </div>
                                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground mb-2">
                                   {lawyer.email && <span className="flex items-center gap-1"><Mail className="w-3 h-3" /> {lawyer.email}</span>}
                                   {lawyer.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" /> {lawyer.phone}</span>}
+                                  {lawyer.officialProfileUrl && (
+                                    <a
+                                      href={lawyer.officialProfileUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="flex items-center gap-1 text-orange-400 hover:underline"
+                                    >
+                                      <ExternalLink className="h-3 w-3" /> Official NOvA profile
+                                    </a>
+                                  )}
                                 </div>
                                 <div className="flex flex-wrap gap-1.5">
                                   {lawyer.legalAreas?.map((area: any, i: number) => (
@@ -949,7 +1053,7 @@ export default function EnhancedCaseDetailsDialog({
                                 <div className="text-2xl font-bold bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent">
                                   {lawyer.matchScore}
                                 </div>
-                                <p className="text-[10px] text-muted-foreground mb-2">Score (max 210)</p>
+                                <p className="text-[10px] text-muted-foreground mb-2">Verified-data score (max 245)</p>
                                 <div className="text-[11px] space-y-0.5">
                                   {lawyer.caseLoadScore !== undefined && <div className="flex justify-between gap-1"><span className="text-muted-foreground/70">Load</span><span className="text-emerald-400">{lawyer.caseLoadScore}/50</span></div>}
                                   {lawyer.responseTimeScore !== undefined && <div className="flex justify-between gap-1"><span className="text-muted-foreground/70">Response</span><span className="text-blue-400">{lawyer.responseTimeScore}/50</span></div>}
@@ -966,7 +1070,7 @@ export default function EnhancedCaseDetailsDialog({
                     ) : (
                       <div className="rounded-xl border border-border/30 bg-card/40 p-8 text-center">
                         <Search className="w-10 h-10 mx-auto mb-3 text-muted-foreground/30" />
-                        <p className="text-muted-foreground text-sm">No matching lawyers found within {selectedDistance} km.</p>
+                        <p className="text-muted-foreground text-sm">No matching lawyers found within {appliedMatchFilters.maxDistance} km.</p>
                         <p className="text-xs text-muted-foreground/60 mt-1">Try increasing the search radius.</p>
                       </div>
                     )}

@@ -41,9 +41,10 @@ The Electron main process starts the Express/tRPC server and React renderer toge
 
 ### Matching and outreach
 
-- Rank lawyers using the case's legal fields and available directory attributes instead of returning random demo matches.
-- Match media and organizations as separate outreach categories and maintain a reviewable target directory.
-- Discover and import candidate targets from configured/public sources; discovery does not claim exhaustive internet coverage and requires human review.
+- Query the official NOvA public lawyer finder from the desktop case workspace, retain source/profile provenance, and rank lawyers using the case's legal fields plus only attributes that are actually available. Unknown capacity, availability, or performance receives no invented score.
+- Apply official legal-area, city/postcode, radius, specialization-association, and financed-legal-aid filters. City/postcode sharing is explicit; LARO does not send case prose or a client's stored address to NOvA.
+- In the Flask Case Command Center, match media and organizations as separate outreach categories and maintain a reviewable target directory. Those records are not silently synchronized into the Electron database.
+- Discover and import media/organization candidates from bounded public searches or configured sources; discovery does not claim exhaustive internet coverage and requires human review.
 - Track outreach totals, progress, responses, acceptance, and pending work per case.
 - Prepare and approve outreach drafts without sending them automatically.
 - Send an approved desktop-runtime lawyer outreach only when the global emergency stop is released, `outreach.send.enabled` is enabled, the caller owns the case, a real email provider is configured, and the idempotency guard has not already recorded the send.
@@ -154,7 +155,7 @@ GitHub Actions repeats the Node checks on the supported Node 22 toolchain:
 - Server, Electron main-process, and shipped renderer TypeScript checks passed; ESLint passed.
 - Traceability reported 116 rows, 93 cited, and 0 broken references.
 - Runtime no-excuses scan reported 0 suspect findings; account safety reported 0 high-severity findings.
-- Vitest reported 34 passing files, 228 passing tests, and no skipped or todo tests.
+- Vitest reported 35 passing files and 232 passing tests, including controlled NOvA parsing/filter and unknown-metric scoring tests, with no skipped or todo tests.
 - Full Python discovery reported 202 passing tests. Warning-focused optimization and UCID tests also passed with deprecations promoted to errors.
 - The Vite 8 renderer, Electron 43 main process, and standalone server builds completed successfully.
 - The scanner integration test verified scoped-token isolation, owner checks, supported MIME enforcement, exact stored bytes, and SHA-256 readback.
@@ -169,10 +170,11 @@ desktop server to that registered OAuth callback port instead.
 - Playwright smoke tests passed at 1440x900 and 390x844 with clean consoles, one coalesced local-session bootstrap, live command-center and Google-status responses, responsive depth controls, a closable Google dialog, and a functional password-visibility control.
 - Packaged Electron scanner QA passed signup, shared-session authorization, empty-state rendering, disabled unsafe scan state, Settings navigation, and clean renderer console checks.
 - A packaged launch from a directory containing hostile development `.env` values still reported production mode, database readiness, and a random `127.0.0.1` port.
-- The current unsigned portable executable is 118,308,427 bytes with SHA-256
-  `0fb4f180aa3a3fd609ff1deef69724aad6e40a64a18482b34de3e4001056f39d`.
-  An isolated-profile launch applied the document-analysis migration and returned
-  healthy production status on an automatically selected loopback port.
+- The current unsigned portable executable is 118,966,658 bytes with SHA-256
+  `EBF16EE4B6980AE23B79A147A7DCC798148CD62680F0FF8B698D373113A5F6F0`.
+  Windows reports `NotSigned`, as intended. An isolated-profile launch applied
+  the document-analysis and NOvA directory migrations, served the renderer, and
+  returned healthy production status on automatically selected loopback port 51188.
 - Main CI run `29455232706` passed Node and Python; Windows workflow
   `29455232654` passed the gate, build, Electron ABI check, package, checksum,
   and upload stages for the preceding protected-main baseline.

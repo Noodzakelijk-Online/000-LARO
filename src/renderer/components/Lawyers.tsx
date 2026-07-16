@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Mail, Phone, Globe, MapPin, Users, GitCompare } from "lucide-react";
+import { Search, Mail, Phone, Globe, MapPin, Users, GitCompare, ExternalLink, Database } from "lucide-react";
 import { useState } from "react";
 import LawyerComparisonView from "@/components/LawyerComparison";
 import SmartSearchFilters from "@/components/SmartSearchFilters";
@@ -50,6 +50,7 @@ export default function Lawyers() {
   };
 
   const lawyers = data?.lawyers || [];
+  const officialRecordCount = lawyers.filter((lawyer: any) => Boolean(lawyer.officialProfileUrl)).length;
   
   const filteredLawyers = lawyers.filter((lawyer: any) => {
     const areas = parseStringArray(lawyer.legalAreas);
@@ -96,7 +97,7 @@ export default function Lawyers() {
             Lawyers Database
           </h1>
           <p className="text-muted-foreground mt-2 text-lg">
-            Browse and manage lawyer profiles from the Dutch Bar Association
+            Browse persisted lawyer profiles and records retrieved from the official NOvA public directory
           </p>
         </div>
 
@@ -132,6 +133,7 @@ export default function Lawyers() {
           {/* Results Count */}
           <div className="text-sm text-muted-foreground">
             Showing {filteredLawyers.length} of {lawyers.length} lawyers
+            {officialRecordCount > 0 && `; ${officialRecordCount} linked to an official NOvA profile`}
           </div>
         </div>
 
@@ -173,9 +175,11 @@ export default function Lawyers() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <CardTitle className="text-lg truncate">{lawyer.name}</CardTitle>
-                        <p className="text-sm text-purple-400">
-                          {lawyer.experienceYears} years experience
-                        </p>
+                        {lawyer.experienceYears && Number(lawyer.experienceYears) > 0 && (
+                          <p className="text-sm text-purple-400">
+                            {lawyer.experienceYears} years experience
+                          </p>
+                        )}
                       </div>
                     </div>
                   </CardHeader>
@@ -210,6 +214,19 @@ export default function Lawyers() {
                             className="text-primary hover:underline truncate text-xs"
                           >
                             Website
+                          </a>
+                        </div>
+                      )}
+                      {lawyer.officialProfileUrl && (
+                        <div className="flex items-center gap-2 text-sm p-2 rounded-lg bg-background/30">
+                          <Database className="w-4 h-4 text-emerald-500 shrink-0" />
+                          <a
+                            href={lawyer.officialProfileUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-emerald-400 hover:underline truncate text-xs"
+                          >
+                            Official NOvA profile <ExternalLink className="h-3 w-3" />
                           </a>
                         </div>
                       )}

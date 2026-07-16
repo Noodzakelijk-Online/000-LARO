@@ -61,6 +61,19 @@ suite('Phase 040 — critical-path backend integration', () => {
     await db.insert(schema.users).values(buildUser({ id: userId }));
     await db.insert(schema.users).values(buildUser({ id: otherUserId }));
     await db.insert(schema.lawyers).values(buildLawyer({ id: 'LWYR_BE01' }));
+    await db.insert(schema.lawyers).values(buildLawyer({
+      id: 'NOVA-BE-UNKNOWN',
+      barAssociationStatus: 'Registered in NOvA public directory',
+      caseLoad: null,
+      averageResponseTimeHours: null,
+      totalOutreaches: '0',
+      totalResponses: '0',
+      totalAcceptances: '0',
+      currentlyAccepting: 'Unknown',
+      capacityPercentage: null,
+      directorySource: 'NOvA public lawyer finder',
+      officialProfileUrl: 'https://zoekeenadvocaat.advocatenorde.nl/advocaten/test/123',
+    }));
 
     const cls = classification.classifyLegalAreas(
       'werknemer ontslag zonder opzegtermijn',
@@ -86,6 +99,23 @@ suite('Phase 040 — critical-path backend integration', () => {
     expect(m.id).toBe('LWYR_BE01');
     expect(typeof m.matchScore).toBe('number');
     expect(m.matchScore).toBeGreaterThan(0);
+  });
+
+  it('does not award performance or availability points for unknown NOvA metrics', async () => {
+    const matches = await matching.findMatchingLawyers(caseId, { sortBy: 'score' });
+    const official = matches.find((match: any) => match.id === 'NOVA-BE-UNKNOWN');
+    expect(official).toBeTruthy();
+    expect(official).toMatchObject({
+      caseLoadScore: 0,
+      responseTimeScore: 0,
+      acceptanceRateScore: 0,
+      capacityScore: 0,
+    });
+    expect(official.matchReasons).toEqual(expect.arrayContaining([
+      'Case-load not available',
+      'Response history not available',
+      'Capacity not available',
+    ]));
   });
 
   it('enforces case ownership (Phase 008)', async () => {

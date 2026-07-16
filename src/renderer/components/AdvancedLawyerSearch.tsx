@@ -102,7 +102,7 @@ export default function AdvancedLawyerSearch() {
             <div>
               <CardTitle>Advanced Lawyer Search</CardTitle>
               <CardDescription>
-                Search from 10,000+ verified Dutch lawyers
+                Search lawyer records stored in LARO
               </CardDescription>
             </div>
             <Button variant="ghost" size="sm" onClick={handleReset}>
