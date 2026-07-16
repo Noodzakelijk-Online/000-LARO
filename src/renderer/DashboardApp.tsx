@@ -1,6 +1,5 @@
 /**
- * Full LARO web dashboard (cases, lawyers, evidence, outreach) — same surface area
- * as the deployed app at https://lawyerdashboard.manus.space
+ * Full LARO dashboard for the packaged desktop and supported server renderer.
  */
 import { lazy, Suspense } from "react";
 import { Router, Route, Switch } from "wouter";

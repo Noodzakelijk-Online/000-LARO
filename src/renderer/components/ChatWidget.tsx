@@ -129,6 +129,7 @@ export default function ChatWidget({ embedded = false }: { embedded?: boolean })
       {!embedded && !isOpen && (
         <Button
           onClick={() => setIsOpen(true)}
+          aria-label="Open LARO assistant"
           className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-2xl bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 z-50 transition-all duration-300 hover:scale-110"
           size="icon"
         >
@@ -149,8 +150,8 @@ export default function ChatWidget({ embedded = false }: { embedded?: boolean })
           className={
             embedded
               ? `flex h-full min-h-[420px] max-h-[640px] flex-col border-border/50 bg-card/95 shadow-md ${isMinimized ? "min-h-14" : ""}`
-              : `fixed bottom-6 right-6 z-50 shadow-2xl border-border/50 bg-card/95 backdrop-blur-lg transition-all duration-300 ${
-                  isMinimized ? "h-14 w-80" : "h-[600px] w-96"
+              : `fixed bottom-3 left-3 right-3 z-50 shadow-2xl border-border/50 bg-card/95 backdrop-blur-lg transition-all duration-300 sm:bottom-6 sm:left-auto sm:right-6 ${
+                  isMinimized ? "h-14 sm:w-80" : "h-[calc(100dvh-1.5rem)] sm:h-[600px] sm:w-96"
                 }`
           }
         >
@@ -174,6 +175,7 @@ export default function ChatWidget({ embedded = false }: { embedded?: boolean })
                 variant="ghost"
                 size="icon"
                 onClick={() => setIsMinimized(!isMinimized)}
+                aria-label={isMinimized ? "Expand LARO assistant" : "Minimize LARO assistant"}
                 className="h-8 w-8"
               >
                 {isMinimized ? (
@@ -187,6 +189,7 @@ export default function ChatWidget({ embedded = false }: { embedded?: boolean })
                   variant="ghost"
                   size="icon"
                   onClick={() => setIsOpen(false)}
+                  aria-label="Close LARO assistant"
                   className="h-8 w-8"
                 >
                   <X className="h-4 w-4" />
@@ -202,7 +205,7 @@ export default function ChatWidget({ embedded = false }: { embedded?: boolean })
                 className={
                   embedded
                     ? "flex-1 overflow-y-auto p-4 space-y-4 min-h-0"
-                    : "flex-1 overflow-y-auto p-4 space-y-4 h-[calc(600px-140px)]"
+                    : "flex-1 min-h-0 overflow-y-auto p-4 space-y-4"
                 }
               >
                 {/* Pending Questions */}
@@ -250,11 +253,13 @@ export default function ChatWidget({ embedded = false }: { embedded?: boolean })
                     onChange={(e) => setMessage(e.target.value)}
                     onKeyPress={handleKeyPress}
                     placeholder="Type your message..."
+                    aria-label="Message LARO assistant"
                     className="flex-1"
                   />
                   <Button
                     onClick={handleSend}
                     size="icon"
+                    aria-label="Send message"
                     className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700"
                     disabled={!message.trim()}
                   >

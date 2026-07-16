@@ -1,6 +1,6 @@
 # Final Verification Report
 
-Date: 2026-07-16
+Date: 2026-07-17
 Verification target: the production-readiness changes in this report's commit
 
 This report separates reproducible repository evidence from target-environment
@@ -17,7 +17,7 @@ acceptance. It supersedes the 2026-07-06 phase snapshot.
 | Account-safety scan | 0 high-severity findings |
 | Isolated backup/delete/restore/reopen drill | Pass |
 | Target database readiness | SQLite integrity, declared foreign keys, invariants, reconciliation, duplicates, and demo markers clean |
-| Vitest | 39 files, 244 tests passed, 0 todo |
+| Vitest | 40 files, 250 tests passed, 0 todo |
 | Python unittest discovery | 202 tests passed |
 | Runtime dependency audit | 0 known vulnerabilities |
 | Renderer, main, and server production builds | Pass |
@@ -25,9 +25,9 @@ acceptance. It supersedes the 2026-07-06 phase snapshot.
 | Packaged `/api/health` | `healthy`, database ready, version 1.3.0, production |
 | Packaged document intelligence and Outreach | Five migrations present; PDF, DOCX, native parser dependencies, and review-gated Outreach tables present; integrated server booted successfully |
 | Desktop scanner contract | Scoped 15-minute token; real bytes/hash; owner/MIME enforcement |
-| PR CI | PR #19 requires current Node and Python branch checks before merge |
-| Protected-main CI | Actions run `29458340785`; Node and Python jobs passed |
-| Windows package workflow | Actions run `29458340759`; gate, build, ABI check, package, checksum, and artifact upload passed |
+| Branch CI policy | Current Node and Python checks are required before merge |
+| Protected-main CI | Actions run `29538287439`; Node and Python jobs passed |
+| Windows package workflow | Actions run `29538286047`; gate, build, ABI check, package, checksum, and artifact upload passed |
 | Packaged matching assets | Seven aligned legal categories; invalid legacy dataset absent |
 | Dependency graph | One canonical Node workspace; 0 open Dependabot alerts |
 
@@ -66,11 +66,25 @@ A second packaged-window run exercised the rebuilt scanner surface:
 - Settings opened and returned to evidence collection; the viewport had no
   horizontal overflow or overlapping controls.
 
-The current local portable artifact is 118,880,896 bytes with SHA-256
-`5A38A99448D1972F51FAC929924048BC8784F5B13D84A20914AAA76ADC638689`.
+A final clean-profile packaged run created a new local account and checked all
+14 mounted routes at both 1440x900 and 390x844:
+
+- all 28 route/viewport combinations rendered meaningful content and an `h1`;
+- no route had horizontal overflow, unnamed visible buttons, unlabeled visible
+  fields, missing image alternative text, blank content, or a framework error;
+- the 366x820 assistant remained inside the 390x844 viewport and exposed named
+  open, minimize, close, input, and send controls;
+- the notification popover, Help accordion, and Case Notes compose flow worked
+  without fabricated delivery filters or support promises;
+- the shell used the packaged LARO favicon and title, and authentication exposed
+  correct email, current-password, new-password, and one-time-code metadata;
+- no page error, console error, or console warning occurred during the sweep.
+
+The current local portable artifact is 118,877,949 bytes with SHA-256
+`79DD955E71703488FC11ED8DB445FBF9D67ACC42BB2AF82997556912D085A60D`.
 It launched with an explicit isolated user-data directory, created fresh local
 secrets and databases, applied all five packaged migrations, and returned
-healthy production status on loopback port 50183. Direct SQLite inspection
+healthy production status on loopback port 52210. Direct SQLite inspection
 confirmed `outreach_directory_targets` and `case_outreach_target_matches`.
 Its packaged resources contain the current migrations, PDF/DOCX parsers, native
 parser dependency, consolidated managed-storage deletion, and seven-category
@@ -143,8 +157,8 @@ before it can publish.
 - The Electron and Flask runtimes still have separate schemas and databases.
 - Application-level reconciliation remains important until more invariants are
   declared as database foreign keys.
-- Route-level lazy loading keeps the production entry chunk near 274 KB before
-  gzip; the largest route chunk is near 230 KB.
+- Route-level lazy loading keeps the production entry chunk near 276 KB before
+  gzip; the largest route chunk is near 266 KB.
 - Full i18n migration and additional cross-browser/a11y automation remain useful
   hardening work.
 

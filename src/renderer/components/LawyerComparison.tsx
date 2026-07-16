@@ -110,7 +110,7 @@ export default function LawyerComparison({ lawyers, caseType, onSelect, onClose 
           <p className="text-muted-foreground">Side-by-side comparison of {lawyers.length} recommended lawyers</p>
         </div>
         {onClose && (
-          <Button variant="ghost" size="icon" onClick={onClose}>
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close lawyer comparison">
             <X className="w-5 h-5" />
           </Button>
         )}

@@ -1,43 +1,42 @@
-# Responsive & Browser Compatibility (Phase 050)
+# Responsive and Browser Compatibility
 
-Date: 2026-07-06 · Branch `Phase-Imp`
+Date: 2026-07-17
 
 ## Target runtime
 
-LARO ships as an **Electron desktop app**, so the renderer runs in a **single,
-known Chromium** (bundled with Electron 43). This removes the
-usual cross-browser matrix: there is one engine to support, not many. The web
-build (if hosted) would additionally target current evergreen browsers.
+LARO's primary renderer runs in the Chromium version bundled with Electron 43.
+The packaged desktop app is therefore the supported browser target. A separately
+hosted build would require its own evergreen-browser matrix.
 
-## Responsive approach
+## Responsive implementation
 
-- **Tailwind CSS** provides the responsive system; layouts use its breakpoints
-  (`sm 640`, `md 768`, `lg 1024`, `xl 1280`, `2xl 1536`) and flex/grid utilities.
-- Radix UI primitives (shadcn-style) supply accessible, responsive components
-  (dialog, popover, dropdown, tabs, scroll-area).
-- The desktop window is resizable; primary views should reflow from a narrow
-  (~800px) to a wide (>1440px) window.
+- Tailwind breakpoints and flex/grid layouts reflow the application shell and
+  route content.
+- Radix UI primitives provide responsive dialog, popover, dropdown, tab, select,
+  and scroll-area behavior.
+- The sidebar switches to a mobile trigger and the primary content retains a
+  constrained, non-overlapping work area.
+- Fixed assistant and notification surfaces use viewport-relative widths and
+  heights on narrow screens.
 
-## Compatibility posture
+## Verified matrix
 
-| Concern | Status |
-|---|---|
-| Rendering engine | Single Electron Chromium — no legacy-browser support burden |
-| Responsive utilities | Tailwind breakpoints + flex/grid in use across components |
-| Minimum window | App is resizable; target ≥ 1024px wide for the dashboard |
-| Hosted web build | Would target evergreen Chromium/Firefox/Safari (not the primary delivery) |
+The final portable Windows executable was audited at 1440x900 and 390x844 on all
+14 mounted routes:
 
-## What is verified vs pending
+`/`, `/cases`, `/lawyers`, `/outreach`, `/help`, `/settings`,
+`/email-settings`, `/email-preferences`, `/privacy`, `/admin`,
+`/admin-analytics`, `/messages`, `/email`, and `/analytics`.
 
-- **Verified:** Tailwind is configured and used; the app targets one Chromium.
-- **Pending (manual):** a per-screen reflow pass at 800 / 1024 / 1440 px widths,
-  and verification that tables and wide content scroll within their own
-  containers rather than the page. This is a manual QA step (no automated visual
-  regression yet — a candidate for Phase 051/052 tooling).
+All 28 route/viewport combinations had meaningful content, no horizontal page
+overflow, and no blank or framework-error surface. The mobile Cases header,
+assistant panel, notification popover, Help accordion, and Case Notes compose
+flow were additionally exercised. The assistant measured 366x820 inside the
+390x844 viewport.
 
-## Honest note
+## Remaining scope
 
-For a single-Chromium desktop app, "browser compatibility" is largely **N/A**;
-the meaningful work here is **responsive reflow within the desktop window**,
-which uses Tailwind and remains a manual QA item until visual-regression tooling
-is added.
+- Electron's bundled Chromium is verified; Firefox and Safari are not supported
+  packaged-app targets.
+- Visual-regression baselines across additional density, zoom, and high-contrast
+  settings remain useful future hardening.

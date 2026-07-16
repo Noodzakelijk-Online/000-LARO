@@ -1,39 +1,50 @@
-# Accessibility Review (Phase 049)
+# Accessibility Review
 
-Date: 2026-07-06 · Branch `Phase-Imp`
+Date: 2026-07-17
 
-## What is implemented
+## Implemented controls
 
-The renderer ships accessibility utilities in `server/accessibility.ts` (a shared
-util, despite the path): keyboard-activation handling, unique-id generation,
-screen-reader announcements, a focus trap, visible-to-screen-reader checks,
-accessible-label resolution, a `KeyboardShortcuts` manager, and a WCAG contrast
-checker.
+- Shared navigation, account, notification, assistant, filter, privacy, note,
+  and comparison controls expose programmatic names.
+- The Help FAQ uses native buttons with `aria-expanded` and `aria-controls`.
+- Authentication fields provide name, email, current-password, new-password,
+  and one-time-code autocomplete metadata.
+- Radix UI primitives provide keyboard and focus behavior for dialogs, popovers,
+  dropdowns, tabs, and selects.
+- `server/accessibility.ts` provides contrast checks, keyboard activation,
+  screen-reader announcements, focus trapping, and accessible-label helpers.
 
-## Automated coverage (Phase 049)
+## Automated coverage
 
-`tests/a11y/accessibility.test.ts` unit-tests the pure helpers:
-- `hasGoodContrast` — WCAG ratio thresholds (normal 4.5:1, large 3:1).
-- `generateId` — unique, prefixed ids for label/for associations.
+- `tests/a11y/accessibility.test.ts` covers contrast thresholds and identifier
+  generation.
+- `tests/frontend/productionUiAccessibility.test.ts` prevents regressions in
+  responsive layout, control names, assistant sizing, notification semantics,
+  truthful Help content, local shell assets, and authentication metadata.
 
-DOM-dependent helpers (focus trap, screen-reader announce, focus restoration)
-require a jsdom environment + component rendering; those are covered when the
-component test harness lands (jsdom + @testing-library/react — Phase 041 follow-up).
+## Packaged renderer audit
 
-## Manual review checklist (for the desktop UI)
+The final unsigned Windows executable was tested with a new local account in its
+bundled Chromium at 1440x900 and 390x844. Fourteen mounted routes were checked at
+both sizes.
 
-| Area | Guidance | Status |
-|---|---|---|
-| Keyboard navigation | All interactive controls reachable via Tab; Enter/Space activate | Utilities present; per-screen audit pending |
-| Focus management | Modals trap focus and restore on close (`createFocusTrap`) | Helper implemented |
-| Labels | Inputs have associated labels (`generateId` + `getAccessibleLabel`) | Helpers implemented |
-| Colour contrast | Text meets 4.5:1 (dark theme) — verify tokens with `hasGoodContrast` | Checker available |
-| Screen readers | Live-region announcements for async results (`announceToScreenReader`) | Helper implemented |
-| Motion | Respect `prefers-reduced-motion` | Pending audit |
+- Every route rendered meaningful content and an `h1`.
+- No visible button lacked an accessible name.
+- No visible input, textarea, or select lacked a programmatic label.
+- No image lacked alternative text.
+- The Help accordion expanded through its button contract.
+- The mobile assistant exposed named open, minimize, close, input, and send
+  controls while remaining inside the viewport.
+- The notification popover remained inside the mobile viewport and its trigger
+  reported unread state through its accessible name.
+- No page error, console error, or console warning occurred during the sweep.
 
-## Gaps / follow-ups
+Radix's generated `aria-hidden` compatibility selects are intentionally excluded
+from the visible-field check.
 
-- Component-level a11y tests (roles, ARIA, focus order) need jsdom — deferred.
-- A full axe-core audit of each screen is recommended before a production claim.
-- The single legal-advice disclaimer (Phase 013) should be surfaced with an
-  appropriate ARIA role where shown.
+## Remaining scope
+
+- The route audit is not a complete WCAG conformance assessment.
+- A full axe-core pass, screen-reader session, complete keyboard focus-order
+  review, and reduced-motion review remain recommended before a public
+  accessibility claim.

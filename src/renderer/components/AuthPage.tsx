@@ -105,6 +105,7 @@ export default function AuthPage() {
                       id="name"
                       placeholder="John Doe"
                       type="text"
+                      autoComplete="name"
                       className="pl-10 h-12 bg-background/50 border-border/50 focus:border-primary/50"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
@@ -124,6 +125,7 @@ export default function AuthPage() {
                     id="email"
                     placeholder="name@example.com"
                     type="email"
+                    autoComplete="email"
                     className="pl-10 h-12 bg-background/50 border-border/50 focus:border-primary/50"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -143,6 +145,7 @@ export default function AuthPage() {
                       placeholder="123456"
                       type="text"
                       inputMode="numeric"
+                      autoComplete="one-time-code"
                       maxLength={6}
                       className="pl-10 h-12 tracking-[0.5em] bg-background/50 border-border/50 focus:border-primary/50"
                       value={code}
@@ -162,6 +165,7 @@ export default function AuthPage() {
                       id="password"
                       placeholder="••••••••"
                       type="password"
+                      autoComplete={mode === "signup" ? "new-password" : "current-password"}
                       className="pl-10 h-12 bg-background/50 border-border/50 focus:border-primary/50"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
@@ -180,6 +184,7 @@ export default function AuthPage() {
                       id="newPassword"
                       placeholder="At least 8 characters"
                       type="password"
+                      autoComplete="new-password"
                       minLength={8}
                       className="pl-10 h-12 bg-background/50 border-border/50 focus:border-primary/50"
                       value={newPassword}

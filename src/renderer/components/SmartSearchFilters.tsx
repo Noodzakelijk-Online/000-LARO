@@ -196,7 +196,7 @@ export default function SmartSearchFilters({
                   })
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger aria-label="Filter by case status">
                   <SelectValue placeholder="All statuses" />
                 </SelectTrigger>
                 <SelectContent>
@@ -221,7 +221,7 @@ export default function SmartSearchFilters({
                   })
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger aria-label="Filter by urgency">
                   <SelectValue placeholder="All urgencies" />
                 </SelectTrigger>
                 <SelectContent>
@@ -245,7 +245,7 @@ export default function SmartSearchFilters({
                   })
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger aria-label="Filter by lawyer experience">
                   <SelectValue placeholder="Any experience" />
                 </SelectTrigger>
                 <SelectContent>
@@ -270,7 +270,7 @@ export default function SmartSearchFilters({
                   })
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger aria-label="Filter by lawyer availability">
                   <SelectValue placeholder="Any availability" />
                 </SelectTrigger>
                 <SelectContent>
@@ -285,6 +285,7 @@ export default function SmartSearchFilters({
             <div>
               <label className="text-sm font-medium mb-1 block text-muted-foreground">Legal Area</label>
               <Input
+                aria-label="Filter by legal area"
                 value={activeFilters.legalArea || ""}
                 placeholder="Any legal area"
                 onChange={(event) =>
@@ -310,7 +311,7 @@ export default function SmartSearchFilters({
                   })
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger aria-label="Filter by date range">
                   <SelectValue placeholder="All time" />
                 </SelectTrigger>
                 <SelectContent>
@@ -329,6 +330,7 @@ export default function SmartSearchFilters({
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
+                aria-label={searchType === "lawyers" ? "Search lawyers" : "Search cases"}
                 placeholder={searchType === "lawyers" ? "Search lawyer name, email, address, or legal area..." : "Search cases using natural language or keywords..."}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}

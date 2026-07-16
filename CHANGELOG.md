@@ -22,6 +22,18 @@ versioning; dates are ISO. Version is sourced from `package.json` and surfaced b
   compact source controls that open the owning document.
 
 ### Fixed
+- Reworked the reachable Messages surface as truthful local Case Notes: removed
+  fabricated unread, delivery, priority, response-time, subject, and fallback
+  template states while retaining real persisted note creation and search.
+- Fixed the narrow-screen Cases header, floating assistant, and notification
+  popover so primary actions and overlays remain inside a 390px viewport.
+- Added accessible names to shared navigation, account, assistant, notification,
+  search, privacy, note, and comparison controls; converted Help FAQs to
+  keyboard-operable disclosure buttons.
+- Replaced unsupported Help claims about billing, provider breadth, response
+  SLAs, blanket encryption, and compliance with the actual installed behavior.
+- Replaced the stale dashboard title and remote Manus favicon with LARO-owned
+  shell metadata, and added authentication autocomplete hints.
 - Removed obsolete pricing, checkout, quota-alert, grace-period, and upgrade
   prototypes so core document generation cannot return a fabricated paywall.
 - Reduced local usage tracking to real operation and quantity counts; it no
