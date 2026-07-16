@@ -7,6 +7,7 @@ import {
   text,
   integer,
   index,
+  uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 
 // ─── Users & auth ───────────────────────────────────────────────────────────
@@ -127,6 +128,38 @@ export const evidence = sqliteTable(
     userIdIdx: index("evidence_userId_idx").on(table.userId),
   })
 );
+
+export const documentAnalyses = sqliteTable(
+  "document_analyses",
+  {
+    id: text("id").primaryKey(),
+    evidenceId: text("evidenceId").notNull().references(() => evidence.id, { onDelete: "cascade" }),
+    caseId: text("caseId").notNull().references(() => cases.id, { onDelete: "cascade" }),
+    userId: text("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+    analysisVersion: text("analysisVersion").notNull(),
+    contentHash: text("contentHash").notNull(),
+    status: text("status").notNull(),
+    extractionMethod: text("extractionMethod").notNull(),
+    providerStatus: text("providerStatus").notNull(),
+    documentType: text("documentType").notNull(),
+    confidence: integer("confidence").notNull(),
+    summary: text("summary").notNull(),
+    result: text("result").notNull(),
+    analyzedChars: integer("analyzedChars").notNull(),
+    createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
+    updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull(),
+  },
+  (table) => ({
+    evidenceVersionUnique: uniqueIndex("document_analyses_evidence_version_unique").on(
+      table.evidenceId,
+      table.analysisVersion
+    ),
+    caseCreatedIdx: index("document_analyses_case_created_idx").on(table.caseId, table.createdAt),
+    userIdx: index("document_analyses_user_idx").on(table.userId),
+  })
+);
+
+export type DocumentAnalysis = typeof documentAnalyses.$inferSelect;
 
 export const evidenceItems = sqliteTable("evidence_items", {
   id: text("id").primaryKey(),

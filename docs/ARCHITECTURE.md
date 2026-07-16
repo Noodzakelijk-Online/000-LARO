@@ -29,6 +29,11 @@ Important boundaries:
 - tRPC procedures enforce authentication, role checks, case ownership, and team access.
 - Provider credentials stay server-side and are encrypted at rest.
 - Evidence blobs use S3 when configured or confined local storage with SHA-256 provenance hashes.
+- Supported evidence is extracted locally into versioned, persisted document
+  analyses. Deterministic findings carry source-span IDs; optional provider
+  enrichment is discarded when any finding cites an unknown source span.
+- Gmail messages, attachments, local files, and Drive files use the same managed
+  evidence storage. Google-native documents are exported to PDF before analysis.
 - External outreach is disabled by default and requires ownership, approval, feature-flag, emergency-stop, provider, and idempotency checks.
 - Server, Electron main, renderer TypeScript, ESLint, safety scans, traceability,
   an isolated database recovery drill, and Vitest are blocking release gates.
@@ -69,7 +74,9 @@ Private records are scoped as follows:
 
 - Google and Microsoft OAuth require configured client credentials and explicit user consent.
 - Trello OAuth remains disabled until its server-side token lifecycle is complete.
-- Provider-backed AI fails closed when its credentials are absent.
+- Desktop document analysis retains a deterministic local result when provider
+  credentials are absent; provider-backed enrichment fails closed and cannot
+  replace the source-grounded result with uncited output.
 - Flask document intelligence always has a deterministic review path and can optionally use a loopback-only Ollama endpoint.
 - Model-derived observations must contain literal source support and remain unconfirmed until reviewed.
 
@@ -81,9 +88,9 @@ Private records are scoped as follows:
 - SQLite files, uploads, token vaults, and generated secrets are runtime state and are ignored by Git.
 - Desktop packaging allowlists the two matcher datasets and excludes the legacy
   development service under `assets`.
-- Public Windows distribution requires an approved icon and either Microsoft
-  Store certification, where Microsoft signs the accepted package, or a trusted
-  Authenticode signature for direct portable distribution.
+- Current Windows artifacts are for internal deployment and are unsigned. Public
+  distribution is intentionally disabled unless an operator later chooses Store
+  certification or configures a trusted Authenticode provider.
 
 ## Current Architectural Risks
 

@@ -61,37 +61,9 @@ async function getDriveClient(userId: string) {
  * For now, we'll try to find the user associated with the folder if possible,
  * or use a fallback mechanism.
  */
-export async function getGoogleDriveFileMetadata(folderId: string, userId?: string) {
-  // If userId is missing, we try to find it from the autoCollectionSettings
-  // This is a safety measure because autoCollectionService.ts doesn't pass it yet.
-  let targetUserId = userId;
-  
-  if (!targetUserId) {
-    const db = await getDb();
-    if (db) {
-      const { autoCollectionSettings } = await import('./schema');
-      const settings = await db
-        .select()
-        .from(autoCollectionSettings)
-        .where(eq(autoCollectionSettings.googleDriveFolderIds, JSON.stringify([folderId])))
-        .limit(1);
-      
-      if (settings[0]) {
-          targetUserId = settings[0].userId || undefined;
-      }
-    }
-  }
-
-  if (!targetUserId) {
-    // Fallback: Get the first user with a Google account (simplified for now)
-    const db = await getDb();
-    const account = await db?.select().from(emailAccounts).where(eq(emailAccounts.provider, 'gmail')).limit(1);
-    targetUserId = account?.[0]?.userId;
-  }
-
-  if (!targetUserId) throw new Error('Could not determine userId for Google Drive request');
-
-  const drive = await getDriveClient(targetUserId);
+export async function getGoogleDriveFileMetadata(folderId: string, userId: string) {
+  if (!userId) throw new Error('Google Drive metadata lookup requires an explicit user');
+  const drive = await getDriveClient(userId);
   
   const response = await drive.files.list({
     q: `'${folderId}' in parents and trashed = false`,
@@ -125,28 +97,42 @@ export async function downloadAndUploadGoogleDriveFile(fileId: string, caseId: s
     fields: 'name, mimeType, size, modifiedTime',
   });
 
-  const fileName = fileMetadata.data.name || 'document';
-  const mimeType = fileMetadata.data.mimeType || 'application/octet-stream';
+  let fileName = fileMetadata.data.name || 'document';
+  const sourceMimeType = fileMetadata.data.mimeType || 'application/octet-stream';
+  let mimeType = sourceMimeType;
   const fileSize = fileMetadata.data.size;
   const modifiedTime = fileMetadata.data.modifiedTime;
 
-  // 2. Download the file content
-  const response = await drive.files.get(
-    { fileId, alt: 'media' },
-    { responseType: 'arraybuffer' }
-  );
+  // Google-native documents have no media body. Export them to PDF so the
+  // same source-grounded text extraction pipeline can analyze them.
+  const googleNative = sourceMimeType.startsWith('application/vnd.google-apps.');
+  const response = googleNative
+    ? await drive.files.export(
+        { fileId, mimeType: 'application/pdf' },
+        { responseType: 'arraybuffer' }
+      )
+    : await drive.files.get(
+        { fileId, alt: 'media' },
+        { responseType: 'arraybuffer' }
+      );
+  if (googleNative) {
+    mimeType = 'application/pdf';
+    if (!fileName.toLowerCase().endsWith('.pdf')) fileName += '.pdf';
+  }
 
   const buffer = Buffer.from(response.data as ArrayBuffer);
 
   // 3. Upload to our storage
   const storagePath = `evidence/${caseId}/gdrive/${uuidv4()}-${fileName}`;
-  const { key, url } = await storagePut(storagePath, buffer, mimeType);
+  const { key, url, sha256 } = await storagePut(storagePath, buffer, mimeType);
 
   return { 
     key, 
     url, 
+    sha256,
     fileName, 
     mimeType, 
+    sourceMimeType,
     size: fileSize || buffer.length.toString(),
     modifiedTime: modifiedTime ? new Date(modifiedTime) : new Date(),
   };

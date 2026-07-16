@@ -61,6 +61,8 @@ import { EvidenceGapAnalysisDashboard } from "@/components/EvidenceGapAnalysisDa
 import EnhancedEvidenceUpload from "@/components/EnhancedEvidenceUpload";
 import { CollectionMonitoringDashboard } from "@/components/CollectionMonitoringDashboard";
 import ProgressTrackingDashboard from "@/components/ProgressTrackingDashboard";
+import { AutomatedDocumentAnalysis } from "@/components/AutomatedDocumentAnalysis";
+import { CaseTimeline } from "@/components/CaseTimeline";
 import { exportCaseSummary, printCaseSummary } from "@/lib/export";
 import CaseStatusWorkflow from "@/components/CaseStatusWorkflow";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -378,6 +380,7 @@ const NAV_ITEMS = [
   { id: "progress", label: "Progress", icon: TrendingUp },
   { id: "messages", label: "Messages", icon: MessageSquare },
   { id: "evidence", label: "Evidence", icon: FileText },
+  { id: "analysis", label: "Analysis", icon: Sparkles },
   { id: "evidence-timeline", label: "Evidence Timeline", icon: GitBranch },
   { id: "gap-analysis", label: "Gap Analysis", icon: Shield },
   { id: "matching", label: "Lawyers", icon: Users },
@@ -834,6 +837,15 @@ export default function EnhancedCaseDetailsDialog({
                 )}
 
                 {/* ═══ EVIDENCE TIMELINE ═══ */}
+                {activeTab === "analysis" && (
+                  <div className="space-y-5 animate-in fade-in-0 duration-200">
+                    <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-orange-500" /> Document Analysis
+                    </h2>
+                    <AutomatedDocumentAnalysis caseId={caseId} />
+                  </div>
+                )}
+
                 {activeTab === "evidence-timeline" && (
                   <div className="space-y-5 animate-in fade-in-0 duration-200">
                     <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
@@ -1037,6 +1049,8 @@ export default function EnhancedCaseDetailsDialog({
                     <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
                       <Clock className="w-5 h-5 text-orange-500" /> Case Timeline
                     </h2>
+                    <CaseTimeline caseId={caseId} />
+                    <h3 className="text-base font-semibold text-foreground">Operational history</h3>
                     <TimelineView
                       events={[
                         {

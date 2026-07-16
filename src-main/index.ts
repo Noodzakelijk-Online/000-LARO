@@ -2,7 +2,9 @@ import { app, BrowserWindow, ipcMain, dialog, shell, Menu } from 'electron';
 import path from 'path';
 import os from 'os';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
 import { nanoid } from 'nanoid';
+import log from 'electron-log';
 import { IPC_CHANNELS, Platform, ScanConfig, AgentConfig } from '../shared/types';
 import {
   initDatabase as initAgentDb,
@@ -132,6 +134,18 @@ function hardenWindowNavigation(window: BrowserWindow): void {
 
 async function openExternalUrl(rawUrl: string): Promise<void> {
   const url = new URL(rawUrl);
+  if (url.protocol === 'file:') {
+    const storageBase = path.resolve(
+      process.env.LOCAL_STORAGE_DIR || path.join(app.getPath('userData'), 'uploads')
+    );
+    const filePath = path.resolve(fileURLToPath(url));
+    if (filePath !== storageBase && !filePath.startsWith(storageBase + path.sep)) {
+      throw new Error('Blocked local file outside LARO evidence storage');
+    }
+    const error = await shell.openPath(filePath);
+    if (error) throw new Error(error);
+    return;
+  }
   const localHttp = url.protocol === 'http:' && ['localhost', '127.0.0.1', '::1'].includes(url.hostname);
   if (url.protocol !== 'https:' && url.protocol !== 'mailto:' && !localHttp) {
     throw new Error(`Blocked external URL protocol: ${url.protocol}`);
@@ -373,6 +387,20 @@ function setupIPC(): void {
   ipcMain.handle(IPC_CHANNELS.OPEN_EXTERNAL, (event, url: string) => {
     assertTrustedIpc(event);
     return openExternalUrl(url);
+  });
+  ipcMain.handle(IPC_CHANNELS.RENDERER_ERROR_REPORT, (event, report: unknown) => {
+    assertTrustedIpc(event);
+    if (!report || typeof report !== 'object') throw new Error('Invalid renderer error report');
+    const input = report as Record<string, unknown>;
+    const bounded = (value: unknown, length: number) => typeof value === 'string' ? value.slice(0, length) : undefined;
+    const message = bounded(input.message, 1_000);
+    if (!message) throw new Error('Renderer error message is required');
+    log.error('[RendererBoundary]', {
+      message,
+      stack: bounded(input.stack, 8_000),
+      componentStack: bounded(input.componentStack, 8_000),
+      route: bounded(input.route, 500),
+    });
   });
   ipcMain.handle(IPC_CHANNELS.SCAN_OPEN_PANEL, (event) => {
     assertTrustedIpc(event);

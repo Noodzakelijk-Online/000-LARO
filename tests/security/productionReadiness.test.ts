@@ -22,6 +22,42 @@ describe('production readiness regressions', () => {
       .rejects.toThrow('FORGE_API_KEY is not configured');
   });
 
+  it('ships persisted source-grounded document analysis instead of a renderer-only stub', () => {
+    const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+    const router = readFileSync(join(ROOT, 'server/routers/documentAnalysis.ts'), 'utf8');
+    const intelligence = readFileSync(join(ROOT, 'server/documentIntelligence.ts'), 'utf8');
+    const collector = readFileSync(join(ROOT, 'server/autoCollectionService.ts'), 'utf8');
+    const analysisUi = readFileSync(join(ROOT, 'src/renderer/components/AutomatedDocumentAnalysis.tsx'), 'utf8');
+    const caseUi = readFileSync(join(ROOT, 'src/renderer/components/EnhancedCaseDetailsDialog.tsx'), 'utf8');
+    const timelineUi = readFileSync(join(ROOT, 'src/renderer/components/CaseTimeline.tsx'), 'utf8');
+    const migration = readFileSync(join(ROOT, 'drizzle/0002_unknown_silver_samurai.sql'), 'utf8');
+    const main = readFileSync(join(ROOT, 'src-main/index.ts'), 'utf8');
+
+    expect(pkg.dependencies['pdf-parse']).toBeTruthy();
+    expect(pkg.dependencies.mammoth).toBeTruthy();
+    expect(router).toContain('analyzeStoredEvidence');
+    expect(router).toContain('generateCaseTimeline');
+    expect(router).not.toContain('documentAnalysis stub');
+    expect(intelligence).toContain('Every finding must cite one or more supplied source IDs');
+    expect(intelligence).toContain('validCitationIds.has(id)');
+    expect(collector).toContain('storageKey: storedMessage.key');
+    expect(collector).toContain('contentHash: storedAttachment.sha256');
+    expect(collector).toContain('analyzeImportedEvidence');
+    expect(analysisUi).toContain('evidenceFiles.upload.useMutation');
+    expect(analysisUi).toContain('documentAnalysis.analyzeEvidence.useMutation');
+    expect(caseUi).toContain('{ id: "analysis", label: "Analysis"');
+    expect(caseUi).toContain('<CaseTimeline caseId={caseId} />');
+    expect(timelineUi).toContain('title="Open source document"');
+    expect(migration).toContain('CREATE TABLE `document_analyses`');
+    expect(migration).not.toContain('__new_');
+    expect(main).toContain("url.protocol === 'file:'");
+    expect(main).toContain("filePath.startsWith(storageBase + path.sep)");
+    expect(main).toContain('IPC_CHANNELS.RENDERER_ERROR_REPORT');
+    const boundary = readFileSync(join(ROOT, 'src/renderer/components/PageErrorBoundary.tsx'), 'utf8');
+    expect(boundary).toContain('reportRendererError');
+    expect(boundary).not.toContain('TODO: Send to error tracking service');
+  });
+
   it('uses encrypted PKCE state for Google OAuth', async () => {
     process.env.GOOGLE_CLIENT_ID = 'client-id';
     process.env.COOKIE_SECRET = 'test-cookie-secret-that-is-long-and-random-1234';

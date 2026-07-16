@@ -6,7 +6,24 @@ versioning; dates are ISO. Version is sourced from `package.json` and surfaced b
 
 ## Unreleased
 
+### Added
+- Added persisted source-grounded desktop document intelligence for TXT, CSV,
+  HTML, EML, PDF, and DOCX evidence, with versioned findings, source spans,
+  citation validation, and optional deep provider enrichment.
+- Added automatic local analysis for supported Gmail, Drive, and local-folder
+  imports, including Google-native document export to PDF.
+- Added an active case Analysis workspace and generated evidence chronology with
+  compact source controls that open the owning document.
+
 ### Fixed
+- Evidence analysis uploads now persist the actual source bytes and SHA-256 hash
+  instead of creating metadata-only rows or treating binary files as plain text.
+- Scheduled Gmail collection now honors every selected account ID, and enabling
+  attachment collection later backfills only the missing message attachments.
+- Local evidence links are allowed through Electron only when their resolved path
+  remains inside LARO's configured evidence-storage directory.
+- Windows distribution documentation now reflects the owner's no-certification
+  decision: unsigned internal builds are active and public signing routes are optional.
 - Replaced the desktop scanner's false offline login and fabricated upload path
   with shared-session authorization, explicit native folder consent, per-file
   review, real byte persistence, and SHA-256 provenance.

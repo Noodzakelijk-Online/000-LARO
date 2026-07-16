@@ -1,8 +1,7 @@
 # Final Verification Report
 
 Date: 2026-07-16
-Branch: `main`
-Verified runtime commit: `7a02d2a9a33e45dad6d67b47cfd5c6446c34849d`
+Verification target: the production-readiness changes in this report's commit
 
 This report separates reproducible repository evidence from target-environment
 acceptance. It supersedes the 2026-07-06 phase snapshot.
@@ -17,12 +16,13 @@ acceptance. It supersedes the 2026-07-06 phase snapshot.
 | Runtime no-excuses scan | 0 suspect findings |
 | Account-safety scan | 0 high-severity findings |
 | Isolated backup/delete/restore/reopen drill | Pass |
-| Vitest | 32 files, 220 tests passed, 0 todo |
+| Vitest | 34 files, 228 tests passed, 0 todo |
 | Python unittest discovery | 202 tests passed |
 | Runtime dependency audit | 0 known vulnerabilities |
 | Renderer, main, and server production builds | Pass |
-| Unpacked Windows packaging | Pass with tracked LARO icon |
+| Portable Windows packaging | Pass with tracked LARO icon; unsigned by policy |
 | Packaged `/api/health` | `healthy`, database ready, version 1.3.0, production |
+| Packaged document intelligence | Migration present; PDF, DOCX, and native parser dependencies present; integrated server booted successfully |
 | Desktop scanner contract | Scoped 15-minute token; real bytes/hash; owner/MIME enforcement |
 | Protected-main CI | Actions run `29458340785`; Node and Python jobs passed |
 | Windows package workflow | Actions run `29458340759`; gate, build, ABI check, package, checksum, and artifact upload passed |
@@ -59,13 +59,14 @@ A second packaged-window run exercised the rebuilt scanner surface:
 - Settings opened and returned to evidence collection; the viewport had no
   horizontal overflow or overlapping controls.
 
-The CI portable artifact is 104,516,282 bytes with SHA-256
-`33f71f3391537df0e2f55af289a2e06762932e54501b453247c4d300abae654c`.
-The downloaded executable matched its published checksum, launched the real
-dashboard window with an active renderer, and did not reproduce the obsolete
-`dist/main/index.js` startup error. Its packaged resources contain the current
-seven-category `legal-keywords.json` and no truncated legacy dataset. Windows
-reports `NotSigned`, matching the external signing gate below.
+The current local portable artifact is 118,308,427 bytes with SHA-256
+`0fb4f180aa3a3fd609ff1deef69724aad6e40a64a18482b34de3e4001056f39d`.
+It launched with an explicit isolated user-data directory, created fresh local
+secrets and databases, applied the packaged `document_analyses` migration, and
+returned healthy production status on loopback port 59448. Its packaged resources
+contain the current migration, PDF/DOCX parsers, native parser dependency, and
+seven-category matching data. Windows reports `NotSigned`, matching the selected
+unsigned internal distribution policy.
 
 The same CI artifact was launched with `NODE_ENV=development` deliberately
 injected by its parent process. It still served `/api/health` as `healthy`,
@@ -91,6 +92,16 @@ development renderer path from the launching shell.
   selected bytes are persisted through the canonical evidence upload route with
   content-hash provenance. Scanner bearer tokens cannot access other protected
   procedures.
+- Supported Gmail, Drive, local-folder, and direct uploads persist retrievable
+  bytes and trigger versioned local analysis. Google-native documents are
+  exported to PDF instead of being passed through an invalid media download.
+- TXT, CSV, HTML, EML, PDF, and DOCX evidence produces source-grounded parties,
+  dates, amounts, claims, obligations, legal issues, risks, and chronology.
+  Optional provider enrichment is retained only when every observation resolves
+  to an extracted source segment.
+- The active case workspace exposes document analysis and an automatically
+  generated evidence timeline. Each event retains a compact source control that
+  opens the owned evidence document.
 - Lawyer matching loads a valid curated terminology dataset whose seven category
   keys are checked against the specialization taxonomy. It no longer silently
   falls back around the truncated asset or claims unsupported 877k-case scoring.
@@ -103,7 +114,7 @@ development renderer path from the launching shell.
 
 | Gate | Current state | Required evidence |
 |---|---|---|
-| Trusted Windows distribution | Blocked externally | Partner Center product identity and successful Store certification, or a configured signing provider whose tagged portable artifact reports Authenticode `Valid` |
+| Trusted public Windows distribution | Deliberately out of scope | Configure Store or certificate signing only if the distribution policy changes from unsigned internal delivery |
 | Public branding | Awaiting owner confirmation | Product owner confirms `build/icon.png` / `public/laro-logo.png` as the approved public mark |
 | Live providers | Not exercised with production accounts | Target Google OAuth, storage/LLM as used, and outbound email credentials pass consent, send, callback, and audit checks |
 
@@ -124,10 +135,9 @@ before it can publish.
 
 ## Verdict
 
-The repository is a verified internal release candidate: the code, tests,
-recovery path, packaged startup, authenticated realtime channel, and tested user
-flow are operational. It must not be represented as a publicly signed production
-release until the three external acceptance gates above are evidenced. The
-Microsoft Store route avoids a recurring certificate purchase because Microsoft
-signs the accepted Store package; the unsigned submission package is not itself
-a public artifact.
+The repository is a verified unsigned internal release candidate: the code,
+tests, recovery path, packaged startup, authenticated realtime channel, and
+tested user flow are operational. Public signing and Store certification are not
+part of the selected distribution path. The artifact must therefore remain an
+internal build and may show Windows' unknown-publisher warning. Live-provider
+and public-brand acceptance remain environment and owner gates respectively.

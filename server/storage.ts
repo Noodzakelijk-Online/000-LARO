@@ -115,6 +115,19 @@ export async function storageGet(key: string): Promise<string> {
   return `file://${full}`;
 }
 
+export async function storageRead(key: string): Promise<Buffer> {
+  const safeKey = sanitizeStorageKey(key);
+  if (!safeKey) throw new Error('Storage key must contain at least one valid path segment');
+  if (isS3Configured()) {
+    const response = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: safeKey }));
+    if (!response.Body) throw new Error(`Storage object is empty: ${safeKey}`);
+    return Buffer.from(await response.Body.transformToByteArray());
+  }
+  const full = resolveLocalPath(safeKey);
+  if (!fs.existsSync(full)) throw new Error(`Local storage object not found: ${safeKey}`);
+  return fs.readFileSync(full);
+}
+
 export async function storageDelete(key: string): Promise<void> {
   const safeKey = sanitizeStorageKey(key);
   if (!safeKey) throw new Error('Storage key must contain at least one valid path segment');

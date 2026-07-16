@@ -93,6 +93,7 @@ export const IPC = {
   UPLOAD_PROGRESS: 'upload:progress',
   EVIDENCE_UPDATED: 'evidence:updated',
   OPEN_EXTERNAL:   'open:external',
+  RENDERER_ERROR_REPORT: 'renderer:error-report',
   SCAN_OPEN_PANEL: 'scan:open-panel',
 } as const;
 

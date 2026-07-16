@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { getElectronAPI } from "@/lib/electronApiShim";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,39 +13,71 @@ import {
   CheckCircle2,
   Loader2,
   TrendingUp,
-  AlertCircle
+  AlertCircle,
+  CircleHelp,
+  BriefcaseBusiness,
+  DoorOpen,
+  MessageSquareText,
+  Scale,
+  Banknote
 } from "lucide-react";
 
 interface TimelineEvent {
   date: string;
   title: string;
   description: string;
-  source: string;
+  source: {
+    evidenceId: string;
+    title: string;
+    citation: { quote: string; lineStart: number; lineEnd: number } | null;
+  };
   importance: "critical" | "high" | "medium" | "low";
   category: "employment" | "termination" | "communication" | "legal" | "financial" | "other";
 }
 
 interface CaseTimelineProps {
-  caseId: number;
+  caseId: string;
 }
 
 export function CaseTimeline({ caseId }: CaseTimelineProps) {
   const [generating, setGenerating] = useState(false);
   const [timeline, setTimeline] = useState<any>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const generatedForCase = useRef<string | null>(null);
 
   const generateMutation = trpc.documentAnalysis.generateCaseTimeline.useMutation();
+  const sourceMutation = trpc.evidenceFiles.getDownloadUrl.useMutation();
 
   const handleGenerateTimeline = async () => {
     try {
       setGenerating(true);
+      setErrorMessage(null);
       const result = await generateMutation.mutateAsync({ caseId });
       setTimeline(result);
     } catch (error) {
       console.error('Error generating timeline:', error);
+      setErrorMessage(error instanceof Error ? error.message : "Timeline generation failed.");
     } finally {
       setGenerating(false);
     }
   };
+
+  const openSource = async (evidenceId: string) => {
+    try {
+      setErrorMessage(null);
+      const source = await sourceMutation.mutateAsync({ id: evidenceId });
+      if (!source.url) throw new Error(source.message || "The source file is not available.");
+      await getElectronAPI().openExternal(source.url);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "The source file could not be opened.");
+    }
+  };
+
+  useEffect(() => {
+    if (generatedForCase.current === caseId) return;
+    generatedForCase.current = caseId;
+    void handleGenerateTimeline();
+  }, [caseId]);
 
   const getImportanceColor = (importance: string) => {
     const colors = {
@@ -56,20 +89,21 @@ export function CaseTimeline({ caseId }: CaseTimelineProps) {
     return colors[importance as keyof typeof colors] || colors.medium;
   };
 
-  const getCategoryIcon = (category: string) => {
+  const getCategoryIconComponent = (category: string) => {
     const icons = {
-      employment: "💼",
-      termination: "🚪",
-      communication: "💬",
-      legal: "⚖️",
-      financial: "💰",
-      other: "📄"
+      employment: BriefcaseBusiness,
+      termination: DoorOpen,
+      communication: MessageSquareText,
+      legal: Scale,
+      financial: Banknote,
+      other: FileText
     };
     return icons[category as keyof typeof icons] || icons.other;
   };
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return dateString;
     return date.toLocaleDateString('nl-NL', {
       year: 'numeric',
       month: 'long',
@@ -79,6 +113,13 @@ export function CaseTimeline({ caseId }: CaseTimelineProps) {
 
   return (
     <div className="space-y-6">
+      {errorMessage && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Timeline action failed</AlertTitle>
+          <AlertDescription>{errorMessage}</AlertDescription>
+        </Alert>
+      )}
       {/* Generate Timeline Button */}
       {!timeline && (
         <Card>
@@ -171,7 +212,9 @@ export function CaseTimeline({ caseId }: CaseTimelineProps) {
 
                 {/* Events */}
                 <div className="space-y-6">
-                  {timeline.events.map((event: TimelineEvent, idx: number) => (
+                  {timeline.events.map((event: TimelineEvent, idx: number) => {
+                    const CategoryIcon = getCategoryIconComponent(event.category);
+                    return (
                     <div key={idx} className="relative pl-12">
                       {/* Timeline Dot */}
                       <div className={`absolute left-2 w-4 h-4 rounded-full border-2 border-background ${
@@ -186,16 +229,34 @@ export function CaseTimeline({ caseId }: CaseTimelineProps) {
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
-                              <span className="text-lg">{getCategoryIcon(event.category)}</span>
+                              <CategoryIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
                               <h3 className="font-semibold">{event.title}</h3>
                             </div>
                             <div className="text-sm text-muted-foreground mb-2">
                               {formatDate(event.date)}
                             </div>
                             <p className="text-sm mb-2">{event.description}</p>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <div className="flex items-start gap-2 text-xs text-muted-foreground">
                               <FileText className="h-3 w-3" />
-                              <span>Source: {event.source}</span>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="truncate">{event.source.title}</span>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 shrink-0"
+                                    title="Open source document"
+                                    aria-label={`Open source document ${event.source.title}`}
+                                    onClick={() => openSource(event.source.evidenceId)}
+                                  >
+                                    <CircleHelp className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                                {event.source.citation?.quote && (
+                                  <p className="mt-1 line-clamp-2">{event.source.citation.quote}</p>
+                                )}
+                              </div>
                             </div>
                           </div>
                           <Badge variant="outline" className="capitalize">
@@ -204,7 +265,8 @@ export function CaseTimeline({ caseId }: CaseTimelineProps) {
                         </div>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </CardContent>
