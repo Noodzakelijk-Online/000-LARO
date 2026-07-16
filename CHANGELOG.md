@@ -61,6 +61,8 @@ versioning; dates are ISO. Version is sourced from `package.json` and surfaced b
   signing credentials, or an invalid signature and publish a SHA-256 checksum.
 - Tagged Windows releases support Microsoft Artifact Signing through GitHub OIDC
   as the preferred alternative to storing a PFX certificate in GitHub secrets.
+- Tagged Windows releases also support SSL.com eSigner as a cloud-HSM signing
+  provider that does not require an Azure subscription or local hardware token.
 
 ## [1.3.0] — 2026-07-06
 Closing renderer-independent Partials with real code.
