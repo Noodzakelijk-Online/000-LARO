@@ -33,6 +33,7 @@ A feature is done only when all applicable conditions hold:
 | Evidence, case, and account managed-object erasure | Done | Target backup, storage credentials, and retention policy reviewed |
 | Scanner | Done | Clean-profile native folder and byte/hash acceptance |
 | Operator diagnostics and recovery | Done | Production preflight, data readiness, backup drill, and health probe pass |
+| Local usage telemetry | Done | Counts operations and quantities only; never prices, quotas, or blocks core actions |
 
 ## Release Boundary
 

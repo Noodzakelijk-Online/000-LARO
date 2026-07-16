@@ -17,7 +17,7 @@ acceptance. It supersedes the 2026-07-06 phase snapshot.
 | Account-safety scan | 0 high-severity findings |
 | Isolated backup/delete/restore/reopen drill | Pass |
 | Target database readiness | SQLite integrity, declared foreign keys, invariants, reconciliation, duplicates, and demo markers clean |
-| Vitest | 38 files, 241 tests passed, 0 todo |
+| Vitest | 39 files, 244 tests passed, 0 todo |
 | Python unittest discovery | 202 tests passed |
 | Runtime dependency audit | 0 known vulnerabilities |
 | Renderer, main, and server production builds | Pass |
@@ -66,11 +66,11 @@ A second packaged-window run exercised the rebuilt scanner surface:
 - Settings opened and returned to evidence collection; the viewport had no
   horizontal overflow or overlapping controls.
 
-The current local portable artifact is 118,987,499 bytes with SHA-256
-`5B7460B39A970A23784FEE4DE37BD576B7FACEF8ACC8E7179C16B3299301F6A7`.
+The current local portable artifact is 118,880,896 bytes with SHA-256
+`5A38A99448D1972F51FAC929924048BC8784F5B13D84A20914AAA76ADC638689`.
 It launched with an explicit isolated user-data directory, created fresh local
 secrets and databases, applied all five packaged migrations, and returned
-healthy production status on loopback port 51819. Direct SQLite inspection
+healthy production status on loopback port 50183. Direct SQLite inspection
 confirmed `outreach_directory_targets` and `case_outreach_target_matches`.
 Its packaged resources contain the current migrations, PDF/DOCX parsers, native
 parser dependency, consolidated managed-storage deletion, and seven-category
@@ -85,6 +85,9 @@ development renderer path from the launching shell.
 
 ## Verified product path
 
+- Core local workflows are unmetered. Usage telemetry stores operation and
+  quantity counts only; there is no checkout, upgrade, quota, or payment-provider
+  enforcement path.
 - Case creation, deterministic classification, lawyer matching, and idempotent
   draft preparation are real database-backed actions.
 - Starting outreach prepares reviewable drafts in one action. It does not send.

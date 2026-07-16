@@ -22,6 +22,12 @@ versioning; dates are ISO. Version is sourced from `package.json` and surfaced b
   compact source controls that open the owning document.
 
 ### Fixed
+- Removed obsolete pricing, checkout, quota-alert, grace-period, and upgrade
+  prototypes so core document generation cannot return a fabricated paywall.
+- Reduced local usage tracking to real operation and quantity counts; it no
+  longer invents prices, reports to a payment provider, or sends quota alerts.
+- Removed the unused Microsoft Graph client dependency left behind by the dead
+  quota-notification path.
 - Evidence, case, and GDPR erasure now delete managed objects referenced by
   canonical, scanner, Google, Gmail, and legacy storage records before deleting
   metadata; storage or database failures abort instead of silently leaving

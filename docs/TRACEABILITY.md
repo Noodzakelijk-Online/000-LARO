@@ -52,7 +52,7 @@ None — every artifact cited in the matrix exists. ✅
 | 053 | Backup & restore procedures | Implemented | ✅ `server/backup.ts`<br>✅ `docs/BACKUP_RESTORE.md` |
 | 054 | Data reconciliation & repair | Implemented | ✅ `server/reconcile.ts`<br>✅ `docs/DATA_RECONCILIATION.md` |
 | 055 | Product analytics local-first | Implemented | ✅ `server/analytics.ts`<br>✅ `docs/ANALYTICS.md` |
-| 056 | SaaS readiness without forced billing | Implemented | ✅ `docs/SAAS_READINESS.md` |
+| 056 | Local operation without forced billing | Implemented | ✅ `docs/SAAS_READINESS.md` |
 | 057 | Internationalization (NL/EN) | Partial | ✅ `shared/i18n.ts`<br>✅ `docs/I18N.md` |
 | 058 | Feature flags & rollout controls | Implemented | ✅ `server/featureFlags.ts`<br>✅ `docs/FEATURE_FLAGS.md` |
 | 059 | Formal state machines | Implemented | ✅ `server/stateMachines.ts`<br>✅ `docs/STATE_MACHINES.md` |

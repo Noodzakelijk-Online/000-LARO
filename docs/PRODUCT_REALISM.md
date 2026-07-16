@@ -11,13 +11,15 @@ Current as of 2026-07-15.
 | Lawyer matching | ranks suitable lawyers | real persisted records and case-derived matching; no random results |
 | Outreach | prepares and sends reviewed messages | drafting and approval are real; delivery is separate, provider-backed, audited, and disabled by default |
 | Analytics | shows progress and outcomes | computed from owned persisted rows |
+| Usage telemetry | reports local activity | operation and quantity counts only; no prices, quotas, or payment provider |
 | Demo mode | provides demonstration behavior | labelled and forced off in production |
 
 No user-facing action may claim an external effect from a missing provider or an
 unimplemented operation. Unavailable OCR and optional providers report their
-state explicitly. Production routes for unfinished billing, reports, and email
-automation are not mounted.
+state explicitly. Obsolete pricing, checkout, quota, and upgrade prototypes were
+removed. Unfinished reports and email-automation routes are not mounted.
 
-Public-release realism still depends on a Microsoft Store-certified package or
-independently signed portable artifact, approved branding, and live acceptance
-evidence for each enabled provider.
+The supported distribution is an unsigned internal portable artifact. A future
+trusted public release would require Store or signing acceptance. Approved
+branding and live acceptance evidence remain required for each enabled external
+provider.

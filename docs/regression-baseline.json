@@ -21,6 +21,7 @@
     "tests/backend/scannerUpload.test.ts",
     "tests/backend/stateMachines.test.ts",
     "tests/backend/teams.test.ts",
+    "tests/backend/usageTelemetry.test.ts",
     "tests/backend/worker.test.ts",
     "tests/e2e/workflow.e2e.test.ts",
     "tests/frontend/frontendLogic.test.ts",
@@ -40,5 +41,5 @@
     "tests/smoke/phase021_030.smoke.test.ts",
     "tests/smoke/storage.smoke.test.ts"
   ],
-  "count": 38
+  "count": 39
 }

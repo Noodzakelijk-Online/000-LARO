@@ -3,8 +3,7 @@ import { ENV } from "./_core/env";
 
 /**
  * System (transactional) email sender — used for app-generated mail like
- * password-reset codes. This is distinct from server/userNotification.ts, which
- * sends from a user's own connected Gmail/Outlook account.
+ * password-reset codes and explicitly approved outreach.
  *
  * Provider precedence: SendGrid → SMTP (nodemailer) → console fallback.
  * The console fallback keeps the feature testable in development / when no

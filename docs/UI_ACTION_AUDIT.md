@@ -17,9 +17,9 @@ identified fourteen missing router groups.
 | Operations | Diagnostics, readiness, backup, restore, emergency stop | Admin/operator controls |
 
 The fourteen router groups identified in the dated audit are now mounted and
-typed. Unfinished pricing and billing prototypes are not mounted in the
-production route tree. Reachable unsupported actions must remain hidden or
-return an explicit unavailable state; fabricated success is prohibited.
+typed. Obsolete pricing, checkout, quota, and upgrade prototypes were removed.
+Reachable unsupported actions must remain hidden or return an explicit
+unavailable state; fabricated success is prohibited.
 
 ## Regression Rules
 

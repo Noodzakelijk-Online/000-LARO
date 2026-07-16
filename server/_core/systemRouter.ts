@@ -57,8 +57,6 @@ export const systemRouter = router({
         configured: has(ENV.SENDGRID_API_KEY) || has(process.env.SMTP_HOST) },
       { provider: 'Trello', category: 'evidence', requiredEnv: ['TRELLO_API_KEY'], configured: has(ENV.TRELLO_API_KEY) },
       { provider: 'Telegram', category: 'evidence', requiredEnv: ['TELEGRAM_BOT_TOKEN'], configured: has(ENV.TELEGRAM_BOT_TOKEN) },
-      { provider: 'Stripe (billing)', category: 'billing', requiredEnv: ['STRIPE_SECRET_KEY'],
-        configured: has(ENV.STRIPE_SECRET_KEY), note: 'Optional — no forced billing (Phase 056).' },
     ];
     return {
       configuredCount: items.filter((i) => i.configured).length,
