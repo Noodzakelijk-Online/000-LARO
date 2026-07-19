@@ -1,10 +1,16 @@
 import { createHash } from "crypto";
 import mammoth from "mammoth";
 import { PDFParse } from "pdf-parse";
+import {
+  getSupportedDocumentAnalysisMimeTypes,
+  isSupportedDocumentAnalysisMimeType,
+  isSupportedImageOcrMimeType,
+} from "../shared/evidenceFiles";
 import { ENV } from "./_core/env";
 import { invokeLLM } from "./llm";
+import { extractImageText } from "./ocr";
 
-export const DOCUMENT_ANALYSIS_VERSION = "2.0.0";
+export const DOCUMENT_ANALYSIS_VERSION = "2.1.0";
 const MAX_ANALYSIS_CHARS = 250_000;
 const MAX_PROVIDER_CHARS = 100_000;
 
@@ -36,7 +42,8 @@ export type DocumentAnalysisResult = {
   analysisVersion: string;
   contentHash: string;
   status: "complete";
-  extractionMethod: "plain_text" | "html" | "pdf_text" | "docx_text" | "email_text";
+  extractionMethod: "plain_text" | "html" | "pdf_text" | "docx_text" | "email_text" | "ocr_text";
+  extractionConfidence: number | null;
   providerStatus: "not_requested" | "unavailable" | "complete" | "invalid_response" | "failed";
   providerMessage: string | null;
   documentType: string;
@@ -58,19 +65,15 @@ export type DocumentAnalysisResult = {
 type ExtractionResult = {
   text: string;
   method: DocumentAnalysisResult["extractionMethod"];
+  confidence: number | null;
 };
 
-const SUPPORTED_ANALYSIS_MIME_TYPES = new Set([
-  "text/plain",
-  "text/csv",
-  "text/html",
-  "message/rfc822",
-  "application/pdf",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-]);
-
 export function supportsDocumentAnalysisMime(mimeType: string): boolean {
-  return SUPPORTED_ANALYSIS_MIME_TYPES.has(mimeType.toLowerCase().split(";")[0].trim());
+  return isSupportedDocumentAnalysisMimeType(mimeType);
+}
+
+export function supportedDocumentAnalysisMimeTypes(): string[] {
+  return getSupportedDocumentAnalysisMimeTypes();
 }
 
 const DATE_PATTERN = /\b(?:\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[./-]\d{1,2}[./-]\d{2,4}|\d{1,2}\s+(?:januari|februari|maart|april|mei|juni|juli|augustus|september|oktober|november|december|january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{4})\b/gi;
@@ -116,26 +119,30 @@ function stripHtml(html: string): string {
 export async function extractDocumentText(bytes: Buffer, mimeType: string): Promise<ExtractionResult> {
   const normalizedMime = mimeType.toLowerCase().split(";")[0].trim();
   if (["text/plain", "text/csv"].includes(normalizedMime)) {
-    return { text: normalizeText(bytes.toString("utf8")), method: "plain_text" };
+    return { text: normalizeText(bytes.toString("utf8")), method: "plain_text", confidence: null };
   }
   if (normalizedMime === "text/html") {
-    return { text: stripHtml(bytes.toString("utf8")), method: "html" };
+    return { text: stripHtml(bytes.toString("utf8")), method: "html", confidence: null };
   }
   if (normalizedMime === "message/rfc822") {
-    return { text: normalizeText(bytes.toString("utf8")), method: "email_text" };
+    return { text: normalizeText(bytes.toString("utf8")), method: "email_text", confidence: null };
   }
   if (normalizedMime === "application/pdf") {
     const parser = new PDFParse({ data: new Uint8Array(bytes) });
     try {
       const result = await parser.getText();
-      return { text: normalizeText(result.text), method: "pdf_text" };
+      return { text: normalizeText(result.text), method: "pdf_text", confidence: null };
     } finally {
       await parser.destroy();
     }
   }
   if (normalizedMime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
     const result = await mammoth.extractRawText({ buffer: bytes });
-    return { text: normalizeText(result.value), method: "docx_text" };
+    return { text: normalizeText(result.value), method: "docx_text", confidence: null };
+  }
+  if (isSupportedImageOcrMimeType(normalizedMime)) {
+    const result = await extractImageText(bytes);
+    return { text: normalizeText(result.text), method: "ocr_text", confidence: result.confidence };
   }
   throw new Error(`Document analysis does not support ${mimeType || "this file type"}`);
 }
@@ -297,7 +304,8 @@ function buildTimeline(citations: Citation[], dates: CitedFinding[]): TimelineFi
   });
 }
 
-function deterministicAnalysis(text: string, method: ExtractionResult["method"]): DocumentAnalysisResult {
+function deterministicAnalysis(extraction: ExtractionResult): DocumentAnalysisResult {
+  const { text, method } = extraction;
   const truncated = text.length > MAX_ANALYSIS_CHARS;
   const analyzedText = text.slice(0, MAX_ANALYSIS_CHARS);
   const citations = buildCitations(analyzedText);
@@ -318,6 +326,7 @@ function deterministicAnalysis(text: string, method: ExtractionResult["method"])
     contentHash: createHash("sha256").update(analyzedText).digest("hex"),
     status: "complete",
     extractionMethod: method,
+    extractionConfidence: extraction.confidence,
     providerStatus: "not_requested",
     providerMessage: null,
     documentType: classification.type,
@@ -475,8 +484,12 @@ export async function analyzeDocumentBytes(options: {
 }): Promise<DocumentAnalysisResult> {
   const extraction = await extractDocumentText(options.bytes, options.mimeType);
   if (extraction.text.length < 20) {
-    throw new Error("No readable text was extracted. The document may be scanned or image-only; OCR is not available.");
+    throw new Error(
+      extraction.method === "ocr_text"
+        ? "OCR could not extract enough readable text from this image."
+        : "No readable text was extracted from this document. Scanned PDFs require conversion to an image before OCR.",
+    );
   }
-  const base = deterministicAnalysis(extraction.text, extraction.method);
+  const base = deterministicAnalysis(extraction);
   return options.deepAnalysis ? enrichAnalysis(base) : base;
 }

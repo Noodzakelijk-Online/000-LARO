@@ -14,6 +14,37 @@ const SUPPORTED_EXACT_MIME_TYPES = new Set([
   "text/plain",
 ]);
 
+const DOCUMENT_ANALYSIS_MIME_TYPES = [
+  "text/plain",
+  "text/csv",
+  "text/html",
+  "message/rfc822",
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+  "image/bmp",
+  "image/x-ms-bmp",
+  "image/x-portable-bitmap",
+] as const;
+
+const IMAGE_OCR_MIME_TYPES = new Set<string>(DOCUMENT_ANALYSIS_MIME_TYPES.filter((mimeType) => mimeType.startsWith("image/")));
+const DOCUMENT_ANALYSIS_MIME_TYPE_SET = new Set<string>(DOCUMENT_ANALYSIS_MIME_TYPES);
+
+export function getSupportedDocumentAnalysisMimeTypes(): string[] {
+  return [...DOCUMENT_ANALYSIS_MIME_TYPES];
+}
+
+export function isSupportedImageOcrMimeType(mimeType: string): boolean {
+  return IMAGE_OCR_MIME_TYPES.has(mimeType.trim().toLowerCase().split(";")[0]);
+}
+
+export function isSupportedDocumentAnalysisMimeType(mimeType: string): boolean {
+  return DOCUMENT_ANALYSIS_MIME_TYPE_SET.has(mimeType.trim().toLowerCase().split(";")[0]);
+}
+
 export function isSupportedEvidenceMimeType(mimeType: string): boolean {
   const normalized = mimeType.trim().toLowerCase();
   return (

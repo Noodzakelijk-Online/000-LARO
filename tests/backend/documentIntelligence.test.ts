@@ -1,3 +1,5 @@
+import { readFileSync } from "fs";
+import { join } from "path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { analyzeDocumentBytes, extractDocumentText } from "../../server/documentIntelligence";
@@ -5,6 +7,7 @@ import { buildCase, buildUser } from "../factories";
 import { bootTestApp, sqliteAvailable, type TestApp } from "../helpers/app";
 
 const suite = sqliteAvailable ? describe : describe.skip;
+const OCR_FIXTURE = readFileSync(join(__dirname, "..", "fixtures", "ocr-dutch-decision.png"));
 
 describe("document intelligence units", () => {
   it("extracts clean HTML text without executable content", async () => {
@@ -52,6 +55,21 @@ describe("document intelligence units", () => {
       expect(finding.citations.every((id) => citationIds.has(id))).toBe(true);
     }
   });
+
+  it("extracts Dutch image text locally and keeps OCR findings source-linked", async () => {
+    const analysis = await analyzeDocumentBytes({
+      bytes: OCR_FIXTURE,
+      mimeType: "image/png",
+      deepAnalysis: false,
+    });
+
+    expect(analysis.extractionMethod).toBe("ocr_text");
+    expect(analysis.extractionConfidence).toBeGreaterThan(80);
+    expect(analysis.summary).toContain("Besluit 14 juli 2026 EUR 1250");
+    expect(analysis.dates[0]?.normalized).toBe("2026-07-14");
+    expect(analysis.amounts.length).toBeGreaterThan(0);
+    expect(analysis.timelineEvents[0]?.citations.length).toBeGreaterThan(0);
+  }, 60_000);
 });
 
 suite("persisted document analysis and source-linked timeline", () => {

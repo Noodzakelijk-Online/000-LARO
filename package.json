@@ -70,6 +70,8 @@
     "@radix-ui/react-tabs": "^1.0.4",
     "@radix-ui/react-tooltip": "^1.0.7",
     "@tanstack/react-query": "^4.18.0",
+    "@tesseract.js-data/eng": "1.0.0",
+    "@tesseract.js-data/nld": "1.0.0",
     "@trpc/client": "^10.45.2",
     "@trpc/react-query": "^10.45.2",
     "@trpc/server": "^10.45.2",
@@ -110,6 +112,7 @@
     "sonner": "^1.4.41",
     "superjson": "^1.13.1",
     "tailwind-merge": "^2.2.2",
+    "tesseract.js": "7.0.0",
     "uuid": "^11.1.1",
     "wouter": "^3.1.2",
     "zod": "^3.22.4"
@@ -158,7 +161,15 @@
       "package.json"
     ],
     "asarUnpack": [
-      "drizzle/**/*"
+      "drizzle/**/*",
+      "node_modules/@tesseract.js-data/eng/4.0.0/eng.traineddata.gz",
+      "node_modules/@tesseract.js-data/nld/4.0.0/nld.traineddata.gz",
+      "node_modules/bmp-js/**/*",
+      "node_modules/is-url/**/*",
+      "node_modules/regenerator-runtime/**/*",
+      "node_modules/tesseract.js/**/*",
+      "node_modules/tesseract.js-core/**/*",
+      "node_modules/wasm-feature-detect/**/*"
     ],
     "extraResources": [
       {

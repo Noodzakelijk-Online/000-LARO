@@ -112,13 +112,12 @@ suite('Phase 081 — non-technical user journey simulation', () => {
     expect(rows.find((r: any) => r.id === userId)).toBeUndefined();
   });
 
-  it('Honesty — an unimplemented action fails clearly, it does not fake success', async () => {
-    // A non-technical user triggering an unbuilt feature must get an honest error,
-    // never a fabricated "done". OCR is wired but explicitly not implemented: it
-    // must reject with NOT_IMPLEMENTED, not return a success payload.
+  it('Honesty — invalid OCR input fails clearly, it does not fake success', async () => {
+    // OCR accepts supported image bytes only. A PDF data URL must fail before
+    // recognition instead of returning fabricated text.
     const caller = app.makeCaller({ id: 'X', name: 'X', role: 'user', email: 'x@example.com' });
     await expect(
-      caller.ocr.extractText({ image: 'data:image/png;base64,AAAA', language: 'nl' }),
-    ).rejects.toMatchObject({ code: 'NOT_IMPLEMENTED' });
+      caller.ocr.extractText({ image: 'data:application/pdf;base64,AAAA', language: 'nl' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
   });
 });

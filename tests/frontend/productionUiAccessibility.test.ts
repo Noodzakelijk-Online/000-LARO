@@ -93,4 +93,16 @@ describe('production renderer usability regressions', () => {
     expect(auth).toContain('"new-password" : "current-password"');
     expect(auth).toContain('autoComplete="one-time-code"');
   });
+
+  it('offers local image OCR and analyzes supported evidence automatically', () => {
+    const analysis = read('src/renderer/components/AutomatedDocumentAnalysis.tsx');
+    const upload = read('src/renderer/components/EnhancedEvidenceUpload.tsx');
+
+    expect(analysis).toContain('.jpg,.jpeg,.png,.gif,.webp,.bmp');
+    expect(analysis).toContain('Dutch and English OCR for images');
+    expect(analysis).toContain('extraction_confidence');
+    expect(upload).toContain('isSupportedDocumentAnalysisMimeType(item.mimeType)');
+    expect(upload).toContain('analyzeEvidence.mutateAsync');
+    expect(upload).toContain('status: "analyzing"');
+  });
 });

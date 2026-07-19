@@ -35,6 +35,19 @@ describe('production readiness regressions', () => {
 
     expect(pkg.dependencies['pdf-parse']).toBeTruthy();
     expect(pkg.dependencies.mammoth).toBeTruthy();
+    expect(pkg.dependencies['tesseract.js']).toBe('7.0.0');
+    expect(pkg.dependencies['@tesseract.js-data/nld']).toBe('1.0.0');
+    expect(pkg.dependencies['@tesseract.js-data/eng']).toBe('1.0.0');
+    for (const workerRuntime of [
+      'node_modules/bmp-js/**/*',
+      'node_modules/is-url/**/*',
+      'node_modules/regenerator-runtime/**/*',
+      'node_modules/tesseract.js/**/*',
+      'node_modules/tesseract.js-core/**/*',
+      'node_modules/wasm-feature-detect/**/*',
+    ]) {
+      expect(pkg.build.asarUnpack).toContain(workerRuntime);
+    }
     expect(router).toContain('analyzeStoredEvidence');
     expect(router).toContain('generateCaseTimeline');
     expect(router).not.toContain('documentAnalysis stub');
