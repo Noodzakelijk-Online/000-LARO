@@ -16,6 +16,9 @@ versioning; dates are ISO. Version is sourced from `package.json` and surfaced b
 - Added persisted source-grounded desktop document intelligence for TXT, CSV,
   HTML, EML, PDF, and DOCX evidence, with versioned findings, source spans,
   citation validation, and optional deep provider enrichment.
+- Added bounded local OCR for Dutch and English image evidence, with bundled
+  language data, automatic post-upload analysis, confidence reporting, and the
+  same source-linked findings used by Papertrail timelines.
 - Added automatic local analysis for supported Gmail, Drive, and local-folder
   imports, including Google-native document export to PDF.
 - Added an active case Analysis workspace and generated evidence chronology with
@@ -58,9 +61,10 @@ versioning; dates are ISO. Version is sourced from `package.json` and surfaced b
 - Restricted 15-minute scanner JWTs to the evidence upload mutation and bound
   `desktop_scanner` provenance to those credentials; removed the obsolete
   all-access local-agent bearer path.
-- Removed unreachable scanner, sync, mobile, OCR, annotation, and inbox
-  prototypes, and removed filename-based confidence labels and invented upload
-  progress from reachable evidence controls.
+- Removed unreachable scanner, sync, mobile, annotation, and inbox prototypes,
+  replaced the old OCR stub with source-grounded local image analysis, and
+  removed filename-based confidence labels and invented upload progress from
+  reachable evidence controls.
 - Removed seven unused runtime packages and their obsolete type packages,
   reducing the install by 33 transitive packages.
 - Lawyer search now stores filters under the correct directory type, removes

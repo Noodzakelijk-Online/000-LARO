@@ -4,7 +4,7 @@ import { z } from "zod";
 import { assertCaseOwnership } from "../_core/authz";
 import { protectedProcedure, router } from "../_core/trpc";
 import { analyzeStoredEvidence, parseDocumentAnalysisResult } from "../documentAnalysisService";
-import { DOCUMENT_ANALYSIS_VERSION } from "../documentIntelligence";
+import { DOCUMENT_ANALYSIS_VERSION, supportedDocumentAnalysisMimeTypes } from "../documentIntelligence";
 import { getDb } from "../db";
 import { documentAnalyses, evidence } from "../schema";
 
@@ -13,15 +13,10 @@ export const documentAnalysisRouter = router({
     version: DOCUMENT_ANALYSIS_VERSION,
     localAnalysis: true,
     deepAnalysisConfigured: Boolean(process.env.FORGE_API_KEY),
-    supportedMimeTypes: [
-      "text/plain",
-      "text/csv",
-      "text/html",
-      "message/rfc822",
-      "application/pdf",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    ],
-    ocrAvailable: false,
+    supportedMimeTypes: supportedDocumentAnalysisMimeTypes(),
+    ocrAvailable: true,
+    ocrLanguages: ["nld", "eng"],
+    ocrProcessing: "local" as const,
   })),
 
   analyzeEvidence: protectedProcedure

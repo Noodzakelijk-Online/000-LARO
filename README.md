@@ -31,7 +31,7 @@ The Electron main process starts the Express/tRPC server and React renderer toge
 ### Document intelligence and Papertrail
 
 - Extract readable text and create review-only suggestions for events, claims, evidence links, contradictions, deadlines, obligations, and missing evidence.
-- Analyze TXT, CSV, HTML, EML, PDF, and DOCX evidence locally in the desktop runtime; persist versioned summaries, parties, dates, amounts, claims, obligations, legal issues, risks, and source spans.
+- Analyze TXT, CSV, HTML, EML, PDF, DOCX, and JPEG/PNG/GIF/WebP/BMP image evidence locally in the desktop runtime; Dutch and English image OCR feeds the same versioned summaries, parties, dates, amounts, claims, obligations, legal issues, risks, and source spans. Scanned PDFs must first be converted to images.
 - Run local citation extraction automatically for supported Gmail, Drive, and folder imports; optional deep analysis is accepted only when every finding cites a real extracted source segment.
 - Run full-source deterministic comparisons or optional loopback-only Ollama analysis in bounded batches.
 - Reject uncited model observations; retained suggestions include literal source support and remain unconfirmed until reviewed.

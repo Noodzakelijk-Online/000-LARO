@@ -27,6 +27,8 @@ type AnalysisView = {
   matches_evidence_item: string | null;
   provider_status: string;
   provider_message: string | null;
+  extraction_method: string;
+  extraction_confidence: number | null;
   citation_count: number;
   claims: string[];
   obligations: string[];
@@ -111,6 +113,8 @@ export function AutomatedDocumentAnalysis({ caseId, onAnalysisComplete }: Automa
         matches_evidence_item: selectedFile.name,
         provider_status: result.providerStatus,
         provider_message: result.providerMessage,
+        extraction_method: result.extractionMethod,
+        extraction_confidence: result.extractionConfidence,
         citation_count: result.citations.length,
         claims: result.claims.map((item) => item.text),
         obligations: result.obligations.map((item) => item.text),
@@ -152,7 +156,7 @@ export function AutomatedDocumentAnalysis({ caseId, onAnalysisComplete }: Automa
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <input
               type="file"
-              accept=".pdf,.docx,.txt,.csv,.html,.eml"
+              accept=".pdf,.docx,.txt,.csv,.html,.eml,.jpg,.jpeg,.png,.gif,.webp,.bmp"
               onChange={handleFileSelect}
               className="min-w-0 flex-1 text-sm"
               disabled={uploading || analyzing}
@@ -177,7 +181,7 @@ export function AutomatedDocumentAnalysis({ caseId, onAnalysisComplete }: Automa
             </div>
           )}
           <p className="text-xs text-muted-foreground">
-            Local source extraction is always used. Deep analysis is {capabilities.data?.deepAnalysisConfigured ? "configured" : "not configured"}; findings remain linked to extracted source passages.
+            Local source extraction is always used, including Dutch and English OCR for images. Deep analysis is {capabilities.data?.deepAnalysisConfigured ? "configured" : "not configured"}; findings remain linked to extracted source passages.
           </p>
           {errorMessage && (
             <Alert variant="destructive">
@@ -223,6 +227,10 @@ export function AutomatedDocumentAnalysis({ caseId, onAnalysisComplete }: Automa
               </div>
               <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                 <Badge variant="outline">{analysisResult.citation_count} source passages</Badge>
+                <Badge variant="outline">{analysisResult.extraction_method.replace(/_/g, " ")}</Badge>
+                {analysisResult.extraction_confidence !== null ? (
+                  <Badge variant="outline">OCR {analysisResult.extraction_confidence.toFixed(0)}%</Badge>
+                ) : null}
                 <Badge variant="outline">{analysisResult.provider_status.replace(/_/g, " ")}</Badge>
               </div>
               {analysisResult.provider_message && (

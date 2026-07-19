@@ -1,13 +1,18 @@
 import { useCallback, useRef, useState } from "react";
 import { AlertCircle, Camera, Check, File, FileText, Image, Loader2, Upload, Video } from "lucide-react";
 import { toast } from "sonner";
-import { evidenceTypeForMime, isSupportedEvidenceMimeType, MAX_EVIDENCE_FILE_BYTES } from "../../../shared/evidenceFiles";
+import {
+  evidenceTypeForMime,
+  isSupportedDocumentAnalysisMimeType,
+  isSupportedEvidenceMimeType,
+  MAX_EVIDENCE_FILE_BYTES,
+} from "../../../shared/evidenceFiles";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 
-type UploadState = "uploading" | "complete" | "error";
+type UploadState = "uploading" | "analyzing" | "complete" | "error";
 
 interface UploadedFile {
   id: string;
@@ -15,6 +20,7 @@ interface UploadedFile {
   mimeType: string;
   status: UploadState;
   error?: string;
+  analysisWarning?: string;
 }
 
 const MIME_BY_EXTENSION: Record<string, string> = {
@@ -67,6 +73,7 @@ export default function EnhancedEvidenceUpload({ caseId }: { caseId?: string }) 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const uploadEvidenceFile = trpc.evidenceFiles.upload.useMutation();
+  const analyzeEvidence = trpc.documentAnalysis.analyzeEvidence.useMutation();
 
   const handleFiles = useCallback(async (fileList: FileList) => {
     if (!caseId) {
@@ -91,7 +98,7 @@ export default function EnhancedEvidenceUpload({ caseId }: { caseId?: string }) 
 
     for (const item of accepted) {
       try {
-        await uploadEvidenceFile.mutateAsync({
+        const uploaded = await uploadEvidenceFile.mutateAsync({
           caseId,
           title: item.file.name,
           type: evidenceTypeForMime(item.mimeType),
@@ -99,18 +106,31 @@ export default function EnhancedEvidenceUpload({ caseId }: { caseId?: string }) 
           mimeType: item.mimeType,
           base64: await fileToBase64(item.file),
         });
+        if (isSupportedDocumentAnalysisMimeType(item.mimeType)) {
+          setFiles((previous) => previous.map((file) => file.id === item.id ? { ...file, status: "analyzing" } : file));
+          try {
+            await analyzeEvidence.mutateAsync({ evidenceId: uploaded.id, deepAnalysis: false });
+          } catch (error) {
+            const message = error instanceof Error ? error.message : "Automatic analysis failed";
+            setFiles((previous) => previous.map((file) => file.id === item.id
+              ? { ...file, status: "complete", analysisWarning: message }
+              : file));
+            toast.warning(`${item.file.name} was stored, but analysis needs review`);
+            continue;
+          }
+        }
         setFiles((previous) => previous.map((file) => file.id === item.id ? { ...file, status: "complete" } : file));
-        toast.success(`${item.file.name} stored as evidence`);
+        toast.success(`${item.file.name} stored${isSupportedDocumentAnalysisMimeType(item.mimeType) ? " and analyzed" : " as evidence"}`);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Upload failed";
         setFiles((previous) => previous.map((file) => file.id === item.id ? { ...file, status: "error", error: message } : file));
         toast.error(`${item.file.name}: ${message}`);
       }
     }
-  }, [caseId, uploadEvidenceFile]);
+  }, [analyzeEvidence, caseId, uploadEvidenceFile]);
 
   const completeCount = files.filter((file) => file.status === "complete").length;
-  const settledCount = files.filter((file) => file.status !== "uploading").length;
+  const settledCount = files.filter((file) => file.status === "complete" || file.status === "error").length;
 
   return (
     <div className="space-y-5">
@@ -164,8 +184,14 @@ export default function EnhancedEvidenceUpload({ caseId }: { caseId?: string }) 
                     <p className="truncate text-sm font-medium">{item.file.name}</p>
                     <p className="text-xs text-muted-foreground">{(item.file.size / 1024).toFixed(1)} KB</p>
                     {item.error ? <p className="mt-1 text-xs text-destructive">{item.error}</p> : null}
+                    {item.analysisWarning ? <p className="mt-1 text-xs text-amber-600">Stored; analysis: {item.analysisWarning}</p> : null}
                   </div>
-                  {item.status === "uploading" ? <Loader2 className="h-5 w-5 animate-spin text-primary" aria-label="Uploading" /> : null}
+                  {item.status === "uploading" || item.status === "analyzing" ? (
+                    <Loader2
+                      className="h-5 w-5 animate-spin text-primary"
+                      aria-label={item.status === "uploading" ? "Uploading" : "Analyzing"}
+                    />
+                  ) : null}
                   {item.status === "complete" ? <Check className="h-5 w-5 text-emerald-500" aria-label="Stored" /> : null}
                   {item.status === "error" ? <AlertCircle className="h-5 w-5 text-destructive" aria-label="Failed" /> : null}
                 </CardContent>

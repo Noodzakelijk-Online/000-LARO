@@ -37,14 +37,16 @@ describe('Phase 014 — dashboard is not fabricated', () => {
   });
 });
 
-describe('Phase 014 — OCR does not fabricate document text', () => {
+describe('Phase 014 — OCR uses the real local engine', () => {
   const src = read('server/routers/index.ts');
   it('removed the hardcoded "[OCR Extraction Successful]" response', () => {
     expect(src).not.toContain('[OCR Extraction Successful]');
     expect(src).not.toContain('arbeidsovereenkomst zonder de vereiste');
   });
-  it('extractText throws NOT_IMPLEMENTED instead', () => {
-    expect(src).toMatch(/OCR text extraction is not implemented/);
+  it('passes decoded image bytes to the bounded OCR service', () => {
+    expect(src).toContain('isSupportedImageOcrMimeType');
+    expect(src).toContain('extractImageText(bytes, input.language)');
+    expect(src).not.toContain('OCR text extraction is not implemented');
   });
 });
 

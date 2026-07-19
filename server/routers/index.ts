@@ -62,6 +62,12 @@ import { users, cases } from "../schema";
 import { and, eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { invokeLLM } from "../llm";
+import { extractImageText } from "../ocr";
+import {
+  isSupportedImageOcrMimeType,
+  MAX_EVIDENCE_BASE64_CHARS,
+  MAX_EVIDENCE_FILE_BYTES,
+} from "../../shared/evidenceFiles";
 
 export const appRouter = router({
   system: systemRouter,
@@ -447,25 +453,53 @@ export const appRouter = router({
       }),
   }),
   
-  // OCR procedures.
-  // Phase 014: OCR is NOT implemented. Previously extractText returned a
-  // hardcoded Dutch employment-contract with confidence 0.98 regardless of
-  // input — a fabricated success. It now reports unavailability honestly and
-  // extractText throws a clear "not implemented" error rather than inventing
-  // document text. Real OCR (tesseract.js) is scheduled for Phase 025/015.
+  // Local OCR accepts bounded image bytes only. It never fetches caller-provided
+  // URLs and uses the same engine as source-grounded evidence analysis.
   ocr: router({
-    supportsOcr: protectedProcedure.input(z.any()).query(() => false),
-    getStatus: protectedProcedure.input(z.any()).query(() => ({ status: "unavailable" as const })),
-    getSupportedLanguages: protectedProcedure.query(() => [] as string[]),
+    supportsOcr: protectedProcedure
+      .input(z.object({ mimeType: z.string() }))
+      .query(({ input }) => ({ supported: isSupportedImageOcrMimeType(input.mimeType) })),
+    getStatus: protectedProcedure.input(z.any()).query(() => ({
+      status: "available" as const,
+      processing: "local" as const,
+    })),
+    getSupportedLanguages: protectedProcedure.query(() => ({
+      languages: [
+        { code: "nld", name: "Dutch" },
+        { code: "eng", name: "English" },
+        { code: "nld+eng", name: "Dutch + English" },
+      ],
+    })),
     extractText: protectedProcedure
-      .input(z.object({ image: z.string(), language: z.string().optional().default("nl") }))
-      .mutation(() => {
-        throw new TRPCError({
-          code: "NOT_IMPLEMENTED",
-          message:
-            "OCR text extraction is not implemented yet. No text was extracted. " +
-            "Upload the document as evidence instead; automatic OCR is planned (Phase 025).",
-        });
+      .input(z.object({
+        image: z.string().min(1).max(MAX_EVIDENCE_BASE64_CHARS + 100),
+        language: z.string().optional().default("nld+eng"),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        enforceRateLimit(ctx, "ocr", RATE_LIMITS.aiAnalysis);
+        const match = input.image.match(/^data:([^;,]+);base64,([A-Za-z0-9+/]+={0,2})$/);
+        if (!match || !isSupportedImageOcrMimeType(match[1])) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "OCR requires a supported base64 image" });
+        }
+        const bytes = Buffer.from(match[2], "base64");
+        if (!bytes.length || bytes.length > MAX_EVIDENCE_FILE_BYTES) {
+          throw new TRPCError({ code: "PAYLOAD_TOO_LARGE", message: "OCR images must be between 1 byte and 7 MB" });
+        }
+        try {
+          const result = await extractImageText(bytes, input.language);
+          return {
+            success: true as const,
+            text: result.text,
+            confidence: result.confidence,
+            language: result.language,
+            processingTime: result.processingTimeMs,
+          };
+        } catch (error) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: error instanceof Error ? error.message : "OCR failed",
+          });
+        }
       }),
   }),
 
