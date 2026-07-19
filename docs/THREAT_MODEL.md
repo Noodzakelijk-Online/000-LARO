@@ -13,8 +13,9 @@ Trust boundaries:
 1. sandboxed renderer to validated Electron IPC;
 2. loopback HTTP renderer/scanner to authenticated API;
 3. API to Google, Microsoft, S3, LLM, and email providers over TLS;
-4. Microsoft Store-signed or independently Authenticode-signed release artifact
-   to the end-user machine.
+4. release artifact to the end-user machine; unsigned builds have checksum
+   integrity but no publisher identity, while Store or Authenticode builds add
+   platform trust.
 
 ## STRIDE review
 
@@ -38,4 +39,6 @@ leaves the action unsent.
 
 Production checks include dependency audit, account-safety and unfinished-work
 scans, recovery drill, package/native-module verification, tagged-version
-matching, and mandatory Authenticode verification for public tagged releases.
+matching, checksum publication for every tagged release, and mandatory
+Authenticode verification whenever a signing provider is selected. Unsigned
+delivery retains the unknown-publisher social-engineering risk.

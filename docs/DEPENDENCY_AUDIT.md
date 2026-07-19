@@ -33,16 +33,14 @@ databases, uploads, and token stores are not packaged.
 - Archiver powers provenance-preserving ZIP evidence export.
 - bcrypt and jsonwebtoken power account and session controls.
 
-## Removed unused surface
+## Document-processing surface
 
-The current audit removed unused `@azure/msal-node`, `jose`, `mammoth`,
-`pdf-parse`, `isomorphic-fetch`, `ws`, and their obsolete standalone type
-packages. None had a shipped-source import. Removing them reduced the install by
-33 transitive packages without cutting a working capability.
-
-OCR remains explicitly unavailable; no parser dependency is retained merely to
-imply otherwise. The Flask document-intelligence runtime has its own Python
-dependencies in `requirements.txt`.
+The desktop runtime intentionally retains `pdf-parse`, `mammoth`, `tesseract.js`,
+and the Dutch and English Tesseract datasets because shipped document analysis
+uses them for PDF, DOCX, and image evidence. Electron packaging unpacks the OCR
+worker runtime and language data required by the packaged application. The Flask
+document-intelligence runtime has its own Python dependencies in
+`requirements.txt`.
 
 ## Release checks
 
@@ -50,5 +48,6 @@ dependencies in `requirements.txt`.
 - `npm audit --omit=dev` must have no unresolved runtime advisory.
 - The TypeScript and renderer builds prove every declared import resolves.
 - `npm run verify:electron-native` proves the packaged SQLite ABI.
-- Public artifacts must be Store-certified and Store-signed, or, for direct
-  portable releases, version-matched and Authenticode-valid.
+- Tagged artifacts must be version-matched, acceptance-approved, and accompanied
+  by a SHA-256 checksum. Configured signing modes must also be
+  Authenticode-valid; owner-selected unsigned builds remain untrusted by Windows.

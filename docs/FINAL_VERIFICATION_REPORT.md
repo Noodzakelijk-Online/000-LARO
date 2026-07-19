@@ -1,6 +1,6 @@
 # Final Verification Report
 
-Date: 2026-07-17
+Date: 2026-07-20
 Verification target: the production-readiness changes in this report's commit
 
 This report separates reproducible repository evidence from target-environment
@@ -17,12 +17,12 @@ acceptance. It supersedes the 2026-07-06 phase snapshot.
 | Account-safety scan | 0 high-severity findings |
 | Isolated backup/delete/restore/reopen drill | Pass |
 | Target database readiness | SQLite integrity, declared foreign keys, invariants, reconciliation, duplicates, and demo markers clean |
-| Vitest | 40 files, 250 tests passed, 0 todo |
+| Vitest | 40 files, 255 tests passed, 0 todo |
 | Python unittest discovery | 202 tests passed |
 | Runtime dependency audit | 0 known vulnerabilities |
 | Renderer, main, and server production builds | Pass |
 | Portable Windows packaging | Pass with tracked LARO icon; unsigned by policy |
-| Packaged `/api/health` | `healthy`, database ready, version 1.3.0, production |
+| Packaged `/api/health` | `healthy`, database ready, version 1.3.0 |
 | Packaged document intelligence and Outreach | Five migrations present; PDF, DOCX, native parser dependencies, and review-gated Outreach tables present; integrated server booted successfully |
 | Desktop scanner contract | Scoped 15-minute token; real bytes/hash; owner/MIME enforcement |
 | Branch CI policy | Current Node and Python checks are required before merge |
@@ -66,6 +66,12 @@ A second packaged-window run exercised the rebuilt scanner surface:
 - Settings opened and returned to evidence collection; the viewport had no
   horizontal overflow or overlapping controls.
 
+The 2026-07-20 isolated-profile package check additionally verified account
+signup, the retained Gmail and Google Drive connection controls, the local-folder
+picker entry point, user-scoped account and activity exports, mobile navigation,
+and a clean browser console. Settings no longer exposes inert outreach,
+notification, matching, personalization, or restorable-backup controls.
+
 A final clean-profile packaged run created a new local account and checked all
 14 mounted routes at both 1440x900 and 390x844:
 
@@ -80,12 +86,11 @@ A final clean-profile packaged run created a new local account and checked all
   correct email, current-password, new-password, and one-time-code metadata;
 - no page error, console error, or console warning occurred during the sweep.
 
-The current local portable artifact is 118,877,949 bytes with SHA-256
-`79DD955E71703488FC11ED8DB445FBF9D67ACC42BB2AF82997556912D085A60D`.
+The current local portable artifact is 151,687,715 bytes with SHA-256
+`ee96c8098eba00982ddb89e2bf864dff972fb70d98cf0531ecd755c62e4db76b`.
 It launched with an explicit isolated user-data directory, created fresh local
 secrets and databases, applied all five packaged migrations, and returned
-healthy production status on loopback port 52210. Direct SQLite inspection
-confirmed `outreach_directory_targets` and `case_outreach_target_matches`.
+healthy status on loopback port 63494.
 Its packaged resources contain the current migrations, PDF/DOCX parsers, native
 parser dependency, consolidated managed-storage deletion, and seven-category
 matching data. Windows reports
@@ -143,7 +148,7 @@ development renderer path from the launching shell.
 
 | Gate | Current state | Required evidence |
 |---|---|---|
-| Trusted public Windows distribution | Deliberately out of scope | Configure Store or certificate signing only if the distribution policy changes from unsigned internal delivery |
+| Trusted public Windows distribution | Deliberately out of scope | Configure Store or certificate signing only if platform publisher trust becomes a requirement; unsigned tagged delivery remains supported with a checksum and warning |
 | Public branding | Awaiting owner confirmation | Product owner confirms `build/icon.png` / `public/laro-logo.png` as the approved public mark |
 | Live providers | Not exercised with production accounts | Target Google OAuth, storage/LLM as used, and outbound email credentials pass consent, send, callback, and audit checks |
 
@@ -164,9 +169,9 @@ before it can publish.
 
 ## Verdict
 
-The repository is a verified unsigned internal release candidate: the code,
+The repository is a verified unsigned release candidate: the code,
 tests, recovery path, packaged startup, authenticated realtime channel, and
 tested user flow are operational. Public signing and Store certification are not
-part of the selected distribution path. The artifact must therefore remain an
-internal build and may show Windows' unknown-publisher warning. Live-provider
-and public-brand acceptance remain environment and owner gates respectively.
+part of the selected distribution path. Windows may show an unknown-publisher
+warning. Live-provider and public-brand acceptance remain environment and owner
+gates respectively and continue to block a versioned release until recorded.

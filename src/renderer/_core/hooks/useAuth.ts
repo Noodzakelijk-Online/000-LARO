@@ -13,10 +13,6 @@ export function useAuth(options?: UseAuthOptions) {
     options ?? {};
   const utils = trpc.useUtils();
 
-  // Check if demo mode is enabled via URL parameter
-  const isDemoMode = typeof window !== 'undefined' && 
-    new URLSearchParams(window.location.search).get('demo') === 'true';
-
   const meQuery = trpc.auth.me.useQuery(undefined, {
     retry: false,
     refetchOnWindowFocus: false,
@@ -66,7 +62,6 @@ export function useAuth(options?: UseAuthOptions) {
 
   useEffect(() => {
     if (!redirectOnUnauthenticated) return;
-    if (isDemoMode) return; // Skip redirect in demo mode
     if (meQuery.isLoading || logoutMutation.isPending) return;
     if (state.user) return;
     if (typeof window === "undefined") return;
@@ -76,7 +71,6 @@ export function useAuth(options?: UseAuthOptions) {
   }, [
     redirectOnUnauthenticated,
     redirectPath,
-    isDemoMode,
     logoutMutation.isPending,
     meQuery.isLoading,
     state.user,

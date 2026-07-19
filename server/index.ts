@@ -107,7 +107,7 @@ app.use(compressionMiddleware);
 // Phase 035 — observability: liveness (process up), readiness (DB reachable),
 // and a health summary. Liveness must never touch the DB; readiness does.
 app.get('/api/live', (_req, res) => {
-  res.status(200).json({ status: 'alive', uptime: process.uptime() });
+  res.status(200).json({ status: 'alive' });
 });
 
 app.get('/api/ready', async (_req, res) => {
@@ -136,8 +136,6 @@ app.get('/api/health', async (_req, res) => {
     status: dbReady ? 'healthy' : 'degraded',
     dbReady,
     version: APP_VERSION,
-    env: ENV.NODE_ENV,
-    uptime: process.uptime(),
     timestamp: new Date().toISOString(),
   });
 });

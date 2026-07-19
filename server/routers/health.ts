@@ -7,10 +7,7 @@ export const healthRouter = router({
     .query(() => {
       return {
         status: 'ok',
-        uptime: process.uptime(),
         timestamp: new Date().toISOString(),
-        nodeVersion: process.version,
-        platform: process.platform,
       };
     }),
 

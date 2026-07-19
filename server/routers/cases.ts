@@ -233,7 +233,7 @@ export const casesRouter = router({
 
   clearDraft: protectedProcedure.mutation(async ({ ctx }) => {
     const db = await getDb();
-    if (!db) return { success: true };
+    if (!db) throw new Error("Database not available");
     await db.delete(systemConfig).where(eq(systemConfig.configKey, `caseDraft:${ctx.user.id}`));
     return { success: true };
   }),

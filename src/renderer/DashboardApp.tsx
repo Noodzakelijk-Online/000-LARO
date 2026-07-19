@@ -47,7 +47,6 @@ export default function DashboardApp() {
       <Route path="/help" component={Help} />
 
       <Route path="/settings" component={Settings} />
-      {/* EmailSettings.tsx is incomplete in repo; use main Settings until restored */}
       <Route path="/email-settings" component={Settings} />
       <Route path="/email-preferences" component={Settings} />
       <Route path="/privacy" component={Privacy} />

@@ -36,7 +36,7 @@ npm run docker:build && npm run docker:run
 |---|---|---|
 | `GET /api/live` | Liveness — process is up | No |
 | `GET /api/ready` | Readiness — DB reachable (503 if not) | Yes |
-| `GET /api/health` | Summary: status, dbReady, version, env, uptime | Yes |
+| `GET /api/health` | Summary: status, dbReady, version, timestamp | Yes |
 
 tRPC also exposes `health.check` (public) and `health.readiness` (protected, with
 scheduled-job status), and `admin.diagnostics`/`admin.tableCounts` for operators
@@ -52,8 +52,8 @@ problems, so it can gate a deploy.
 
 - The desktop app is packaged separately with `npm run dist:*` (electron-builder).
 - Branch and manual Windows builds are unsigned internal artifacts. Store
-  certification and paid signing are not active deployment requirements. Public
-  tagged releases remain blocked unless a future operator configures a supported
-  trust provider and completes the corresponding acceptance gate. Any public
-  route must use the owner-approved mark from `build/icon.png`.
+  certification and paid signing are not active deployment requirements. Tagged
+  releases can remain unsigned after the external acceptance gates are approved;
+  Windows may warn that the publisher is unknown. Any public route must use the
+  owner-approved mark from `build/icon.png`.
 - The packaged installer no longer bundles `.env` (Phase 030).
