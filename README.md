@@ -149,14 +149,14 @@ See [Operator Runbook](docs/OPERATOR_RUNBOOK.md), [Security](docs/SECURITY.md), 
 
 ## Verification
 
-The current production-readiness candidate was verified locally on 2026-07-16.
+The current production-readiness candidate was verified locally on 2026-07-20.
 GitHub Actions repeats the Node checks on the supported Node 22 toolchain:
 
 - `npm run gate`: all blocking gates passed.
 - Server, Electron main-process, and shipped renderer TypeScript checks passed; ESLint passed.
 - Traceability reported 116 rows, 93 cited, and 0 broken references.
 - Runtime no-excuses scan reported 0 suspect findings; account safety reported 0 high-severity findings.
-- Vitest reported 38 passing files and 241 passing tests, including controlled
+- Vitest reported 40 passing files and 255 passing tests, including controlled
   NOvA parsing/filter, unknown-metric scoring, and review-gated
   media/organization discovery, tenant isolation, case-draft persistence, and
   target-database readiness tests, with no skipped or todo tests.
@@ -184,13 +184,14 @@ desktop server to that registered OAuth callback port instead.
   checks also remain covered.
 - Packaged Electron scanner QA passed signup, shared-session authorization, empty-state rendering, disabled unsafe scan state, Settings navigation, and clean renderer console checks.
 - A packaged launch from a directory containing hostile development `.env` values still reported production mode, database readiness, and a random `127.0.0.1` port.
-- The current unsigned portable executable is 118,880,896 bytes with SHA-256
-  `5A38A99448D1972F51FAC929924048BC8784F5B13D84A20914AAA76ADC638689`.
+- The current unsigned portable executable is 151,687,715 bytes with SHA-256
+  `ee96c8098eba00982ddb89e2bf864dff972fb70d98cf0531ecd755c62e4db76b`.
   Windows reports `NotSigned`, as intended. An isolated-profile launch applied
   all five migrations, including the document-analysis, NOvA, and Outreach
   directory schemas, served the renderer, and returned healthy production status
-  on automatically selected loopback port 50183. Direct database inspection
-  confirmed `outreach_directory_targets` and `case_outreach_target_matches`.
+  on automatically selected loopback port 63494. Packaged QA also verified signup,
+  Google evidence controls, truthful Settings exports, responsive layout, and a
+  clean browser console.
 - PR #19 requires the Node and Python branch checks before merge. Windows
   workflow `29455232654` passed the gate, build,
   Electron ABI check, package, checksum, and upload stages for the preceding
@@ -242,10 +243,11 @@ development service, Python cache files, and local configuration are excluded.
 See [Backup and Restore](docs/BACKUP_RESTORE.md) for verified database recovery.
 
 CI runs Node and Python gates for pushes and pull requests to `main`. The release
-workflows target Node 22. Current Windows builds are unsigned internal artifacts;
-no Store certification or paid signing provider is active. Optional Store and
-direct-signing workflows remain available, but public tagged releases fail closed
-until an operator deliberately configures and accepts one of those trust routes.
+workflows target Node 22. Current Windows builds are unsigned artifacts; no Store
+certification or paid signing provider is active. Tagged releases may also remain
+unsigned when `WINDOWS_SIGNING_PROVIDER` is unset or set to `unsigned`, but the
+external acceptance record must still be approved and Windows may show an
+unknown-publisher warning. Optional Store and direct-signing routes remain available.
 
 ## Repository Map
 

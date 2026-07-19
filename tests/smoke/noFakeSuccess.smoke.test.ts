@@ -72,3 +72,32 @@ describe('Phase 013 — generated legal documents carry a disclaimer', () => {
     expect(read('server/routers/gapAnalysis.ts')).toContain('LEGAL_DISCLAIMER');
   });
 });
+
+describe('Production settings expose only operational controls', () => {
+  const settings = read('src/renderer/components/Settings.tsx');
+  const preferences = read('server/routers/userPreferences.ts');
+  const messages = read('server/routers/messages.ts');
+  const authHook = read('src/renderer/_core/hooks/useAuth.ts');
+
+  it('does not advertise inert controls or a restorable backup', () => {
+    expect(settings).not.toContain('Outreach Settings');
+    expect(settings).not.toContain('Notification Preferences');
+    expect(settings).not.toContain('Automatic matching');
+    expect(settings).not.toContain('Backup &amp; restore');
+    expect(settings).toContain('Account archive');
+    expect(settings).toContain('trpc.audit.list.useQuery');
+  });
+
+  it('removes no-op preference and unread-message procedures', () => {
+    expect(preferences).not.toContain('togglePreferredLawyer');
+    expect(preferences).not.toContain('updateCaseTemplates');
+    expect(preferences).not.toContain('updateAppWorkbench');
+    expect(messages).not.toContain('getUnreadCount');
+    expect(messages).not.toContain('markAsRead');
+  });
+
+  it('does not let a URL query parameter alter authentication', () => {
+    expect(authHook).not.toContain("get('demo')");
+    expect(authHook).not.toContain('isDemoMode');
+  });
+});

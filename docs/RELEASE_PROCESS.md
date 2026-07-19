@@ -5,22 +5,25 @@
 Changes enter `main` through a reviewed pull request with passing CI. Use
 semantic versions from `package.json` and add the matching changelog entry.
 Normal Windows builds are unsigned internal artifacts. No signing provider is
-currently selected. Public `vX.Y.Z` tags remain disabled until an operator
-deliberately configures one of the optional trust routes below.
+currently selected. Versioned `vX.Y.Z` tags may publish the same unsigned
+portable executable after the external acceptance gates are approved.
 
 Tagged releases fail closed unless the tag exactly matches `package.json`, a
-supported signing provider is fully configured, `release-acceptance.json`
-records approved public-brand and live-provider gates, and Windows reports the
-executable's Authenticode signature as `Valid`. Each approval must identify its
-approver, timestamp, evidence references, and, for providers, the tested
-provider scope. The workflow publishes only the versioned portable executable
-and its SHA-256 checksum. Main-branch and manual builds remain internal
-validation artifacts.
+supported distribution mode is selected, and `release-acceptance.json` records
+approved public-brand and live-provider gates. Each approval must identify its
+approver, timestamp, evidence references, and, for providers, the tested provider
+scope. The workflow publishes only the versioned portable executable and its
+SHA-256 checksum. Signed modes additionally require Windows to report the
+executable's Authenticode signature as `Valid`.
 
 ## Windows Signing
 
-Only when public trusted distribution is required, set the repository variable
-`WINDOWS_SIGNING_PROVIDER` to one of:
+Set the repository variable `WINDOWS_SIGNING_PROVIDER` to one of the following.
+Leaving it unset is equivalent to `unsigned`.
+
+- `unsigned`: publishes the portable executable and SHA-256 checksum without a
+  certificate. Windows may show an unknown-publisher or SmartScreen warning.
+  This is the current owner-selected mode.
 
 - `microsoft-store` (optional, no recurring signing fee): creates an unsigned
   APPX submission package whose identity must exactly match Partner Center.
@@ -45,10 +48,11 @@ Only when public trusted distribution is required, set the repository variable
 - `pfx`: store the base64-encoded certificate in `WINDOWS_CSC_LINK` and its
   password in `WINDOWS_CSC_KEY_PASSWORD` as repository secrets.
 
-No route permits an unsigned tagged release. Every provider output is checked
-with `Get-AuthenticodeSignature` before GitHub may publish it. Azure signing
-uses Microsoft's RFC 3161 timestamp service; eSigner signs and timestamps
-through SSL.com's cloud-HSM service.
+Every configured signing-provider output is checked with
+`Get-AuthenticodeSignature` before GitHub may publish it. Unsigned output is
+published only in the explicit or default unsigned mode and remains untrusted by
+Windows. Azure signing uses Microsoft's RFC 3161 timestamp service; eSigner
+signs and timestamps through SSL.com's cloud-HSM service.
 
 The optional Microsoft Store route is intentionally different: the repository produces
 an unsigned submission package and validates its manifest identity. Microsoft
@@ -75,7 +79,8 @@ npm run dist:store
 
 For an API deployment, also run `npm run readiness:production` with the target
 environment. Confirm no `.env`, database, upload, token, or unrelated development
-asset appears in the package. Confirm the signature and checksum before rollout.
+asset appears in the package. Confirm the checksum and, when signing is enabled,
+the signature before rollout.
 Confirm that `build/icon.png` is the product-owner-approved public LARO mark.
 Before tagging, update `release-acceptance.json` in a reviewed pull request. A
 pending record is valid for normal development but blocks every tagged release.

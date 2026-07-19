@@ -141,11 +141,13 @@ describe('production readiness regressions', () => {
     expect(matchingSource).not.toContain('877k court cases');
   });
 
-  it('fails closed for unsigned, unaccepted, or version-mismatched tagged releases', async () => {
+  it('supports owner-selected unsigned releases while blocking unaccepted or mismatched tags', async () => {
     const workflow = readFileSync(join(ROOT, '.github/workflows/build.yml'), 'utf8');
     const acceptance = JSON.parse(readFileSync(join(ROOT, 'release-acceptance.json'), 'utf8'));
     const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
-    expect(workflow).toContain('WINDOWS_SIGNING_PROVIDER must be microsoft-store, pfx, azure-artifact-signing, or sslcom-esigner');
+    expect(workflow).toContain('WINDOWS_SIGNING_PROVIDER must be unsigned, microsoft-store, pfx, azure-artifact-signing, or sslcom-esigner');
+    expect(workflow).toContain("$env:WINDOWS_SIGNING_PROVIDER -eq 'unsigned'");
+    expect(workflow).toContain('Tagged release is unsigned by owner-selected policy.');
     expect(workflow).toContain('Portable tagged releases are prohibited');
     expect(workflow).toContain('WINDOWS_CSC_LINK is required when WINDOWS_SIGNING_PROVIDER=pfx');
     expect(workflow).toContain('Azure Artifact Signing configuration is incomplete');
@@ -160,6 +162,7 @@ describe('production readiness regressions', () => {
     expect(workflow).toContain("Tag ${{ github.ref_name }} does not match package version");
     expect(workflow).toContain('release-acceptance.mjs --require-approved --tag');
     expect(workflow).toContain("$signature.Status -ne 'Valid'");
+    expect(workflow).toContain("$provider -ne 'unsigned'");
     expect(workflow).toContain('release-artifacts/*');
     expect(workflow).not.toContain('path: release/**/*.exe');
     const storeWorkflow = readFileSync(join(ROOT, '.github/workflows/store.yml'), 'utf8');

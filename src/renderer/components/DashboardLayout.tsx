@@ -1,21 +1,4 @@
 import { useAuth } from "@/_core/hooks/useAuth";
-import { trpc } from "@/lib/trpc";
-import { Badge } from "./ui/badge";
-
-// Unread message badge component
-function UnreadMessageBadge() {
-  const { data: unreadCount } = trpc.messages.getUnreadCount.useQuery(undefined, {
-    refetchInterval: 30000, // Refresh every 30 seconds
-  });
-
-  if (!unreadCount || unreadCount === 0) return null;
-
-  return (
-    <Badge variant="destructive" className="h-5 min-w-5 px-1.5 text-xs">
-      {unreadCount > 99 ? "99+" : unreadCount}
-    </Badge>
-  );
-}
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -144,14 +127,9 @@ export default function DashboardLayout({
     const saved = localStorage.getItem(SIDEBAR_WIDTH_KEY);
     return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
   });
-  const { loading, user } = useAuth();
-
   useEffect(() => {
     localStorage.setItem(SIDEBAR_WIDTH_KEY, sidebarWidth.toString());
   }, [sidebarWidth]);
-
-  // Public demo mode - skip authentication entirely
-  // Show loading only briefly, then display dashboard for everyone
 
   return (
     <SidebarProvider

@@ -7,7 +7,6 @@ export const systemRouter = router({
   health: publicProcedure.query(() => ({
     status: 'ok',
     version: APP_VERSION,
-    env: ENV.NODE_ENV,
     timestamp: new Date().toISOString(),
   })),
 

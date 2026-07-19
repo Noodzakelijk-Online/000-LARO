@@ -45,7 +45,9 @@ jobs:
           if ('${{ github.ref_name }}' -ne "v$version") {
             throw "Tag ${{ github.ref_name }} does not match package version v$version"
           }
-          if ($env:WINDOWS_SIGNING_PROVIDER -eq 'pfx') {
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_PROVIDER) -or $env:WINDOWS_SIGNING_PROVIDER -eq 'unsigned') {
+            Write-Warning 'Publishing an unsigned Windows executable. Windows may show an unknown-publisher warning.'
+          } elseif ($env:WINDOWS_SIGNING_PROVIDER -eq 'pfx') {
             if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CSC_LINK)) {
               throw 'WINDOWS_CSC_LINK is required when WINDOWS_SIGNING_PROVIDER=pfx'
             }
@@ -83,7 +85,7 @@ jobs:
           } elseif ($env:WINDOWS_SIGNING_PROVIDER -eq 'microsoft-store') {
             throw 'Microsoft Store distribution is selected. Portable tagged releases are prohibited; run the Store submission workflow instead.'
           } else {
-            throw 'WINDOWS_SIGNING_PROVIDER must be microsoft-store, pfx, azure-artifact-signing, or sslcom-esigner'
+            throw 'WINDOWS_SIGNING_PROVIDER must be unsigned, microsoft-store, pfx, azure-artifact-signing, or sslcom-esigner'
           }
       - name: Validate external release acceptance
         if: startsWith(github.ref, 'refs/tags/')
@@ -149,11 +151,14 @@ jobs:
         run: |
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
           $portable = Get-Item -LiteralPath '${{ steps.portable.outputs.path }}'
-          if ('${{ github.ref_type }}' -eq 'tag') {
+          $provider = '${{ vars.WINDOWS_SIGNING_PROVIDER }}'
+          if ('${{ github.ref_type }}' -eq 'tag' -and -not [string]::IsNullOrWhiteSpace($provider) -and $provider -ne 'unsigned') {
             $signature = Get-AuthenticodeSignature $portable.FullName
             if ($signature.Status -ne 'Valid') {
               throw "Tagged release is not validly signed: $($signature.Status)"
             }
+          } elseif ('${{ github.ref_type }}' -eq 'tag') {
+            Write-Warning 'Tagged release is unsigned by owner-selected policy.'
           }
           New-Item -ItemType Directory -Force release-artifacts | Out-Null
           $published = "release-artifacts/LARO-Desktop-$version-Windows-x64.exe"

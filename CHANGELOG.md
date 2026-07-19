@@ -25,6 +25,9 @@ versioning; dates are ISO. Version is sourced from `package.json` and surfaced b
   compact source controls that open the owning document.
 
 ### Fixed
+- Aligned tagged Windows delivery with the owner-selected no-certificate policy:
+  unsigned releases are supported with checksums and explicit warnings, while
+  configured signing providers still require a valid signature.
 - Reworked the reachable Messages surface as truthful local Case Notes: removed
   fabricated unread, delivery, priority, response-time, subject, and fallback
   template states while retaining real persisted note creation and search.
