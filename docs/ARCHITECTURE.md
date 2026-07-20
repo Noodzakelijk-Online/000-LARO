@@ -1,6 +1,6 @@
 # LARO Architecture
 
-Updated: 2026-07-16
+Updated: 2026-07-20
 
 LARO contains two supported local-first runtimes. They share a repository and selected provider configuration, but they currently have separate schemas and databases. This is an explicit transitional constraint, not an implied synchronization mechanism.
 
@@ -63,6 +63,11 @@ Important boundaries:
 - Ledger case routes use one centralized ownership check before reading or mutating legal material.
 - Document analysis produces review suggestions. It does not silently promote model output into confirmed facts.
 - Case-bundle approval is tied to the exact persisted case snapshot and becomes stale when relevant state changes.
+- Flask recovery sets coordinate the ledger SQLite file, authentication SQLite
+  file, encrypted OAuth vault, and upload root. External secret values remain in
+  operator escrow and are verified through non-reversible compatibility tags.
+- The Flask recovery drill is blocking alongside the Electron database/key/
+  evidence drill; the two recovery-set formats remain intentionally separate.
 
 ## Data Ownership
 

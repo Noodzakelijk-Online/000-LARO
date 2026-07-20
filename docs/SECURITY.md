@@ -31,6 +31,9 @@ Date: 2026-07-20
   resolve symlinks and reject paths outside the path-delimited
   `LOCAL_SCAN_ROOTS` allowlist; local collection is disabled when it is unset.
 - Google status requires authentication, OAuth state is attached to the authenticated Flask session, callback JavaScript uses Jinja's JSON serializer, and return URLs are restricted to local absolute paths.
+- Flask recovery binds the ledger, auth database, encrypted OAuth vault, and
+  upload inventory. External Flask and vault secrets are verified through salted
+  compatibility tags and are never written into the recovery manifest.
 
 ## Operational requirements
 
@@ -41,6 +44,12 @@ Date: 2026-07-20
   manifest, optional desktop-secret sidecar, and local evidence directory
   together on access-controlled or encrypted media; restore only while writes
   are stopped. S3-backed deployments require independent bucket recovery.
+- Create and validate the separate Flask recovery set before Flask maintenance.
+  Keep its four members together, retain external `SECRET_KEY` and
+  `LARO_TOKEN_ENCRYPTION_KEY` values in independent secret escrow, and restore
+  only after stopping Flask and its background workers.
+- Default Electron and Flask backup directories are ignored by Git. Keep backup
+  sets on access-controlled or encrypted media and never force-add them.
 - Configure `LARO_PASSWORD_RESET_URL_TEMPLATE` and SMTP before enabling password reset for non-local users.
 - Renderer TypeScript and lint are blocking release gates.
 
@@ -53,3 +62,9 @@ non-reversible compatibility tag in the backup-set manifest.
 Deleting it while LARO is stopped intentionally rotates the local keys on next
 launch, invalidates existing sessions, and makes previously encrypted provider
 tokens unusable until the accounts are reconnected.
+
+The Flask token vault follows the same recovery principle. A locally generated
+Fernet key is bundled inside the protected token-vault snapshot. An environment-
+managed `LARO_TOKEN_ENCRYPTION_KEY` remains external and is compatibility-bound.
+The Flask `SECRET_KEY` always remains external; `--allow-session-reset` is an
+explicit acceptance that existing browser cookie sessions will be invalidated.

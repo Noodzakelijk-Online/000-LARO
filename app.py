@@ -374,7 +374,10 @@ def _ledger_document_analysis_snapshot(case_id):
 
 
 def _upload_root():
-    root = os.environ.get('LARO_UPLOAD_ROOT') or os.path.join(app.instance_path, 'laro_uploads')
+    configured = os.environ.get('LARO_UPLOAD_ROOT')
+    canonical = os.path.join(app.instance_path, 'uploads')
+    legacy = os.path.join(app.instance_path, 'laro_uploads')
+    root = configured or (legacy if os.path.isdir(legacy) and not os.path.exists(canonical) else canonical)
     os.makedirs(root, exist_ok=True)
     return root
 

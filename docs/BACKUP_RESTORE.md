@@ -2,11 +2,11 @@
 
 LARO stores application metadata in SQLite, provider tokens under an encryption
 key, and evidence bytes on local disk or S3. A database alone is therefore not a
-complete recovery point. The server path is `DATABASE_URL`; the desktop uses
+complete recovery point. The Electron server path is `DATABASE_URL`; the desktop uses
 `<userData>/laro-server.sqlite`, `<userData>/laro-secrets.json`, and
 `<userData>/uploads`.
 
-## Backup
+## Electron Backup
 
 ```powershell
 npm run db:backup
@@ -44,7 +44,7 @@ The default destination is a timestamped file under `db-backups` beside the live
 database. Keep every set member together on access-controlled or encrypted
 storage. The desktop sidecar contains secret key material.
 
-## Validate
+## Electron Validate
 
 ```powershell
 npm run db:validate -- C:\Backups\laro.sqlite
@@ -56,7 +56,7 @@ key compatibility, and local-file or S3-key coverage. A database-only backup is
 labelled legacy because token and file recovery cannot be proven. A version-1
 backup set can still be inspected, but is labelled as missing storage coverage.
 
-## Restore
+## Electron Restore
 
 1. Stop incoming API traffic or close LARO Desktop.
 2. Validate the selected backup.
@@ -90,7 +90,7 @@ restoring the matching local evidence may an operator use:
 npm run db:restore -- C:\Backups\v1.sqlite --allow-missing-storage
 ```
 
-## Recovery Proof
+## Electron Recovery Proof
 
 ```powershell
 npm run recovery:drill
@@ -101,9 +101,64 @@ evidence object; changes all three live states; restores the set; and proves dat
 key, and evidence recovery plus preservation of every previous path. It never
 touches the live profile. `npm run readiness` includes this drill.
 
-## Runtime Scope
+## Flask Recovery Set
 
-This CLI covers the Electron/Express/tRPC database and its managed storage. The
-separate Flask Case Command Center still has its own ledger, auth database, token
-vault, and upload root; these require a separate coordinated snapshot until a
-verified Flask recovery command is implemented.
+The Flask Case Command Center has a separate recovery command because it has a
+separate persistence model. One recovery-set directory contains:
+
+- `ledger.sqlite3`: the source-linked legal ledger;
+- `auth.sqlite3`: password identities, hashed bearer sessions, and reset state;
+- `uploads/`: every regular file under `LARO_UPLOAD_ROOT`;
+- `tokens/`: encrypted provider records and the local Fernet key, when used;
+- `manifest.json`: database and per-file hashes, table inventories, referenced
+  upload coverage, and non-reversible compatibility tags for external secrets.
+
+Stop the Flask server and its workers before maintenance. Create and validate a
+new set with:
+
+```powershell
+npm run flask:backup -- C:\Backups\laro-flask-20260720
+npm run flask:validate -- C:\Backups\laro-flask-20260720
+```
+
+The CLI loads `.env` without overwriting already exported values. It supports
+`--ledger-db`, `--auth-db`, `--uploads`, and `--tokens` for explicit maintenance
+targets. A set is published only after both online SQLite snapshots pass
+integrity, foreign-key, schema, and stable-source checks; both file stores match
+their SHA-256 inventories; and every ledger-managed local path exists inside the
+upload snapshot with its recorded content hash.
+
+`SECRET_KEY` remains external and is bound through a salted compatibility tag.
+It must be strong and retained with the deployment configuration. If invalidating
+browser cookie sessions is acceptable, backup, validation, and restore can use
+`--allow-session-reset`. This does not bypass OAuth-vault key validation.
+
+When `LARO_TOKEN_ENCRYPTION_KEY` is configured, the set records only a salted
+compatibility tag and validation requires the same external key. Otherwise the
+ignored local `.laro-oauth-vault.key` is bundled with the encrypted vault. LARO
+refuses vault files that have no recoverable key and refuses an active external
+key that conflicts with a bundled key.
+
+Restore requires an explicit stopped-runtime confirmation:
+
+```powershell
+npm run flask:restore -- C:\Backups\laro-flask-20260720 --confirm-stopped
+```
+
+The command validates the untouched set, stages all four members, rebases ledger
+upload paths when `LARO_UPLOAD_ROOT` changed, validates staged state again, then
+installs the members. Every previous live path remains beside its target with a
+`.bak-<timestamp>` suffix. A partial installation attempts rollback for every
+member and reports any incomplete rollback as a maintenance failure.
+
+Run the isolated destructive proof with:
+
+```powershell
+npm run flask:recovery:drill
+```
+
+`npm run gate` and `npm run readiness` run both the Electron recovery drill and
+the Flask ledger/auth/vault/upload drill. The two runtimes are therefore
+independently recoverable, but they still use separate databases and identities;
+their backups are not interchangeable or a transactionally consistent combined
+snapshot.

@@ -403,6 +403,32 @@ describe('production readiness regressions', () => {
     expect(recoveryDrill).toContain('backupOfPreviousStorage');
   });
 
+  it('ships coordinated Flask ledger, auth, token-vault, and upload recovery', () => {
+    const recovery = readFileSync(join(ROOT, 'flask_recovery.py'), 'utf8');
+    const flaskApp = readFileSync(join(ROOT, 'app.py'), 'utf8');
+    const cli = readFileSync(join(ROOT, 'scripts/flask_recovery.py'), 'utf8');
+    const drill = readFileSync(join(ROOT, 'scripts/flask_recovery_drill.py'), 'utf8');
+    const gate = readFileSync(join(ROOT, 'scripts/stabilization-gate.mjs'), 'utf8');
+    const gitignore = readFileSync(join(ROOT, '.gitignore'), 'utf8');
+
+    expect(recovery).toContain('PRAGMA data_version');
+    expect(recovery).toContain('upload_references');
+    expect(recovery).toContain('bundled-vault-key');
+    expect(recovery).toContain('session-reset-required');
+    expect(recovery).toContain('confirm_stopped');
+    expect(recovery).toContain('previous[index]');
+    expect(recovery).toContain('_default_upload_root');
+    expect(flaskApp).toContain("os.path.join(app.instance_path, 'uploads')");
+    expect(flaskApp).toContain("os.path.join(app.instance_path, 'laro_uploads')");
+    expect(cli).toContain('--confirm-stopped');
+    expect(cli).toContain('--allow-session-reset');
+    expect(drill).toContain('previous_uploads');
+    expect(drill).toContain('previous_tokens');
+    expect(gate).toContain('scripts/flask_recovery_drill.py');
+    expect(gitignore).toContain('db-backups/');
+    expect(gitignore).toContain('flask-backups/');
+  });
+
   it('wires case intake draft persistence into the mounted creation flow', () => {
     const wizard = readFileSync(join(ROOT, 'src/renderer/components/CaseCreationWizard.tsx'), 'utf8');
     const cases = readFileSync(join(ROOT, 'src/renderer/components/Cases.tsx'), 'utf8');

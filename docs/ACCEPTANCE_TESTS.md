@@ -1,6 +1,6 @@
 # Acceptance Test Matrix
 
-Current as of 2026-07-16. Automated criteria exercise real tRPC procedures and
+Current as of 2026-07-20. Automated criteria exercise real tRPC procedures and
 temporary SQLite databases; they do not contact external people or accounts.
 
 | ID | Criterion | Evidence | Status |
@@ -23,6 +23,7 @@ temporary SQLite databases; they do not contact external people or accounts.
 | AC16 | Discover media/organization candidates without sharing case prose | `tests/backend/outreachDirectory.test.ts` | Automated with a controlled public-search response |
 | AC17 | Prevent unreviewed or rejected targets from appearing as active case matches | `tests/backend/outreachDirectory.test.ts` | Automated |
 | AC18 | Keep outreach directory records and matches tenant-scoped | `tests/backend/outreachDirectory.test.ts` | Automated |
+| AC19 | Recover the Flask legal ledger, auth sessions, OAuth vault, and referenced uploads while preserving every previous path | `test_flask_recovery.py` and blocking Flask recovery drill | Automated |
 
 ## Target-Environment Acceptance
 

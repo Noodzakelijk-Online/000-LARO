@@ -5,6 +5,7 @@ import { dirname, join } from 'path';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const productionMode = process.argv.includes('--production');
+const PYTHON = process.env.PYTHON || (process.platform === 'win32' ? 'python' : 'python3');
 
 const checks = [
   { name: 'traceability', required: true, cmd: 'node', args: ['scripts/traceability.mjs'] },
@@ -16,6 +17,12 @@ const checks = [
     required: true,
     cmd: process.execPath,
     args: [join(ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs'), 'scripts/recovery-drill.ts'],
+  },
+  {
+    name: 'Flask recovery drill',
+    required: true,
+    cmd: PYTHON,
+    args: ['scripts/flask_recovery_drill.py'],
   },
   {
     name: 'target database readiness',

@@ -45,3 +45,11 @@ encryption keys on the next launch, invalidates existing sessions, and requires
 reconnecting providers whose tokens were encrypted with the previous key. LARO
 preserves and rejects an invalid existing file instead of silently rotating it.
 Provider credentials still require their own rotation or revocation.
+
+For the Flask command center, stop the server and workers, then run
+`npm run flask:backup -- <directory>` and `npm run flask:validate -- <directory>`.
+Restore only with `npm run flask:restore -- <directory> --confirm-stopped`. The
+set coordinates the ledger, auth sessions, OAuth vault, and uploads while keeping
+every previous target beside the restored path. Keep the matching external
+`SECRET_KEY` and optional `LARO_TOKEN_ENCRYPTION_KEY` in independent secret
+escrow; neither raw value is copied into the set.
