@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, shell, Menu } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, shell, Menu, session } from 'electron';
 import path from 'path';
 import os from 'os';
 import fs from 'fs';
@@ -17,6 +17,7 @@ import { FileScanner } from './scanner';
 import { FileUploader } from './uploader';
 import { isDesktopDevelopmentMode, resolveDesktopServerPort } from './desktopPort';
 import { acquireSingleInstanceLock } from './singleInstance';
+import { installDenyByDefaultPermissions } from './sessionPermissions';
 // NOTE: server/index.ts reads `.env` (dotenv) at import time, so it is imported
 // lazily in startApp() AFTER we pin NODE_ENV from app.isPackaged. This guarantees
 // a packaged build runs the server in production mode even if the bundled .env
@@ -333,6 +334,8 @@ function buildMenu(): void {
 }
 
 if (ownsDesktopProfile) app.whenReady().then(async () => {
+  installDenyByDefaultPermissions(session.defaultSession);
+
   // Initialize App Data Directory for SQLite
   const userDataPath = app.getPath('userData');
   if (!fs.existsSync(userDataPath)) {

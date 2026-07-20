@@ -76,7 +76,7 @@ npm run setup
 npm run dev
 ```
 
-`npm run setup` creates `.env` from `.env.example` only when `.env` does not already exist. It never overwrites existing configuration. The packaged desktop app generates local JWT and cookie secrets in its Electron user-data directory; standalone production server operation requires strong values in `.env`. A desktop single-instance lock prevents concurrent processes from opening that shared profile; a later launch restores and focuses the existing window.
+`npm run setup` creates `.env` from `.env.example` only when `.env` does not already exist. It never overwrites existing configuration. The packaged desktop app generates local JWT and cookie secrets in its Electron user-data directory; standalone production server operation requires strong values in `.env`. A desktop single-instance lock prevents concurrent processes from opening that shared profile; a later launch restores and focuses the existing window. Electron browser permissions are denied by default because LARO uses reviewed native IPC for local-file selection and external links instead of browser device APIs.
 
 Useful desktop commands:
 
