@@ -206,20 +206,18 @@ desktop server to that registered OAuth callback port instead.
   errors, and console errors all block the browser job.
 - Packaged Electron scanner QA passed signup, shared-session authorization, empty-state rendering, disabled unsafe scan state, Settings navigation, and clean renderer console checks.
 - A packaged launch from a directory containing hostile development `.env` values still reported production mode, database readiness, and a random `127.0.0.1` port.
-- The current unsigned portable executable is 151,773,047 bytes with SHA-256
-  `3d68bea313f916a1a9c635127d65336149615127a5af2277a830d85cfbe04ab0`.
-  Windows reports `NotSigned`, as intended. An isolated-profile launch applied
-  all six migrations, installed 228 database relationship guards, served the
-  renderer, and returned healthy production status on automatically selected
-  loopback port 63918. Packaged QA also verified signup,
-  Google evidence controls, truthful Settings exports, responsive layout, and a
-  clean browser console.
-- PR #28 merged after the required Node and Python branch checks. Its protected-main
-  baseline CI run `29715727941` passed; Windows workflow `29715727914` passed the gate,
-  build, Electron ABI check, package, checksum, and upload stages.
-- The protected-main `LARO-Desktop-Windows` workflow artifact was uploaded with
-  SHA-256 digest
-  `2f1a2878bf924d89a0e21ea69bbc109351a709afd8b90b4712a5c5d53bf9f4b7`.
+- Every protected-main commit must pass the Node, Python, renderer-accessibility,
+  and Windows packaging workflows. Use the latest successful
+  [GitHub Actions runs](https://github.com/Noodzakelijk-Online/000-LARO/actions)
+  for commit-specific evidence instead of relying on a hash from an older build.
+- The Windows workflow publishes `LARO-Desktop-Windows` with the portable
+  executable and its `.sha256` sidecar. It also verifies the production gate,
+  Electron native-module ABI, single-instance profile lock, restart persistence
+  of the desktop secret, and artifact checksum before upload.
+- Windows reports `NotSigned` for the current unsigned distribution, as intended.
+  A verified isolated-profile launch applies all six migrations, installs 228
+  database relationship guards, serves the renderer on an automatically selected
+  loopback port, and preserves the existing profile across restart.
 
 Run the same checks locally:
 
