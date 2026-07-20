@@ -40,7 +40,8 @@ Important boundaries:
   an explicit review gate before local case matching.
 - External outreach is disabled by default and requires ownership, approval, feature-flag, emergency-stop, provider, and idempotency checks.
 - Server, Electron main, renderer TypeScript, ESLint, safety scans, traceability,
-  an isolated database recovery drill, and Vitest are blocking release gates.
+  an isolated database/key backup-set recovery drill, and Vitest are blocking
+  release gates.
 
 ## Flask Flow
 

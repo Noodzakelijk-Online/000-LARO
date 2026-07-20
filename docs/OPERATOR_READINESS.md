@@ -38,9 +38,10 @@ counts only and does not print case or user data.
       workflow enforces this against the packaged executable.
 - [ ] Browser permission checks and requests remain denied unless a reviewed
       product feature explicitly introduces a narrowly scoped exception.
-- [ ] `laro-secrets.json` is readable, durable, and included with the matching
-      desktop database backup; startup never falls back to temporary keys. The
-      Windows workflow verifies that the packaged app preserves it on restart.
+- [ ] `laro-secrets.json` is readable and durable; startup never falls back to
+      temporary keys. The Windows workflow verifies restart preservation, while
+      `db:backup`, `db:validate`, and the recovery drill prove a complete,
+      manifest-bound database/key backup set.
 - [ ] The scanner requires a selected case and native-picker-approved folder,
       exposes a review list, and persists a test file with matching SHA-256.
 - [ ] Demo data is absent from the target database.

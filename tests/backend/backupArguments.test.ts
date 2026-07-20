@@ -1,0 +1,40 @@
+import { describe, expect, it } from 'vitest';
+import { parseBackupArguments } from '../../scripts/backupArguments';
+
+describe('database maintenance CLI arguments', () => {
+  it('preserves an explicit backup destination when no flags are present', () => {
+    expect(parseBackupArguments(['C:\\Backups\\laro.sqlite'])).toEqual({
+      commandOrDestination: 'C:\\Backups\\laro.sqlite',
+      file: undefined,
+      desktopSecretsPath: undefined,
+      allowLegacy: false,
+    });
+  });
+
+  it('parses restore and legacy override without changing positional paths', () => {
+    expect(parseBackupArguments(['--restore', 'legacy.sqlite', '--allow-legacy'])).toMatchObject({
+      commandOrDestination: '--restore',
+      file: 'legacy.sqlite',
+      allowLegacy: true,
+    });
+  });
+
+  it('accepts an explicit desktop-secret path in any supported command', () => {
+    expect(parseBackupArguments([
+      '--desktop-secrets',
+      'C:\\Profile\\laro-secrets.json',
+      '--validate',
+      'backup.sqlite',
+    ])).toEqual({
+      commandOrDestination: '--validate',
+      file: 'backup.sqlite',
+      desktopSecretsPath: 'C:\\Profile\\laro-secrets.json',
+      allowLegacy: false,
+    });
+  });
+
+  it('rejects missing values and unknown maintenance flags', () => {
+    expect(() => parseBackupArguments(['--desktop-secrets'])).toThrow('requires a file path');
+    expect(() => parseBackupArguments(['--unknown'])).toThrow('Unknown database-maintenance option');
+  });
+});
