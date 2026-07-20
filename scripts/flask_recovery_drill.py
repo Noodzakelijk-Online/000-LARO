@@ -121,7 +121,7 @@ def main() -> None:
         assert case == ("Verified recovery case",)
         assert user == ("recovery@example.test",)
         assert session == ("bearer-session-hash",)
-        assert Path(local_path) == config.upload_root / "case_41" / "notice.txt"
+        assert Path(local_path).resolve() == (config.upload_root / "case_41" / "notice.txt").resolve()
         assert Path(local_path).read_bytes() == b"Recovery drill legal evidence"
         assert (config.token_root / "google-recovery.vault").read_bytes() == b"encrypted-oauth-record"
         assert restored.previous_ledger.read_bytes() == b"mutated-ledger"

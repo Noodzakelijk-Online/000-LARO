@@ -355,6 +355,16 @@ class FlaskRecoveryTests(unittest.TestCase):
         recovery_set = self.root / "normalized-backup"
         manifest = create_backup_set(recovery_set, config)
         self.assertEqual(manifest["upload_references"][0]["relative_path"], "case_1/proof.txt")
+        restore_backup_set(recovery_set, config, confirm_stopped=True)
+        ledger = sqlite3.connect(config.ledger_database)
+        try:
+            restored_path = Path(ledger.execute("SELECT local_path FROM case_documents WHERE id = 1").fetchone()[0])
+        finally:
+            ledger.close()
+        self.assertEqual(
+            restored_path.resolve(),
+            (config.upload_root / "case_1" / "proof.txt").resolve(),
+        )
 
 
 if __name__ == "__main__":
