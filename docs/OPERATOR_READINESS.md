@@ -21,9 +21,9 @@ development exemptions require an explicit `NODE_ENV=development`.
 
 Production mode also runs the `db:readiness` checks against the configured
 database. It blocks on SQLite integrity errors, declared foreign-key violations,
-failed invariants, reconciliation findings, duplicate emails, or exact known
-demo/test account markers. The report contains counts only and does not print
-case or user data.
+missing legacy relationship guards, failed invariants, reconciliation findings,
+duplicate emails, or exact known demo/test account markers. The report contains
+counts only and does not print case or user data.
 
 ## Release Checklist
 
