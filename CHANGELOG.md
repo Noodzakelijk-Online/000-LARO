@@ -39,6 +39,8 @@ versioning; dates are ISO. Version is sourced from `package.json` and surfaced b
   compact source controls that open the owning document.
 
 ### Fixed
+- Normalized directly supplied Flask recovery paths before containment checks so
+  Windows short/long profile aliases cannot reject evidence inside the same root.
 - Unified direct Flask, launcher, environment-template, and recovery upload-root
   defaults while retaining an existing legacy `instance/laro_uploads` directory.
 - Made direct production preflight load the project environment and fail closed

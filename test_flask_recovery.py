@@ -338,6 +338,24 @@ class FlaskRecoveryTests(unittest.TestCase):
             config = config_from_environment(root=root)
         self.assertEqual(config.upload_root, (root / "instance" / "uploads").resolve())
 
+    def test_normalizes_direct_config_paths_before_upload_containment_checks(self):
+        canonical = self.root / "normalized-source"
+        alias = canonical / "alias"
+        alias.mkdir(parents=True)
+        unresolved = alias / ".."
+        config = FlaskRecoveryConfig(
+            root=unresolved,
+            ledger_database=unresolved / "instance" / "ledger.sqlite3",
+            auth_database=unresolved / "instance" / "auth.sqlite3",
+            upload_root=unresolved / "instance" / "uploads",
+            token_root=unresolved / "tokens",
+            session_secret=SESSION_SECRET,
+        )
+        self._seed(config)
+        recovery_set = self.root / "normalized-backup"
+        manifest = create_backup_set(recovery_set, config)
+        self.assertEqual(manifest["upload_references"][0]["relative_path"], "case_1/proof.txt")
+
 
 if __name__ == "__main__":
     unittest.main()
