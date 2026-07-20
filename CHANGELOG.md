@@ -30,6 +30,14 @@ versioning; dates are ISO. Version is sourced from `package.json` and surfaced b
   compact source controls that open the owning document.
 
 ### Fixed
+- Made direct production preflight load the project environment and fail closed
+  as production when `NODE_ENV` is omitted, matching operator-readiness behavior.
+- Allowed the Vite development proxy to target an explicit LARO API URL instead
+  of silently reaching an unrelated process already using port 3000.
+- Ignored SQLite WAL and shared-memory sidecars so local operation cannot stage
+  transient database state.
+- Added a compact legal-assistance notice to every authenticated workspace so
+  analyses and generated documents are not presented as definitive legal advice.
 - Closed case-ID authorization gaps across auto-collection settings, logs,
   keyword matches, local folders, manual runs, and job creation/status reads.
 - Replaced filename-based pull word counts with actual extracted-document word

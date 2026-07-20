@@ -1,57 +1,62 @@
-# Compliance & Platform Policy Boundaries (Phase 013)
+# Compliance And Legal-Safety Boundaries
 
-Date: 2026-07-06 · Branch `Phase-Imp`
+Current as of 2026-07-20.
 
-The prompt's primary safety boundary: **high-stakes legal domain — the app must
-not pretend to provide final legal advice, must preserve evidence provenance,
-must protect personal data, and must require approval before contacting lawyers
-or third parties.**
+LARO is a legal evidence and preparation workspace. It must not present generated
+content as definitive legal advice, lose source provenance, expose another
+user's case data, or contact a third party without explicit review and approval.
 
----
+## Legal-Advice Boundary
 
-## 1. Legal-advice disclaimer (Phase 013 change, applied)
+- Every authenticated renderer route displays a compact legal-assistance notice.
+- Generated legal documents append the Dutch and English `LEGAL_DISCLAIMER` and
+  return the disclaimer in the API response.
+- The pre-send review includes the mandatory disclaimer and identifies the
+  intended recipient before an irreversible provider action is available.
+- Help and onboarding expose the same boundary before users depend on analysis.
 
-- Added `LEGAL_DISCLAIMER` (NL + EN) in `shared/const.ts`.
-- Every AI-generated legal document from `gapAnalysis.generateDocument` now has
-  the disclaimer appended to its `content`, and the response includes a
-  `disclaimer` field. So no generated letter can be mistaken for definitive legal
-  advice. Verified by `tests/smoke/noFakeSuccess.smoke.test.ts`.
+LARO does not claim that deterministic extraction, optional model output, or a
+lawyer match replaces review by a qualified lawyer.
 
-**Disclaimer text (NL):** "Let op: LARO biedt juridische ondersteuning en
-voorbereiding, geen definitief juridisch advies. Laat gegenereerde documenten en
-analyses altijd controleren door een bevoegd advocaat voordat u ze gebruikt."
+## Evidence Provenance
 
-## 2. Evidence provenance
+- Managed evidence retains source metadata, source URI where available, MIME
+  type, storage key, and SHA-256 content hash.
+- Deterministic and optional provider findings retain source citations. Provider
+  observations without literal source support are rejected.
+- Timeline events retain an owning evidence identifier and a direct source-open
+  action.
+- Export packages include a provenance manifest and evidence metadata.
 
-- Evidence collected from Gmail/Drive records its source metadata.
-- Phase 015 adds a **sha256 content hash** (`hashBuffer`) returned by
-  `storagePut`, so ingested files can carry an integrity hash for provenance.
-  (Wiring the hash into every evidence-write path is tracked for Phase 015/019.)
+## External Actions
 
-## 3. Approval before contacting third parties
+- Preparing outreach creates reviewable drafts and contacts nobody.
+- Approval marks a draft ready and contacts nobody.
+- Delivery requires case ownership, Approved state, an enabled feature flag, a
+  released emergency stop, a configured provider, and an unsent idempotency
+  state. Provider failure cannot produce a Sent state.
+- Media and organization discovery remains review-gated before persistence or
+  outreach.
 
-- No lawyer/third party is contacted automatically: the outreach send path is not
-  wired (see `docs/PROVIDERS.md`). A human approval gate must exist **before** a
-  real send is built — Phase 026. This ordering keeps the boundary intact.
+## Personal Data
 
-## 4. Personal data protection
+- Authentication, case ownership, team access, and cross-user isolation are
+  enforced in protected server procedures.
+- OAuth tokens use AES-256-GCM storage; reset and bearer credentials are stored
+  as hashes where the legacy Flask runtime requires them.
+- Account export and erasure remove owned relational records and managed storage
+  objects; storage deletion failure aborts metadata deletion.
+- Retention tooling purges eligible audit history and does not silently delete
+  business evidence.
 
-- Auth, ownership, and IDOR fixes landed in Phases 007/008 (`docs/SECURITY.md`).
-- Residual: OAuth-token encryption is weak, and there is no data export/deletion
-  (GDPR) yet — Phases 028/030.
+## Operational Acceptance
 
-## 5. Remaining compliance gaps (tracked, not done here)
+Repository tests prove the local safety contracts but cannot prove consent,
+delivery, callback behavior, or provider retention in a target account. Each
+provider intended for release needs credential, consent, representative-data,
+failure, and audit evidence in `release-acceptance.json`. Missing providers must
+remain disabled and visibly unavailable.
 
-| Gap | Phase |
-|---|---|
-| Disclaimer shown on case analysis / matching results in the UI | 037 (UI labelling) |
-| GDPR data export + account deletion | 028 |
-| i18n framework (NL/EN toggle) instead of hardcoded strings | 057 |
-| Data-retention policy | 102 |
-| Privacy impact assessment | 065 |
-
-## 6. Honest status
-
-Phase 013 makes generated legal content carry a disclaimer and documents the
-boundaries; it does **not** claim full compliance. The UI-wide disclaimer, GDPR
-tooling, and i18n remain open and are scheduled above.
+The repository includes a DPIA, threat model, retention policy, and operator
+runbook. These controls support an operator review; they are not a declaration
+of regulatory certification or jurisdiction-specific legal compliance.
