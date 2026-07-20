@@ -55,7 +55,7 @@ Ledger reconciled: 2026-07-15.
 | 038 | Fake provider lab for tests only | **Implemented** | `server/testing/fakeProviders.ts`, prod-guarded (throws in production). |
 | 039 | Test-data factories & fixtures | **Implemented** | `tests/factories.ts` (user/case/lawyer/evidence). |
 | 040 | Backend test suite | **Implemented** | Real DB integration `tests/backend/…` (classification→matching→ownership→GDPR); caught & fixed the `LIKE '__%'` cascade bug. Legacy suite still → 041. |
-| 041 | Frontend & component test suite | **Partial** | `tests/frontend/frontendLogic.test.ts` (form/validation/legal-area logic). Component-render tests need jsdom/testing-library — deferred. |
+| 041 | Frontend & component test suite | **Implemented** | Vitest covers frontend state/contracts and `tests/browser/rendererAccessibility.spec.ts` renders the real authenticated application across all supported routes and viewports in Chromium. The CI browser harness replaces a weaker synthetic jsdom-only claim. |
 | 042 | Worker/job test suite | **Implemented** | `tests/backend/worker.test.ts` — runJob isolation, retry+backoff, recover, status. |
 | 043 | End-to-end workflow tests | **Implemented** | `tests/e2e/workflow.e2e.test.ts` — signup→case→classify→match→prepare→approve via real API; sending remains a separate explicit action. |
 | 044 | Acceptance test matrix | **Implemented** | `docs/ACCEPTANCE_TESTS.md` defines automated AC1–AC15 plus target-environment acceptance M1–M3. |
@@ -63,8 +63,8 @@ Ledger reconciled: 2026-07-15.
 | 046 | Cross-user isolation tests | **Implemented** | `tests/security/isolation.test.ts` — B cannot read/mutate/export A's case. |
 | 047 | File safety & path traversal tests | **Implemented** | `tests/security/fileSafety.test.ts` — traversal/absolute keys confined; sha256 round-trip. |
 | 048 | Provider failure simulation | **Implemented** | `tests/security/providerFailure.test.ts` — graceful degradation + prod-guarded fake lab. |
-| 049 | Accessibility review | **Partial** | `tests/a11y/accessibility.test.ts` (contrast/id) + `docs/ACCESSIBILITY.md`. Per-screen axe audit pending. |
-| 050 | Responsive & browser compatibility | **Partial** | `docs/RESPONSIVE_COMPAT.md` (single-Chromium desktop). Manual reflow QA / visual-regression pending. |
+| 049 | Accessibility review | **Implemented** | Shared helpers and static contracts are supplemented by a CI axe-core audit of all 15 supported routes at desktop/mobile sizes; serious/critical violations, unnamed controls, errors, and failed requests block the build. `docs/ACCESSIBILITY.md`. |
+| 050 | Responsive & browser compatibility | **Implemented** | The supported Electron/Chromium surface is audited across 30 route/viewport combinations for content, overflow, errors, request failures, and accessibility. Firefox/Safari are not packaged-app targets. `docs/RESPONSIVE_COMPAT.md`. |
 | 051 | Performance baseline & indexing | **Implemented** | cases(userId,status)/urgency/updatedAt indexes; `docs/PERFORMANCE.md`. |
 | 052 | Large dataset & pagination testing | **Implemented** | `phase051_060.test.ts` — complete non-overlapping pagination over 55 rows + filters. |
 | 053 | Backup & restore procedures | **Implemented** | `server/backup.ts` (online backup/validate/restore) + CLI + `docs/BACKUP_RESTORE.md`; tested. |

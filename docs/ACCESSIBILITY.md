@@ -21,12 +21,18 @@ Date: 2026-07-17
 - `tests/frontend/productionUiAccessibility.test.ts` prevents regressions in
   responsive layout, control names, assistant sizing, notification semantics,
   truthful Help content, local shell assets, and authentication metadata.
+- `tests/browser/rendererAccessibility.spec.ts` runs axe-core against every
+  supported static route at 1440x900 and 390x844. It also blocks unnamed visible
+  controls, missing primary headings, horizontal overflow, page errors, failed
+  requests, and console errors. GitHub Actions runs this as the
+  `renderer-accessibility` job.
 
 ## Packaged renderer audit
 
 The final unsigned Windows executable was tested with a new local account in its
-bundled Chromium at 1440x900 and 390x844. Fourteen mounted routes were checked at
-both sizes.
+bundled Chromium at 1440x900 and 390x844. The automated development-renderer
+audit covers the same supported Chromium surface. Fifteen mounted routes were
+checked at both sizes, including the consolidated Evidence workspace.
 
 - Every route rendered meaningful content and an `h1`.
 - No visible button lacked an accessible name.
@@ -38,6 +44,9 @@ both sizes.
 - The notification popover remained inside the mobile viewport and its trigger
   reported unread state through its accessible name.
 - No page error, console error, or console warning occurred during the sweep.
+- No serious or critical WCAG 2.0/2.1 A/AA axe-core violation remained. The
+  audit found and fixed the global primary-button contrast token and required
+  accessible names for every shared progress indicator.
 
 Radix's generated `aria-hidden` compatibility selects are intentionally excluded
 from the visible-field check.
@@ -45,6 +54,6 @@ from the visible-field check.
 ## Remaining scope
 
 - The route audit is not a complete WCAG conformance assessment.
-- A full axe-core pass, screen-reader session, complete keyboard focus-order
-  review, and reduced-motion review remain recommended before a public
-  accessibility claim.
+- A screen-reader session, complete keyboard focus-order review, and
+  reduced-motion review remain recommended before a public WCAG conformance
+  claim. LARO does not claim formal conformance.

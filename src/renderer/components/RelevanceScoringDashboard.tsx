@@ -215,6 +215,7 @@ export default function RelevanceScoringDashboard({
                 </Badge>
               </div>
               <Progress
+                aria-label="High relevance evidence distribution"
                 value={
                   stats.statistics.totalScored > 0
                     ? (stats.statistics.highRelevance / stats.statistics.totalScored) * 100
@@ -233,6 +234,7 @@ export default function RelevanceScoringDashboard({
                 </Badge>
               </div>
               <Progress
+                aria-label="Medium relevance evidence distribution"
                 value={
                   stats.statistics.totalScored > 0
                     ? (stats.statistics.mediumRelevance / stats.statistics.totalScored) * 100
@@ -251,6 +253,7 @@ export default function RelevanceScoringDashboard({
                 </Badge>
               </div>
               <Progress
+                aria-label="Low relevance evidence distribution"
                 value={
                   stats.statistics.totalScored > 0
                     ? (stats.statistics.lowRelevance / stats.statistics.totalScored) * 100

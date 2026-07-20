@@ -178,6 +178,7 @@ export function BulkCaseImport() {
                     </span>
                   </div>
                   <Progress
+                    aria-label="Case import progress"
                     value={(jobStatus.processedRows / jobStatus.totalRows) * 100}
                     className="h-2"
                   />

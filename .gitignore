@@ -49,6 +49,7 @@ desktop.ini
 coverage/
 .nyc_output/
 test-results/
+playwright-report/
 
 .cache/
 tmp/

@@ -396,7 +396,7 @@ export default function Evidence() {
                   <span className="text-sm text-muted-foreground">Score</span>
                   <span className="text-lg font-semibold">{stats.strength}/100</span>
                 </div>
-                <Progress value={stats.strength} />
+                <Progress aria-label="Case strength" value={stats.strength} />
               </CardContent>
             </Card>
 

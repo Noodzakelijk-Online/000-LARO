@@ -21,14 +21,14 @@ hosted build would require its own evergreen-browser matrix.
 
 ## Verified matrix
 
-The final portable Windows executable was audited at 1440x900 and 390x844 on all
-14 mounted routes:
+The final portable Windows executable and the automated Chromium renderer audit
+cover 1440x900 and 390x844 on all 15 supported static routes:
 
-`/`, `/cases`, `/lawyers`, `/outreach`, `/help`, `/settings`,
+`/`, `/cases`, `/evidence`, `/lawyers`, `/outreach`, `/help`, `/settings`,
 `/email-settings`, `/email-preferences`, `/privacy`, `/admin`,
 `/admin-analytics`, `/messages`, `/email`, and `/analytics`.
 
-All 28 route/viewport combinations had meaningful content, no horizontal page
+All 30 route/viewport combinations had meaningful content, no horizontal page
 overflow, and no blank or framework-error surface. The mobile Cases header,
 assistant panel, notification popover, Help accordion, and Case Notes compose
 flow were additionally exercised. The assistant measured 366x820 inside the
@@ -39,4 +39,5 @@ flow were additionally exercised. The assistant measured 366x820 inside the
 - Electron's bundled Chromium is verified; Firefox and Safari are not supported
   packaged-app targets.
 - Visual-regression baselines across additional density, zoom, and high-contrast
-  settings remain useful future hardening.
+  settings remain useful future hardening, but the supported Electron/Chromium
+  route and reflow matrix is release-blocking in GitHub Actions.

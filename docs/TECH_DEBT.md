@@ -19,7 +19,7 @@ Updated: 2026-07-20
 | D13 | Historical subscription, usage-limit, and monetary usage columns remain in installed schemas | Low | Keep for compatibility; new telemetry writes quantity counts only and leaves monetary fields null |
 | D14 | Renderer strings are not fully migrated to `t()` | Low | Complete i18n pass |
 | D15 | Desktop scanner previously accepted false connection success and fabricated uploads | - | Resolved with session auth, folder consent, review selection and real evidence storage |
-| D16 | Full cross-browser and automated accessibility coverage is incomplete | Low | Expand in subsequent release cycles |
+| D16 | Supported Electron/Chromium route accessibility and responsive coverage | - | Resolved with a CI Playwright/axe matrix across all 15 static routes at desktop and mobile sizes; non-target browsers and formal WCAG certification remain outside the packaged-app claim |
 | D17 | Evidence, case, and account deletion could leave managed objects after metadata deletion | - | Resolved; managed storage keys are deleted first and failures abort deletion |
 | D18 | KvK lookup used a stale query-string contract and a missing LinkedIn enrichment module | - | Resolved; uses the official open-dataset path contract, normalizes its response, and exposes only supported lookup controls |
 | D19 | Retention was manual-only and accepted unsafe environment values | - | Resolved; bounded configuration fails startup, and an idempotent observable sweep runs after startup and daily |

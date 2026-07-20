@@ -92,7 +92,11 @@ export default function OutreachAnalytics() {
                 ].map(([label, count]) => (
                   <div key={String(label)} className="space-y-2">
                     <div className="flex items-center justify-between text-sm"><span>{label}</span><strong>{count}</strong></div>
-                    <Progress value={(Number(count) / pipelineMax) * 100} className="h-2" />
+                    <Progress
+                      aria-label={`${label} pipeline progress`}
+                      value={(Number(count) / pipelineMax) * 100}
+                      className="h-2"
+                    />
                   </div>
                 ))}
               </CardContent>
