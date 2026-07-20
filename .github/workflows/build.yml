@@ -146,6 +146,9 @@ jobs:
           override: true
           environment_name: PROD
           clean_logs: true
+      - name: Verify packaged single-instance profile lock
+        shell: pwsh
+        run: ./scripts/verify-single-instance.ps1 -ArtifactPath '${{ steps.portable.outputs.path }}'
       - name: Verify and stage release artifact
         shell: pwsh
         run: |

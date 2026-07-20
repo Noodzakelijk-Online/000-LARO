@@ -16,6 +16,7 @@ import {
 import { FileScanner } from './scanner';
 import { FileUploader } from './uploader';
 import { isDesktopDevelopmentMode, resolveDesktopServerPort } from './desktopPort';
+import { acquireSingleInstanceLock } from './singleInstance';
 // NOTE: server/index.ts reads `.env` (dotenv) at import time, so it is imported
 // lazily in startApp() AFTER we pin NODE_ENV from app.isPackaged. This guarantees
 // a packaged build runs the server in production mode even if the bundled .env
@@ -24,6 +25,8 @@ import { isDesktopDevelopmentMode, resolveDesktopServerPort } from './desktopPor
 const DEFAULT_PORT = 3000;
 let laroUrl = `http://127.0.0.1:${DEFAULT_PORT}`;
 const isDev = isDesktopDevelopmentMode(app.isPackaged, process.env.NODE_ENV);
+let mainWindow: BrowserWindow | null = null;
+const ownsDesktopProfile = acquireSingleInstanceLock(app, () => mainWindow);
 
 /**
  * Phase 006/007 — per-install secret bootstrap.
@@ -78,7 +81,6 @@ process.on('unhandledRejection', (reason) => {
   console.error('[Electron] Unhandled Rejection:', reason);
 });
 
-let mainWindow: BrowserWindow | null = null;
 let scanPanel: BrowserWindow | null = null;
 const oauthWindows = new Set<BrowserWindow>();
 let currentScanner: FileScanner | null = null;
@@ -330,7 +332,7 @@ function buildMenu(): void {
   ]));
 }
 
-app.whenReady().then(async () => {
+if (ownsDesktopProfile) app.whenReady().then(async () => {
   // Initialize App Data Directory for SQLite
   const userDataPath = app.getPath('userData');
   if (!fs.existsSync(userDataPath)) {

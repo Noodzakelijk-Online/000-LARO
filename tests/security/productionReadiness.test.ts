@@ -229,6 +229,10 @@ describe('production readiness regressions', () => {
     expect(workflow).toContain('release-acceptance.mjs --require-approved --tag');
     expect(workflow).toContain("$signature.Status -ne 'Valid'");
     expect(workflow).toContain("$provider -ne 'unsigned'");
+    expect(workflow).toContain('verify-single-instance.ps1');
+    const singleInstanceProbe = readFileSync(join(ROOT, 'scripts/verify-single-instance.ps1'), 'utf8');
+    expect(singleInstanceProbe).toContain("Join-Path $profile 'laro-server.sqlite'");
+    expect(singleInstanceProbe).toContain('Compare-Object $beforeIds $afterIds');
     expect(workflow).toContain('release-artifacts/*');
     expect(workflow).not.toContain('path: release/**/*.exe');
     const storeWorkflow = readFileSync(join(ROOT, '.github/workflows/store.yml'), 'utf8');

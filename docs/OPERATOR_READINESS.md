@@ -33,6 +33,9 @@ counts only and does not print case or user data.
 - [ ] `npm run readiness` passes, including the recovery drill.
 - [ ] `npm run readiness:production` passes for an API deployment.
 - [ ] The Windows portable artifact builds and launches on a clean profile.
+- [ ] A second desktop launch returns focus to the existing window instead of
+      opening another process against the same SQLite profile. The Windows
+      workflow enforces this against the packaged executable.
 - [ ] The scanner requires a selected case and native-picker-approved folder,
       exposes a review list, and persists a test file with matching SHA-256.
 - [ ] Demo data is absent from the target database.

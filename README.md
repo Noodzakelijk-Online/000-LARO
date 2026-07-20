@@ -76,7 +76,7 @@ npm run setup
 npm run dev
 ```
 
-`npm run setup` creates `.env` from `.env.example` only when `.env` does not already exist. It never overwrites existing configuration. The packaged desktop app generates local JWT and cookie secrets in its Electron user-data directory; standalone production server operation requires strong values in `.env`.
+`npm run setup` creates `.env` from `.env.example` only when `.env` does not already exist. It never overwrites existing configuration. The packaged desktop app generates local JWT and cookie secrets in its Electron user-data directory; standalone production server operation requires strong values in `.env`. A desktop single-instance lock prevents concurrent processes from opening that shared profile; a later launch restores and focuses the existing window.
 
 Useful desktop commands:
 
