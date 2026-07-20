@@ -1,46 +1,70 @@
-# Privacy Impact Assessment (DPIA) — Phase 065
+# Privacy Impact Assessment (DPIA)
 
-Date: 2026-07-06 · Branch `Phase-Imp` · Jurisdiction: Netherlands / EU (GDPR)
+Updated: 2026-07-20
+Jurisdiction: Netherlands / EU (GDPR)
 
 ## Purpose of processing
-Match a claimant's legal case to suitable lawyers, aggregate supporting evidence,
-prepare (human-approved) outreach, and track outcomes.
+
+LARO helps an account owner organize a legal case, collect supporting evidence,
+match relevant lawyers, prepare human-reviewed outreach, and track outcomes.
 
 ## Personal data categories
+
 | Category | Examples | Sensitivity | Store |
-|---|---|---|---|
-| Client identity/contact | name, email, phone, address | Personal | `cases` |
-| Case content | free-text description, legal areas | Potentially special-category (legal matters) | `cases` |
-| Evidence | documents, emails, attachments | Potentially special-category | `evidence`, S3/local |
-| Account | email, password hash, role | Personal + credential | `users` |
-| Connected-account tokens | OAuth access/refresh | Credential | `email_accounts`, `evidence_sources` |
-| Audit | actions, timestamps, IP/UA | Personal | `audit_logs` |
+| --- | --- | --- | --- |
+| Client identity and contact | Name, email, phone, address | Personal | `cases` |
+| Case content | Free-text description and legal areas | Potentially special-category | `cases` |
+| Evidence | Documents, emails, attachments | Potentially special-category | `evidence`, managed storage |
+| Account | Email, password hash, role | Personal and credential | `users` |
+| Connected-account tokens | OAuth access and refresh tokens | Credential | `email_accounts`, `evidence_sources` |
+| Audit | Actions, timestamps, IP and user agent | Personal | `audit_logs` |
 
-## Lawfulness & data-subject rights
-- **Access**: `gdpr.exportData` — full JSON of the user's data (028).
-- **Erasure**: `gdpr.deleteData` — transactional deletion of all user rows + user (028).
-- **Consent**: implied for data processing; no marketing/analytics tracking; all
-  analytics are local-first (055) — **no third-party telemetry**.
+## Lawfulness and rights
 
-## Data flow & storage
-- Local-first: data lives in the on-device SQLite DB and (optionally) S3.
-- External egress only to explicitly-configured providers (Google/Microsoft/S3/
-  SMTP) over TLS; **no lawyer is contacted without approval** (026/062).
+- The deployment operator must identify and document the applicable GDPR
+  Articles 6 and, where relevant, 9 legal basis. LARO does not infer lawful
+  consent merely because an account exists.
+- `gdpr.exportData` provides an authenticated owner export with credential fields
+  redacted.
+- `gdpr.deleteData` performs confirmed account erasure, including owned managed
+  objects, before relational metadata is removed.
+- Provider connection and evidence collection are explicit user actions.
+- No marketing tracker or third-party product telemetry is enabled.
 
-## Risks & mitigations
+## Data flow and storage
+
+- Local-first operation stores data in the on-device SQLite database and local
+  evidence directory unless the owner configures managed storage.
+- External egress is limited to explicitly configured providers over TLS.
+- OAuth tokens are encrypted at rest with authenticated AES-256-GCM.
+- Outreach delivery requires ownership, approval, feature-flag, emergency-stop,
+  idempotency, and provider checks. Preparing or approving a draft does not send it.
+
+## Risks and mitigations
+
 | Risk | Mitigation | Residual |
-|---|---|---|
-| PII exposure across users | ownership guards + isolation tests (008/046) | — |
-| Token theft | encrypted at rest (weak — upgrade to GCM) | **Open** |
-| Secrets in shipped app | `.env` no longer bundled (030) | — |
-| Over-retention | erasure available; **retention policy pending (102)** | Open |
-| Evidence integrity | sha256 provenance hash (015) | wire into all writes |
+| --- | --- | --- |
+| Cross-account exposure | Owner checks, relationship guards, and isolation tests | Target deployment access review |
+| Token theft | AES-256-GCM at rest; secrets excluded from exports and packages | Host/account compromise |
+| Secrets in shipped app | `.env` excluded; desktop generates per-install session secrets | Provider credentials remain operator-controlled |
+| Over-retention | Automatic bounded audit-log retention plus owner export and erasure | Operator must approve the retention window |
+| Evidence integrity | Source metadata, content hashes, and source-linked analysis | Provider-origin authenticity is not independently certified |
+| External processing | Provider connection is explicit and optional | Operator must execute suitable processor agreements |
 
-## Necessity & proportionality
-Only data needed for matching/outreach is collected. Evidence collection is
-user-initiated and provider-scoped. High-stakes legal domain → the app never
-provides final legal advice (disclaimer, 013).
+## Necessity and proportionality
 
-## Outstanding for full compliance
-Data-retention/auto-archival (102), stronger token crypto, a formal DPA with each
-processor (S3/Google/Microsoft), and a UI to trigger export/erase (037).
+LARO collects case and evidence information needed for the selected workflow.
+Automated analysis remains source-linked and is not represented as final legal
+advice. Business records remain owner-controlled; only audit history is purged
+automatically under the configured policy.
+
+## Required target-environment acceptance
+
+- Record the approved retention period and controller/operator responsibility.
+- Execute required processor agreements for every enabled provider.
+- Complete live-provider consent, callback, storage, analysis, delivery, and
+  audit verification with target accounts.
+- Confirm the public product branding before a versioned public release.
+
+These target-account items cannot be proven by repository tests and remain in
+`release-acceptance.json` where applicable.

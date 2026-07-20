@@ -12,6 +12,7 @@ import { outreachDirectoryRouter } from "./outreachDirectory";
 import { savedSearchesRouter } from "./savedSearches";
 import { workflowRouter } from "./workflow";
 import { evidenceFilesRouter } from "./evidenceFiles";
+import { evidenceExportRouter } from "./evidenceExport";
 import { evidenceTimelineRouter } from "./evidenceTimeline";
 import { documentAnalysisRouter } from "./documentAnalysis";
 import { searchRouter } from "./search";
@@ -30,13 +31,14 @@ import { evidenceAnalyticsRouter } from "./evidenceAnalytics";
 import { autoCollectionRouter } from "./autoCollection";
 import { googleDriveRouter } from "./googleDrive";
 import { notificationsRouter } from "./notifications";
+import { relevanceScoringRouter } from "./relevanceScoring";
 import { featureFlagsRouter } from "./featureFlags";
 import { helpRouter } from "./help";
 import { onboardingRouter } from "./onboarding";
 import { teamsRouter } from "./teams";
 import {
-  adminAnalyticsRouter, outreachAnalyticsRouter, relevanceScoringRouter,
-  evidenceAggregationRouter, enrichmentRouter, evidenceRouter, evidenceExportRouter,
+  adminAnalyticsRouter, outreachAnalyticsRouter,
+  evidenceAggregationRouter, enrichmentRouter, evidenceRouter,
   bulkFileOperationsRouter, caseManagementRouter, legalChecklistsRouter,
   emailMessagesRouter, syncSchedulerRouter, trelloRouter, unifiedInboxRouter,
 } from "./extendedRouters";
@@ -529,14 +531,16 @@ export const appRouter = router({
 
   // GDPR procedures — Phase 028: real access + erasure (were empty stubs).
   gdpr: router({
-    getConsent: protectedProcedure.query(() => ({
-      // Consent to process personal data is implied by using the account; there
-      // is no separate marketing/analytics consent to track yet. Returned
-      // honestly rather than as an empty object.
-      dataProcessing: true,
-      marketing: false,
-      analytics: false,
-    })),
+    getConsent: protectedProcedure.query(async ({ ctx }) => {
+      const { getPrivacyPreferences } = await import('../privacyPreferences');
+      const preferences = await getPrivacyPreferences(ctx.user.id);
+      return {
+        // This describes required service processing, not proof of a GDPR legal
+        // basis. The deployment operator must document that basis separately.
+        dataProcessing: true,
+        ...preferences,
+      };
+    }),
     // Full data export (right of access). Returns every row owned by the user.
     exportData: protectedProcedure.mutation(async ({ ctx }) => {
       const { exportUserData } = await import("../gdpr");
@@ -561,16 +565,23 @@ export const appRouter = router({
         return { success: true, ...result };
       }),
     updateConsent: protectedProcedure
-      .input(z.object({ marketing: z.boolean().optional(), analytics: z.boolean().optional() }))
+      .input(
+        z.object({ marketing: z.boolean().optional(), analytics: z.boolean().optional() })
+          .refine((input) => input.marketing !== undefined || input.analytics !== undefined, {
+            message: 'At least one privacy preference is required',
+          })
+      )
       .mutation(async ({ ctx, input }) => {
+        const { updatePrivacyPreferences } = await import('../privacyPreferences');
+        const preferences = await updatePrivacyPreferences(ctx.user.id, input);
         await createAuditLog({
           userId: ctx.user.id,
           action: "gdpr.consent_updated",
           entityType: "user",
           entityId: ctx.user.id,
-          details: input,
+          details: preferences,
         });
-        return { success: true, ...input };
+        return { success: true, ...preferences };
       }),
   }),
 

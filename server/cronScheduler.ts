@@ -28,6 +28,14 @@ export interface JobStatus {
 }
 
 const jobStatus = new Map<string, JobStatus>();
+let initialized = false;
+
+export const CRON_SCHEDULES = {
+  autoCollection: '0 2 * * *',
+  outreachHeartbeat: '0 * * * *',
+  reminders: '0 8 * * *',
+  retention: '30 3 * * *',
+} as const;
 
 function ensureStatus(name: string): JobStatus {
   let s = jobStatus.get(name);
@@ -102,17 +110,21 @@ function nowMs(): number {
 }
 
 export function initCronScheduler() {
+  if (initialized) return;
+  initialized = true;
   console.log('[Cron] Initializing scheduled tasks...');
   ensureStatus('auto-collection');
   ensureStatus('outreach-heartbeat');
+  ensureStatus('reminders');
+  ensureStatus('retention');
 
   // Daily auto-collection at 02:00.
-  cron.schedule('0 2 * * *', () => {
+  cron.schedule(CRON_SCHEDULES.autoCollection, () => {
     void runJob('auto-collection', async () => { await runAutoCollectionForAllCases(); }, { retries: 2 });
   });
 
   // Hourly outreach heartbeat — intentionally does NOT send anything.
-  cron.schedule('0 * * * *', () => {
+  cron.schedule(CRON_SCHEDULES.outreachHeartbeat, () => {
     void runJob('outreach-heartbeat', async () => {
       console.log('[Cron] Automated outreach follow-ups are disabled; explicit approved sends only. Heartbeat recorded.');
     }, { retries: 0 });
@@ -120,13 +132,27 @@ export function initCronScheduler() {
 
   // Phase 027 — daily reminder sweep: creates user notifications for items needing
   // attention (approval-pending, urgent-no-evidence). Idempotent per case/kind/day.
-  ensureStatus('reminders');
-  cron.schedule('0 8 * * *', () => {
+  cron.schedule(CRON_SCHEDULES.reminders, () => {
     void runJob('reminders', async () => {
       const { runReminderSweep } = await import('./reminders');
       const res = await runReminderSweep();
       console.log(`[Cron] Reminder sweep: ${res.created} reminder(s) across ${res.users} user(s).`);
     }, { retries: 1 });
+  });
+
+  const runRetention = async () => {
+    const { runRetentionSweep } = await import('./retention');
+    const report = await runRetentionSweep();
+    console.log(
+      `[Cron] Retention sweep: removed ${report.auditLogsDeleted} audit log(s) older than ${report.cutoffISO}.`
+    );
+  };
+
+  // Catch up after downtime at startup, then enforce the policy daily. The
+  // sweep is idempotent and never touches cases, evidence, or outreach data.
+  void runJob('retention', runRetention, { retries: 1 });
+  cron.schedule(CRON_SCHEDULES.retention, () => {
+    void runJob('retention', runRetention, { retries: 1 });
   });
 
   console.log('[Cron] Scheduled tasks loaded:', getJobStatus().map((j) => j.name).join(', '));

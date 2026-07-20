@@ -12,12 +12,12 @@ acceptance. It supersedes the 2026-07-06 phase snapshot.
 |---|---|
 | Server, Electron main, and renderer TypeScript | Pass; 0 shipped runtime `@ts-nocheck` bypasses |
 | ESLint | Pass |
-| Requirements traceability | 116 rows, 93 cited, 0 broken |
+| Requirements traceability | 116 rows, 91 cited, 0 broken |
 | Runtime no-excuses scan | 0 suspect findings |
 | Account-safety scan | 0 high-severity findings |
 | Isolated backup/delete/restore/reopen drill | Pass |
 | Target database readiness | SQLite integrity, declared foreign keys, 228 legacy relationship guards, invariants, reconciliation, duplicates, and demo markers clean |
-| Vitest | 44 files, 275 tests passed, 0 todo |
+| Vitest | 46 files, 287 tests passed, 0 todo |
 | Python unittest discovery | 202 tests passed |
 | Runtime dependency audit | 0 known vulnerabilities |
 | Renderer, main, and server production builds | Pass |
@@ -26,8 +26,8 @@ acceptance. It supersedes the 2026-07-06 phase snapshot.
 | Packaged document intelligence and Outreach | Six migrations present, including persisted keyword-pull jobs; PDF, DOCX, native parser dependencies, and review-gated Outreach tables present; integrated server booted successfully |
 | Desktop scanner contract | Scoped 15-minute token; real bytes/hash; owner/MIME enforcement |
 | Branch CI policy | Current Node and Python checks are required before merge |
-| Protected-main baseline CI | Actions run `29711247681`; Node and Python jobs passed |
-| Windows package baseline | Actions run `29711247694`; gate, build, ABI check, package, checksum, and artifact upload passed |
+| Protected-main baseline CI | Actions run `29712712369`; Node and Python jobs passed |
+| Windows package baseline | Actions run `29712712401`; gate, build, ABI check, package, checksum, and artifact upload passed |
 | Packaged matching assets | Seven aligned legal categories; invalid legacy dataset absent |
 | Dependency graph | One canonical Node workspace; 0 open Dependabot alerts |
 
@@ -107,11 +107,19 @@ real local account, moved from Home to Cases, and observed the notice after both
 renders with no console warning, console error, framework overlay, or horizontal
 overflow at 2560x1440.
 
-The current local portable artifact is 151,696,207 bytes with SHA-256
-`2e4056b0d1ed636dda62c3a10b3bdc6349e7bc1ec4191f07c71f93a508000f49`.
+The legacy-dashboard port audit also exercised the consolidated Evidence route
+at 1440x1000 and 390x844. A persisted local case selected without reload, the
+CSV export downloaded real case-scoped bytes, ZIP and CSV availability matched
+the server contract, PDF remained visibly unavailable, and batch scoring stayed
+disabled with a collection prompt while the case had no evidence. The inherited
+dark-theme recommendation contrast defect found during this pass was corrected
+and visually rechecked.
+
+The current local portable artifact is 151,771,576 bytes with SHA-256
+`abfe23193e2b313a200d29a29529d5e0974c8970b723358546032c8247bc05bb`.
 It launched with an explicit isolated user-data directory, created fresh local
 secrets and databases, applied all six packaged migrations, and served the
-application on automatically selected loopback port 61919. `/api/health`
+application on pinned loopback port 63917. `/api/health`
 returned `healthy`, database ready, and version `1.3.0`. SQLite integrity passed with zero foreign-key
 violations and all 228 required relationship guards persisted.
 Its packaged resources contain the current migrations, PDF/DOCX parsers, native

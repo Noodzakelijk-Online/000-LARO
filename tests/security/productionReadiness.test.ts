@@ -107,6 +107,10 @@ describe('production readiness regressions', () => {
     const boundary = readFileSync(join(ROOT, 'src/renderer/components/PageErrorBoundary.tsx'), 'utf8');
     expect(boundary).toContain('reportRendererError');
     expect(boundary).not.toContain('TODO: Send to error tracking service');
+    const dashboardRoutes = readFileSync(join(ROOT, 'src/renderer/DashboardApp.tsx'), 'utf8');
+    const dashboardLayout = readFileSync(join(ROOT, 'src/renderer/components/DashboardLayout.tsx'), 'utf8');
+    expect(dashboardRoutes).toContain('<Route path="/evidence" component={Evidence} />');
+    expect(dashboardLayout).toContain('label: "Evidence", path: "/evidence"');
   });
 
   it('uses encrypted PKCE state for Google OAuth', async () => {

@@ -1,24 +1,35 @@
-# Data Retention & Archival Policy (Phase 102)
+# Data Retention and Archival Policy
 
-Date: 2026-07-06 · Branch `Phase-Imp`
+Updated: 2026-07-20
 
-## Policy (enforced in code: `server/retention.ts`)
+## Policy
+
 | Data | Retention | Action at expiry |
-|---|---|---|
-| Audit logs (`audit_logs`) | `AUDIT_RETENTION_DAYS` (default 365) | Deleted (holds IP/user metadata — minimize) |
-| User business data (cases, evidence, outreach) | For account lifetime | Governed by the **user** (GDPR erasure), not by retention |
+| --- | --- | --- |
+| Audit logs (`audit_logs`) | `AUDIT_RETENTION_DAYS` (default 365) | Delete expired rows |
+| User business data | Account lifetime | Owner-controlled export and erasure |
 
-Rationale: audit logs accumulate indefinitely and contain identifying metadata
-that should not be kept forever (privacy minimization — see DPIA). Business data
-belongs to the user; only the user (or account deletion) removes it.
+Audit logs can contain identifying metadata and should not accumulate
+indefinitely. Cases, evidence, and outreach belong to the account owner and are
+never removed by the audit-retention sweep.
 
-## How it runs
-- `admin.retentionPreview` — dry run: reports what WOULD be deleted (no change).
-- `admin.retentionRun` — executes the sweep; writes an audit entry with the report.
-- Schedulable via the job runner; safe to run repeatedly (no-op when nothing old).
+## Execution
 
-## Guarantees
-- The sweep counts before deleting and returns an honest `{ auditLogsDeleted, cutoffISO }`.
-- It never touches cases/evidence/outreach — verified by the phase 101–115 test
-  (old audit row purged, recent row + business data untouched).
-- Configure the window with `AUDIT_RETENTION_DAYS`.
+- The sweep runs once after server startup to catch up after downtime.
+- It then runs daily at 03:30 through the observable job runner.
+- `admin.retentionPreview` reports what would be deleted without changing data.
+- `admin.retentionRun` executes an additional operator-requested sweep and writes
+  an audit entry with the report.
+- Repeated execution is safe and is a no-op when no row has expired.
+
+## Configuration safety
+
+`AUDIT_RETENTION_DAYS` accepts whole numbers from 30 through 3650. Invalid,
+fractional, zero, negative, or out-of-range values stop startup rather than
+risk an unsafe cutoff. The default is 365 days.
+
+## Verification
+
+Automated tests prove that the sweep removes only expired audit rows, retains
+recent audit rows and business data, rejects unsafe configuration, and keeps a
+dedicated daily schedule separate from evidence collection.

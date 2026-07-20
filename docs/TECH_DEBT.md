@@ -15,13 +15,15 @@ Updated: 2026-07-20
 | D9 | Historical excluded tests and audit snapshots remain for traceability | Low | Keep clearly dated; remove only through reviewed archive work |
 | D10 | Historical tables use database triggers rather than native foreign-key clauses to avoid destructive installed-data rebuilds | Low | Startup enforces insert/update/delete relationships; readiness verifies every guard and reconciliation covers historical drift; replace with native FKs only through a backup-tested migration |
 | D11 | Top-level proprietary license | - | Resolved |
-| D12 | ZIP evidence export is implemented; unavailable formats remain explicit | Low | Keep capability labels honest |
+| D12 | CSV and ZIP evidence export include a case-scoped index, redacted metadata, analyses, and available source files; PDF remains unavailable | Low | Keep capability labels honest |
 | D13 | Historical subscription, usage-limit, and monetary usage columns remain in installed schemas | Low | Keep for compatibility; new telemetry writes quantity counts only and leaves monetary fields null |
 | D14 | Renderer strings are not fully migrated to `t()` | Low | Complete i18n pass |
 | D15 | Desktop scanner previously accepted false connection success and fabricated uploads | - | Resolved with session auth, folder consent, review selection and real evidence storage |
 | D16 | Full cross-browser and automated accessibility coverage is incomplete | Low | Expand in subsequent release cycles |
 | D17 | Evidence, case, and account deletion could leave managed objects after metadata deletion | - | Resolved; managed storage keys are deleted first and failures abort deletion |
 | D18 | KvK lookup used a stale query-string contract and a missing LinkedIn enrichment module | - | Resolved; uses the official open-dataset path contract, normalizes its response, and exposes only supported lookup controls |
+| D19 | Retention was manual-only and accepted unsafe environment values | - | Resolved; bounded configuration fails startup, and an idempotent observable sweep runs after startup and daily |
+| D20 | Legacy evidence scoring UI was connected to lawyer matching and the export view exposed inert buttons | - | Resolved with dedicated owner-scoped scoring/export routers and integration coverage; see `LEGACY_DASHBOARD_PORT_AUDIT.md` |
 
 D10 is operationally contained without rewriting installed databases. A native
 foreign-key conversion remains migration work, not a release blocker while the

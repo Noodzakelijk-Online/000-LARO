@@ -2,6 +2,27 @@
  * Environment configuration
  * Single source of truth for all env vars with safe defaults
  */
+export class ConfigError extends Error {}
+
+export const DEFAULT_AUDIT_RETENTION_DAYS = 365;
+export const MIN_AUDIT_RETENTION_DAYS = 30;
+export const MAX_AUDIT_RETENTION_DAYS = 3650;
+
+export function parseAuditRetentionDays(value: string | undefined): number {
+  if (value === undefined || value.trim() === '') return DEFAULT_AUDIT_RETENTION_DAYS;
+  const parsed = Number(value);
+  if (
+    !Number.isInteger(parsed) ||
+    parsed < MIN_AUDIT_RETENTION_DAYS ||
+    parsed > MAX_AUDIT_RETENTION_DAYS
+  ) {
+    throw new ConfigError(
+      `AUDIT_RETENTION_DAYS must be a whole number between ${MIN_AUDIT_RETENTION_DAYS} and ${MAX_AUDIT_RETENTION_DAYS}.`
+    );
+  }
+  return parsed;
+}
+
 export const ENV = {
   // Server
   PORT:             parseInt(process.env.PORT || '3000', 10),
@@ -12,6 +33,7 @@ export const ENV = {
 
   // Database
   DATABASE_URL:     process.env.DATABASE_URL || '',
+  AUDIT_RETENTION_DAYS: parseAuditRetentionDays(process.env.AUDIT_RETENTION_DAYS),
 
   // Auth / Manus OAuth
   MANUS_API_URL:    process.env.MANUS_API_URL || 'https://api.manus.im',
@@ -76,8 +98,6 @@ export const ENV = {
  */
 export const INSECURE_JWT_DEFAULT = 'change-this-secret';
 export const INSECURE_COOKIE_DEFAULT = 'change-this-cookie-secret';
-
-export class ConfigError extends Error {}
 
 /**
  * Throws in production when security-critical secrets are missing or still set

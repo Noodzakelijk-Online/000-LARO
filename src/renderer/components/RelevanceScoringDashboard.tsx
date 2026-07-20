@@ -12,9 +12,7 @@ import {
   Zap,
   TrendingUp,
   AlertCircle,
-  CheckCircle2,
   Loader2,
-  RefreshCw,
   Tag,
 } from "lucide-react";
 
@@ -31,8 +29,6 @@ export default function RelevanceScoringDashboard({
   legalArea,
   keyIssues,
 }: RelevanceScoringDashboardProps) {
-  const [scoringProgress, setScoringProgress] = useState(0);
-  const [isScoringActive, setIsScoringActive] = useState(false);
   const [batchSize, setBatchSize] = useState(10);
 
   // Get relevance statistics
@@ -47,24 +43,16 @@ export default function RelevanceScoringDashboard({
   // Batch score mutation
   const batchScoreMutation = trpc.relevanceScoring.batchScore.useMutation({
     onSuccess: (data) => {
-      toast.success(`Successfully scored ${data.totalScored} evidence items!`);
-      setIsScoringActive(false);
-      setScoringProgress(0);
+      toast.success(`Scored ${data.totalScored} evidence items`);
       refetchStats();
     },
     onError: (error) => {
       toast.error(`Scoring failed: ${error.message}`);
-      setIsScoringActive(false);
-      setScoringProgress(0);
     },
   });
 
   const handleBatchScore = async () => {
-    setIsScoringActive(true);
-    setScoringProgress(10);
-
     try {
-      setScoringProgress(30);
       await batchScoreMutation.mutateAsync({
         caseContext: {
           caseId,
@@ -74,7 +62,6 @@ export default function RelevanceScoringDashboard({
         },
         batchSize,
       });
-      setScoringProgress(100);
     } catch (error) {
       console.error("Batch scoring error:", error);
     }
@@ -87,14 +74,6 @@ export default function RelevanceScoringDashboard({
       </div>
     );
   }
-
-  const relevancePercentage = stats?.statistics
-    ? (stats.statistics.highRelevance /
-        (stats.statistics.highRelevance +
-          stats.statistics.mediumRelevance +
-          stats.statistics.lowRelevance)) *
-      100
-    : 0;
 
   return (
     <div className="space-y-6">
@@ -173,7 +152,7 @@ export default function RelevanceScoringDashboard({
             Batch Scoring
           </CardTitle>
           <CardDescription>
-            Analyze all evidence items using AI to determine relevance to your case
+            Compare evidence metadata and source-linked document analysis with the persisted case context
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -186,8 +165,8 @@ export default function RelevanceScoringDashboard({
               min="1"
               max="50"
               value={batchSize}
-              onChange={(e) => setBatchSize(Math.max(1, parseInt(e.target.value) || 10))}
-              disabled={isScoringActive}
+              onChange={(e) => setBatchSize(Math.min(50, Math.max(1, parseInt(e.target.value) || 10)))}
+              disabled={batchScoreMutation.isPending}
               className="max-w-xs"
             />
             <p className="text-xs text-muted-foreground">
@@ -196,23 +175,13 @@ export default function RelevanceScoringDashboard({
           </div>
 
           {/* Progress Bar */}
-          {isScoringActive && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Scoring in progress...</span>
-                <span className="text-sm text-muted-foreground">{scoringProgress}%</span>
-              </div>
-              <Progress value={scoringProgress} className="h-2" />
-            </div>
-          )}
-
           {/* Start Scoring Button */}
           <Button
             onClick={handleBatchScore}
-            disabled={isScoringActive || batchScoreMutation.isPending}
+            disabled={batchScoreMutation.isPending || !stats?.statistics.totalEvidence}
             className="w-full"
           >
-            {isScoringActive || batchScoreMutation.isPending ? (
+            {batchScoreMutation.isPending ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                 Scoring Evidence...
@@ -333,8 +302,8 @@ export default function RelevanceScoringDashboard({
                   key={index}
                   className={`p-3 rounded-lg border-l-4 ${
                     rec.priority === "high"
-                      ? "border-red-500 bg-red-50 dark:bg-red-950"
-                      : "border-yellow-500 bg-yellow-50 dark:bg-yellow-950"
+                      ? "border-red-500 bg-red-50 text-red-950 dark:bg-red-950 dark:text-red-50"
+                      : "border-yellow-500 bg-yellow-50 text-yellow-950 dark:bg-yellow-950 dark:text-yellow-50"
                   }`}
                 >
                   <div className="flex items-start gap-2">
@@ -359,8 +328,9 @@ export default function RelevanceScoringDashboard({
             <div className="text-center space-y-3">
               <BarChart3 className="w-12 h-12 mx-auto text-muted-foreground opacity-50" />
               <p className="text-muted-foreground">
-                No evidence has been scored yet. Click "Start Batch Scoring" to analyze your
-                evidence.
+                {stats?.statistics.totalEvidence
+                  ? 'No evidence has been scored yet. Select "Start Batch Scoring" to compare it with this case.'
+                  : "Collect evidence for this case before running relevance scoring."}
               </p>
             </div>
           </CardContent>

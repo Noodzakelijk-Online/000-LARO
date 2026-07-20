@@ -1,25 +1,26 @@
-# Documentation Truthfulness Audit (Phase 075)
+# Documentation Truthfulness Audit
 
-Date: 2026-07-06 · Branch `Phase-Imp`
+Updated: 2026-07-20
 
-Checks that each doc's claims match the code. Method: cross-read docs vs source +
-the test suite (22 files, 143+ passing) that backs the claims.
+Current operational claims were checked against source, release gates, database
+tests, packaged runtime evidence, and protected-main workflows.
 
-| Doc | Claim | Verified against | Verdict |
-|---|---|---|---|
-| PROJECT_INFO.md | Electron + in-process tRPC + local SQLite (not Docker/MySQL) | src-main/index.ts, server/db.ts | ✅ corrected (Phase 004) |
-| CRITICAL_PATH.md | Steps 1–5 real; send not implemented | routers + workflow.ts | ✅ accurate |
-| SECURITY.md §5 | `.env` unbundled; headers added; token crypto still weak | package.json, server/index.ts | ✅ accurate |
-| PROVIDERS.md | Slack/unconfigured report unavailable | enhancedConnections.ts | ✅ accurate |
-| PRIVACY.md | Real GDPR export + erasure | server/gdpr.ts | ✅ accurate (+ Phase 078 completeness fix) |
-| ANALYTICS.md | Local-first, no telemetry | server/analytics.ts | ✅ accurate |
-| FEATURE_FLAGS.md | `outreach.send.enabled` default off | server/featureFlags.ts | ✅ accurate |
-| STATE_MACHINES.md | Enforced in cases.update + approval gate | cases.ts, workflow.ts | ✅ accurate |
-| GOAL_COMPLETION_MATRIX.md | Partials named with residuals | this audit | ✅ honest |
+| Document | Current claim | Evidence | Verdict |
+| --- | --- | --- | --- |
+| `README.md` | Electron/tRPC and Flask compatibility runtimes are distinguished | Runtime entry points and build scripts | Accurate |
+| `SECURITY.md` | Secrets are excluded and OAuth tokens use AES-256-GCM | Packaging manifest and token crypto tests | Accurate |
+| `PRIVACY.md` | Export, managed-object erasure, preferences, and retention are real | GDPR, storage-failure, preference, and retention tests | Accurate |
+| `API_USAGE_AUDIT.md` | Mounted renderer contracts are typed; unavailable providers fail honestly | `AppRouter`, renderer typecheck, provider tests | Accurate |
+| `UI_ACTION_AUDIT.md` | Previously missing router groups are mounted | Router index and renderer calls | Accurate |
+| `FINAL_VERIFICATION_REPORT.md` | Local and protected-main evidence is separated from external acceptance | Gate output, package smoke, Actions runs | Accurate |
 
-## Findings
-- No doc overstates capability: every "Implemented" has code+tests; every
-  "Partial" names its residual. The one historical inaccuracy (PROJECT_INFO's
-  Docker/MySQL stack) was fixed in Phase 004.
-- **Action:** keep the matrix + worklog updated per phase (already the practice);
-  add the UI/API audits (073/074) to the honest-status set.
+Historical phase logs remain dated snapshots and may describe defects that were
+subsequently fixed. They are retained for traceability and are not current
+operator guidance.
+
+## Remaining external claims
+
+Repository evidence does not establish a GDPR legal basis, processor agreement,
+provider consent, callback/delivery behavior in a target account, or approval of
+the public product mark. Those claims remain prohibited until the owner records
+the corresponding evidence.

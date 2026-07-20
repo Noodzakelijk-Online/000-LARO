@@ -204,43 +204,6 @@ export const outreachAnalyticsRouter = router({
   }),
 });
 
-/* ─── relevanceScoring (real matching engine) ────────────────────────────── */
-export const relevanceScoringRouter = router({
-  getStatistics: protectedProcedure.input(z.object({ caseId: z.string() })).query(async ({ input, ctx }) => {
-    await assertCaseOwnership(input.caseId, ctx.user.id);
-    const { findMatchingLawyers } = await import("../matching");
-    try {
-      const m = (await findMatchingLawyers(input.caseId, { maxResults: 50, sortBy: "score" })) as any[];
-      const scores = m.map((x) => Number(x.matchScore ?? x.score ?? 0));
-      const avg = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
-      return { caseId: input.caseId, scored: m.length, avgScore: avg, topScore: scores[0] ?? 0 };
-    } catch {
-      return { caseId: input.caseId, scored: 0, avgScore: 0, topScore: 0 };
-    }
-  }),
-  getRecommendations: protectedProcedure.input(z.object({ caseId: z.string(), limit: z.number().optional().default(5) })).query(async ({ input, ctx }) => {
-    await assertCaseOwnership(input.caseId, ctx.user.id);
-    const { findMatchingLawyers } = await import("../matching");
-    const { scoreToConfidence } = await import("../confidence");
-    try {
-      const m = (await findMatchingLawyers(input.caseId, { maxResults: input.limit, sortBy: "score" })) as any[];
-      return m.map((x) => ({ lawyerId: x.id, name: x.name, score: Number(x.matchScore ?? x.score ?? 0), confidence: scoreToConfidence(Number(x.matchScore ?? x.score ?? 0)) }));
-    } catch {
-      return [] as Array<{ lawyerId: string; name: string; score: number; confidence: ReturnType<typeof scoreToConfidence> }>;
-    }
-  }),
-  batchScore: protectedProcedure.input(z.object({ caseId: z.string() })).mutation(async ({ input, ctx }) => {
-    await assertCaseOwnership(input.caseId, ctx.user.id);
-    const { findMatchingLawyers } = await import("../matching");
-    try {
-      const m = (await findMatchingLawyers(input.caseId, { maxResults: 100, sortBy: "score" })) as any[];
-      return { scored: m.length };
-    } catch {
-      return { scored: 0 };
-    }
-  }),
-});
-
 /* ─── evidenceAggregation / enrichment (honest typed) ────────────────────── */
 export const evidenceAggregationRouter = router({
   syncAll: protectedProcedure.mutation(async ({ ctx }) => {
@@ -262,7 +225,7 @@ export const enrichmentRouter = router({
   scheduler: protectedProcedure.query(() => ({ enabled: false, note: "Enrichment scheduling runs with the job scheduler; no external enrichment provider is configured." })),
 });
 
-/* ─── evidence.upload / evidenceExport / bulkFileOperations ──────────────── */
+/* ─── evidence.upload / bulkFileOperations ───────────────────────────────── */
 export const evidenceRouter = router({
   upload: protectedProcedure
     .input(z.object({ caseId: z.string(), title: z.string(), type: z.string().default("document"), content: z.string().optional(), fileName: z.string().optional(), mimeType: z.string().optional() }))
@@ -275,38 +238,6 @@ export const evidenceRouter = router({
       });
       return { id, ok: true as const };
     }),
-});
-export const evidenceExportRouter = router({
-  getFormats: protectedProcedure.query((): Array<{ id: string; label: string; available: boolean }> => [
-    { id: "json", label: "JSON package", available: true },
-    { id: "csv", label: "CSV", available: true },
-    { id: "zip", label: "ZIP (evidence package)", available: true },
-    { id: "pdf", label: "PDF", available: false },
-  ]),
-  exportCSV: protectedProcedure.mutation(async ({ ctx }) => {
-    const db = await getDb();
-    if (!db) return { csv: "" };
-    const rows = await db.select().from(casesTable).where(eq(casesTable.userId, ctx.user.id));
-    const header = "id,client,status,urgency\n";
-    const body = rows.map((r: any) => `${r.id},${JSON.stringify(r.clientName || "")},${r.status || ""},${r.urgency || ""}`).join("\n");
-    return { csv: header + body };
-  }),
-  exportZIP: protectedProcedure.input(z.object({ caseId: z.string() })).mutation(async ({ input, ctx }) => {
-    await assertCaseOwnership(input.caseId, ctx.user.id);
-    const { buildCaseZip } = await import("../evidenceExport");
-    const buf = await buildCaseZip(ctx.user.id, input.caseId);
-    return { filename: `case-${input.caseId}.zip`, base64: buf.toString("base64"), bytes: buf.length };
-  }),
-  exportAll: protectedProcedure.mutation(async ({ ctx }) => {
-    const db = await getDb();
-    if (!db) return { cases: 0 };
-    const c = await n(db.select({ c: count }).from(casesTable).where(eq(casesTable.userId, ctx.user.id)));
-    return { cases: c };
-  }),
-  exportPDF: protectedProcedure.input(z.object({ caseId: z.string() }).partial()).mutation(async () => {
-    const { TRPCError } = await import("@trpc/server");
-    throw new TRPCError({ code: "NOT_IMPLEMENTED", message: "PDF export is not implemented yet. Use ZIP or JSON export." });
-  }),
 });
 export const bulkFileOperationsRouter = router({
   getCaseItems: protectedProcedure.input(z.object({ caseId: z.string() })).query(async ({ input, ctx }) => {

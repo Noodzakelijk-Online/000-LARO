@@ -37,7 +37,7 @@ Ledger reconciled: 2026-07-15.
 | 015 | Storage, files, uploads & media safety | **Implemented** | `storage.ts` sanitization + real local fallback + sha256; content hash now persisted on the primary evidence write (`createEvidenceFile` → metadata `contentHash`); zip export (023). Tested. Narrow follow-up: provider auto-collected items hash-on-store. |
 | 021 | Forms, validation, autosave | **Implemented** | `shared/validation.ts` validates case intake; the mounted creation wizard restores, debounces, flushes, and clears owner-scoped drafts through `cases.getDraft/saveDraft/clearDraft`. Failed creation preserves the open form. API and browser acceptance cover the lifecycle. |
 | 022 | Search, filters, sorting, pagination | **Implemented** | `cases.list` filters (status/urgency/search) + sort + pagination, owner-scoped. |
-| 023 | Import & export | **Implemented** | `cases.export` (JSON) + `cases.exportCsv` + **`cases.exportZip`** (real `archiver` ZIP: manifest + per-item metadata + provenance hashes, `server/evidenceExport.ts`); CSV import existed. Tested. (PDF rendering optional/deferred.) |
+| 023 | Import & export | **Implemented** | Case-scoped JSON plus evidence CSV and ZIP downloads. ZIP contains a manifest, redacted per-item metadata, analyses, and every available managed source file with provenance hashes (`server/evidenceExport.ts`, `server/routers/evidenceExport.ts`). PDF remains explicitly unavailable. |
 | 024 | Templates, presets, defaults | **Implemented** | `messageTemplates` real per-user CRUD. |
 | 025 | AI/provider abstraction & deterministic fallback | **Implemented** | `server/classification.ts` deterministic classifier wired into `cases.create`/`cases.classify`; unblocks matching. Tested. |
 | 026 | Human review queue & approval gates | **Implemented** | Prepare/review/approve/reject + **real gated send** (`workflow.sendApproved`): emergency-stop + flag + Approved-state + ownership + idempotency. Tested. |
@@ -92,12 +92,12 @@ Ledger reconciled: 2026-07-15.
 | 020 | User-facing dashboard & next-action | **Implemented** | `dashboard.stats`/`nextActions`/**`exceptions`** (109) all real + tested, derived from case state; consumed by the dashboard UI. |
 | 071 | User guide & in-app help | **Implemented** | `server/help.ts` + `help.topics/topic` (ordered topics incl. disclaimer); `docs/USER_GUIDE.md`. Tested. |
 | 072 | Troubleshooting & error catalog | **Implemented** | `server/errorCatalog.ts` + `help.errorCatalog` (code→message/cause/remedy); `docs/TROUBLESHOOTING.md`. Tested. |
-| 073 | UI action audit | **Implemented** | `docs/UI_ACTION_AUDIT.md` — found 14 renderer-referenced routers with no backend (broken UI actions) + billing/agent method gaps. |
-| 074 | Backend endpoint usage audit | **Implemented** | `docs/API_USAGE_AUDIT.md` — 46 routers/187 procedures; called-but-missing, mounted-but-unused, honest empty stubs mapped. |
+| 073 | UI action audit | **Implemented** | `docs/UI_ACTION_AUDIT.md` records the reconciled mounted surface; the fourteen router groups from the original snapshot are now mounted and typed. |
+| 074 | Backend endpoint usage audit | **Implemented** | `docs/API_USAGE_AUDIT.md` records the current typed contract, supported surface, explicit unavailable states, and regression controls. |
 | 075 | Documentation truthfulness audit | **Implemented** | `docs/DOC_TRUTHFULNESS_AUDIT.md` — claims cross-checked vs code+tests; no overstatement (historical Docker/MySQL fixed in 004). |
 | 076 | Technical debt register | **Implemented** | `docs/TECH_DEBT.md` maintains resolved historical items and the current ranked residual work. |
 | 077 | Bug hunt log | **Implemented** | `docs/BUG_HUNT_LOG.md` — 7 real bugs found+fixed (GDPR orphans, LIKE wildcard, classification, …). |
-| 078 | Red-team loop 1 — isolation & erasure | **Implemented** | GDPR erasure now purges caseId-scoped children (`server/gdpr.ts`); test proves outreach rows gone. Residual: storage-blob sweep (D3). |
+| 078 | Red-team loop 1 — isolation & erasure | **Implemented** | GDPR erasure purges case-scoped children and owned managed objects before metadata; tests prove relational and storage removal and abort-on-storage-failure behavior. |
 | 079 | Red-team loop 2 — info disclosure | **Implemented** | `system.providerChecklist` made `protectedProcedure`; test asserts UNAUTHORIZED for anon. `docs/RED_TEAM.md`. |
 | 080 | Red-team loop 3 — abuse/DoS/supply-chain | **Implemented** | Guards hold (adversarial/fileSafety/state-machine tests); **D4 fixed** (GCM token crypto), **D5 fixed** (`server/_core/csrf.ts` CSRF guard + strict CORS, tested). Remaining D7 (npm-audit advisories) is external/owner triage, tracked in 066. |
 | 081 | Non-technical user simulation | **Implemented** | `tests/sim/nonTechnicalUser.test.ts` (7/7) — full journey via help-guided steps, safety boundary, export/erase, honest NOT_IMPLEMENTED. |
@@ -121,7 +121,7 @@ Ledger reconciled: 2026-07-15.
 | 099 | Roadmap & blocked items | **Implemented** | `docs/ROADMAP.md` — phases 101–115 + blocked items with unblock conditions. |
 | 100 | Real-provider cleanup & account safety | **Implemented** | `scripts/account-safety-check.mjs` (in gate) — 0 HIGH; `.env` unbundled/gitignored, no hardcoded secrets; `docs/ACCOUNT_SAFETY.md` cleanup checklist. |
 | 101 | Support/debug bundle | **Implemented** | `admin.debugBundle` — redacted diagnostic snapshot (system/tableCounts/invariants/flags/jobs), admin-only, no secrets. Tested. |
-| 102 | Data retention & archival policy | **Implemented** | `server/retention.ts` + `admin.retentionPreview/Run` — purges audit logs > window, never business data; `docs/DATA_RETENTION.md`. Tested. |
+| 102 | Data retention & archival policy | **Implemented** | Bounded configuration fails startup when unsafe; the idempotent sweep catches up after startup, runs daily, and never deletes business data. Admin preview/run remains available. Tested. |
 | 103 | Prototype → production migration | **Implemented** | `scripts/prod-preflight.mjs` (`npm run preflight`) — blocks go-live on weak secrets/demo/migrations/tracked-.env; `docs/PROD_MIGRATION.md`. |
 | 104 | Operator safety stop / emergency controls | **Implemented** | `server/systemState.ts` + `admin.setEmergencyStop/emergencyStopStatus`; wired into `workflow.prepareDrafts/approveDraft` (halts outreach). Tested. |
 | 105 | Onboarding & first-run | **Implemented** | `server/onboarding.ts` + `onboarding.steps/state/complete`; per-user completion tracked. Tested. |
