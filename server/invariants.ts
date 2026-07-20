@@ -10,6 +10,7 @@
  */
 import { getDb } from "./db";
 import { VALID_LEGAL_AREAS } from "./legalAreasValidator";
+import { relationshipIntegrityReport } from "./relationshipIntegrity";
 
 function rawClient(db: any): any {
   return db?.$client ?? db?.session?.client ?? null;
@@ -72,6 +73,19 @@ export async function verifyInvariants(): Promise<{ ok: boolean; invariants: Inv
     }
   } catch { /* table may be empty */ }
   add({ name: "cases.legalAreas is valid canonical JSON", severity: "warning", ok: badAreas === 0, count: badAreas });
+
+  // SQLite cannot add foreign keys to legacy tables without rebuilding them,
+  // so readiness separately verifies the non-destructive relationship guards.
+  const relationshipIntegrity = relationshipIntegrityReport(sqlite);
+  add({
+    name: "database relationship guards installed",
+    severity: "error",
+    ok: relationshipIntegrity.ok,
+    count: relationshipIntegrity.missing.length,
+    detail: relationshipIntegrity.ok
+      ? `${relationshipIntegrity.installed} triggers installed`
+      : `Missing: ${relationshipIntegrity.missing.join(", ")}`,
+  });
 
   const ok = inv.filter((i) => i.severity === "error").every((i) => i.ok);
   return { ok, invariants: inv };

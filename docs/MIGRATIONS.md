@@ -11,6 +11,11 @@ Date: 2026-07-06 · Branch `Phase-Imp`
   if core tables are missing (portable-build safety). Missing schema columns are
   backfilled at boot (`ensureAllTablesColumns`), and integrity indexes are
   ensured (`ensureIndexes`, Phase 005/017).
+- `ensureRelationshipIntegrityTriggers` installs non-destructive database guards
+  for historical relationships after schema alignment. It rejects new orphaned
+  inserts/updates and cascades parent deletion. It does not delete pre-existing
+  drift; `admin.reconcileReport` and a reviewed `admin.repairOrphans` run handle
+  that explicitly.
 
 ## Rollback strategy — file snapshot
 
@@ -43,3 +48,5 @@ Restore stages and validates the replacement and preserves the previous database
 - A consolidated, non-destructive migration baseline is planned (Phase 033
   follow-up) to replace the boot-time reconciliation with clean versioned
   migrations.
+- Historical tables retain trigger-enforced relationships until a future
+  backup-tested rebuild can replace them with native foreign-key clauses.

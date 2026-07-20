@@ -8,6 +8,7 @@ import { InsertUser, users, lawyers, cases, outreachStatus, emailActivity, syste
 import { getTableConfig } from "drizzle-orm/sqlite-core";
 import { ENV } from './_core/env';
 import { createCaseId } from './ids';
+import { ensureRelationshipIntegrityTriggers } from './relationshipIntegrity';
 
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 
@@ -392,6 +393,12 @@ export async function getDb() {
       // Phase 005: create integrity indexes + unique email constraint AFTER the
       // tables exist. Idempotent, so safe on every boot.
       ensureIndexes(sqlite);
+
+      // Enforce relationships in legacy tables without rebuilding installed
+      // databases. Existing inconsistencies remain visible to reconciliation;
+      // new orphaned writes and parent deletes are guarded at database level.
+      const relationshipTriggerCount = ensureRelationshipIntegrityTriggers(sqlite);
+      console.log(`[Database] Ensured ${relationshipTriggerCount} relationship-integrity triggers.`);
 
     } catch (error) {
       console.error("[Database] Failed to connect to SQLite or run migrations:", error);

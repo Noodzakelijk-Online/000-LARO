@@ -163,7 +163,7 @@ GitHub Actions repeats the Node checks on the supported Node 22 toolchain:
 - Server, Electron main-process, and shipped renderer TypeScript checks passed; ESLint passed.
 - Traceability reported 116 rows, 93 cited, and 0 broken references.
 - Runtime no-excuses scan reported 0 suspect findings; account safety reported 0 high-severity findings.
-- Vitest reported 40 passing files and 255 passing tests, including controlled
+- Vitest reported 42 passing files and 271 passing tests, including controlled
   NOvA parsing/filter, unknown-metric scoring, and review-gated
   media/organization discovery, tenant isolation, case-draft persistence, and
   target-database readiness tests, with no skipped or todo tests.
@@ -178,8 +178,8 @@ desktop server to that registered OAuth callback port instead.
 - `npm audit` reported 0 known vulnerabilities.
 - Production preflight and operator-readiness diagnostics reported no blockers.
   The isolated backup/delete/restore/reopen drill and target-database integrity,
-  foreign-key, invariant, reconciliation, duplicate, and demo-marker checks
-  passed.
+  foreign-key, relationship-guard, invariant, reconciliation, duplicate, and
+  demo-marker checks passed.
 - Playwright smoke tests passed at desktop and 390x844 with clean consoles,
   responsive Outreach controls and no horizontal overflow. Live bounded public
   discovery produced pending organization candidates; approval immediately
@@ -191,22 +191,20 @@ desktop server to that registered OAuth callback port instead.
   checks also remain covered.
 - Packaged Electron scanner QA passed signup, shared-session authorization, empty-state rendering, disabled unsafe scan state, Settings navigation, and clean renderer console checks.
 - A packaged launch from a directory containing hostile development `.env` values still reported production mode, database readiness, and a random `127.0.0.1` port.
-- The current unsigned portable executable is 151,687,715 bytes with SHA-256
-  `ee96c8098eba00982ddb89e2bf864dff972fb70d98cf0531ecd755c62e4db76b`.
+- The current unsigned portable executable is 151,689,956 bytes with SHA-256
+  `ce8baac8729583de42f3ff08cab1ee9ce645505288650ebb3505b83b3a3e8259`.
   Windows reports `NotSigned`, as intended. An isolated-profile launch applied
-  all five migrations, including the document-analysis, NOvA, and Outreach
-  directory schemas, served the renderer, and returned healthy production status
-  on automatically selected loopback port 63494. Packaged QA also verified signup,
+  all six migrations, installed 228 database relationship guards, served the
+  renderer, and returned healthy production status on automatically selected
+  loopback port 57690. Packaged QA also verified signup,
   Google evidence controls, truthful Settings exports, responsive layout, and a
   clean browser console.
-- PR #19 requires the Node and Python branch checks before merge. Windows
-  workflow `29455232654` passed the gate, build,
-  Electron ABI check, package, checksum, and upload stages for the preceding
-  protected-main baseline.
-- The downloaded CI executable matched SHA-256
-  `c6cf367f112b4dc4fd64d749666f00ae169a175a4f2a168aaf1159a06dc3cb38`,
-  launched the dashboard, and contained the validated seven-category matching
-  terminology dataset.
+- PR #25 merged after the required Node and Python branch checks. Protected-main
+  CI run `29710137158` passed; Windows workflow `29710137156` passed the gate,
+  build, Electron ABI check, package, checksum, and upload stages.
+- The protected-main `LARO-Desktop-Windows` workflow artifact was uploaded with
+  SHA-256 digest
+  `6b06388a747b08aacac7ce3cf30ea93ead6a694935129928eb60402e5ff05a21`.
 
 Run the same checks locally:
 

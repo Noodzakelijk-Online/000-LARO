@@ -16,8 +16,8 @@ acceptance. It supersedes the 2026-07-06 phase snapshot.
 | Runtime no-excuses scan | 0 suspect findings |
 | Account-safety scan | 0 high-severity findings |
 | Isolated backup/delete/restore/reopen drill | Pass |
-| Target database readiness | SQLite integrity, declared foreign keys, invariants, reconciliation, duplicates, and demo markers clean |
-| Vitest | 41 files, 265 tests passed, 0 todo |
+| Target database readiness | SQLite integrity, declared foreign keys, 228 legacy relationship guards, invariants, reconciliation, duplicates, and demo markers clean |
+| Vitest | 42 files, 271 tests passed, 0 todo |
 | Python unittest discovery | 202 tests passed |
 | Runtime dependency audit | 0 known vulnerabilities |
 | Renderer, main, and server production builds | Pass |
@@ -26,8 +26,8 @@ acceptance. It supersedes the 2026-07-06 phase snapshot.
 | Packaged document intelligence and Outreach | Six migrations present, including persisted keyword-pull jobs; PDF, DOCX, native parser dependencies, and review-gated Outreach tables present; integrated server booted successfully |
 | Desktop scanner contract | Scoped 15-minute token; real bytes/hash; owner/MIME enforcement |
 | Branch CI policy | Current Node and Python checks are required before merge |
-| Protected-main CI | Actions run `29538287439`; Node and Python jobs passed |
-| Windows package workflow | Actions run `29538286047`; gate, build, ABI check, package, checksum, and artifact upload passed |
+| Protected-main CI | Actions run `29710137158`; Node and Python jobs passed |
+| Windows package workflow | Actions run `29710137156`; gate, build, ABI check, package, checksum, and artifact upload passed |
 | Packaged matching assets | Seven aligned legal categories; invalid legacy dataset absent |
 | Dependency graph | One canonical Node workspace; 0 open Dependabot alerts |
 
@@ -107,12 +107,12 @@ real local account, moved from Home to Cases, and observed the notice after both
 renders with no console warning, console error, framework overlay, or horizontal
 overflow at 2560x1440.
 
-The current local portable artifact is 151,683,671 bytes with SHA-256
-`1408409111acffaf0801046ea63f0662b822d5d4a92c0da583b5d7f73ae4f40f`.
+The current local portable artifact is 151,689,956 bytes with SHA-256
+`ce8baac8729583de42f3ff08cab1ee9ce645505288650ebb3505b83b3a3e8259`.
 It launched with an explicit isolated user-data directory, created fresh local
 secrets and databases, applied all six packaged migrations, and served the
-authenticated application on loopback port 55193. SQLite integrity passed with
-zero foreign-key violations after the evidence run.
+application on loopback port 57690. SQLite integrity passed with zero foreign-key
+violations and all 228 required relationship guards persisted.
 Its packaged resources contain the current migrations, PDF/DOCX parsers, native
 parser dependency, consolidated managed-storage deletion, and seven-category
 matching data. Windows reports
@@ -182,8 +182,9 @@ before it can publish.
 ## Residual engineering work
 
 - The Electron and Flask runtimes still have separate schemas and databases.
-- Application-level reconciliation remains important until more invariants are
-  declared as database foreign keys.
+- Historical tables use non-destructive database relationship triggers until a
+  future backup-tested migration can replace them with native foreign keys;
+  reconciliation remains the explicit repair path for pre-existing drift.
 - Route-level lazy loading keeps the production entry chunk near 276 KB before
   gzip; the largest route chunk is near 266 KB.
 - Full i18n migration and additional cross-browser/a11y automation remain useful

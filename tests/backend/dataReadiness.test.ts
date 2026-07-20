@@ -26,6 +26,26 @@ suite("production data readiness", () => {
     expect(report.invariants.every((item) => item.ok)).toBe(true);
   });
 
+  it("fails closed when a required relationship guard is missing", async () => {
+    const sqlite = (app.db as any).$client ?? (app.db as any).session?.client;
+    const { ensureRelationshipIntegrityTriggers, requiredRelationshipTriggerNames } = await import(
+      "../../server/relationshipIntegrity"
+    );
+    const trigger = requiredRelationshipTriggerNames(sqlite)[0];
+    sqlite.exec(`DROP TRIGGER "${trigger}"`);
+
+    const report = await assessDataReadiness();
+    expect(report.ok).toBe(false);
+    expect(report.invariants).toContainEqual(expect.objectContaining({
+      name: "database relationship guards installed",
+      severity: "error",
+      ok: false,
+      count: 1,
+    }));
+
+    ensureRelationshipIntegrityTriggers(sqlite);
+  });
+
   it("fails when a known non-production account marker remains", async () => {
     await app.db.insert(app.schema.users).values(buildUser({
       id: "demo-user-123",

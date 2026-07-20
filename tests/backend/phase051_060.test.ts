@@ -82,19 +82,14 @@ suite('Phases 051–060 — services', () => {
     expect(dist.find((d: any) => d.area === 'Employment Law')).toBeTruthy();
   });
 
-  it('Phase 054 — reconciliation detects and repairs orphans', async () => {
-    const { reconcileReport, repairOrphans } = await import('../../server/reconcile');
-    // Create an orphaned outreach row (caseId not in cases).
-    await app.db.insert(app.schema.outreachStatus).values({
+  it('Phase 054 — database guards reject new orphans and reconciliation stays clean', async () => {
+    const { reconcileReport } = await import('../../server/reconcile');
+    await expect(app.db.insert(app.schema.outreachStatus).values({
       id: 'ORPHAN1', caseId: 'NONEXISTENT_CASE', lawyerId: 'LWYR_5X', status: 'PendingApproval',
       createdAt: new Date(), updatedAt: new Date(),
-    } as any);
-    const before = await reconcileReport();
-    expect(before.totalOrphans).toBeGreaterThan(0);
-    const repaired = await repairOrphans();
-    expect(Object.keys(repaired.deleted).length).toBeGreaterThan(0);
-    const after = await reconcileReport();
-    expect(after.orphanedByCaseId['outreach_status'] ?? 0).toBe(0);
+    } as any)).rejects.toThrow(/relationship violation: outreach_status\.caseId/);
+    const report = await reconcileReport();
+    expect(report.orphanedByCaseId['outreach_status'] ?? 0).toBe(0);
   });
 
   it('Phase 053 — backup produces a valid restorable SQLite file', async () => {

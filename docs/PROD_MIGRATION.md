@@ -28,4 +28,6 @@ deployment for real cases (not the dev/demo environment).
 ## Data migration
 Prototype SQLite data can be carried over as-is (same schema). Use
 `server/backup.ts` to snapshot before migrating, and `admin.reconcileReport` to
-detect drift afterward.
+detect drift afterward. Startup installs non-destructive relationship guards;
+it does not erase existing orphaned rows. Review the report and use
+`admin.repairOrphans` only after the backup has been validated.
