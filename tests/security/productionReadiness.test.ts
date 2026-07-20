@@ -89,6 +89,36 @@ describe('production readiness regressions', () => {
     expect(consumeOAuthState(state!, 'gmail').userId).toBe('USER_TEST');
   });
 
+  it('opens OAuth in a sandboxed closeable desktop window and refreshes connection state', () => {
+    const main = readFileSync(join(ROOT, 'src-main/index.ts'), 'utf8');
+    const callback = readFileSync(join(ROOT, 'server/oauth2Callbacks.ts'), 'utf8');
+    const connections = readFileSync(join(ROOT, 'src/renderer/components/EvidenceConnectionsCard.tsx'), 'utf8');
+    expect(main).toContain('async function openOAuthWindow');
+    expect(main).toContain("url.hostname === 'accounts.google.com'");
+    expect(main).toContain("url.hostname === 'login.microsoftonline.com'");
+    expect(main).toContain('nodeIntegration: false');
+    expect(main).toContain('contextIsolation: true');
+    expect(main).toContain('sandbox: true');
+    expect(callback).toContain("document.getElementById('close').addEventListener('click', closePage)");
+    expect(callback).toContain('window.close()');
+    expect(connections).toContain('refetchInterval: connectingPlatform === "gmail" ? 1_500 : false');
+    expect(connections).toContain('refetchInterval: connectingPlatform === "google-drive" ? 1_500 : false');
+  });
+
+  it('refreshes the evidence query used by the case workspace after a keyword pull', () => {
+    const caseDetails = readFileSync(
+      join(ROOT, 'src/renderer/components/EnhancedCaseDetailsDialog.tsx'),
+      'utf8',
+    );
+    const collection = readFileSync(join(ROOT, 'server/autoCollectionService.ts'), 'utf8');
+    expect(caseDetails).toContain('utils.evidenceFiles.search.invalidate({ caseId })');
+    expect(caseDetails).toContain('getElectronAPI().selectFolder()');
+    expect(caseDetails).not.toContain('evidenceFiles as any)?.byCase');
+    expect(collection).toContain("process.env.LOCAL_SCAN_ROOTS");
+    expect(collection).toContain('await fs.realpath(folderPath)');
+    expect(collection).toContain('Local scan path is outside LOCAL_SCAN_ROOTS');
+  });
+
   it('keeps sensitive mutations behind protected or admin procedures', () => {
     const messages = readFileSync(join(ROOT, 'server/routers/messages.ts'), 'utf8');
     const lawyers = readFileSync(join(ROOT, 'server/routers/lawyers.ts'), 'utf8');

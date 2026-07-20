@@ -23,8 +23,12 @@ The Electron main process starts the Express/tRPC server and React renderer toge
 - Upload or stage PDF, DOCX, HTML, text, email-shaped, and Drive-shaped records while retaining source metadata and content hashes.
 - Keep case-neutral documents in an inbox until a user reviews deterministic case suggestions and explicitly links them.
 - Pull selected Gmail and Google Drive records through real read-only OAuth when credentials are configured.
+- Run desktop keyword pulls as persisted, resumable jobs with live source phase,
+  extracted-word and item counts, percentage, and estimated seconds remaining.
 - Deduplicate imported evidence while preserving source URIs and locally retrievable files.
 - Scan only folders selected through the native desktop picker, review the discovered files, and upload only the selected evidence.
+- Standalone servers reject local-folder collection unless the path resolves
+  inside an operator-configured `LOCAL_SCAN_ROOTS` allowlist.
 - Store actual scanner bytes under the owned case with SHA-256 provenance; scanner credentials expire after 15 minutes and cannot call other protected APIs.
 - Persist Gmail messages, attachments, local files, and Drive files under the same evidence contract; Google-native documents are exported to analyzable PDF while retaining their source identity.
 
@@ -36,7 +40,8 @@ The Electron main process starts the Express/tRPC server and React renderer toge
 - Run full-source deterministic comparisons or optional loopback-only Ollama analysis in bounded batches.
 - Reject uncited model observations; retained suggestions include literal source support and remain unconfirmed until reviewed.
 - Build who-said-or-did-what-and-when timelines with actor, action, affected party, event type, date, summary, and direct document access.
-- Browse evidence as story, horizontal timeline, vertical timeline, or filtered Papertrail views.
+- Browse source-linked legal events horizontally or vertically, source documents,
+  and operational case activity from one Timeline workspace.
 - Generate source-linked case summaries, lawyer briefings, red-line drafts, and approval-bound case bundles.
 
 ### Matching and outreach
@@ -109,6 +114,7 @@ Copy `.env.example` to `.env`; never commit real secrets. The template is groupe
 | --- | --- |
 | Desktop server | `NODE_ENV`, `HOST`, `PORT`, `API_BODY_LIMIT`, `JWT_SECRET`, `COOKIE_SECRET` |
 | Desktop data | `DATABASE_URL`, `LOCAL_STORAGE_DIR`, `AWS_S3_*` |
+| Standalone local scan | `LOCAL_SCAN_ROOTS` (path-delimited allowlist; desktop uses the native folder picker) |
 | Provider-backed desktop AI | `FORGE_API_URL`, `FORGE_API_KEY` |
 | Optional connectors | `MICROSOFT_*`, `TELEGRAM_BOT_TOKEN`, `SENDGRID_API_KEY`, `SMTP_*` |
 | Flask server | `LARO_FLASK_PORT`, `LARO_HOST`, `LARO_DEBUG`, `SECRET_KEY` |

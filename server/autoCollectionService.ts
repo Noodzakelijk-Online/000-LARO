@@ -6,6 +6,7 @@ import { notifyOwner } from './notification';
 import {
   autoCollectionSettings,
   autoCollectionLogs,
+  keywordPullJobs,
   keywordMatches,
   emailMessages,
   googleDriveFiles,
@@ -26,7 +27,6 @@ import { supportsDocumentAnalysisMime } from './documentIntelligence';
 import { getStoredGmailEvidenceState, resolveGmailAccountIds } from './gmailCollectionPolicy';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import * as nodeFs from 'fs';
 
 /**
  * Evidence Auto-Collection Service
@@ -52,12 +52,14 @@ async function analyzeImportedEvidence(
   mimeType: string,
   label: string,
   errors: string[],
-): Promise<void> {
-  if (!supportsDocumentAnalysisMime(mimeType)) return;
+): Promise<number> {
+  if (!supportsDocumentAnalysisMime(mimeType)) return 0;
   try {
-    await analyzeStoredEvidence({ userId, evidenceId, deepAnalysis: false });
+    const analysis = await analyzeStoredEvidence({ userId, evidenceId, deepAnalysis: false });
+    return analysis.result.analyzedWords ?? countWords(analysis.result.summary || '');
   } catch (error) {
     errors.push(`Analysis for "${label}" failed: ${error instanceof Error ? error.message : String(error)}`);
+    return 0;
   }
 }
 
@@ -604,6 +606,23 @@ export interface PullByKeywordsResult {
   errors: string[];
 }
 
+export type PullProgressPhase = 'queued' | 'discovering' | 'gmail' | 'drive' | 'local' | 'finalizing';
+
+export interface PullProgressUpdate {
+  phase: PullProgressPhase;
+  message: string;
+  processedWordsDelta?: number;
+  totalWordsDelta?: number;
+  processedItemsDelta?: number;
+  totalItemsDelta?: number;
+}
+
+export type PullProgressReporter = (update: PullProgressUpdate) => void;
+
+function countWords(value: string): number {
+  return value.match(/[\p{L}\p{N}]+(?:['\u2019-][\p{L}\p{N}]+)*/gu)?.length ?? 0;
+}
+
 /**
  * Read & decrypt a Gmail access token for the user, refreshing if expired.
  * Returns null when the user has no connected Gmail account.
@@ -664,6 +683,7 @@ async function pullFromGmail(
   dateEnd?: Date,
   includeAttachments = true,
   accountIds?: string[],
+  onProgress?: PullProgressReporter,
 ): Promise<{ messages: number; attachments: number }> {
   const db = await getDb();
   if (!db) return { messages: 0, attachments: 0 };
@@ -683,6 +703,7 @@ async function pullFromGmail(
         dateEnd,
         includeAttachments,
         [selectedAccountId],
+        onProgress,
       );
       messages += result.messages;
       attachments += result.attachments;
@@ -739,8 +760,15 @@ async function pullFromGmail(
 
   let messagesIngested = 0;
   let attachmentsIngested = 0;
+  onProgress?.({
+    phase: 'gmail',
+    message: `Reviewing ${threads.length} Gmail message${threads.length === 1 ? '' : 's'}`,
+    totalItemsDelta: threads.length,
+    totalWordsDelta: threads.length,
+  });
 
   for (const t of threads) {
+    let messageWords = 1;
     try {
       const msg = await getGmailMessage(cred.accessToken, t.id);
       const headers = (msg.payload?.headers || []).reduce<Record<string, string>>(
@@ -777,6 +805,12 @@ async function pullFromGmail(
         if (payload.parts) payload.parts.forEach(collectBody);
       };
       collectBody(msg.payload);
+      messageWords = Math.max(1, countWords(`${from} ${subject} ${body}`));
+      onProgress?.({
+        phase: 'gmail',
+        message: `Reading Gmail message: ${subject}`,
+        totalWordsDelta: Math.max(0, messageWords - 1),
+      });
 
       if (!storedState.messageStored) {
         const messageSource = [
@@ -832,8 +866,16 @@ async function pullFromGmail(
       };
       collectAttachments(msg.payload);
       if (!includeAttachments) attachments.length = 0;
+      if (attachments.length > 0) {
+        onProgress?.({
+          phase: 'gmail',
+          message: `Found ${attachments.length} Gmail attachment${attachments.length === 1 ? '' : 's'}`,
+          totalItemsDelta: attachments.length,
+        });
+      }
 
       for (const att of attachments) {
+        let attachmentWords = 0;
         try {
           if (storedState.attachmentIds.has(att.attachmentId)) continue;
           const a = await getGmailAttachment(cred.accessToken, msg.id, att.attachmentId);
@@ -865,15 +907,36 @@ async function pullFromGmail(
             contentHash: storedAttachment.sha256,
             relevant: true,
           });
-          await analyzeImportedEvidence(attachmentEvidenceId, userId, att.mimeType, safeName, errors);
+          attachmentWords = await analyzeImportedEvidence(
+            attachmentEvidenceId,
+            userId,
+            att.mimeType,
+            safeName,
+            errors,
+          );
           storedState.attachmentIds.add(att.attachmentId);
           attachmentsIngested++;
         } catch (err) {
           errors.push(`Attachment "${att.filename}" failed: ${err instanceof Error ? err.message : String(err)}`);
+        } finally {
+          onProgress?.({
+            phase: 'gmail',
+            message: `Reviewed Gmail attachment: ${att.filename}`,
+            processedItemsDelta: 1,
+            processedWordsDelta: attachmentWords,
+            totalWordsDelta: attachmentWords,
+          });
         }
       }
     } catch (err) {
       errors.push(`Gmail message fetch failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      onProgress?.({
+        phase: 'gmail',
+        message: 'Reviewed a Gmail message',
+        processedItemsDelta: 1,
+        processedWordsDelta: messageWords,
+      });
     }
   }
 
@@ -893,6 +956,7 @@ async function pullFromDrive(
   errors: string[],
   dateStart?: Date,
   dateEnd?: Date,
+  onProgress?: PullProgressReporter,
 ): Promise<{ files: number }> {
   const db = await getDb();
   if (!db) return { files: 0 };
@@ -907,30 +971,36 @@ async function pullFromDrive(
   for (const folderId of folders) {
     try {
       const files = await getAllFilesInFolder(userId, folderId, true);
-      for (const file of files) {
+      const candidates = files.filter((file) => {
+        if (!file.name || !file.id || !matchesKeywords(file.name, keywords, matchMode)) return false;
+        const modified = (file as any).modifiedTime ? new Date((file as any).modifiedTime) : null;
+        if (dateStart && modified && modified < dateStart) return false;
+        if (dateEnd && modified && modified > dateEnd) return false;
+        return true;
+      });
+      onProgress?.({
+        phase: 'drive',
+        message: `Reviewing ${candidates.length} matching Drive file${candidates.length === 1 ? '' : 's'}`,
+        totalItemsDelta: candidates.length,
+      });
+      for (const file of candidates) {
         if (!file.name || !file.id) continue;
-        if (!matchesKeywords(file.name, keywords, matchMode)) continue;
-        // Date filter (Drive returns modifiedTime as ISO string).
-        const mod = (file as any).modifiedTime ? new Date((file as any).modifiedTime) : null;
-        if (dateStart && mod && mod < dateStart) continue;
-        if (dateEnd && mod && mod > dateEnd) continue;
-
-        // Dedupe.
-        const existing = await db
-          .select()
-          .from(evidenceTable)
-          .where(and(eq(evidenceTable.caseId, caseId), eq(evidenceTable.source, 'google_drive')));
-        const already = existing.some((e) => {
-          try {
-            const meta = e.metadata ? JSON.parse(e.metadata) : {};
-            return meta.driveFileId === file.id;
-          } catch {
-            return false;
-          }
-        });
-        if (already) continue;
-
+        let fileWords = 0;
         try {
+          const existing = await db
+            .select()
+            .from(evidenceTable)
+            .where(and(eq(evidenceTable.caseId, caseId), eq(evidenceTable.source, 'google_drive')));
+          const already = existing.some((e) => {
+            try {
+              const meta = e.metadata ? JSON.parse(e.metadata) : {};
+              return meta.driveFileId === file.id;
+            } catch {
+              return false;
+            }
+          });
+          if (already) continue;
+
           const fileData = await downloadAndUploadGoogleDriveFile(file.id, caseId, userId);
           const evidenceId = await createEvidenceFile(userId, {
             caseId,
@@ -954,7 +1024,7 @@ async function pullFromDrive(
             contentHash: fileData.sha256,
             relevant: true,
           });
-          await analyzeImportedEvidence(evidenceId, userId, fileData.mimeType, file.name, errors);
+          fileWords = await analyzeImportedEvidence(evidenceId, userId, fileData.mimeType, file.name, errors);
           await db.insert(googleDriveFiles).values({
             id: uuidv4(),
             userId,
@@ -974,6 +1044,14 @@ async function pullFromDrive(
           downloaded++;
         } catch (err) {
           errors.push(`Drive file "${file.name}" failed: ${err instanceof Error ? err.message : String(err)}`);
+        } finally {
+          onProgress?.({
+            phase: 'drive',
+            message: `Reviewed Drive file: ${file.name}`,
+            processedItemsDelta: 1,
+            processedWordsDelta: fileWords,
+            totalWordsDelta: fileWords,
+          });
         }
       }
     } catch (err) {
@@ -1026,6 +1104,27 @@ async function scanLocalDirectory(
   return matches;
 }
 
+async function resolveAllowedLocalFolder(folderPath: string): Promise<string> {
+  if (!path.isAbsolute(folderPath)) throw new Error('Local scan paths must be absolute');
+  const resolved = await fs.realpath(folderPath);
+  const stat = await fs.stat(resolved);
+  if (!stat.isDirectory()) throw new Error('Local scan path is not a directory');
+  if (process.env.LARO_PACKAGED_DESKTOP === 'true') return resolved;
+
+  const configuredRoots = (process.env.LOCAL_SCAN_ROOTS || '')
+    .split(path.delimiter)
+    .map((root) => root.trim())
+    .filter(Boolean);
+  if (configuredRoots.length === 0) {
+    throw new Error('Local folder collection is disabled; configure LOCAL_SCAN_ROOTS on the server');
+  }
+  const allowedRoots = await Promise.all(configuredRoots.map(async (root) => fs.realpath(root)));
+  if (!allowedRoots.some((root) => resolved === root || resolved.startsWith(root + path.sep))) {
+    throw new Error('Local scan path is outside LOCAL_SCAN_ROOTS');
+  }
+  return resolved;
+}
+
 /**
  * Pull matching files from one or more local folders. Files are copied into
  * the evidence storage layer (S3 if configured, on-disk fallback otherwise)
@@ -1040,6 +1139,7 @@ async function pullFromLocalFolders(
   errors: string[],
   dateStart?: Date,
   dateEnd?: Date,
+  onProgress?: PullProgressReporter,
 ): Promise<{ files: number }> {
   const db = await getDb();
   if (!db) return { files: 0 };
@@ -1048,14 +1148,23 @@ async function pullFromLocalFolders(
   let ingested = 0;
 
   for (const folderPath of folderPaths) {
-    if (!folderPath || !nodeFs.existsSync(folderPath)) {
-      errors.push(`Local folder not found: ${folderPath}`);
+    let resolvedFolderPath: string;
+    try {
+      resolvedFolderPath = await resolveAllowedLocalFolder(folderPath);
+    } catch (error) {
+      errors.push(`Local folder rejected: ${folderPath} (${error instanceof Error ? error.message : String(error)})`);
       continue;
     }
 
-    const found = await scanLocalDirectory(folderPath, keywords, matchMode, errors);
+    const found = await scanLocalDirectory(resolvedFolderPath, keywords, matchMode, errors);
+    onProgress?.({
+      phase: 'local',
+      message: `Reviewing ${found.length} matching local file${found.length === 1 ? '' : 's'}`,
+      totalItemsDelta: found.length,
+    });
 
     for (const file of found) {
+      let fileWords = 0;
       try {
         // Dedupe by absolute path.
         const existing = await db
@@ -1086,7 +1195,7 @@ async function pullFromLocalFolders(
           type: determineEvidenceType(mimeType),
           source: 'local',
           title: file.name,
-          description: `Auto-collected from local folder ${folderPath}`,
+          description: `Auto-collected from local folder ${resolvedFolderPath}`,
           fileUrl: storedFile.url,
           fileName: file.name,
           fileSize: String(stat.size),
@@ -1094,7 +1203,7 @@ async function pullFromLocalFolders(
           metadata: JSON.stringify({
             storageKey: storedFile.key,
             absPath: file.absPath,
-            sourceFolder: folderPath,
+            sourceFolder: resolvedFolderPath,
             autoCollected: true,
             collectedAt: new Date().toISOString(),
             modifiedTime: stat.mtime.toISOString(),
@@ -1102,10 +1211,18 @@ async function pullFromLocalFolders(
           contentHash: storedFile.sha256,
           relevant: true,
         });
-        await analyzeImportedEvidence(evidenceId, userId, mimeType, file.name, errors);
+        fileWords = await analyzeImportedEvidence(evidenceId, userId, mimeType, file.name, errors);
         ingested++;
       } catch (err) {
         errors.push(`Local file "${file.absPath}" failed: ${err instanceof Error ? err.message : String(err)}`);
+      } finally {
+        onProgress?.({
+          phase: 'local',
+          message: `Reviewed local file: ${file.name}`,
+          processedItemsDelta: 1,
+          processedWordsDelta: fileWords,
+          totalWordsDelta: fileWords,
+        });
       }
     }
   }
@@ -1171,6 +1288,7 @@ export async function pullEvidenceByKeywords(params: {
   includeGmailAttachments?: boolean;
   includeDrive?: boolean;
   includeLocal?: boolean;
+  onProgress?: PullProgressReporter;
 }): Promise<PullByKeywordsResult> {
   const matchMode = params.matchMode || 'any';
   const errors: string[] = [];
@@ -1181,6 +1299,7 @@ export async function pullEvidenceByKeywords(params: {
 
   const db = await getDb();
   if (!db) throw new Error('Database not available');
+  params.onProgress?.({ phase: 'discovering', message: 'Checking connected evidence sources' });
 
   // Resolve sources. Fall back to settings-configured sources, then to defaults.
   const settings = await getAutoCollectionSettings(params.caseId);
@@ -1207,15 +1326,15 @@ export async function pullEvidenceByKeywords(params: {
   }
 
   const [gmail, drive, local] = await Promise.all([
-    (params.includeGmail === false ? Promise.resolve({ messages: 0, attachments: 0 }) : pullFromGmail(params.caseId, params.userId, params.keywords, matchMode, errors, params.dateStart, params.dateEnd, params.includeGmailAttachments !== false, gmailAccountIds)).catch((err) => {
+    (params.includeGmail === false ? Promise.resolve({ messages: 0, attachments: 0 }) : pullFromGmail(params.caseId, params.userId, params.keywords, matchMode, errors, params.dateStart, params.dateEnd, params.includeGmailAttachments !== false, gmailAccountIds, params.onProgress)).catch((err) => {
       errors.push(`Gmail pull failed: ${err instanceof Error ? err.message : String(err)}`);
       return { messages: 0, attachments: 0 };
     }),
-    (params.includeDrive === false ? Promise.resolve({ files: 0 }) : pullFromDrive(params.caseId, params.userId, params.keywords, matchMode, driveFolderIds, errors, params.dateStart, params.dateEnd)).catch((err) => {
+    (params.includeDrive === false ? Promise.resolve({ files: 0 }) : pullFromDrive(params.caseId, params.userId, params.keywords, matchMode, driveFolderIds, errors, params.dateStart, params.dateEnd, params.onProgress)).catch((err) => {
       errors.push(`Drive pull failed: ${err instanceof Error ? err.message : String(err)}`);
       return { files: 0 };
     }),
-    (params.includeLocal === false ? Promise.resolve({ files: 0 }) : pullFromLocalFolders(params.caseId, params.userId, params.keywords, matchMode, localFolderPaths, errors, params.dateStart, params.dateEnd)).catch((err) => {
+    (params.includeLocal === false ? Promise.resolve({ files: 0 }) : pullFromLocalFolders(params.caseId, params.userId, params.keywords, matchMode, localFolderPaths, errors, params.dateStart, params.dateEnd, params.onProgress)).catch((err) => {
       errors.push(`Local pull failed: ${err instanceof Error ? err.message : String(err)}`);
       return { files: 0 };
     }),
@@ -1250,6 +1369,190 @@ export async function pullEvidenceByKeywords(params: {
     localFiles: local.files,
     errors,
   };
+}
+
+type KeywordPullJobParams = Omit<Parameters<typeof pullEvidenceByKeywords>[0], 'onProgress'>;
+const runningKeywordPullJobIds = new Set<string>();
+
+export async function startKeywordPullJob(params: KeywordPullJobParams) {
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
+
+  const recent = await db
+    .select()
+    .from(keywordPullJobs)
+    .where(and(eq(keywordPullJobs.caseId, params.caseId), eq(keywordPullJobs.userId, params.userId)))
+    .orderBy(desc(keywordPullJobs.createdAt))
+    .limit(10);
+  const active = recent.find((job) => job.status === 'queued' || job.status === 'running');
+  if (active && runningKeywordPullJobIds.has(active.id)) return active;
+  if (active) {
+    await db.update(keywordPullJobs).set({
+      status: 'failed',
+      message: 'Pull interrupted before completion',
+      error: 'The application stopped while this pull was active. Start it again to retry safely.',
+      completedAt: new Date(),
+      updatedAt: new Date(),
+    }).where(eq(keywordPullJobs.id, active.id));
+  }
+
+  const now = new Date();
+  const id = uuidv4();
+  await db.insert(keywordPullJobs).values({
+    id,
+    caseId: params.caseId,
+    userId: params.userId,
+    status: 'queued',
+    phase: 'queued',
+    message: 'Waiting to start',
+    processedWords: 0,
+    totalWords: 0,
+    processedItems: 0,
+    totalItems: 0,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  runningKeywordPullJobIds.add(id);
+  setImmediate(() => {
+    void executeKeywordPullJob(id, params);
+  });
+
+  const [job] = await db.select().from(keywordPullJobs).where(eq(keywordPullJobs.id, id)).limit(1);
+  return job;
+}
+
+async function executeKeywordPullJob(id: string, params: KeywordPullJobParams): Promise<void> {
+  const db = await getDb();
+  if (!db) {
+    runningKeywordPullJobIds.delete(id);
+    return;
+  }
+  const startedAt = new Date();
+  const state = {
+    processedWords: 0,
+    totalWords: 0,
+    processedItems: 0,
+    totalItems: 0,
+    phase: 'discovering' as PullProgressPhase,
+    message: 'Checking connected evidence sources',
+  };
+  let writeChain = Promise.resolve();
+
+  const persistProgress = () => {
+    const elapsedSeconds = Math.max(1, (Date.now() - startedAt.getTime()) / 1000);
+    const remainingWords = Math.max(0, state.totalWords - state.processedWords);
+    const remainingItems = Math.max(0, state.totalItems - state.processedItems);
+    const wordRate = state.processedWords / elapsedSeconds;
+    const itemRate = state.processedItems / elapsedSeconds;
+    const estimatedSecondsRemaining = remainingWords > 0 && wordRate > 0
+      ? Math.ceil(remainingWords / wordRate)
+      : remainingItems > 0 && itemRate > 0
+        ? Math.ceil(remainingItems / itemRate)
+        : null;
+    const snapshot = { ...state, estimatedSecondsRemaining, updatedAt: new Date() };
+    writeChain = writeChain
+      .then(async () => {
+        await db.update(keywordPullJobs).set(snapshot).where(eq(keywordPullJobs.id, id));
+      })
+      .catch((error) => {
+        console.warn('[KeywordPull] Failed to persist progress:', error);
+      });
+  };
+
+  await db.update(keywordPullJobs).set({
+    status: 'running',
+    phase: state.phase,
+    message: state.message,
+    startedAt,
+    updatedAt: startedAt,
+  }).where(eq(keywordPullJobs.id, id));
+
+  const onProgress: PullProgressReporter = (update) => {
+    state.phase = update.phase;
+    state.message = update.message;
+    state.processedWords += update.processedWordsDelta ?? 0;
+    state.totalWords += update.totalWordsDelta ?? 0;
+    state.processedItems += update.processedItemsDelta ?? 0;
+    state.totalItems += update.totalItemsDelta ?? 0;
+    persistProgress();
+  };
+
+  try {
+    const result = await pullEvidenceByKeywords({ ...params, onProgress });
+    onProgress({ phase: 'finalizing', message: 'Updating the case evidence index' });
+    await writeChain;
+    const completedAt = new Date();
+    await db.update(keywordPullJobs).set({
+      status: result.errors.length > 0 ? 'completed_with_errors' : 'completed',
+      phase: 'finalizing',
+      message: result.errors.length > 0 ? 'Pull completed with source warnings' : 'Pull complete',
+      processedWords: Math.max(state.processedWords, state.totalWords),
+      totalWords: Math.max(state.processedWords, state.totalWords),
+      processedItems: Math.max(state.processedItems, state.totalItems),
+      totalItems: Math.max(state.processedItems, state.totalItems),
+      estimatedSecondsRemaining: 0,
+      result: JSON.stringify(result),
+      completedAt,
+      updatedAt: completedAt,
+    }).where(eq(keywordPullJobs.id, id));
+  } catch (error) {
+    await writeChain;
+    const completedAt = new Date();
+    await db.update(keywordPullJobs).set({
+      status: 'failed',
+      message: 'Pull failed',
+      error: error instanceof Error ? error.message : String(error),
+      estimatedSecondsRemaining: null,
+      completedAt,
+      updatedAt: completedAt,
+    }).where(eq(keywordPullJobs.id, id));
+  } finally {
+    runningKeywordPullJobIds.delete(id);
+  }
+}
+
+export async function getKeywordPullJob(id: string, userId: string) {
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
+  const [job] = await db
+    .select()
+    .from(keywordPullJobs)
+    .where(and(eq(keywordPullJobs.id, id), eq(keywordPullJobs.userId, userId)))
+    .limit(1);
+  return job ?? null;
+}
+
+export async function getActiveKeywordPullJob(caseId: string, userId: string) {
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
+  const rows = await db
+    .select()
+    .from(keywordPullJobs)
+    .where(and(eq(keywordPullJobs.caseId, caseId), eq(keywordPullJobs.userId, userId)))
+    .orderBy(desc(keywordPullJobs.createdAt))
+    .limit(10);
+  const active = rows.find((job) => job.status === 'queued' || job.status === 'running');
+  if (!active) return null;
+  if (runningKeywordPullJobIds.has(active.id)) return active;
+
+  const completedAt = new Date();
+  const interrupted = {
+    ...active,
+    status: 'failed',
+    message: 'Pull interrupted before completion',
+    error: 'The application stopped while this pull was active. Start it again to retry safely.',
+    completedAt,
+    updatedAt: completedAt,
+  };
+  await db.update(keywordPullJobs).set({
+    status: interrupted.status,
+    message: interrupted.message,
+    error: interrupted.error,
+    completedAt,
+    updatedAt: completedAt,
+  }).where(eq(keywordPullJobs.id, active.id));
+  return interrupted;
 }
 
 export async function runAutoCollection(caseId: string): Promise<{
@@ -1302,6 +1605,7 @@ export async function runAutoCollection(caseId: string): Promise<{
 export async function setLocalFolderPaths(caseId: string, userId: string, paths: string[]): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error('Database not available');
+  const validatedPaths = await Promise.all(paths.map((folderPath) => resolveAllowedLocalFolder(folderPath)));
 
   const existing = await getAutoCollectionSettings(caseId);
   const meta = existing?.metadata
@@ -1313,7 +1617,7 @@ export async function setLocalFolderPaths(caseId: string, userId: string, paths:
         }
       })()
     : {};
-  meta.localFolderPaths = paths;
+  meta.localFolderPaths = Array.from(new Set(validatedPaths));
 
   if (existing) {
     await db

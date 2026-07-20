@@ -55,6 +55,46 @@ suite('Phase 046 — cross-user isolation', () => {
     await expect(app.makeCaller(B).cases.progress({ caseId })).rejects.toBeTruthy();
   });
 
+  it('B cannot read, configure, or start evidence collection on A\'s case', async () => {
+    const caller = app.makeCaller(B);
+    await expect(caller.autoCollection.getSettings({ caseId })).rejects.toBeTruthy();
+    await expect(caller.autoCollection.getLogs({ caseId, limit: 10 })).rejects.toBeTruthy();
+    await expect(caller.autoCollection.getKeywordMatches({ caseId })).rejects.toBeTruthy();
+    await expect(caller.autoCollection.getLocalFolders({ caseId })).rejects.toBeTruthy();
+    await expect(caller.autoCollection.setLocalFolders({ caseId, paths: [] })).rejects.toBeTruthy();
+    await expect(caller.autoCollection.runCollection({ caseId })).rejects.toBeTruthy();
+    await expect(caller.autoCollection.startPullByKeywords({
+      caseId,
+      keywords: ['private'],
+      matchMode: 'any',
+    })).rejects.toBeTruthy();
+  });
+
+  it('keyword pull jobs are resumable for A and invisible to B', async () => {
+    const started = await app.makeCaller(A).autoCollection.startPullByKeywords({
+      caseId,
+      keywords: ['no-provider-match'],
+      matchMode: 'any',
+    });
+    expect(started.job.id).toBeTruthy();
+
+    let job = await app.makeCaller(A).autoCollection.pullJobStatus({ jobId: started.job.id });
+    for (let attempt = 0; attempt < 50 && (job?.status === 'queued' || job?.status === 'running'); attempt += 1) {
+      await new Promise((resolve) => { setTimeout(resolve, 20); });
+      job = await app.makeCaller(A).autoCollection.pullJobStatus({ jobId: started.job.id });
+    }
+
+    expect(['completed', 'completed_with_errors']).toContain(job?.status);
+    expect(job?.estimatedSecondsRemaining).toBe(0);
+    expect(JSON.parse(job?.result || '{}')).toMatchObject({
+      gmailMessages: 0,
+      driveFiles: 0,
+      localFiles: 0,
+    });
+    await expect(app.makeCaller(B).autoCollection.pullJobStatus({ jobId: started.job.id }))
+      .resolves.toBeNull();
+  });
+
   it('B\'s GDPR export does not contain A\'s case', async () => {
     const exp = await app.makeCaller(B).gdpr.exportData();
     const cases = exp.data?.cases ?? [];

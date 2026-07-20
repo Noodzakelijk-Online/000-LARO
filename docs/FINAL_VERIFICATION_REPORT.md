@@ -17,13 +17,13 @@ acceptance. It supersedes the 2026-07-06 phase snapshot.
 | Account-safety scan | 0 high-severity findings |
 | Isolated backup/delete/restore/reopen drill | Pass |
 | Target database readiness | SQLite integrity, declared foreign keys, invariants, reconciliation, duplicates, and demo markers clean |
-| Vitest | 40 files, 255 tests passed, 0 todo |
+| Vitest | 41 files, 262 tests passed, 0 todo |
 | Python unittest discovery | 202 tests passed |
 | Runtime dependency audit | 0 known vulnerabilities |
 | Renderer, main, and server production builds | Pass |
 | Portable Windows packaging | Pass with tracked LARO icon; unsigned by policy |
 | Packaged `/api/health` | `healthy`, database ready, version 1.3.0 |
-| Packaged document intelligence and Outreach | Five migrations present; PDF, DOCX, native parser dependencies, and review-gated Outreach tables present; integrated server booted successfully |
+| Packaged document intelligence and Outreach | Six migrations present, including persisted keyword-pull jobs; PDF, DOCX, native parser dependencies, and review-gated Outreach tables present; integrated server booted successfully |
 | Desktop scanner contract | Scoped 15-minute token; real bytes/hash; owner/MIME enforcement |
 | Branch CI policy | Current Node and Python checks are required before merge |
 | Protected-main CI | Actions run `29538287439`; Node and Python jobs passed |
@@ -72,6 +72,21 @@ picker entry point, user-scoped account and activity exports, mobile navigation,
 and a clean browser console. Settings no longer exposes inert outreach,
 notification, matching, personalization, or restorable-backup controls.
 
+A clean-profile packaged evidence run then created a case, configured a local
+folder, and pulled 40 matching text records through the real background job:
+
+- the interface exposed queued/running state, word and item counters, progress,
+  completion state, and disabled conflicting controls while work was active;
+- completion reported actual extracted-document words and `40 / 40 items`, and
+  persisted one job;
+- all 40 records were extracted and analyzed, and the visible evidence list
+  replaced its empty state automatically without a reload;
+- the consolidated Timeline workspace generated 40 source-linked legal events,
+  exposed Legal events, Source documents, and Case activity views, and switched
+  between vertical and horizontal layouts while retaining all 40 source buttons;
+- desktop and 390x844 responsive checks had no page-level horizontal overflow,
+  framework overlay, console error, or console warning.
+
 A final clean-profile packaged run created a new local account and checked all
 14 mounted routes at both 1440x900 and 390x844:
 
@@ -86,11 +101,12 @@ A final clean-profile packaged run created a new local account and checked all
   correct email, current-password, new-password, and one-time-code metadata;
 - no page error, console error, or console warning occurred during the sweep.
 
-The current local portable artifact is 151,687,715 bytes with SHA-256
-`ee96c8098eba00982ddb89e2bf864dff972fb70d98cf0531ecd755c62e4db76b`.
+The current local portable artifact is 151,693,919 bytes with SHA-256
+`05cb62465b8eb0d9c85c1309b3e6a7be7f7a77f080001b0f3d23e153778af58d`.
 It launched with an explicit isolated user-data directory, created fresh local
-secrets and databases, applied all five packaged migrations, and returned
-healthy status on loopback port 63494.
+secrets and databases, applied all six packaged migrations, and served the
+authenticated application on loopback port 49178. SQLite integrity passed with
+zero foreign-key violations after the evidence run.
 Its packaged resources contain the current migrations, PDF/DOCX parsers, native
 parser dependency, consolidated managed-storage deletion, and seven-category
 matching data. Windows reports

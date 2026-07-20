@@ -16,13 +16,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import {
   MapPin,
   Phone,
   Mail,
   Briefcase,
-  Clock,
   Target,
   Send,
   CheckCircle2,
@@ -57,7 +57,7 @@ import {
 } from "lucide-react";
 import { LegalAreasSelect } from "@/components/LegalAreasSelect";
 import { EvidenceCollection } from "@/components/EvidenceCollection";
-import TimelineView, { TimelineEvent } from "@/components/TimelineView";
+import TimelineView from "@/components/TimelineView";
 import CommunicationHub from "@/components/CommunicationHub";
 import EvidenceTimelineView from "@/components/EvidenceTimelineView";
 import OutreachAnalyticsView from "@/components/OutreachAnalyticsView";
@@ -68,6 +68,7 @@ import ProgressTrackingDashboard from "@/components/ProgressTrackingDashboard";
 import { AutomatedDocumentAnalysis } from "@/components/AutomatedDocumentAnalysis";
 import { CaseTimeline } from "@/components/CaseTimeline";
 import { exportCaseSummary, printCaseSummary } from "@/lib/export";
+import { getElectronAPI, isElectron } from "@/lib/electronApiShim";
 import CaseStatusWorkflow from "@/components/CaseStatusWorkflow";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -91,36 +92,78 @@ function KeywordEvidencePull({ caseId }: { caseId: string }) {
   const [matchMode, setMatchMode] = useState<"all" | "any">("any");
   const [dateStart, setDateStart] = useState("");
   const [dateEnd, setDateEnd] = useState("");
+  const [pullJobId, setPullJobId] = useState<string | null>(null);
+  const [handledJobId, setHandledJobId] = useState<string | null>(null);
 
   const utils = trpc.useUtils();
 
   const { data: driveStatus } = trpc.googleDrive.checkConnection.useQuery(undefined, {
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
+    refetchInterval: 2_000,
   });
   const { data: localFolderData, refetch: refetchLocalFolders } =
     trpc.autoCollection.getLocalFolders.useQuery({ caseId });
 
-  const pullMutation = trpc.autoCollection.pullByKeywords.useMutation({
-    onSuccess: (data) => {
-      const r = data.result;
-      const total = r.gmailMessages + r.gmailAttachments + r.driveFiles + r.localFiles;
+  const activePullJob = trpc.autoCollection.activePullJob.useQuery({ caseId }, {
+    refetchInterval: 1_000,
+  });
+  const pullJob = trpc.autoCollection.pullJobStatus.useQuery(
+    { jobId: pullJobId || "00000000-0000-0000-0000-000000000000" },
+    {
+      enabled: Boolean(pullJobId),
+      refetchInterval: (data) => !data || data.status === "queued" || data.status === "running" ? 500 : false,
+    },
+  );
+  const currentJob = pullJob.data ?? activePullJob.data ?? null;
+  const pullActive = currentJob?.status === "queued" || currentJob?.status === "running";
+
+  useEffect(() => {
+    if (!pullJobId && activePullJob.data?.id) setPullJobId(activePullJob.data.id);
+  }, [activePullJob.data?.id, pullJobId]);
+
+  useEffect(() => {
+    if (!currentJob || pullActive || handledJobId === currentJob.id) return;
+    setHandledJobId(currentJob.id);
+    if (currentJob.status === "failed") {
+      toast.error(`Pull failed: ${currentJob.error || "Unknown error"}`);
+      return;
+    }
+    try {
+      const result = JSON.parse(currentJob.result || "{}") as {
+        gmailMessages?: number;
+        gmailAttachments?: number;
+        driveFiles?: number;
+        localFiles?: number;
+        errors?: string[];
+      };
+      const total = (result.gmailMessages || 0)
+        + (result.gmailAttachments || 0)
+        + (result.driveFiles || 0)
+        + (result.localFiles || 0);
       if (total === 0) {
-        toast.message("Pull complete — no new matches", {
-          description: r.errors.length
-            ? `Some sources errored: ${r.errors[0]}`
+        toast.message("Pull complete - no new matches", {
+          description: result.errors?.length
+            ? `Some sources errored: ${result.errors[0]}`
             : "No items matched your keywords. Try different terms or connect a source.",
         });
       } else {
         toast.success(`Pulled ${total} item${total === 1 ? "" : "s"} into the case`, {
-          description: `Gmail: ${r.gmailMessages} email(s), ${r.gmailAttachments} attachment(s). Drive: ${r.driveFiles}. Local: ${r.localFiles}.`,
+          description: `Gmail: ${result.gmailMessages || 0} email(s), ${result.gmailAttachments || 0} attachment(s). Drive: ${result.driveFiles || 0}. Local: ${result.localFiles || 0}.`,
         });
       }
-      if (r.errors.length) {
-        console.warn("[KeywordPull] errors:", r.errors);
-      }
-      // Refresh evidence + monitoring views.
-      (utils.evidenceFiles as any)?.byCase?.invalidate?.({ caseId });
+      if (result.errors?.length) console.warn("[KeywordPull] errors:", result.errors);
+      void utils.evidenceFiles.search.invalidate({ caseId });
       (utils.autoCollection as any)?.getLogs?.invalidate?.({ caseId });
+      (utils.evidenceTimeline as any)?.getTimeline?.invalidate?.({ caseId });
+    } catch {
+      toast.error("Pull completed but its result could not be read.");
+    }
+  }, [caseId, currentJob, handledJobId, pullActive, utils]);
+
+  const pullMutation = trpc.autoCollection.startPullByKeywords.useMutation({
+    onSuccess: (data) => {
+      setHandledJobId(null);
+      setPullJobId(data.job.id);
     },
     onError: (err) => {
       toast.error(`Pull failed: ${err.message}`);
@@ -194,6 +237,23 @@ function KeywordEvidencePull({ caseId }: { caseId: string }) {
     addFolderMutation.mutate({ caseId, paths: next });
   };
 
+  const handleChooseFolder = async () => {
+    if (!isElectron()) {
+      setShowFolderInput(true);
+      return;
+    }
+    try {
+      const selected = await getElectronAPI().selectFolder();
+      if (!selected?.length) return;
+      addFolderMutation.mutate({
+        caseId,
+        paths: Array.from(new Set([...currentLocalFolders, ...selected])),
+      });
+    } catch (error) {
+      toast.error(`Could not select folder: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
   const handleRemoveFolder = (p: string) => {
     const next = currentLocalFolders.filter((x) => x !== p);
     addFolderMutation.mutate({ caseId, paths: next });
@@ -202,6 +262,18 @@ function KeywordEvidencePull({ caseId }: { caseId: string }) {
   const handleConnectDrive = () => {
     connectMutation.mutate();
   };
+
+  const progressValue = currentJob
+    ? currentJob.status === "completed" || currentJob.status === "completed_with_errors"
+      ? 100
+      : currentJob.totalItems > 0
+        ? Math.min(99, Math.round((currentJob.processedItems / currentJob.totalItems) * 100))
+        : currentJob.totalWords > 0
+          ? Math.min(99, Math.round((currentJob.processedWords / currentJob.totalWords) * 100))
+          : currentJob.status === "running"
+            ? 5
+            : 0
+    : 0;
 
   return (
     <Card className="border-purple-500/30 bg-gradient-to-br from-purple-500/5 to-pink-500/5">
@@ -225,16 +297,17 @@ function KeywordEvidencePull({ caseId }: { caseId: string }) {
               value={keywordsRaw}
               onChange={(e) => setKeywordsRaw(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && !pullMutation.isLoading) handlePull();
+                if (e.key === "Enter" && !pullMutation.isLoading && !pullActive) handlePull();
               }}
               className="bg-background"
+              disabled={pullActive}
             />
             <Button
               onClick={handlePull}
-              disabled={pullMutation.isLoading}
+              disabled={pullMutation.isLoading || pullActive}
               className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
             >
-              {pullMutation.isLoading ? (
+              {pullMutation.isLoading || pullActive ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   Pulling…
@@ -248,6 +321,33 @@ function KeywordEvidencePull({ caseId }: { caseId: string }) {
             </Button>
           </div>
         </div>
+
+        {currentJob && (
+          <div className="space-y-2 rounded-md border border-border/50 bg-background/60 p-3" aria-live="polite">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+              <span className="font-medium">{currentJob.message}</span>
+              <span className="tabular-nums text-muted-foreground">{progressValue}%</span>
+            </div>
+            <Progress value={progressValue} className="h-2" />
+            <div className="flex flex-wrap justify-between gap-x-4 gap-y-1 text-xs text-muted-foreground">
+              <span className="tabular-nums">
+                {currentJob.processedWords.toLocaleString()} words analyzed
+              </span>
+              <span className="tabular-nums">
+                {currentJob.processedItems} / {currentJob.totalItems} items
+              </span>
+              <span className="tabular-nums">
+                {pullActive
+                  ? currentJob.estimatedSecondsRemaining == null
+                    ? "Estimating time remaining"
+                    : `${currentJob.estimatedSecondsRemaining}s remaining`
+                  : currentJob.status === "failed"
+                    ? "Stopped"
+                    : "Complete"}
+              </span>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-border/40">
           {/* Gmail / Drive */}
@@ -317,7 +417,7 @@ function KeywordEvidencePull({ caseId }: { caseId: string }) {
                 <Button
                   size="sm"
                   variant="ghost"
-                  onClick={() => setShowFolderInput(true)}
+                  onClick={() => void handleChooseFolder()}
                   className="h-7 px-2"
                 >
                   <FolderPlus className="w-3 h-3 mr-1" /> Add folder
@@ -385,12 +485,11 @@ const NAV_ITEMS = [
   { id: "messages", label: "Messages", icon: MessageSquare },
   { id: "evidence", label: "Evidence", icon: FileText },
   { id: "analysis", label: "Analysis", icon: Sparkles },
-  { id: "evidence-timeline", label: "Evidence Timeline", icon: GitBranch },
+  { id: "evidence-timeline", label: "Timeline", icon: GitBranch },
   { id: "gap-analysis", label: "Gap Analysis", icon: Shield },
   { id: "matching", label: "Lawyers", icon: Users },
   { id: "outreach", label: "Outreach", icon: Send },
   { id: "outreach-analytics", label: "Analytics", icon: BarChart3 },
-  { id: "timeline", label: "Timeline", icon: Clock },
 ] as const;
 
 /* ─── Outreach progress wrapper ─── */
@@ -428,12 +527,12 @@ export default function EnhancedCaseDetailsDialog({
 
   const [activeTab, setActiveTab] = useState(() => {
     const saved = localStorage.getItem(`case-tab-${caseId}`);
-    return saved || "overview";
+    return saved === "timeline" ? "evidence-timeline" : saved || "overview";
   });
 
   useEffect(() => {
     const saved = localStorage.getItem(`case-tab-${caseId}`);
-    setActiveTab(saved || "overview");
+    setActiveTab(saved === "timeline" ? "evidence-timeline" : saved || "overview");
     localStorage.setItem("active-case-context-id", caseId);
   }, [caseId]);
 
@@ -892,7 +991,49 @@ export default function EnhancedCaseDetailsDialog({
                     <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
                       <GitBranch className="w-5 h-5 text-orange-500" /> Evidence Timeline
                     </h2>
-                    <EvidenceTimelineView caseId={caseId} />
+                    <Tabs defaultValue="events" className="w-full">
+                      <TabsList className="h-auto w-full justify-start gap-1 border border-border/30 bg-card/40 p-1">
+                        <TabsTrigger value="events" className="text-xs">Legal events</TabsTrigger>
+                        <TabsTrigger value="sources" className="text-xs">Source documents</TabsTrigger>
+                        <TabsTrigger value="activity" className="text-xs">Case activity</TabsTrigger>
+                      </TabsList>
+                      <TabsContent value="events" className="mt-4">
+                        <CaseTimeline caseId={caseId} />
+                      </TabsContent>
+                      <TabsContent value="sources" className="mt-4">
+                        <EvidenceTimelineView caseId={caseId} />
+                      </TabsContent>
+                      <TabsContent value="activity" className="mt-4">
+                        <TimelineView
+                          events={[
+                            {
+                              id: "case-created",
+                              date: caseData.createdAt ? new Date(caseData.createdAt) : new Date(),
+                              type: "case_created",
+                              title: "Case Created",
+                              description: `Case for ${caseData.clientName} was created with ${caseData.urgency} priority`,
+                              metadata: { urgency: caseData.urgency, caseType: caseData.caseType },
+                            },
+                            ...(outreachHistory?.map((outreach: any) => ({
+                              id: `outreach-${outreach.id}`,
+                              date: new Date(outreach.initialContact),
+                              type: "lawyer_contacted" as const,
+                              title: "Lawyer Contacted",
+                              description: `Reached out to ${outreach.lawyerName || "lawyer"}`,
+                              metadata: { lawyer: outreach.lawyerName, status: outreach.status, distance: `${outreach.distanceKm} km` },
+                            })) || []),
+                            ...(outreachHistory?.filter((outreach: any) => outreach.response).map((outreach: any) => ({
+                              id: `response-${outreach.id}`,
+                              date: outreach.lastContact ? new Date(outreach.lastContact) : new Date(outreach.initialContact),
+                              type: "response_received" as const,
+                              title: "Response Received",
+                              description: outreach.response || "Lawyer responded to outreach",
+                              metadata: { lawyer: outreach.lawyerName },
+                            })) || []),
+                          ]}
+                        />
+                      </TabsContent>
+                    </Tabs>
                   </div>
                 )}
 
@@ -1147,44 +1288,6 @@ export default function EnhancedCaseDetailsDialog({
                   </div>
                 )}
 
-                {/* ═══ TIMELINE ═══ */}
-                {activeTab === "timeline" && (
-                  <div className="space-y-5 animate-in fade-in-0 duration-200">
-                    <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-                      <Clock className="w-5 h-5 text-orange-500" /> Case Timeline
-                    </h2>
-                    <CaseTimeline caseId={caseId} />
-                    <h3 className="text-base font-semibold text-foreground">Operational history</h3>
-                    <TimelineView
-                      events={[
-                        {
-                          id: "case-created",
-                          date: caseData.createdAt ? new Date(caseData.createdAt) : new Date(),
-                          type: "case_created",
-                          title: "Case Created",
-                          description: `Case for ${caseData.clientName} was created with ${caseData.urgency} priority`,
-                          metadata: { urgency: caseData.urgency, caseType: caseData.caseType },
-                        },
-                        ...(outreachHistory?.map((outreach: any) => ({
-                          id: `outreach-${outreach.id}`,
-                          date: new Date(outreach.initialContact),
-                          type: "lawyer_contacted" as const,
-                          title: "Lawyer Contacted",
-                          description: `Reached out to ${outreach.lawyerName || "lawyer"}`,
-                          metadata: { lawyer: outreach.lawyerName, status: outreach.status, distance: `${outreach.distanceKm} km` },
-                        })) || []),
-                        ...(outreachHistory?.filter((o: any) => o.response).map((outreach: any) => ({
-                          id: `response-${outreach.id}`,
-                          date: outreach.lastContact ? new Date(outreach.lastContact) : new Date(outreach.initialContact),
-                          type: "response_received" as const,
-                          title: "Response Received",
-                          description: outreach.response || "Lawyer responded to outreach",
-                          metadata: { lawyer: outreach.lawyerName },
-                        })) || []),
-                      ]}
-                    />
-                  </div>
-                )}
               </>
             )}
           </main>

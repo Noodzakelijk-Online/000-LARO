@@ -10,12 +10,27 @@ import {
   pullEvidenceByKeywords,
   setLocalFolderPaths,
   getLocalFolderPaths,
+  startKeywordPullJob,
+  getKeywordPullJob,
+  getActiveKeywordPullJob,
 } from "../autoCollectionService";
+import { assertCaseOwnership } from "../_core/authz";
+
+const keywordPullInput = z.object({
+  caseId: z.string(),
+  keywords: z.array(z.string().min(1)).min(1),
+  matchMode: z.enum(["all", "any"]).optional().default("any"),
+  driveFolderIds: z.array(z.string()).optional(),
+  localFolderPaths: z.array(z.string()).optional(),
+  dateStart: z.coerce.date().optional(),
+  dateEnd: z.coerce.date().optional(),
+});
 
 export const autoCollectionRouter = router({
   getSettings: protectedProcedure
     .input(z.object({ caseId: z.string() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await assertCaseOwnership(input.caseId, ctx.user.id);
       const settings = await getAutoCollectionSettings(input.caseId);
       return { settings };
     }),
@@ -35,6 +50,7 @@ export const autoCollectionRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const userId = ctx.user.id;
+      await assertCaseOwnership(input.caseId, userId);
       await upsertAutoCollectionSettings({
         ...input,
         userId,
@@ -52,7 +68,8 @@ export const autoCollectionRouter = router({
 
   runCollection: protectedProcedure
     .input(z.object({ caseId: z.string() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await assertCaseOwnership(input.caseId, ctx.user.id);
       try {
         const result = await runAutoCollection(input.caseId);
         return { success: true, result };
@@ -66,14 +83,16 @@ export const autoCollectionRouter = router({
 
   getLogs: protectedProcedure
     .input(z.object({ caseId: z.string(), limit: z.number().optional().default(10) }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await assertCaseOwnership(input.caseId, ctx.user.id);
       const logs = await getAutoCollectionLogs(input.caseId, input.limit);
       return { logs };
     }),
 
   getKeywordMatches: protectedProcedure
     .input(z.object({ caseId: z.string() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await assertCaseOwnership(input.caseId, ctx.user.id);
       const matches = await getKeywordMatches(input.caseId);
       return { matches };
     }),
@@ -82,20 +101,11 @@ export const autoCollectionRouter = router({
    * One-shot keyword pull: pull evidence from every connected source
    * (Gmail, Google Drive, configured local folders) in a single call.
    * This is the entry point for the case-view "Pull evidence by keyword" UI.
-   */
+  */
   pullByKeywords: protectedProcedure
-    .input(
-      z.object({
-        caseId: z.string(),
-        keywords: z.array(z.string().min(1)).min(1),
-        matchMode: z.enum(["all", "any"]).optional().default("any"),
-        driveFolderIds: z.array(z.string()).optional(),
-        localFolderPaths: z.array(z.string()).optional(),
-        dateStart: z.coerce.date().optional(),
-        dateEnd: z.coerce.date().optional(),
-      })
-    )
+    .input(keywordPullInput)
     .mutation(async ({ input, ctx }) => {
+      await assertCaseOwnership(input.caseId, ctx.user.id);
       try {
         const result = await pullEvidenceByKeywords({
           caseId: input.caseId,
@@ -116,19 +126,40 @@ export const autoCollectionRouter = router({
       }
     }),
 
+  startPullByKeywords: protectedProcedure
+    .input(keywordPullInput)
+    .mutation(async ({ input, ctx }) => {
+      await assertCaseOwnership(input.caseId, ctx.user.id);
+      const job = await startKeywordPullJob({ ...input, userId: ctx.user.id });
+      return { success: true, job };
+    }),
+
+  pullJobStatus: protectedProcedure
+    .input(z.object({ jobId: z.string().uuid() }))
+    .query(async ({ input, ctx }) => getKeywordPullJob(input.jobId, ctx.user.id)),
+
+  activePullJob: protectedProcedure
+    .input(z.object({ caseId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      await assertCaseOwnership(input.caseId, ctx.user.id);
+      return getActiveKeywordPullJob(input.caseId, ctx.user.id);
+    }),
+
   /**
    * Persist local-folder paths to auto-scan during keyword pulls.
    */
   setLocalFolders: protectedProcedure
     .input(z.object({ caseId: z.string(), paths: z.array(z.string()) }))
     .mutation(async ({ input, ctx }) => {
+      await assertCaseOwnership(input.caseId, ctx.user.id);
       await setLocalFolderPaths(input.caseId, ctx.user.id, input.paths);
       return { success: true };
     }),
 
   getLocalFolders: protectedProcedure
     .input(z.object({ caseId: z.string() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await assertCaseOwnership(input.caseId, ctx.user.id);
       const paths = await getLocalFolderPaths(input.caseId);
       return { paths };
     }),

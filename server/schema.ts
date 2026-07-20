@@ -785,6 +785,39 @@ export const autoCollectionLogs = sqliteTable("auto_collection_logs", {
   createdAt: integer("createdAt", { mode: "timestamp" }).default(new Date()),
 });
 
+export const keywordPullJobs = sqliteTable(
+  "keyword_pull_jobs",
+  {
+    id: text("id").primaryKey(),
+    caseId: text("caseId").notNull().references(() => cases.id, { onDelete: "cascade" }),
+    userId: text("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+    status: text("status").notNull().default("queued"),
+    phase: text("phase").notNull().default("queued"),
+    message: text("message").notNull().default("Waiting to start"),
+    processedWords: integer("processedWords").notNull().default(0),
+    totalWords: integer("totalWords").notNull().default(0),
+    processedItems: integer("processedItems").notNull().default(0),
+    totalItems: integer("totalItems").notNull().default(0),
+    estimatedSecondsRemaining: integer("estimatedSecondsRemaining"),
+    result: text("result"),
+    error: text("error"),
+    createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
+    startedAt: integer("startedAt", { mode: "timestamp" }),
+    updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull(),
+    completedAt: integer("completedAt", { mode: "timestamp" }),
+  },
+  (table) => ({
+    userCaseCreatedIdx: index("keyword_pull_jobs_user_case_created_idx").on(
+      table.userId,
+      table.caseId,
+      table.createdAt
+    ),
+    userStatusIdx: index("keyword_pull_jobs_user_status_idx").on(table.userId, table.status),
+  })
+);
+
+export type KeywordPullJob = typeof keywordPullJobs.$inferSelect;
+
 export const keywordMatches = sqliteTable("keyword_matches", {
   id: text("id").primaryKey(),
   caseId: text("caseId"),

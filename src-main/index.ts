@@ -80,6 +80,7 @@ process.on('unhandledRejection', (reason) => {
 
 let mainWindow: BrowserWindow | null = null;
 let scanPanel: BrowserWindow | null = null;
+const oauthWindows = new Set<BrowserWindow>();
 let currentScanner: FileScanner | null = null;
 let currentUploader: FileUploader | null = null;
 const approvedScanFolders = new Set<string>();
@@ -114,6 +115,63 @@ function assertTrustedIpc(event: Electron.IpcMainInvokeEvent): void {
   if (!isTrustedAppUrl(senderUrl)) throw new Error('Blocked IPC from an untrusted renderer');
 }
 
+function isOAuthProviderUrl(rawUrl: string): boolean {
+  try {
+    const url = new URL(rawUrl);
+    if (url.protocol !== 'https:') return false;
+    return url.hostname === 'accounts.google.com' || url.hostname === 'login.microsoftonline.com';
+  } catch {
+    return false;
+  }
+}
+
+function isAllowedOAuthWindowUrl(rawUrl: string): boolean {
+  if (isOAuthProviderUrl(rawUrl)) return true;
+  try {
+    const url = new URL(rawUrl);
+    return url.origin === new URL(laroUrl).origin && url.pathname.startsWith('/api/oauth/');
+  } catch {
+    return false;
+  }
+}
+
+async function openOAuthWindow(rawUrl: string, parent: BrowserWindow): Promise<void> {
+  if (!isOAuthProviderUrl(rawUrl)) throw new Error('Blocked unapproved OAuth provider URL');
+  const oauthWindow = new BrowserWindow({
+    parent,
+    width: 520,
+    height: 720,
+    minWidth: 420,
+    minHeight: 560,
+    show: false,
+    autoHideMenuBar: true,
+    title: 'Connect account to LARO',
+    backgroundColor: '#f4f6f8',
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+    },
+  });
+  oauthWindows.add(oauthWindow);
+  oauthWindow.once('ready-to-show', () => oauthWindow.show());
+  oauthWindow.on('closed', () => oauthWindows.delete(oauthWindow));
+  oauthWindow.webContents.on('will-navigate', (event, url) => {
+    if (isAllowedOAuthWindowUrl(url)) return;
+    event.preventDefault();
+    void openExternalUrl(url).catch((error) => console.error('[Electron] Blocked OAuth navigation:', error));
+  });
+  oauthWindow.webContents.setWindowOpenHandler(({ url }: { url: string }) => {
+    if (isAllowedOAuthWindowUrl(url)) {
+      void oauthWindow.loadURL(url);
+      return { action: 'deny' };
+    }
+    void openExternalUrl(url).catch((error) => console.error('[Electron] Blocked OAuth popup:', error));
+    return { action: 'deny' };
+  });
+  await oauthWindow.loadURL(rawUrl);
+}
+
 function hardenWindowNavigation(window: BrowserWindow): void {
   window.webContents.on('will-navigate', (event, url) => {
     if (url.includes('/api/oauth/') || !isTrustedAppUrl(url)) {
@@ -122,6 +180,10 @@ function hardenWindowNavigation(window: BrowserWindow): void {
     }
   });
   window.webContents.setWindowOpenHandler(({ url }: { url: string }) => {
+    if (isOAuthProviderUrl(url)) {
+      void openOAuthWindow(url, window).catch((error) => console.error('[Electron] OAuth window failed:', error));
+      return { action: 'deny' };
+    }
     if (url.includes('/api/oauth/')) {
       void openExternalUrl(url).catch((error) => console.error('[Electron] Blocked OAuth URL:', error));
       return { action: 'deny' };
