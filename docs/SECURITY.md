@@ -38,8 +38,9 @@ Date: 2026-07-20
 - Keep `outreach.send.enabled` off until provider, approval, emergency-stop, ownership, and audit checks are verified in the target environment.
 - Run `npm run gate`, `npm run readiness`, `npm audit --omit=dev`, and the Python suite before release.
 - Create and validate a complete backup set before migration. Store its database,
-  manifest, and optional desktop-secret sidecar together on access-controlled or
-  encrypted media; restore only while writes are stopped.
+  manifest, optional desktop-secret sidecar, and local evidence directory
+  together on access-controlled or encrypted media; restore only while writes
+  are stopped. S3-backed deployments require independent bucket recovery.
 - Configure `LARO_PASSWORD_RESET_URL_TEMPLATE` and SMTP before enabling password reset for non-local users.
 - Renderer TypeScript and lint are blocking release gates.
 

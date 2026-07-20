@@ -50,6 +50,8 @@ export function collectManagedStorageKeys(
     } else if (scope.caseIds?.length && columns.includes("caseId")) {
       const placeholders = scope.caseIds.map(() => "?").join(",");
       rows = sqlite.prepare(`SELECT ${select} FROM "${table}" WHERE caseId IN (${placeholders})`).all(...scope.caseIds);
+    } else if (!scope.userId && !scope.caseIds?.length) {
+      rows = sqlite.prepare(`SELECT ${select} FROM "${table}"`).all();
     }
 
     for (const row of rows) {

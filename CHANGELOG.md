@@ -9,7 +9,9 @@ versioning; dates are ISO. Version is sourced from `package.json` and surfaced b
 ### Added
 - Added recovery-ready backup sets that bind verified SQLite snapshots to the
   matching desktop or environment-managed token-encryption key, preserve both
-  previous files on restore, and reject ambiguous legacy or cross-mode restores.
+  previous files on restore, and reject ambiguous legacy or cross-mode restores;
+  version 2 also snapshots referenced local evidence, inventories S3 keys, and
+  preserves the previous evidence directory.
 - Added persisted desktop keyword-pull jobs with automatic UI recovery, live
   Gmail/Drive/local phase reporting, reviewed-word and item counts, progress,
   ETA, terminal results, and restart-time interruption-safe retry behavior.

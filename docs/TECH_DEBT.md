@@ -28,6 +28,8 @@ Updated: 2026-07-20
 | D22 | Electron sessions had no explicit browser-permission policy | - | Resolved with deny-by-default check/request handlers installed before any window and covered by behavioral/security tests |
 | D23 | Desktop could continue with temporary encryption keys when install-secret persistence failed | - | Resolved with atomic first-run creation, strict existing-file validation, explicit environment override, fail-closed startup before SQLite opens, and packaged restart/hash verification in the Windows workflow |
 | D24 | Database-only backups could validate successfully without preserving or checking the key required to decrypt provider tokens | - | Resolved with manifest-bound backup sets, bundled desktop keys, external-secret compatibility checks, rollback-safe paired restore, explicit legacy override, and a blocking paired recovery drill |
+| D25 | Electron backup sets did not preserve locally managed legal evidence bytes | - | Resolved with versioned local-file inventories, managed-key coverage, stable-source rescans, S3 inventory binding, rollback-safe storage restore, and a blocking database/key/evidence drill |
+| D26 | Flask ledger, auth, token-vault, and upload recovery is still separate from the Electron backup CLI | Medium | Add a verified Flask backup/restore command and coordinated drill before treating both supported runtimes as one recoverable installation |
 
 D10 is operationally contained without rewriting installed databases. A native
 foreign-key conversion remains migration work, not a release blocker while the

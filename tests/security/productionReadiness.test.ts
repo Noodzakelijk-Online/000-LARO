@@ -375,8 +375,10 @@ describe('production readiness regressions', () => {
     expect(secrets).not.toContain('using in-memory values');
   });
 
-  it('binds recovery backups to the provider-token encryption secret', () => {
+  it('binds recovery backups to encryption keys and managed evidence bytes', () => {
     const backupSet = readFileSync(join(ROOT, 'server/backupSet.ts'), 'utf8');
+    const backupStorage = readFileSync(join(ROOT, 'server/backupStorage.ts'), 'utf8');
+    const backupCore = readFileSync(join(ROOT, 'server/backup.ts'), 'utf8');
     const backupCli = readFileSync(join(ROOT, 'scripts/backup.ts'), 'utf8');
     const recoveryDrill = readFileSync(join(ROOT, 'scripts/recovery-drill.ts'), 'utf8');
 
@@ -385,10 +387,20 @@ describe('production readiness regressions', () => {
     expect(backupSet).toContain('external-environment');
     expect(backupSet).toContain('fs.renameSync(temporaryManifest, manifestPath)');
     expect(backupSet).toContain('secretInstall?.rollback()');
+    expect(backupSet).toContain('storageInstall?.rollback()');
+    expect(backupSet).toContain('allowMissingStorage');
+    expect(backupSet).toContain('Staged desktop secrets do not match');
+    expect(backupCore).toContain('staged database does not match the backup-set manifest');
+    expect(backupStorage).toContain('bundled-local');
+    expect(backupStorage).toContain('external-s3');
+    expect(backupStorage).toContain('assertLocalStorageUnchanged');
+    expect(backupStorage).toContain('managed local evidence object(s)');
     expect(backupCli).toContain('Refusing a database-only restore');
     expect(backupCli).toContain('parsed.allowLegacy');
+    expect(backupCli).toContain('parsed.allowMissingStorage');
     expect(recoveryDrill).toContain('backup.createBackupSet');
     expect(recoveryDrill).toContain('backupOfPreviousSecrets');
+    expect(recoveryDrill).toContain('backupOfPreviousStorage');
   });
 
   it('wires case intake draft persistence into the mounted creation flow', () => {

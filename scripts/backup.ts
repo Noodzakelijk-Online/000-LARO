@@ -20,14 +20,20 @@ async function main() {
   const commandOrDest = parsed.commandOrDestination;
   const file = parsed.file;
   const desktopSecretsPath = parsed.desktopSecretsPath || process.env.LARO_DESKTOP_SECRETS_PATH;
+  const localStoragePath = parsed.localStoragePath || process.env.LARO_LOCAL_STORAGE_PATH;
 
   if (commandOrDest === '--restore') {
     if (!file) throw new Error('Usage: npm run db:restore -- <backup.sqlite>');
     if (fs.existsSync(backupSetManifestPath(file))) {
-      const result = restoreBackupSet(file, { desktopSecretsPath });
+      const result = restoreBackupSet(file, {
+        desktopSecretsPath,
+        localStoragePath,
+        allowMissingStorage: parsed.allowMissingStorage,
+      });
       console.log(`[Restore] Restored verified backup set ${path.resolve(file)}.`);
       console.log(`[Restore] Previous database: ${result.backupOfPreviousDatabase || 'none'}`);
       console.log(`[Restore] Previous desktop secrets: ${result.backupOfPreviousSecrets || 'none'}`);
+      console.log(`[Restore] Previous local evidence: ${result.backupOfPreviousStorage || 'none'}`);
       return;
     }
     if (!parsed.allowLegacy) {
@@ -48,7 +54,17 @@ async function main() {
     if (fs.existsSync(backupSetManifestPath(file))) {
       const result = validateBackupSet(file);
       if (!result.valid) throw new Error(`Invalid backup set: ${result.reason}`);
-      console.log(`[Validate] Valid recovery-ready backup set with ${result.tables?.length || 0} tables.`);
+      if (result.storageCoverage === 'legacy-missing') {
+        console.warn(
+          `[Validate] Version-1 backup set is structurally valid with ${result.tables?.length || 0} tables, ` +
+            'but local evidence coverage is not proven.',
+        );
+      } else {
+        console.log(
+          `[Validate] Valid backup set with ${result.tables?.length || 0} tables and ` +
+            `${result.storageCoverage === 'complete-local' ? 'complete local evidence' : 'external S3 inventory'}.`,
+        );
+      }
       return;
     }
     const result = validateBackup(file);
@@ -66,10 +82,11 @@ async function main() {
     'db-backups',
     `${path.basename(dbPath)}.${timestamp()}.bak`,
   );
-  const result = await createBackupSet(destination, { desktopSecretsPath });
+  const result = await createBackupSet(destination, { desktopSecretsPath, localStoragePath });
   console.log(`[Backup] Wrote ${result.bytes} database bytes to ${result.databasePath}`);
   console.log(`[Backup] Recovery manifest: ${result.manifestPath}`);
   console.log(`[Backup] Desktop secrets: ${result.secretsPath || 'external environment; retain JWT_SECRET separately'}`);
+  console.log(`[Backup] Local evidence: ${result.storagePath || 'external S3 inventory recorded in manifest'}`);
 }
 
 main().catch((error) => {

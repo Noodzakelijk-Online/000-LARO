@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import crypto from "crypto";
 import Database from "better-sqlite3";
 import { closeDatabaseForMaintenance, getDb } from "./db";
 
@@ -71,7 +72,10 @@ export function validateBackup(srcPath: string): { valid: boolean; reason?: stri
  * The current connection is checkpointed and closed, the previous DB is moved
  * aside, and a failed replacement is rolled back before the error is returned.
  */
-export function restoreDatabase(srcPath: string): { restored: true; backupOfPrevious: string | null } {
+export function restoreDatabase(
+  srcPath: string,
+  expected?: { bytes: number; sha256: string },
+): { restored: true; backupOfPrevious: string | null } {
   const source = path.resolve(srcPath);
   const live = path.resolve(currentDbPath());
   if (source === live) throw new Error("Refusing to restore a database over itself");
@@ -83,6 +87,15 @@ export function restoreDatabase(srcPath: string): { restored: true; backupOfPrev
   const staged = `${live}.restore-${process.pid}-${Date.now()}.tmp`;
   const previous = `${live}.bak-${Date.now()}`;
   fs.copyFileSync(source, staged);
+
+  if (expected) {
+    const stagedStat = fs.statSync(staged);
+    const stagedHash = crypto.createHash("sha256").update(fs.readFileSync(staged)).digest("hex");
+    if (stagedStat.size !== expected.bytes || stagedHash !== expected.sha256) {
+      try { fs.unlinkSync(staged); } catch { /* preserve the verification error */ }
+      throw new Error("Refusing to restore: staged database does not match the backup-set manifest");
+    }
+  }
 
   const stagedCheck = validateBackup(staged);
   if (!stagedCheck.valid) {
