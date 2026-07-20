@@ -375,6 +375,22 @@ describe('production readiness regressions', () => {
     expect(secrets).not.toContain('using in-memory values');
   });
 
+  it('binds recovery backups to the provider-token encryption secret', () => {
+    const backupSet = readFileSync(join(ROOT, 'server/backupSet.ts'), 'utf8');
+    const backupCli = readFileSync(join(ROOT, 'scripts/backup.ts'), 'utf8');
+    const recoveryDrill = readFileSync(join(ROOT, 'scripts/recovery-drill.ts'), 'utf8');
+
+    expect(backupSet).toContain('createHmac("sha256", jwtSecret)');
+    expect(backupSet).toContain('bundled-desktop-secret');
+    expect(backupSet).toContain('external-environment');
+    expect(backupSet).toContain('fs.renameSync(temporaryManifest, manifestPath)');
+    expect(backupSet).toContain('secretInstall?.rollback()');
+    expect(backupCli).toContain('Refusing a database-only restore');
+    expect(backupCli).toContain('parsed.allowLegacy');
+    expect(recoveryDrill).toContain('backup.createBackupSet');
+    expect(recoveryDrill).toContain('backupOfPreviousSecrets');
+  });
+
   it('wires case intake draft persistence into the mounted creation flow', () => {
     const wizard = readFileSync(join(ROOT, 'src/renderer/components/CaseCreationWizard.tsx'), 'utf8');
     const cases = readFileSync(join(ROOT, 'src/renderer/components/Cases.tsx'), 'utf8');

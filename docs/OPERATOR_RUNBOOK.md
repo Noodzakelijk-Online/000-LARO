@@ -37,9 +37,10 @@ and job state, including the last run, success, and error timestamps.
 5. Roll back application and database only when evidence requires it.
 6. Re-run readiness and the critical acceptance flow before reopening.
 
-Back up `<userData>/laro-secrets.json` with the desktop database. Deleting it
-rotates desktop session and encryption keys on the next launch, invalidates
-existing sessions, and requires reconnecting providers whose tokens were
-encrypted with the previous key. LARO preserves and rejects an invalid existing
-file instead of silently rotating it. Provider credentials still require their
-own rotation or revocation at the provider.
+Use `npm run db:backup` to create the database, manifest, and matching desktop
+secret sidecar as one recovery set. Keep all members together on protected
+media. Deleting `<userData>/laro-secrets.json` rotates desktop session and
+encryption keys on the next launch, invalidates existing sessions, and requires
+reconnecting providers whose tokens were encrypted with the previous key. LARO
+preserves and rejects an invalid existing file instead of silently rotating it.
+Provider credentials still require their own rotation or revocation.

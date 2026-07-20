@@ -37,14 +37,18 @@ Date: 2026-07-20
 - Keep standalone secrets and OAuth credentials outside Git and outside desktop artifacts.
 - Keep `outreach.send.enabled` off until provider, approval, emergency-stop, ownership, and audit checks are verified in the target environment.
 - Run `npm run gate`, `npm run readiness`, `npm audit --omit=dev`, and the Python suite before release.
-- Validate a target-data backup before migration; restore only while writes are stopped.
+- Create and validate a complete backup set before migration. Store its database,
+  manifest, and optional desktop-secret sidecar together on access-controlled or
+  encrypted media; restore only while writes are stopped.
 - Configure `LARO_PASSWORD_RESET_URL_TEMPLATE` and SMTP before enabling password reset for non-local users.
 - Renderer TypeScript and lint are blocking release gates.
 
 ## Rotation
 
 Desktop secrets live in `userData/laro-secrets.json` and derive both session
-signatures and OAuth-token encryption. Back this file up with the database.
+signatures and OAuth-token encryption. `npm run db:backup` bundles this file with
+the database when it is present beside `DATABASE_URL`, then records hashes and a
+non-reversible compatibility tag in the backup-set manifest.
 Deleting it while LARO is stopped intentionally rotates the local keys on next
 launch, invalidates existing sessions, and makes previously encrypted provider
 tokens unusable until the accounts are reconnected.

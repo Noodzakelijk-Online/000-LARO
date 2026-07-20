@@ -67,7 +67,7 @@ Ledger reconciled: 2026-07-15.
 | 050 | Responsive & browser compatibility | **Implemented** | The supported Electron/Chromium surface is audited across 30 route/viewport combinations for content, overflow, errors, request failures, and accessibility. Firefox/Safari are not packaged-app targets. `docs/RESPONSIVE_COMPAT.md`. |
 | 051 | Performance baseline & indexing | **Implemented** | cases(userId,status)/urgency/updatedAt indexes; `docs/PERFORMANCE.md`. |
 | 052 | Large dataset & pagination testing | **Implemented** | `phase051_060.test.ts` — complete non-overlapping pagination over 55 rows + filters. |
-| 053 | Backup & restore procedures | **Implemented** | `server/backup.ts` (online backup/validate/restore) + CLI + `docs/BACKUP_RESTORE.md`; tested. |
+| 053 | Backup & restore procedures | **Implemented** | `server/backup.ts` provides verified SQLite maintenance; `server/backupSet.ts` binds database hashes and desktop/external encryption-key compatibility for paired CLI recovery; `docs/BACKUP_RESTORE.md`; tested. |
 | 054 | Data reconciliation & repair | **Implemented** | `server/reconcile.ts` orphan detect+repair; tested; `docs/DATA_RECONCILIATION.md`. |
 | 055 | Product analytics local-first | **Implemented** | `server/analytics.ts` real metrics wired into `analytics.*`; `docs/ANALYTICS.md`. |
 | 056 | Local operation without forced billing | **Implemented** | `billing.status` reports a local unmetered plan; usage is observational and core actions have no payment or quota gate; `docs/SAAS_READINESS.md`. |
