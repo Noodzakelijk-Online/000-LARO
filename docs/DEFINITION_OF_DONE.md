@@ -32,7 +32,7 @@ A feature is done only when all applicable conditions hold:
 | Response tracking and analytics | Done | Enabled inbound provider must pass live threading acceptance |
 | Evidence, case, and account managed-object erasure | Done | Target backup, storage credentials, and retention policy reviewed |
 | Scanner | Done | Clean-profile native folder and byte/hash acceptance |
-| Operator diagnostics and recovery | Done for Electron runtime | Production preflight, data readiness, database/key/evidence backup drill, and health probe pass; Flask recovery remains separate |
+| Operator diagnostics and recovery | Done for both supported runtimes | Electron database/key/evidence and Flask ledger/auth/vault/upload drills pass; target backups and external secrets must still be escrowed and validated |
 | Local usage telemetry | Done | Counts operations and quantities only; never prices, quotas, or blocks core actions |
 
 ## Release Boundary

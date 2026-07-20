@@ -7,6 +7,10 @@ versioning; dates are ISO. Version is sourced from `package.json` and surfaced b
 ## Unreleased
 
 ### Added
+- Added coordinated Flask recovery sets for the legal ledger, authentication
+  sessions, encrypted OAuth vault, and uploaded evidence, with stable-source
+  checks, manifest inventories, external-secret compatibility binding,
+  rollback-safe restore, path rebasing, and a blocking destructive drill.
 - Added recovery-ready backup sets that bind verified SQLite snapshots to the
   matching desktop or environment-managed token-encryption key, preserve both
   previous files on restore, and reject ambiguous legacy or cross-mode restores;
@@ -35,6 +39,8 @@ versioning; dates are ISO. Version is sourced from `package.json` and surfaced b
   compact source controls that open the owning document.
 
 ### Fixed
+- Unified direct Flask, launcher, environment-template, and recovery upload-root
+  defaults while retaining an existing legacy `instance/laro_uploads` directory.
 - Made direct production preflight load the project environment and fail closed
   as production when `NODE_ENV` is omitted, matching operator-readiness behavior.
 - Allowed the Vite development proxy to target an explicit LARO API URL instead

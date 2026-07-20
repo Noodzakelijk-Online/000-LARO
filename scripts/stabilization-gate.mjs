@@ -20,6 +20,7 @@ const TSC = join(ROOT, "node_modules", "typescript", "bin", "tsc");
 const VITEST = join(ROOT, "node_modules", "vitest", "vitest.mjs");
 const TSX = join(ROOT, "node_modules", "tsx", "dist", "cli.mjs");
 const NPM_CLI = process.env.npm_execpath;
+const PYTHON = process.env.PYTHON || (process.platform === "win32" ? "python" : "python3");
 
 if (!NPM_CLI) {
   console.error("Run this gate through npm so the native rebuild uses the active Node toolchain.");
@@ -37,6 +38,7 @@ const BLOCKING = [
   { name: "no-excuses scan", cmd: process.execPath, args: ["scripts/no-excuses-scan.mjs", "--write"] },
   { name: "account safety", cmd: process.execPath, args: ["scripts/account-safety-check.mjs", "--write"] },
   { name: "backup/restore drill", cmd: process.execPath, args: [TSX, "scripts/recovery-drill.ts"] },
+  { name: "Flask recovery drill", cmd: PYTHON, args: ["scripts/flask_recovery_drill.py"] },
   { name: "tests", cmd: process.execPath, args: [VITEST, "run"] },
 ];
 

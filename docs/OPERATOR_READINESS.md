@@ -6,7 +6,7 @@ This checklist separates repository evidence from target-environment approval.
 
 `npm run readiness` first rebuilds the native SQLite driver for Node, then
 requires traceability, no-excuses and account-safety scans, the regression
-baseline, and an isolated backup/restore round trip. It also runs the environment
+baseline, and isolated Electron plus Flask backup/restore round trips. It also runs the environment
 preflight as an advisory check and prints both stdout and stderr for a failed
 step so the blocker remains visible.
 
@@ -30,7 +30,7 @@ counts only and does not print case or user data.
 - [ ] `npm ci` succeeds on supported Node 22.
 - [ ] `npm run gate` and the Python test suite pass.
 - [ ] `npm audit --omit=dev` reports no unresolved runtime vulnerability.
-- [ ] `npm run readiness` passes, including the recovery drill.
+- [ ] `npm run readiness` passes, including both runtime recovery drills.
 - [ ] `npm run readiness:production` passes for an API deployment.
 - [ ] The Windows portable artifact builds and launches on a clean profile.
 - [ ] A second desktop launch returns focus to the existing window instead of
@@ -40,9 +40,14 @@ counts only and does not print case or user data.
       product feature explicitly introduces a narrowly scoped exception.
 - [ ] `laro-secrets.json` is readable and durable; startup never falls back to
       temporary keys. The Windows workflow verifies restart preservation, while
-      `db:backup`, `db:validate`, and the recovery drill prove a manifest-bound
-      database/key/local-evidence set. S3 objects and Flask state require their
-      documented external or separate recovery controls.
+      `db:backup`, `db:validate`, and the Electron recovery drill prove a
+      manifest-bound database/key/local-evidence set. `flask:backup`,
+      `flask:validate`, and the Flask drill separately prove ledger, auth,
+      OAuth-vault, and upload recovery. S3 objects retain their documented
+      external recovery controls.
+- [ ] A target Flask recovery set validates with the escrowed `SECRET_KEY` and,
+      when configured, `LARO_TOKEN_ENCRYPTION_KEY`; the server and workers are
+      stopped before `flask:restore -- --confirm-stopped`.
 - [ ] The scanner requires a selected case and native-picker-approved folder,
       exposes a review list, and persists a test file with matching SHA-256.
 - [ ] Demo data is absent from the target database.

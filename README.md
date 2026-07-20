@@ -168,11 +168,13 @@ GitHub Actions repeats the Node and browser checks on the supported Node 22 tool
 - Server, Electron main-process, and shipped renderer TypeScript checks passed; no shipped runtime module disables type checking; ESLint passed.
 - Traceability reported 116 rows, 91 cited, and 0 broken references.
 - Runtime no-excuses scan reported 0 suspect findings; account safety reported 0 high-severity findings.
-- Vitest reported 46 passing files and 287 passing tests, including controlled
+- Vitest reported 51 passing files and 326 passing tests, including controlled
   NOvA parsing/filter, unknown-metric scoring, and review-gated
   media/organization discovery, tenant isolation, case-draft persistence, and
   target-database readiness tests, with no skipped or todo tests.
-- Full Python discovery reported 202 passing tests. Warning-focused optimization and UCID tests also passed with deprecations promoted to errors.
+- Full Python discovery reported 214 passing tests, including 12 coordinated
+  Flask recovery tests. Warning-focused optimization and UCID tests also passed
+  with deprecations promoted to errors.
 - The Vite 8 renderer, Electron 43 main process, and standalone server builds completed successfully.
 - The scanner integration test verified scoped-token isolation, owner checks, supported MIME enforcement, exact stored bytes, and SHA-256 readback.
 
@@ -235,7 +237,9 @@ For a broader Flask regression run:
 python -m unittest discover -v -p "test_*.py"
 ```
 
-The npm gate is fail-fast and blocks on server, Electron main-process, and renderer TypeScript checks, lint, traceability, safety scans, an isolated database recovery drill, and Vitest.
+The npm gate is fail-fast and blocks on server, Electron main-process, and
+renderer TypeScript checks, lint, traceability, safety scans, isolated Electron
+and Flask recovery drills, and Vitest.
 
 ## Docker and Packaging
 
@@ -259,8 +263,23 @@ only.
 
 The package includes only the two matcher datasets from `assets/`; the legacy
 development service, Python cache files, and local configuration are excluded.
-See [Backup and Restore](docs/BACKUP_RESTORE.md) for recovery-ready backup sets
-that bind SQLite state to its token-encryption key and managed evidence bytes.
+See [Backup and Restore](docs/BACKUP_RESTORE.md) for recovery-ready sets. The
+Electron commands bind SQLite state to its token-encryption key and managed
+evidence bytes. The Flask commands coordinate its legal ledger, auth sessions,
+encrypted OAuth vault, and uploaded evidence:
+
+```powershell
+npm run flask:backup -- C:\Backups\laro-flask-20260720
+npm run flask:validate -- C:\Backups\laro-flask-20260720
+npm run flask:restore -- C:\Backups\laro-flask-20260720 --confirm-stopped
+npm run flask:recovery:drill
+```
+
+Stop Flask and its workers before maintenance. External `SECRET_KEY` and
+`LARO_TOKEN_ENCRYPTION_KEY` values are compatibility-bound but never copied into
+the set; retain them in independent secret escrow. Both runtimes now have
+blocking destructive recovery drills, but remain separate applications with
+independent databases and identity/session models.
 
 CI runs Node and Python gates for pushes and pull requests to `main`. The release
 workflows target Node 22. Current Windows builds are unsigned artifacts; no Store
