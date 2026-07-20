@@ -5,11 +5,15 @@ import { Progress as ProgressPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
 
+type ProgressProps = React.ComponentProps<typeof ProgressPrimitive.Root> & {
+  "aria-label": string
+}
+
 function Progress({
   className,
   value,
   ...props
-}: React.ComponentProps<typeof ProgressPrimitive.Root>) {
+}: ProgressProps) {
   return (
     <ProgressPrimitive.Root
       data-slot="progress"

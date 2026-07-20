@@ -174,7 +174,7 @@ export default function LawyerComparison({ lawyers, caseType, onSelect, onClose 
                         Success Rate
                       </div>
                       <div className="flex items-center gap-2">
-                        <Progress value={lawyer.successRate} className="h-1.5 flex-1" />
+                        <Progress aria-label="Lawyer success rate" value={lawyer.successRate} className="h-1.5 flex-1" />
                         <span className="text-sm font-medium">{lawyer.successRate}%</span>
                       </div>
                     </div>
@@ -187,7 +187,7 @@ export default function LawyerComparison({ lawyers, caseType, onSelect, onClose 
                         Response Rate
                       </div>
                       <div className="flex items-center gap-2">
-                        <Progress value={lawyer.responseRate} className="h-1.5 flex-1" />
+                        <Progress aria-label="Lawyer response rate" value={lawyer.responseRate} className="h-1.5 flex-1" />
                         <span className="text-sm font-medium">{lawyer.responseRate}%</span>
                       </div>
                     </div>

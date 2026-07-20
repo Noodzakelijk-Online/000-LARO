@@ -38,7 +38,7 @@ None — every artifact cited in the matrix exists. ✅
 | 034 | CLI / doctor self-diagnostic | Implemented | ✅ `scripts/doctor.mjs` |
 | 038 | Fake provider lab for tests only | Implemented | ✅ `server/testing/fakeProviders.ts` |
 | 039 | Test-data factories & fixtures | Implemented | ✅ `tests/factories.ts` |
-| 041 | Frontend & component test suite | Partial | ✅ `tests/frontend/frontendLogic.test.ts` |
+| 041 | Frontend & component test suite | Implemented | ✅ `tests/browser/rendererAccessibility.spec.ts` |
 | 042 | Worker/job test suite | Implemented | ✅ `tests/backend/worker.test.ts` |
 | 043 | End-to-end workflow tests | Implemented | ✅ `tests/e2e/workflow.e2e.test.ts` |
 | 044 | Acceptance test matrix | Implemented | ✅ `docs/ACCEPTANCE_TESTS.md` |
@@ -46,8 +46,8 @@ None — every artifact cited in the matrix exists. ✅
 | 046 | Cross-user isolation tests | Implemented | ✅ `tests/security/isolation.test.ts` |
 | 047 | File safety & path traversal tests | Implemented | ✅ `tests/security/fileSafety.test.ts` |
 | 048 | Provider failure simulation | Implemented | ✅ `tests/security/providerFailure.test.ts` |
-| 049 | Accessibility review | Partial | ✅ `tests/a11y/accessibility.test.ts`<br>✅ `docs/ACCESSIBILITY.md` |
-| 050 | Responsive & browser compatibility | Partial | ✅ `docs/RESPONSIVE_COMPAT.md` |
+| 049 | Accessibility review | Implemented | ✅ `docs/ACCESSIBILITY.md` |
+| 050 | Responsive & browser compatibility | Implemented | ✅ `docs/RESPONSIVE_COMPAT.md` |
 | 051 | Performance baseline & indexing | Implemented | ✅ `docs/PERFORMANCE.md` |
 | 053 | Backup & restore procedures | Implemented | ✅ `server/backup.ts`<br>✅ `docs/BACKUP_RESTORE.md` |
 | 054 | Data reconciliation & repair | Implemented | ✅ `server/reconcile.ts`<br>✅ `docs/DATA_RECONCILIATION.md` |

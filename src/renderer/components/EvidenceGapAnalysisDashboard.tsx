@@ -204,7 +204,7 @@ export function EvidenceGapAnalysisDashboard({ caseId }: EvidenceGapAnalysisDash
                 <span className="text-sm font-medium">Overall Strength</span>
                 <span className="text-2xl font-bold">{score.overall}%</span>
               </div>
-              <Progress value={score.overall} className="h-3" />
+              <Progress aria-label="Overall evidence strength" value={score.overall} className="h-3" />
             </div>
 
             {/* Score Breakdown */}
@@ -213,6 +213,7 @@ export function EvidenceGapAnalysisDashboard({ caseId }: EvidenceGapAnalysisDash
                 <div className="text-sm text-muted-foreground mb-1">Direct Evidence</div>
                 <div className="flex items-center gap-2">
                   <Progress
+                    aria-label="Direct evidence strength"
                     value={score.directEvidence}
                     className="h-2 flex-1"
                   />
@@ -225,6 +226,7 @@ export function EvidenceGapAnalysisDashboard({ caseId }: EvidenceGapAnalysisDash
                 <div className="text-sm text-muted-foreground mb-1">Circumstantial Evidence</div>
                 <div className="flex items-center gap-2">
                   <Progress
+                    aria-label="Circumstantial evidence strength"
                     value={score.circumstantial}
                     className="h-2 flex-1"
                   />
@@ -237,6 +239,7 @@ export function EvidenceGapAnalysisDashboard({ caseId }: EvidenceGapAnalysisDash
                 <div className="text-sm text-muted-foreground mb-1">Legal Basis</div>
                 <div className="flex items-center gap-2">
                   <Progress
+                    aria-label="Legal basis strength"
                     value={score.legalBasis}
                     className="h-2 flex-1"
                   />
@@ -249,6 +252,7 @@ export function EvidenceGapAnalysisDashboard({ caseId }: EvidenceGapAnalysisDash
                 <div className="text-sm text-muted-foreground mb-1">Gap Analysis Impact</div>
                 <div className="flex items-center gap-2">
                   <Progress
+                    aria-label="Gap analysis impact"
                     value={score.gapImpact}
                     className="h-2 flex-1"
                   />

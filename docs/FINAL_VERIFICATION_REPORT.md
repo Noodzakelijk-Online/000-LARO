@@ -15,6 +15,7 @@ acceptance. It supersedes the 2026-07-06 phase snapshot.
 | Requirements traceability | 116 rows, 91 cited, 0 broken |
 | Runtime no-excuses scan | 0 suspect findings |
 | Account-safety scan | 0 high-severity findings |
+| Renderer accessibility | 15 routes x 2 viewports; 0 serious/critical axe violations, unnamed controls, overflows, request failures, page errors, or console errors |
 | Isolated backup/delete/restore/reopen drill | Pass |
 | Target database readiness | SQLite integrity, declared foreign keys, 228 legacy relationship guards, invariants, reconciliation, duplicates, and demo markers clean |
 | Vitest | 46 files, 287 tests passed, 0 todo |
@@ -25,9 +26,9 @@ acceptance. It supersedes the 2026-07-06 phase snapshot.
 | Packaged `/api/health` | `healthy`, database ready, version 1.3.0 |
 | Packaged document intelligence and Outreach | Six migrations present, including persisted keyword-pull jobs; PDF, DOCX, native parser dependencies, and review-gated Outreach tables present; integrated server booted successfully |
 | Desktop scanner contract | Scoped 15-minute token; real bytes/hash; owner/MIME enforcement |
-| Branch CI policy | Current Node and Python checks are required before merge |
-| Protected-main baseline CI | Actions run `29712712369`; Node and Python jobs passed |
-| Windows package baseline | Actions run `29712712401`; gate, build, ABI check, package, checksum, and artifact upload passed |
+| Branch CI policy | Node, Python, and renderer-accessibility checks run before merge |
+| Protected-main baseline CI | Actions run `29715727941`; Node and Python jobs passed |
+| Windows package baseline | Actions run `29715727914`; gate, build, ABI check, package, checksum, and artifact upload passed |
 | Packaged matching assets | Seven aligned legal categories; invalid legacy dataset absent |
 | Dependency graph | One canonical Node workspace; 0 open Dependabot alerts |
 
@@ -87,10 +88,12 @@ folder, and pulled 40 matching text records through the real background job:
 - desktop and 390x844 responsive checks had no page-level horizontal overflow,
   framework overlay, console error, or console warning.
 
-A final clean-profile packaged run created a new local account and checked all
-14 mounted routes at both 1440x900 and 390x844:
+A clean-profile packaged run created a new local account and checked the 14
+routes mounted at that time at both 1440x900 and 390x844. The subsequent
+automated renderer audit adds `/evidence`, covering all 15 currently supported
+static routes at both sizes:
 
-- all 28 route/viewport combinations rendered meaningful content and an `h1`;
+- all 30 current route/viewport combinations rendered meaningful content and an `h1`;
 - no route had horizontal overflow, unnamed visible buttons, unlabeled visible
   fields, missing image alternative text, blank content, or a framework error;
 - the 366x820 assistant remained inside the 390x844 viewport and exposed named
@@ -115,11 +118,11 @@ disabled with a collection prompt while the case had no evidence. The inherited
 dark-theme recommendation contrast defect found during this pass was corrected
 and visually rechecked.
 
-The current local portable artifact is 151,771,576 bytes with SHA-256
-`abfe23193e2b313a200d29a29529d5e0974c8970b723358546032c8247bc05bb`.
+The current local portable artifact is 151,773,047 bytes with SHA-256
+`3d68bea313f916a1a9c635127d65336149615127a5af2277a830d85cfbe04ab0`.
 It launched with an explicit isolated user-data directory, created fresh local
 secrets and databases, applied all six packaged migrations, and served the
-application on pinned loopback port 63917. `/api/health`
+application on pinned loopback port 63918. `/api/health`
 returned `healthy`, database ready, and version `1.3.0`. SQLite integrity passed with zero foreign-key
 violations and all 228 required relationship guards persisted.
 Its packaged resources contain the current migrations, PDF/DOCX parsers, native
@@ -199,8 +202,9 @@ before it can publish.
   reconciliation remains the explicit repair path for pre-existing drift.
 - Route-level lazy loading keeps the production entry chunk near 276 KB before
   gzip; the largest route chunk is near 266 KB.
-- Full i18n migration and additional cross-browser/a11y automation remain useful
-  hardening work.
+- Full i18n migration remains useful optional hardening. Firefox and Safari are
+  not targets for the packaged Electron application; formal WCAG conformance is
+  not claimed.
 
 ## Verdict
 

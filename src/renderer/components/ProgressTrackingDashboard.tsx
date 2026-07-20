@@ -147,7 +147,7 @@ export default function ProgressTrackingDashboard({
                 <TrendingUp className="w-6 h-6 text-primary" />
               </div>
             </div>
-            <Progress value={progress.overallProgress} className="h-2" />
+            <Progress aria-label="Overall case progress" value={progress.overallProgress} className="h-2" />
             <p className="text-xs text-muted-foreground mt-2">
               {completedMilestones} of {totalMilestones} milestones completed
             </p>
@@ -168,7 +168,7 @@ export default function ProgressTrackingDashboard({
                 {getHealthScoreLabel(progress.healthScore)}
               </Badge>
             </div>
-            <Progress value={progress.healthScore} className="h-2" />
+            <Progress aria-label="Case health score" value={progress.healthScore} className="h-2" />
             <p className="text-xs text-muted-foreground mt-2">
               Based on progress, deadlines, and activity
             </p>

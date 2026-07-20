@@ -26,6 +26,9 @@
     "lint": "eslint . --ext .ts,.tsx",
     "test": "npm run rebuild:node && vitest run",
     "test:watch": "vitest",
+    "test:a11y:browser": "npm run rebuild:node && playwright test --config playwright.a11y.config.ts",
+    "test:a11y:server": "cross-env NODE_ENV=test PORT=3015 DATABASE_URL=.laro-a11y.sqlite ALLOWED_ORIGINS=http://127.0.0.1:5181 JWT_SECRET=laro-a11y-jwt-secret-32-characters-minimum COOKIE_SECRET=laro-a11y-cookie-secret-32-characters-minimum tsx server/index.ts",
+    "test:a11y:renderer": "cross-env VITE_LARO_API_URL=http://127.0.0.1:3015 vite --host 127.0.0.1 --port 5181",
     "setup": "node scripts/setup.mjs",
     "doctor": "node scripts/doctor.mjs",
     "audit:deps": "npm audit",
@@ -118,9 +121,11 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
     "@electron/rebuild": "^4.2.0",
     "@emnapi/core": "^1.11.2",
     "@emnapi/runtime": "^1.11.2",
+    "@playwright/test": "^1.61.1",
     "@types/bcryptjs": "^2.4.6",
     "@types/better-sqlite3": "^7.6.13",
     "@types/cookie-parser": "^1.4.7",

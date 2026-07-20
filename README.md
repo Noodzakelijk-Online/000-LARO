@@ -86,6 +86,7 @@ npm run doctor           # environment and native-module checks
 npm run lint             # TypeScript/TSX correctness lint
 npm test                 # Vitest suite
 npm run gate             # blocking quality and safety gates
+npm run test:a11y:browser # 15-route Playwright/axe renderer audit
 npm run build            # renderer, main process, and server builds
 npm run dist:win         # Windows package
 ```
@@ -161,7 +162,7 @@ See [Operator Runbook](docs/OPERATOR_RUNBOOK.md), [Security](docs/SECURITY.md), 
 ## Verification
 
 The current production-readiness candidate was verified locally on 2026-07-20.
-GitHub Actions repeats the Node checks on the supported Node 22 toolchain:
+GitHub Actions repeats the Node and browser checks on the supported Node 22 toolchain:
 
 - `npm run gate`: all blocking gates passed.
 - Server, Electron main-process, and shipped renderer TypeScript checks passed; no shipped runtime module disables type checking; ESLint passed.
@@ -197,27 +198,32 @@ desktop server to that registered OAuth callback port instead.
   exposed case-scoped CSV and ZIP exports, downloaded a real CSV, disabled the
   unavailable PDF format, and kept batch scoring unavailable with a truthful
   collection prompt when the selected case contained no evidence.
+- The CI Playwright/axe audit rendered all 15 supported static routes at
+  1440x900 and 390x844. Serious/critical WCAG A/AA violations, unnamed visible
+  controls, missing primary headings, page overflow, failed requests, page
+  errors, and console errors all block the browser job.
 - Packaged Electron scanner QA passed signup, shared-session authorization, empty-state rendering, disabled unsafe scan state, Settings navigation, and clean renderer console checks.
 - A packaged launch from a directory containing hostile development `.env` values still reported production mode, database readiness, and a random `127.0.0.1` port.
-- The current unsigned portable executable is 151,771,576 bytes with SHA-256
-  `abfe23193e2b313a200d29a29529d5e0974c8970b723358546032c8247bc05bb`.
+- The current unsigned portable executable is 151,773,047 bytes with SHA-256
+  `3d68bea313f916a1a9c635127d65336149615127a5af2277a830d85cfbe04ab0`.
   Windows reports `NotSigned`, as intended. An isolated-profile launch applied
   all six migrations, installed 228 database relationship guards, served the
   renderer, and returned healthy production status on automatically selected
-  loopback port 63917. Packaged QA also verified signup,
+  loopback port 63918. Packaged QA also verified signup,
   Google evidence controls, truthful Settings exports, responsive layout, and a
   clean browser console.
-- PR #27 merged after the required Node and Python branch checks. Its protected-main
-  baseline CI run `29712712369` passed; Windows workflow `29712712401` passed the gate,
+- PR #28 merged after the required Node and Python branch checks. Its protected-main
+  baseline CI run `29715727941` passed; Windows workflow `29715727914` passed the gate,
   build, Electron ABI check, package, checksum, and upload stages.
 - The protected-main `LARO-Desktop-Windows` workflow artifact was uploaded with
   SHA-256 digest
-  `8472548c57b1b5835d77b7ce7b8898bc23d170f84c75567ba38f63c5b5503024`.
+  `2f1a2878bf924d89a0e21ea69bbc109351a709afd8b90b4712a5c5d53bf9f4b7`.
 
 Run the same checks locally:
 
 ```powershell
 npm run gate
+npm run test:a11y:browser
 npm run readiness
 npm run db:readiness
 python -m unittest -v test_authentication test_document_intelligence test_google_oauth test_lawyer_matching test_legal_ledger test_outreach_targets

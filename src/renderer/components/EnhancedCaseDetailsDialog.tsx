@@ -328,7 +328,7 @@ function KeywordEvidencePull({ caseId }: { caseId: string }) {
               <span className="font-medium">{currentJob.message}</span>
               <span className="tabular-nums text-muted-foreground">{progressValue}%</span>
             </div>
-            <Progress value={progressValue} className="h-2" />
+            <Progress aria-label="Document analysis progress" value={progressValue} className="h-2" />
             <div className="flex flex-wrap justify-between gap-x-4 gap-y-1 text-xs text-muted-foreground">
               <span className="tabular-nums">
                 {currentJob.processedWords.toLocaleString()} words analyzed

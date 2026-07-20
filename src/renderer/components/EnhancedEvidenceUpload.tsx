@@ -174,7 +174,11 @@ export default function EnhancedEvidenceUpload({ caseId }: { caseId?: string }) 
             <span className="font-medium">{completeCount} of {files.length} stored</span>
             <span className="text-muted-foreground">{settledCount} processed</span>
           </div>
-          <Progress value={(settledCount / files.length) * 100} className="h-2" />
+          <Progress
+            aria-label="Evidence upload progress"
+            value={(settledCount / files.length) * 100}
+            className="h-2"
+          />
           <div className="grid gap-2">
             {files.map((item) => (
               <Card key={item.id} className="border-border/60">
