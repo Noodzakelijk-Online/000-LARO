@@ -233,6 +233,8 @@ describe('production readiness regressions', () => {
     const singleInstanceProbe = readFileSync(join(ROOT, 'scripts/verify-single-instance.ps1'), 'utf8');
     expect(singleInstanceProbe).toContain("Join-Path $profile 'laro-server.sqlite'");
     expect(singleInstanceProbe).toContain('Compare-Object $beforeIds $afterIds');
+    expect(singleInstanceProbe).toContain("Join-Path $profile 'laro-secrets.json'");
+    expect(singleInstanceProbe).toContain('$secretHashAfterRestart -ne $secretHashBeforeRestart');
     expect(workflow).toContain('release-artifacts/*');
     expect(workflow).not.toContain('path: release/**/*.exe');
     const storeWorkflow = readFileSync(join(ROOT, '.github/workflows/store.yml'), 'utf8');
@@ -357,6 +359,20 @@ describe('production readiness regressions', () => {
     expect(permissions).toContain('setPermissionCheckHandler(() => false)');
     expect(permissions).toContain('setPermissionRequestHandler');
     expect(permissions).toContain('callback(false)');
+  });
+
+  it('fails closed on undurable desktop encryption secrets before opening SQLite', () => {
+    const main = readFileSync(join(ROOT, 'src-main/index.ts'), 'utf8');
+    const secrets = readFileSync(join(ROOT, 'src-main/desktopSecrets.ts'), 'utf8');
+    const secretSetup = main.indexOf('ensureDesktopSecrets(userDataPath)');
+    const databaseOpen = main.indexOf('initAgentDb()');
+
+    expect(secretSetup).toBeGreaterThan(-1);
+    expect(databaseOpen).toBeGreaterThan(secretSetup);
+    expect(main).toContain("LARO will close without opening the database.");
+    expect(secrets).toContain("flag: 'wx'");
+    expect(secrets).toContain('fs.renameSync(temporaryPath, secretsPath)');
+    expect(secrets).not.toContain('using in-memory values');
   });
 
   it('wires case intake draft persistence into the mounted creation flow', () => {

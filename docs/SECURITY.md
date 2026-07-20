@@ -4,7 +4,10 @@ Date: 2026-07-20
 
 ## Implemented controls
 
-- The desktop creates per-install `JWT_SECRET` and `COOKIE_SECRET` values before importing the server. Standalone production startup refuses insecure placeholder secrets.
+- The desktop atomically creates and validates durable per-install `JWT_SECRET`
+  and `COOKIE_SECRET` values before opening SQLite or importing the server. It
+  refuses to replace corrupt existing keys or continue with temporary keys.
+  Standalone production startup refuses insecure placeholder secrets.
 - Session cookies are HTTP-only, CSRF origins and credentialed CORS are restricted, and session revocation is checked. Scanner JWTs expire after 15 minutes and are authorized only for evidence upload.
 - Case-scoped operations use authenticated ownership checks. Lawyer creation is admin-only; lawyer reads, local messages, transactional email tests, and agent controls require authentication.
 - OAuth authorization URLs are created by protected tRPC procedures. Google and Microsoft flows use encrypted, time-limited state plus PKCE; the callback no longer accepts a caller-supplied user ID.
@@ -40,4 +43,8 @@ Date: 2026-07-20
 
 ## Rotation
 
-Desktop secrets live in `userData/laro-secrets.json`. Deleting that file while LARO is stopped rotates the local signing and agent secrets on next launch and invalidates existing sessions.
+Desktop secrets live in `userData/laro-secrets.json` and derive both session
+signatures and OAuth-token encryption. Back this file up with the database.
+Deleting it while LARO is stopped intentionally rotates the local keys on next
+launch, invalidates existing sessions, and makes previously encrypted provider
+tokens unusable until the accounts are reconnected.

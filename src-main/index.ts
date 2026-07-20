@@ -18,6 +18,7 @@ import { FileUploader } from './uploader';
 import { isDesktopDevelopmentMode, resolveDesktopServerPort } from './desktopPort';
 import { acquireSingleInstanceLock } from './singleInstance';
 import { installDenyByDefaultPermissions } from './sessionPermissions';
+import { ensureDesktopSecrets } from './desktopSecrets';
 // NOTE: server/index.ts reads `.env` (dotenv) at import time, so it is imported
 // lazily in startApp() AFTER we pin NODE_ENV from app.isPackaged. This guarantees
 // a packaged build runs the server in production mode even if the bundled .env
@@ -28,49 +29,6 @@ let laroUrl = `http://127.0.0.1:${DEFAULT_PORT}`;
 const isDev = isDesktopDevelopmentMode(app.isPackaged, process.env.NODE_ENV);
 let mainWindow: BrowserWindow | null = null;
 const ownsDesktopProfile = acquireSingleInstanceLock(app, () => mainWindow);
-
-/**
- * Phase 006/007 — per-install secret bootstrap.
- *
- * Generates strong random secrets on first run and persists them to the user's
- * private app-data directory (never committed, never shipped). This makes the
- * desktop app secure-by-default: sessions are signed with a per-install
- * JWT_SECRET and COOKIE_SECRET so sessions cannot be forged with shared defaults.
- *
- * Only fills a value if it is not already provided by the environment (a real
- * deployment can still inject its own secrets).
- */
-function bootstrapSecrets(userDataPath: string) {
-  const crypto = require('crypto') as typeof import('crypto');
-  const secretsPath = path.join(userDataPath, 'laro-secrets.json');
-  let store: { jwtSecret?: string; cookieSecret?: string } = {};
-  try {
-    if (fs.existsSync(secretsPath)) {
-      store = JSON.parse(fs.readFileSync(secretsPath, 'utf8'));
-    }
-  } catch (e) {
-    console.warn('[Electron] Could not read secrets file; regenerating:', e);
-    store = {};
-  }
-
-  const gen = () => crypto.randomBytes(32).toString('hex');
-  let changed = false;
-  if (!store.jwtSecret) { store.jwtSecret = gen(); changed = true; }
-  if (!store.cookieSecret) { store.cookieSecret = gen(); changed = true; }
-
-  if (changed) {
-    try {
-      fs.writeFileSync(secretsPath, JSON.stringify(store, null, 2), { mode: 0o600 });
-      console.log('[Electron] Generated per-install secrets at:', secretsPath);
-    } catch (e) {
-      console.warn('[Electron] Could not persist secrets file (using in-memory values):', e);
-    }
-  }
-
-  // Only set if not already provided by a real .env / deployment.
-  if (!process.env.JWT_SECRET) process.env.JWT_SECRET = store.jwtSecret;
-  if (!process.env.COOKIE_SECRET) process.env.COOKIE_SECRET = store.cookieSecret;
-}
 
 // ─── Error Handling ─────────────────────────────────────────────────────────
 
@@ -347,6 +305,20 @@ if (ownsDesktopProfile) app.whenReady().then(async () => {
   process.env.DATABASE_URL = serverDbPath;
   console.log('[Electron] Server DB Path:', serverDbPath);
 
+  try {
+    const secretResult = ensureDesktopSecrets(userDataPath);
+    console.log(`[Electron] Desktop secrets ready (${secretResult.source}).`);
+  } catch (error) {
+    log.error('[Electron] Desktop secret initialization failed:', error);
+    dialog.showErrorBox(
+      'Security Setup Error',
+      "LARO could not securely load or persist this installation's secrets. " +
+        'Check the user-data permissions or restore laro-secrets.json. LARO will close without opening the database.',
+    );
+    app.quit();
+    return;
+  }
+
   // Phase 015: local evidence storage lives under userData when S3 is not
   // configured, so file uploads are actually persisted (not dropped).
   if (!process.env.LOCAL_STORAGE_DIR) {
@@ -371,10 +343,6 @@ if (ownsDesktopProfile) app.whenReady().then(async () => {
   }
   process.env.LARO_PACKAGED_DESKTOP = app.isPackaged ? 'true' : 'false';
 
-  // Phase 006/007: generate/load per-install secrets and set them in the
-  // environment BEFORE importing the server, so env.ts reads real secrets and
-  // the production security guard passes with strong, non-forgeable values.
-  bootstrapSecrets(userDataPath);
   process.env.LARO_APP_VERSION = app.getVersion();
   process.env.HOST = '127.0.0.1';
 

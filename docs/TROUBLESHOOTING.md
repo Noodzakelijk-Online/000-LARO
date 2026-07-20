@@ -27,6 +27,11 @@ The canonical error catalog is code (`server/errorCatalog.ts`) and served by
   OR the screen references an unimplemented endpoint (see docs/UI_ACTION_AUDIT.md).
 - **Production won't start** → insecure/missing `JWT_SECRET`/`COOKIE_SECRET`
   (fail-safe guard, Phase 006). Set strong values.
+- **"Security Setup Error" on desktop startup** → `laro-secrets.json` is
+  unreadable/invalid or the user-data directory is not writable. Restore the
+  secrets file with its matching database, fix permissions, or inject both
+  `JWT_SECRET` and `COOKIE_SECRET`. Deleting the file rotates encryption keys and
+  requires reconnecting providers.
 
 ## Operator tools
 `npm run doctor`, `admin.diagnostics`, `admin.invariants`, `admin.reconcileReport`.

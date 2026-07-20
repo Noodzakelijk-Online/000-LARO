@@ -26,6 +26,7 @@ Updated: 2026-07-20
 | D20 | Legacy evidence scoring UI was connected to lawyer matching and the export view exposed inert buttons | - | Resolved with dedicated owner-scoped scoring/export routers and integration coverage; see `LEGACY_DASHBOARD_PORT_AUDIT.md` |
 | D21 | Multiple desktop processes could share one SQLite profile and run duplicate background jobs | - | Resolved with an Electron single-instance lock, tested restore/show/focus handoff, and a packaged two-launch profile probe in the Windows release workflow |
 | D22 | Electron sessions had no explicit browser-permission policy | - | Resolved with deny-by-default check/request handlers installed before any window and covered by behavioral/security tests |
+| D23 | Desktop could continue with temporary encryption keys when install-secret persistence failed | - | Resolved with atomic first-run creation, strict existing-file validation, explicit environment override, fail-closed startup before SQLite opens, and packaged restart/hash verification in the Windows workflow |
 
 D10 is operationally contained without rewriting installed databases. A native
 foreign-key conversion remains migration work, not a release blocker while the
