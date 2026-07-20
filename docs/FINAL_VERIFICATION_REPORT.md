@@ -17,7 +17,7 @@ acceptance. It supersedes the 2026-07-06 phase snapshot.
 | Account-safety scan | 0 high-severity findings |
 | Isolated backup/delete/restore/reopen drill | Pass |
 | Target database readiness | SQLite integrity, declared foreign keys, invariants, reconciliation, duplicates, and demo markers clean |
-| Vitest | 41 files, 262 tests passed, 0 todo |
+| Vitest | 41 files, 265 tests passed, 0 todo |
 | Python unittest discovery | 202 tests passed |
 | Runtime dependency audit | 0 known vulnerabilities |
 | Renderer, main, and server production builds | Pass |
@@ -101,11 +101,17 @@ A final clean-profile packaged run created a new local account and checked all
   correct email, current-password, new-password, and one-time-code metadata;
 - no page error, console error, or console warning occurred during the sweep.
 
-The current local portable artifact is 151,693,919 bytes with SHA-256
-`05cb62465b8eb0d9c85c1309b3e6a7be7f7a77f080001b0f3d23e153778af58d`.
+The authenticated shell also carries a compact, programmatically named
+legal-assistance notice on every route. A development-renderer check created a
+real local account, moved from Home to Cases, and observed the notice after both
+renders with no console warning, console error, framework overlay, or horizontal
+overflow at 2560x1440.
+
+The current local portable artifact is 151,683,671 bytes with SHA-256
+`1408409111acffaf0801046ea63f0662b822d5d4a92c0da583b5d7f73ae4f40f`.
 It launched with an explicit isolated user-data directory, created fresh local
 secrets and databases, applied all six packaged migrations, and served the
-authenticated application on loopback port 49178. SQLite integrity passed with
+authenticated application on loopback port 55193. SQLite integrity passed with
 zero foreign-key violations after the evidence run.
 Its packaged resources contain the current migrations, PDF/DOCX parsers, native
 parser dependency, consolidated managed-storage deletion, and seven-category

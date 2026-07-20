@@ -24,7 +24,7 @@ None — every artifact cited in the matrix exists. ✅
 | 010 | Frontend architecture & navigation | Implemented | ✅ `docs/FRONTEND_ARCHITECTURE.md` |
 | 011 | Core workflow vertical slice | Implemented | ✅ `server/outreachSend.ts` |
 | 012 | External provider reality review | Implemented | ✅ `docs/PROVIDERS.md` |
-| 013 | Compliance & policy boundaries | Partial | ✅ `docs/COMPLIANCE.md` |
+| 013 | Compliance & policy boundaries | Implemented | ✅ `docs/COMPLIANCE.md` |
 | 014 | No fake success / no mock production | Implemented | ✅ `tests/smoke/noFakeSuccess.smoke.test.ts` |
 | 021 | Forms, validation, autosave | Implemented | ✅ `shared/validation.ts` |
 | 023 | Import & export | Implemented | ✅ `server/evidenceExport.ts` |

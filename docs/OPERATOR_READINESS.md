@@ -15,6 +15,10 @@ with the target API environment, including strong `JWT_SECRET` and
 `COOKIE_SECRET`. LARO Desktop generates equivalent per-install secrets in its
 user-data directory.
 
+`npm run preflight` loads the project `.env` and defaults to production when
+`NODE_ENV` is omitted. It therefore fails closed on missing or weak secrets;
+development exemptions require an explicit `NODE_ENV=development`.
+
 Production mode also runs the `db:readiness` checks against the configured
 database. It blocks on SQLite integrity errors, declared foreign-key violations,
 failed invariants, reconciliation findings, duplicate emails, or exact known

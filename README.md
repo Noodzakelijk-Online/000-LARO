@@ -113,6 +113,7 @@ Copy `.env.example` to `.env`; never commit real secrets. The template is groupe
 | Area | Important variables |
 | --- | --- |
 | Desktop server | `NODE_ENV`, `HOST`, `PORT`, `API_BODY_LIMIT`, `JWT_SECRET`, `COOKIE_SECRET` |
+| Development renderer | `VITE_LARO_API_URL` (API proxy target when it is not `http://127.0.0.1:3000`) |
 | Desktop data | `DATABASE_URL`, `LOCAL_STORAGE_DIR`, `AWS_S3_*` |
 | Standalone local scan | `LOCAL_SCAN_ROOTS` (path-delimited allowlist; desktop uses the native folder picker) |
 | Provider-backed desktop AI | `FORGE_API_URL`, `FORGE_API_KEY` |

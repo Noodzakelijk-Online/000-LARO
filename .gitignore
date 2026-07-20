@@ -57,6 +57,12 @@ temp/
 *.sqlite
 *.sqlite3
 *.db
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-wal
+*.sqlite3-shm
+*.db-wal
+*.db-shm
 # Phase 015: local evidence storage fallback (never commit uploaded files)
 laro-uploads/
 

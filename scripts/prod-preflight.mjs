@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import 'dotenv/config';
 import { readFileSync, existsSync, readdirSync } from 'fs';
 import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
@@ -7,9 +8,10 @@ import { dirname, join } from 'path';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const results = [];
 const check = (level, name, ok, detail) => results.push({ level, name, ok, detail });
-const isProd = process.env.NODE_ENV === 'production';
+const effectiveNodeEnv = process.env.NODE_ENV || 'production';
+const isProd = effectiveNodeEnv === 'production';
 
-check('INFO', 'NODE_ENV', true, `NODE_ENV=${process.env.NODE_ENV || '(unset)'}`);
+check('INFO', 'NODE_ENV', true, `NODE_ENV=${effectiveNodeEnv}${process.env.NODE_ENV ? '' : ' (default)'}`);
 const insecure = new Set(['', undefined, 'change-me', 'changeme', 'secret', 'dev', 'development', 'insecure']);
 for (const key of ['JWT_SECRET', 'COOKIE_SECRET']) {
   const value = process.env[key];

@@ -27,6 +27,7 @@ import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import ChatWidget from "./ChatWidget";
 import NotificationCenter from "./NotificationCenter";
+import { LegalAdviceNotice } from "./LegalAdviceNotice";
 
 // Main navigation items (case-centric design)
 const mainMenuItems = [
@@ -353,6 +354,7 @@ function DashboardLayoutContent({
         )}
         <main id="main-content" className="min-w-0 flex-1 bg-black p-3 sm:p-6 md:p-8">
           {children}
+          <LegalAdviceNotice />
         </main>
         {location !== "/" && <ChatWidget />}
       </SidebarInset>

@@ -14,6 +14,38 @@ afterEach(() => {
 });
 
 describe('production readiness regressions', () => {
+  it('treats direct preflight as production unless development is explicit', () => {
+    const script = join(ROOT, 'scripts/prod-preflight.mjs');
+    const missingSecrets = spawnSync(process.execPath, [script], {
+      cwd: ROOT,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        NODE_ENV: '',
+        JWT_SECRET: '',
+        COOKIE_SECRET: '',
+        DOTENV_CONFIG_PATH: join(tmpdir(), 'laro-preflight-no-env-file'),
+      },
+    });
+    expect(missingSecrets.status).toBe(1);
+    expect(missingSecrets.stdout).toContain('NODE_ENV=production (default)');
+    expect(missingSecrets.stdout).toContain('[FAIL] [BLOCKER] JWT_SECRET strong');
+    expect(missingSecrets.stdout).toContain('[FAIL] [BLOCKER] COOKIE_SECRET strong');
+
+    const strongSecrets = spawnSync(process.execPath, [script], {
+      cwd: ROOT,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        NODE_ENV: 'production',
+        JWT_SECRET: 'preflight-jwt-secret-with-32-characters',
+        COOKIE_SECRET: 'preflight-cookie-secret-with-32-characters',
+      },
+    });
+    expect(strongSecrets.status).toBe(0);
+    expect(strongSecrets.stdout).toContain('No blockers. Warnings, if any, are advisory.');
+  });
+
   it('fails closed when provider-backed AI is not configured', async () => {
     delete process.env.FORGE_API_KEY;
     vi.resetModules();
@@ -253,6 +285,12 @@ describe('production readiness regressions', () => {
     expect(database.indexOf('migrate(_db')).toBeLessThan(database.lastIndexOf('ensureSupportTicketsTable(sqlite)'));
   });
 
+  it('allows an isolated development API port instead of hardcoding the proxy target', () => {
+    const vite = readFileSync(join(ROOT, 'vite.config.ts'), 'utf8');
+    expect(vite).toContain("process.env.VITE_LARO_API_URL || 'http://127.0.0.1:3000'");
+    expect(vite.match(/target: devApiUrl/g)).toHaveLength(2);
+  });
+
   it('binds packaged Desktop to an available loopback port', () => {
     const server = readFileSync(join(ROOT, 'server/index.ts'), 'utf8');
     const main = readFileSync(join(ROOT, 'src-main/index.ts'), 'utf8');
@@ -356,7 +394,7 @@ describe('production readiness regressions', () => {
     expect(notificationCenter).toContain('@/contexts/WebSocketContext');
     expect(notificationCenter).not.toContain('@/_core/hooks/useWebSocket');
     expect(vite).toContain("'/socket.io'");
-    expect(vite.match(/target: 'http:\/\/127\.0\.0\.1:3000'/g)).toHaveLength(2);
+    expect(vite.match(/target: devApiUrl/g)).toHaveLength(2);
   });
 
   it('generates collision-resistant case identifiers', async () => {

@@ -94,6 +94,17 @@ describe('production renderer usability regressions', () => {
     expect(auth).toContain('autoComplete="one-time-code"');
   });
 
+  it('keeps the legal-assistance boundary visible throughout the authenticated workspace', () => {
+    const layout = read('src/renderer/components/DashboardLayout.tsx');
+    const notice = read('src/renderer/components/LegalAdviceNotice.tsx');
+
+    expect(layout).toContain('<LegalAdviceNotice />');
+    expect(notice).toContain('role="note"');
+    expect(notice).toContain('aria-label="Legal assistance notice"');
+    expect(notice).toContain('Legal assistance, not legal advice.');
+    expect(notice).toContain('reviewed by a qualified lawyer');
+  });
+
   it('offers local image OCR and analyzes supported evidence automatically', () => {
     const analysis = read('src/renderer/components/AutomatedDocumentAnalysis.tsx');
     const upload = read('src/renderer/components/EnhancedEvidenceUpload.tsx');
