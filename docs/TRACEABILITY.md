@@ -49,7 +49,7 @@ None — every artifact cited in the matrix exists. ✅
 | 049 | Accessibility review | Implemented | ✅ `docs/ACCESSIBILITY.md` |
 | 050 | Responsive & browser compatibility | Implemented | ✅ `docs/RESPONSIVE_COMPAT.md` |
 | 051 | Performance baseline & indexing | Implemented | ✅ `docs/PERFORMANCE.md` |
-| 053 | Backup & restore procedures | Implemented | ✅ `server/backup.ts`<br>✅ `server/backupSet.ts`<br>✅ `docs/BACKUP_RESTORE.md` |
+| 053 | Backup & restore procedures | Implemented for Electron runtime | ✅ `server/backup.ts`<br>✅ `server/backupSet.ts`<br>✅ `server/backupStorage.ts`<br>✅ `docs/BACKUP_RESTORE.md` |
 | 054 | Data reconciliation & repair | Implemented | ✅ `server/reconcile.ts`<br>✅ `docs/DATA_RECONCILIATION.md` |
 | 055 | Product analytics local-first | Implemented | ✅ `server/analytics.ts`<br>✅ `docs/ANALYTICS.md` |
 | 056 | Local operation without forced billing | Implemented | ✅ `docs/SAAS_READINESS.md` |

@@ -2,9 +2,21 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { backupDatabase, restoreDatabase, validateBackup } from "./backup";
+import {
+  assertLocalStorageUnchanged,
+  backupSetStoragePath,
+  createExternalS3Manifest,
+  createLocalStorageSnapshot,
+  installLocalStorageSnapshot,
+  isBackupStorageManifest,
+  validateBackupStorage,
+  type BackupStorageManifest,
+  type BundledLocalStorageManifest,
+} from "./backupStorage";
 
 const FORMAT = "laro-backup-set";
-const VERSION = 1;
+const VERSION = 2;
+const LEGACY_VERSION = 1;
 const SECRET_PATTERN = /^[a-f0-9]{64}$/;
 const COMPATIBILITY_CONTEXT = "LARO backup token-encryption compatibility v1";
 
@@ -33,15 +45,17 @@ type EncryptionManifestEntry =
 
 export interface BackupSetManifest {
   format: typeof FORMAT;
-  version: typeof VERSION;
+  version: typeof VERSION | typeof LEGACY_VERSION;
   createdAt: string;
   database: DatabaseManifestEntry;
   encryption: EncryptionManifestEntry;
+  storage?: BackupStorageManifest;
 }
 
 export interface CreateBackupSetOptions {
   desktopSecretsPath?: string;
   externalJwtSecret?: string;
+  localStoragePath?: string;
 }
 
 export interface ValidateBackupSetOptions {
@@ -53,16 +67,20 @@ export interface BackupSetValidation {
   reason?: string;
   manifest?: BackupSetManifest;
   tables?: string[];
+  storageCoverage?: "complete-local" | "external-s3" | "legacy-missing";
 }
 
 export interface RestoreBackupSetOptions extends ValidateBackupSetOptions {
   desktopSecretsPath?: string;
+  localStoragePath?: string;
+  allowMissingStorage?: boolean;
 }
 
 export interface RestoreBackupSetResult {
   restored: true;
   backupOfPreviousDatabase: string | null;
   backupOfPreviousSecrets: string | null;
+  backupOfPreviousStorage: string | null;
 }
 
 export function backupSetManifestPath(databaseBackupPath: string): string {
@@ -123,7 +141,7 @@ function parseManifest(manifestPath: string): BackupSetManifest {
   const encryption = candidate.encryption as Record<string, unknown> | undefined;
   const baseValid =
     candidate.format === FORMAT &&
-    candidate.version === VERSION &&
+    (candidate.version === VERSION || candidate.version === LEGACY_VERSION) &&
     typeof candidate.createdAt === "string" &&
     !Number.isNaN(Date.parse(candidate.createdAt)) &&
     database &&
@@ -141,6 +159,9 @@ function parseManifest(manifestPath: string): BackupSetManifest {
     }
   } else if (encryption.mode !== "external-environment") {
     throw new Error("Backup-set encryption mode is unsupported.");
+  }
+  if (candidate.version === VERSION && !isBackupStorageManifest(candidate.storage)) {
+    throw new Error("Backup-set storage metadata is invalid.");
   }
   return parsed as BackupSetManifest;
 }
@@ -174,9 +195,22 @@ function currentDatabasePath(): string {
   return path.resolve(process.env.DATABASE_URL || "laro.sqlite");
 }
 
+function resolveLocalStoragePath(
+  databasePath: string,
+  options: { localStoragePath?: string },
+  desktopProfile: boolean,
+): string {
+  if (options.localStoragePath) return path.resolve(options.localStoragePath);
+  if (process.env.LOCAL_STORAGE_DIR) return path.resolve(process.env.LOCAL_STORAGE_DIR);
+  if (desktopProfile) return path.join(path.dirname(path.resolve(databasePath)), "uploads");
+  const sibling = path.join(path.dirname(path.resolve(databasePath)), "uploads");
+  if (fs.existsSync(sibling)) return sibling;
+  return path.join(process.cwd(), "laro-uploads");
+}
+
 function removeIfPresent(filePath: string): void {
   try {
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    if (fs.existsSync(filePath)) fs.rmSync(filePath, { recursive: true, force: true });
   } catch {
     // Preserve the original failure; partial paths are named in its message.
   }
@@ -185,12 +219,31 @@ function removeIfPresent(filePath: string): void {
 export async function createBackupSet(
   destinationPath: string,
   options: CreateBackupSetOptions = {},
-): Promise<{ databasePath: string; manifestPath: string; secretsPath: string | null; bytes: number }> {
+): Promise<{
+  databasePath: string;
+  manifestPath: string;
+  secretsPath: string | null;
+  storagePath: string | null;
+  bytes: number;
+}> {
   const destination = path.resolve(destinationPath);
   const manifestPath = backupSetManifestPath(destination);
   const secretsPath = backupSetSecretsPath(destination);
-  const secretSource = resolveSecretSource(currentDatabasePath(), options);
-  const finalPaths = [destination, manifestPath, secretsPath];
+  const storagePath = backupSetStoragePath(destination);
+  const databasePath = currentDatabasePath();
+  const secretSource = resolveSecretSource(databasePath, options);
+  const externalBucket = options.localStoragePath ? "" : (process.env.AWS_S3_BUCKET || "").trim();
+  const localStorageSource = externalBucket
+    ? null
+    : resolveLocalStoragePath(databasePath, options, secretSource.mode === "desktop");
+  if (
+    localStorageSource &&
+    (destination === path.resolve(localStorageSource) ||
+      destination.startsWith(path.resolve(localStorageSource) + path.sep))
+  ) {
+    throw new Error("Refusing to create a backup set inside the live local evidence directory.");
+  }
+  const finalPaths = [destination, manifestPath, secretsPath, storagePath];
   const existing = finalPaths.find((filePath) => fs.existsSync(filePath));
   if (existing) throw new Error(`Refusing to overwrite an existing backup-set file: ${existing}`);
 
@@ -199,15 +252,50 @@ export async function createBackupSet(
   const temporaryDatabase = `${destination}.${nonce}.tmp`;
   const temporaryManifest = `${manifestPath}.${nonce}.tmp`;
   const temporarySecrets = `${secretsPath}.${nonce}.tmp`;
+  const temporaryStorage = `${storagePath}.${nonce}.tmp`;
   const published: string[] = [];
 
   try {
+    let storage: BackupStorageManifest;
+    let localStorageManifest: BundledLocalStorageManifest | null = null;
+    if (localStorageSource) {
+      localStorageManifest = createLocalStorageSnapshot(
+        localStorageSource,
+        temporaryStorage,
+        path.basename(storagePath),
+      );
+      storage = localStorageManifest;
+    }
+
     const backup = await backupDatabase(temporaryDatabase);
     const databaseEntry: DatabaseManifestEntry = {
       file: path.basename(destination),
       bytes: backup.bytes,
       sha256: sha256(temporaryDatabase),
     };
+
+    if (localStorageSource) {
+      if (!localStorageManifest) {
+        throw new Error("Local evidence snapshot did not produce a local-storage manifest.");
+      }
+      assertLocalStorageUnchanged(localStorageSource, localStorageManifest.files);
+      const storageValidation = validateBackupStorage(
+        temporaryDatabase,
+        temporaryStorage,
+        localStorageManifest,
+        path.basename(storagePath),
+      );
+      if (!storageValidation.valid) {
+        throw new Error(`Local evidence backup verification failed: ${storageValidation.reason}`);
+      }
+    } else {
+      storage = createExternalS3Manifest(
+        temporaryDatabase,
+        externalBucket,
+        process.env.AWS_S3_REGION || "eu-west-1",
+      );
+    }
+
     let encryption: EncryptionManifestEntry;
 
     if (secretSource.mode === "desktop") {
@@ -233,6 +321,7 @@ export async function createBackupSet(
       createdAt: new Date().toISOString(),
       database: databaseEntry,
       encryption,
+      storage: storage!,
     };
     fs.writeFileSync(temporaryManifest, JSON.stringify(manifest, null, 2), {
       encoding: "utf8",
@@ -240,6 +329,10 @@ export async function createBackupSet(
       mode: 0o600,
     });
 
+    if (storage!.mode === "bundled-local") {
+      fs.renameSync(temporaryStorage, storagePath);
+      published.push(storagePath);
+    }
     if (secretSource.mode === "desktop") {
       fs.renameSync(temporarySecrets, secretsPath);
       published.push(secretsPath);
@@ -253,10 +346,17 @@ export async function createBackupSet(
       databasePath: destination,
       manifestPath,
       secretsPath: secretSource.mode === "desktop" ? secretsPath : null,
+      storagePath: storage!.mode === "bundled-local" ? storagePath : null,
       bytes: backup.bytes,
     };
   } catch (error) {
-    for (const filePath of [temporaryDatabase, temporaryManifest, temporarySecrets, ...published]) {
+    for (const filePath of [
+      temporaryDatabase,
+      temporaryManifest,
+      temporarySecrets,
+      temporaryStorage,
+      ...published,
+    ]) {
       removeIfPresent(filePath);
     }
     throw error;
@@ -308,7 +408,29 @@ export function validateBackupSet(
       }
     }
 
-    return { valid: true, manifest, tables: databaseValidation.tables };
+    if (manifest.version === LEGACY_VERSION) {
+      return {
+        valid: true,
+        manifest,
+        tables: databaseValidation.tables,
+        storageCoverage: "legacy-missing",
+      };
+    }
+    const storageValidation = validateBackupStorage(
+      databasePath,
+      backupSetStoragePath(databasePath),
+      manifest.storage!,
+    );
+    if (!storageValidation.valid) {
+      return { valid: false, reason: storageValidation.reason };
+    }
+
+    return {
+      valid: true,
+      manifest,
+      tables: databaseValidation.tables,
+      storageCoverage: manifest.storage!.mode === "bundled-local" ? "complete-local" : "external-s3",
+    };
   } catch (error) {
     return { valid: false, reason: error instanceof Error ? error.message : String(error) };
   }
@@ -317,6 +439,7 @@ export function validateBackupSet(
 function installBundledSecrets(
   bundledSecretsPath: string,
   targetSecretsPath: string,
+  expectedSha256: string,
 ): { previous: string | null; rollback: () => void } {
   const source = path.resolve(bundledSecretsPath);
   const target = path.resolve(targetSecretsPath);
@@ -329,6 +452,10 @@ function installBundledSecrets(
   fs.copyFileSync(source, staged, fs.constants.COPYFILE_EXCL);
   fs.chmodSync(staged, 0o600);
   parseDesktopSecretStore(staged);
+  if (sha256(staged) !== expectedSha256) {
+    removeIfPresent(staged);
+    throw new Error("Staged desktop secrets do not match the backup-set manifest.");
+  }
 
   const hadTarget = fs.existsSync(target);
   try {
@@ -362,9 +489,16 @@ export function restoreBackupSet(
   if (!validation.valid || !validation.manifest) {
     throw new Error(`Refusing to restore backup set: ${validation.reason || "validation failed"}`);
   }
+  if (validation.manifest.version === LEGACY_VERSION && !options.allowMissingStorage) {
+    throw new Error(
+      "Refusing to restore a version-1 backup set because local evidence coverage is not proven. " +
+        "Restore the matching storage separately or use an explicit missing-storage override.",
+    );
+  }
 
+  const liveDatabasePath = currentDatabasePath();
   const targetSecretsPath = options.desktopSecretsPath || path.join(
-    path.dirname(currentDatabasePath()),
+    path.dirname(liveDatabasePath),
     "laro-secrets.json",
   );
   const activeEnvironmentSecret = options.externalJwtSecret || process.env.JWT_SECRET;
@@ -389,20 +523,70 @@ export function restoreBackupSet(
     }
   }
 
-  let secretInstall: { previous: string | null; rollback: () => void } | null = null;
-  if (validation.manifest.encryption.mode === "bundled-desktop-secret") {
-    secretInstall = installBundledSecrets(backupSetSecretsPath(databasePath), targetSecretsPath);
+  if (validation.manifest.storage?.mode === "external-s3") {
+    const activeBucket = (process.env.AWS_S3_BUCKET || "").trim();
+    const activeRegion = process.env.AWS_S3_REGION || "eu-west-1";
+    if (
+      activeBucket !== validation.manifest.storage.bucket ||
+      activeRegion !== validation.manifest.storage.region
+    ) {
+      throw new Error(
+        "Refusing to restore backup set while the active S3 bucket or region differs from its manifest.",
+      );
+    }
   }
 
+  let secretInstall: { previous: string | null; rollback: () => void } | null = null;
+  let storageInstall: { previous: string | null; rollback: () => void } | null = null;
+
   try {
-    const restored = restoreDatabase(databasePath);
+    if (validation.manifest.encryption.mode === "bundled-desktop-secret") {
+      secretInstall = installBundledSecrets(
+        backupSetSecretsPath(databasePath),
+        targetSecretsPath,
+        validation.manifest.encryption.sha256,
+      );
+    }
+    if (validation.manifest.storage?.mode === "bundled-local") {
+      const targetStoragePath = resolveLocalStoragePath(
+        liveDatabasePath,
+        options,
+        validation.manifest.encryption.mode === "bundled-desktop-secret",
+      );
+      storageInstall = installLocalStorageSnapshot(
+        backupSetStoragePath(databasePath),
+        targetStoragePath,
+        validation.manifest.storage.files,
+      );
+    }
+    const restored = restoreDatabase(databasePath, {
+      bytes: validation.manifest.database.bytes,
+      sha256: validation.manifest.database.sha256,
+    });
     return {
       restored: true,
       backupOfPreviousDatabase: restored.backupOfPrevious,
       backupOfPreviousSecrets: secretInstall?.previous || null,
+      backupOfPreviousStorage: storageInstall?.previous || null,
     };
   } catch (error) {
-    secretInstall?.rollback();
+    const rollbackErrors: unknown[] = [];
+    try {
+      storageInstall?.rollback();
+    } catch (rollbackError) {
+      rollbackErrors.push(rollbackError);
+    }
+    try {
+      secretInstall?.rollback();
+    } catch (rollbackError) {
+      rollbackErrors.push(rollbackError);
+    }
+    if (rollbackErrors.length > 0) {
+      throw new AggregateError(
+        [error, ...rollbackErrors],
+        "Backup-set restore failed and one or more previous paths could not be reinstated.",
+      );
+    }
     throw error;
   }
 }

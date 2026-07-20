@@ -1,6 +1,6 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
-import { join } from 'path';
+import { dirname, join } from 'path';
 
 const workDir = mkdtempSync(join(tmpdir(), 'laro-recovery-drill-'));
 process.env.NODE_ENV = 'test';
@@ -19,7 +19,13 @@ async function main() {
     jwtSecret: 'a'.repeat(64),
     cookieSecret: 'b'.repeat(64),
   };
+  const storagePath = join(workDir, 'uploads');
+  const storageKey = 'evidence/recovery/source.txt';
+  const evidencePath = join(storagePath, ...storageKey.split('/'));
+  const originalEvidence = 'recovery drill evidence bytes';
   writeFileSync(secretsPath, JSON.stringify(originalSecrets, null, 2), { mode: 0o600 });
+  mkdirSync(dirname(evidencePath), { recursive: true });
+  writeFileSync(evidencePath, originalEvidence, { encoding: 'utf8', flag: 'wx' });
   await db.insert(schema.users).values({
     id: marker,
     email: `${marker.toLowerCase()}@example.invalid`,
@@ -27,6 +33,14 @@ async function main() {
     role: 'user',
     createdAt: new Date(),
     updatedAt: new Date(),
+  });
+  await db.insert(schema.evidenceFiles).values({
+    id: `${marker}-EVIDENCE`,
+    userId: marker,
+    fileName: 'source.txt',
+    fileType: 'text/plain',
+    fileSize: String(Buffer.byteLength(originalEvidence)),
+    storageKey,
   });
 
   const backupPath = join(workDir, 'verified-backup.sqlite');
@@ -36,6 +50,7 @@ async function main() {
     jwtSecret: 'c'.repeat(64),
     cookieSecret: 'd'.repeat(64),
   }, null, 2), { mode: 0o600 });
+  writeFileSync(evidencePath, 'changed evidence bytes', 'utf8');
 
   const restored = backup.restoreBackupSet(backupPath, { desktopSecretsPath: secretsPath });
   const reopened = await getDb();
@@ -48,9 +63,15 @@ async function main() {
   if (readFileSync(secretsPath, 'utf8') !== JSON.stringify(originalSecrets, null, 2)) {
     throw new Error('Round-trip restore did not recover the matching desktop secrets');
   }
+  if (readFileSync(evidencePath, 'utf8') !== originalEvidence) {
+    throw new Error('Round-trip restore did not recover managed local evidence');
+  }
+  if (!restored.backupOfPreviousStorage || !existsSync(restored.backupOfPreviousStorage)) {
+    throw new Error('Restore did not preserve the previous local evidence directory');
+  }
 
   console.log(
-    '[Recovery drill] Backup set validated; database and desktop secrets restored; previous state preserved.',
+    '[Recovery drill] Database, desktop secrets, and local evidence restored; previous state preserved.',
   );
   closeDatabaseForMaintenance();
 }

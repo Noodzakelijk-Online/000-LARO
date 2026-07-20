@@ -7,7 +7,9 @@ describe('database maintenance CLI arguments', () => {
       commandOrDestination: 'C:\\Backups\\laro.sqlite',
       file: undefined,
       desktopSecretsPath: undefined,
+      localStoragePath: undefined,
       allowLegacy: false,
+      allowMissingStorage: false,
     });
   });
 
@@ -29,12 +31,30 @@ describe('database maintenance CLI arguments', () => {
       commandOrDestination: '--validate',
       file: 'backup.sqlite',
       desktopSecretsPath: 'C:\\Profile\\laro-secrets.json',
+      localStoragePath: undefined,
       allowLegacy: false,
+      allowMissingStorage: false,
+    });
+  });
+
+  it('parses local evidence and version-1 recovery overrides explicitly', () => {
+    expect(parseBackupArguments([
+      '--restore',
+      'backup.sqlite',
+      '--local-storage',
+      'D:\\LARO\\uploads',
+      '--allow-missing-storage',
+    ])).toMatchObject({
+      commandOrDestination: '--restore',
+      file: 'backup.sqlite',
+      localStoragePath: 'D:\\LARO\\uploads',
+      allowMissingStorage: true,
     });
   });
 
   it('rejects missing values and unknown maintenance flags', () => {
     expect(() => parseBackupArguments(['--desktop-secrets'])).toThrow('requires a file path');
+    expect(() => parseBackupArguments(['--local-storage'])).toThrow('requires a directory path');
     expect(() => parseBackupArguments(['--unknown'])).toThrow('Unknown database-maintenance option');
   });
 });

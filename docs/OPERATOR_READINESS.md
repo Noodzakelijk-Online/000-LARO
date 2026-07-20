@@ -40,8 +40,9 @@ counts only and does not print case or user data.
       product feature explicitly introduces a narrowly scoped exception.
 - [ ] `laro-secrets.json` is readable and durable; startup never falls back to
       temporary keys. The Windows workflow verifies restart preservation, while
-      `db:backup`, `db:validate`, and the recovery drill prove a complete,
-      manifest-bound database/key backup set.
+      `db:backup`, `db:validate`, and the recovery drill prove a manifest-bound
+      database/key/local-evidence set. S3 objects and Flask state require their
+      documented external or separate recovery controls.
 - [ ] The scanner requires a selected case and native-picker-approved folder,
       exposes a review list, and persists a test file with matching SHA-256.
 - [ ] Demo data is absent from the target database.

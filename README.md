@@ -260,7 +260,7 @@ only.
 The package includes only the two matcher datasets from `assets/`; the legacy
 development service, Python cache files, and local configuration are excluded.
 See [Backup and Restore](docs/BACKUP_RESTORE.md) for recovery-ready backup sets
-that bind SQLite state to the key required to decrypt persisted provider tokens.
+that bind SQLite state to its token-encryption key and managed evidence bytes.
 
 CI runs Node and Python gates for pushes and pull requests to `main`. The release
 workflows target Node 22. Current Windows builds are unsigned artifacts; no Store
