@@ -116,4 +116,14 @@ describe('production renderer usability regressions', () => {
     expect(upload).toContain('analyzeEvidence.mutateAsync');
     expect(upload).toContain('status: "analyzing"');
   });
+
+  it('keeps KVK lookup aligned with the supported open-data contract', () => {
+    const publicRecords = read('src/renderer/components/PublicRecordsPanel.tsx');
+
+    expect(publicRecords).toContain('inputMode="numeric"');
+    expect(publicRecords).toContain('pattern="[0-9]{8}"');
+    expect(publicRecords).toContain('searchKvk.length !== 8');
+    expect(publicRecords).not.toContain('View LinkedIn Profile');
+    expect(publicRecords).not.toContain('htmlFor="company-name"');
+  });
 });

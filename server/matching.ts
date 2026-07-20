@@ -1,5 +1,3 @@
-// @ts-nocheck
-
 // matching.ts
 import { getAllLawyers, getCaseById } from "./db";
 import { getLawyerRating } from "./routers/lawyerRating";
@@ -378,6 +376,9 @@ export async function findMatchingLawyers(
   const matchedLawyers: MatchedLawyer[] = [];
 
   for (const lawyer of allLawyers) {
+    if (!lawyer.name?.trim()) {
+      continue;
+    }
     const lawyerLat = lawyer.latitude ? parseFloat(lawyer.latitude) : null;
     const lawyerLon = lawyer.longitude ? parseFloat(lawyer.longitude) : null;
 

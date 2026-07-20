@@ -1,5 +1,3 @@
-// @ts-nocheck
-
 import { z } from 'zod';
 import { eq, and, gte, desc } from 'drizzle-orm';
 import { getDb } from '../db';
@@ -7,6 +5,16 @@ import { publicProcedure, router } from '../_core/trpc';
 import { lawyerRatings, lawyerInteractions, ratingCalculationLogs, lawyers } from '../schema';
 import { nanoid } from 'nanoid';
 import { invokeLLM } from '../llm';
+
+const responseAnalysisSchema = z.object({
+  completenessScore: z.number().finite(),
+  professionalismScore: z.number().finite(),
+  helpfulnessScore: z.number().finite(),
+  clarityScore: z.number().finite(),
+  reasoning: z.string(),
+  keyPoints: z.array(z.string()),
+  concerns: z.array(z.string()),
+});
 
 /**
  * AI-Powered Lawyer Rating Service
@@ -173,7 +181,14 @@ Provide your analysis in JSON format:
     }
   });
 
-  const analysis = JSON.parse(response.choices[0].message.content || '{}');
+  const content = response.choices[0]?.message.content;
+  const rawContent = typeof content === 'string'
+    ? content
+    : (content || [])
+        .filter((part): part is Extract<(typeof content)[number], { type: 'text' }> => part.type === 'text')
+        .map((part) => part.text)
+        .join('');
+  const analysis = responseAnalysisSchema.parse(JSON.parse(rawContent || '{}'));
 
   return {
     completenessScore: Math.min(100, Math.max(0, analysis.completenessScore)),

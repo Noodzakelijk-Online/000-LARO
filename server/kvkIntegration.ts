@@ -1,5 +1,3 @@
-// @ts-nocheck
-
 /**
  * KvK (Kamer van Koophandel - Dutch Chamber of Commerce) Integration Service
  * 
@@ -17,12 +15,11 @@
  */
 
 interface KvKCompanyData {
-  kvkNummer: string;
   datumAanvang: string; // Start date (YYYYMMDD format, may contain zeros for unknown parts)
   actief: "J" | "N"; // J = Yes (active), N = No (inactive)
   insolventieCode?: "FAIL" | "SSAN" | "SURS"; // FAIL = Bankruptcy, SSAN = Debt restructuring, SURS = Suspension of Payments
   rechtsvormCode: "BV" | "NV"; // BV = Private company, NV = Public limited company
-  postcodeRegio: string; // First two digits of postal code
+  postcodeRegio: string | number; // First two digits of postal code
   activiteiten: Array<{
     sbiCode: string; // SBI activity code (up to 6 digits)
     soortActiviteit: "Hoofdactiviteit" | "Nevenactiviteit"; // Main or secondary activity
@@ -34,7 +31,6 @@ export interface KvKLookupResult {
   success: boolean;
   data?: {
     kvkNumber: string;
-    companyName?: string; // Not available in open dataset, must be enriched from other sources
     startDate: string;
     isActive: boolean;
     insolvencyStatus?: {
@@ -48,14 +44,12 @@ export interface KvKLookupResult {
       description?: string; // Will be enriched from SBI code lookup
       type: "main" | "secondary";
     }>;
-    // Enriched data from other sources
-    linkedInUrl?: string;
-    website?: string;
-    employeeCount?: number;
   };
   error?: string;
   legalSignificance?: string; // How this data can be used as evidence
 }
+
+type KvKLookupData = NonNullable<KvKLookupResult["data"]>;
 
 class KvKIntegrationService {
   private readonly BASE_URL = "https://opendata.kvk.nl/api/v1/hvds/basisbedrijfsgegevens";
@@ -86,7 +80,7 @@ class KvKIntegrationService {
       }
 
       // Call KvK Open Dataset API
-      const response = await fetch(`${this.BASE_URL}/kvknummer?kvkNummer=${cleanKvK}`, {
+      const response = await fetch(`${this.BASE_URL}/kvknummer/${cleanKvK}`, {
         method: "GET",
         headers: {
           Accept: "application/json",
@@ -106,7 +100,7 @@ class KvKIntegrationService {
       const data: KvKCompanyData = await response.json();
 
       // Parse insolvency status
-      let insolvencyStatus: KvKLookupResult["data"]["insolvencyStatus"] | undefined;
+      let insolvencyStatus: KvKLookupData["insolvencyStatus"];
       if (data.insolventieCode) {
         const typeMap = {
           FAIL: "bankruptcy" as const,
@@ -133,12 +127,12 @@ class KvKIntegrationService {
       return {
         success: true,
         data: {
-          kvkNumber: data.kvkNummer,
+          kvkNumber: cleanKvK,
           startDate: this.formatKvKDate(data.datumAanvang),
           isActive: data.actief === "J",
           insolvencyStatus,
           legalForm: data.rechtsvormCode,
-          postalCodeRegion: data.postcodeRegio,
+          postalCodeRegion: String(data.postcodeRegio).padStart(2, "0"),
           activities,
         },
         legalSignificance,
@@ -150,35 +144,6 @@ class KvKIntegrationService {
         error: error instanceof Error ? error.message : "Unknown error occurred",
       };
     }
-  }
-
-  /**
-   * Enrich KvK data with LinkedIn information
-   */
-  async enrichWithLinkedIn(kvkNumber: string, companyName: string): Promise<Partial<KvKLookupResult["data"]>> {
-    try {
-      // Use LinkedIn Data API to get additional company information
-      const { callDataApi } = await import("./dataApi");
-      
-      // Search for company on LinkedIn
-      const linkedInData = await callDataApi("LinkedIn/get_company_details", {
-        query: { username: companyName.toLowerCase().replace(/\s+/g, "-") },
-      });
-
-      if (linkedInData && linkedInData.success) {
-        const data = linkedInData.data;
-        return {
-          companyName: data.name,
-          linkedInUrl: data.linkedinUrl,
-          website: data.website,
-          employeeCount: data.staffCount,
-        };
-      }
-    } catch (error) {
-      console.error("[KvK Integration] LinkedIn enrichment error:", error);
-    }
-
-    return {};
   }
 
   /**

@@ -376,25 +376,13 @@ export const gapAnalysisRouter = router({
     .input(
       z.object({
         kvkNumber: z.string().optional(),
-        companyName: z.string().optional(),
         caseText: z.string().optional(), // Extract KvK numbers from case description
       })
     )
     .mutation(async ({ input }) => {
       // If KvK number provided, look it up directly
       if (input.kvkNumber) {
-        const result = await kvkIntegrationService.lookupByKvKNumber(input.kvkNumber);
-        
-        // If company name provided, enrich with LinkedIn data
-        if (result.success && input.companyName && result.data) {
-          const enriched = await kvkIntegrationService.enrichWithLinkedIn(
-            input.kvkNumber,
-            input.companyName
-          );
-          result.data = { ...result.data, ...enriched };
-        }
-        
-        return result;
+        return await kvkIntegrationService.lookupByKvKNumber(input.kvkNumber);
       }
 
       // If case text provided, extract KvK numbers
@@ -409,18 +397,7 @@ export const gapAnalysisRouter = router({
         }
 
         // Look up first KvK number found
-        const result = await kvkIntegrationService.lookupByKvKNumber(kvkNumbers[0]);
-        
-        // Enrich with LinkedIn if company name provided
-        if (result.success && input.companyName && result.data) {
-          const enriched = await kvkIntegrationService.enrichWithLinkedIn(
-            kvkNumbers[0],
-            input.companyName
-          );
-          result.data = { ...result.data, ...enriched };
-        }
-        
-        return result;
+        return await kvkIntegrationService.lookupByKvKNumber(kvkNumbers[0]);
       }
 
       return {

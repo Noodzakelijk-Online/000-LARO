@@ -160,10 +160,10 @@ The current production-readiness candidate was verified locally on 2026-07-20.
 GitHub Actions repeats the Node checks on the supported Node 22 toolchain:
 
 - `npm run gate`: all blocking gates passed.
-- Server, Electron main-process, and shipped renderer TypeScript checks passed; ESLint passed.
+- Server, Electron main-process, and shipped renderer TypeScript checks passed; no shipped runtime module disables type checking; ESLint passed.
 - Traceability reported 116 rows, 93 cited, and 0 broken references.
 - Runtime no-excuses scan reported 0 suspect findings; account safety reported 0 high-severity findings.
-- Vitest reported 42 passing files and 271 passing tests, including controlled
+- Vitest reported 44 passing files and 275 passing tests, including controlled
   NOvA parsing/filter, unknown-metric scoring, and review-gated
   media/organization discovery, tenant isolation, case-draft persistence, and
   target-database readiness tests, with no skipped or todo tests.
@@ -191,20 +191,20 @@ desktop server to that registered OAuth callback port instead.
   checks also remain covered.
 - Packaged Electron scanner QA passed signup, shared-session authorization, empty-state rendering, disabled unsafe scan state, Settings navigation, and clean renderer console checks.
 - A packaged launch from a directory containing hostile development `.env` values still reported production mode, database readiness, and a random `127.0.0.1` port.
-- The current unsigned portable executable is 151,689,956 bytes with SHA-256
-  `ce8baac8729583de42f3ff08cab1ee9ce645505288650ebb3505b83b3a3e8259`.
+- The current unsigned portable executable is 151,696,207 bytes with SHA-256
+  `2e4056b0d1ed636dda62c3a10b3bdc6349e7bc1ec4191f07c71f93a508000f49`.
   Windows reports `NotSigned`, as intended. An isolated-profile launch applied
   all six migrations, installed 228 database relationship guards, served the
   renderer, and returned healthy production status on automatically selected
-  loopback port 57690. Packaged QA also verified signup,
+  loopback port 61919. Packaged QA also verified signup,
   Google evidence controls, truthful Settings exports, responsive layout, and a
   clean browser console.
-- PR #25 merged after the required Node and Python branch checks. Protected-main
-  CI run `29710137158` passed; Windows workflow `29710137156` passed the gate,
+- PR #26 merged after the required Node and Python branch checks. Its protected-main
+  baseline CI run `29711247681` passed; Windows workflow `29711247694` passed the gate,
   build, Electron ABI check, package, checksum, and upload stages.
 - The protected-main `LARO-Desktop-Windows` workflow artifact was uploaded with
   SHA-256 digest
-  `6b06388a747b08aacac7ce3cf30ea93ead6a694935129928eb60402e5ff05a21`.
+  `0ae183371e557fc775950f770646a330615bfb2b906ae874d71213207bfca061`.
 
 Run the same checks locally:
 
