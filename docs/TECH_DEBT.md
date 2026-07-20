@@ -25,6 +25,7 @@ Updated: 2026-07-20
 | D19 | Retention was manual-only and accepted unsafe environment values | - | Resolved; bounded configuration fails startup, and an idempotent observable sweep runs after startup and daily |
 | D20 | Legacy evidence scoring UI was connected to lawyer matching and the export view exposed inert buttons | - | Resolved with dedicated owner-scoped scoring/export routers and integration coverage; see `LEGACY_DASHBOARD_PORT_AUDIT.md` |
 | D21 | Multiple desktop processes could share one SQLite profile and run duplicate background jobs | - | Resolved with an Electron single-instance lock, tested restore/show/focus handoff, and a packaged two-launch profile probe in the Windows release workflow |
+| D22 | Electron sessions had no explicit browser-permission policy | - | Resolved with deny-by-default check/request handlers installed before any window and covered by behavioral/security tests |
 
 D10 is operationally contained without rewriting installed databases. A native
 foreign-key conversion remains migration work, not a release blocker while the

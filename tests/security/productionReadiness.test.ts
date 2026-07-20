@@ -346,6 +346,19 @@ describe('production readiness regressions', () => {
     expect(readiness).toContain('[result.stdout, result.stderr]');
   });
 
+  it('denies unneeded Electron browser permissions before creating windows', () => {
+    const main = readFileSync(join(ROOT, 'src-main/index.ts'), 'utf8');
+    const permissions = readFileSync(join(ROOT, 'src-main/sessionPermissions.ts'), 'utf8');
+    const policyInstall = main.indexOf('installDenyByDefaultPermissions(session.defaultSession)');
+    const windowCreation = main.indexOf('await createMainWindow()');
+
+    expect(policyInstall).toBeGreaterThan(-1);
+    expect(windowCreation).toBeGreaterThan(policyInstall);
+    expect(permissions).toContain('setPermissionCheckHandler(() => false)');
+    expect(permissions).toContain('setPermissionRequestHandler');
+    expect(permissions).toContain('callback(false)');
+  });
+
   it('wires case intake draft persistence into the mounted creation flow', () => {
     const wizard = readFileSync(join(ROOT, 'src/renderer/components/CaseCreationWizard.tsx'), 'utf8');
     const cases = readFileSync(join(ROOT, 'src/renderer/components/Cases.tsx'), 'utf8');
