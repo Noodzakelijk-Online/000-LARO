@@ -26,7 +26,8 @@ lawyer match replaces review by a qualified lawyer.
   observations without literal source support are rejected.
 - Timeline events retain an owning evidence identifier and a direct source-open
   action.
-- Export packages include a provenance manifest and evidence metadata.
+- Export packages include a provenance manifest, redacted evidence metadata,
+  versioned analyses, and available managed source files.
 
 ## External Actions
 
@@ -46,8 +47,11 @@ lawyer match replaces review by a qualified lawyer.
   as hashes where the legacy Flask runtime requires them.
 - Account export and erasure remove owned relational records and managed storage
   objects; storage deletion failure aborts metadata deletion.
-- Retention tooling purges eligible audit history and does not silently delete
-  business evidence.
+- Account exports omit credential fields across every owner table; optional
+  privacy preferences persist per account and participate in export and erasure.
+- Bounded retention configuration fails startup when unsafe. The observable
+  sweep catches up after startup, runs daily, purges eligible audit history, and
+  never deletes business evidence.
 
 ## Operational Acceptance
 

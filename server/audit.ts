@@ -90,6 +90,10 @@ export const AUDIT_ACTIONS = {
   // Email actions
   EMAIL_SENT: "email.sent",
   EMAIL_RESPONSE_RECEIVED: "email.response_received",
+
+  // Evidence actions
+  EVIDENCE_EXPORTED: "evidence.exported",
+  EVIDENCE_SCORED: "evidence.scored",
   
   // Outreach actions
   OUTREACH_INITIATED: "outreach.initiated",

@@ -16,6 +16,7 @@ import EvidenceSummaryDashboard from "@/components/EvidenceSummaryDashboard";
 import EvidenceTimeline from "@/components/EvidenceTimeline";
 import { EvidenceGapAnalysisDashboard } from "@/components/EvidenceGapAnalysisDashboard";
 import RelevanceScoringDashboard from "@/components/RelevanceScoringDashboard";
+import EvidenceExportUI from "@/components/EvidenceExportUI";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
@@ -34,9 +35,10 @@ export default function Evidence() {
     { enabled: true }
   );
   const evidenceItems = (filesData as any[]) ?? [];
+  const selectedCase = cases.find((c: any) => c.id === selectedCaseId);
   const caseLabel =
-    cases.find((c: any) => c.id === selectedCaseId)?.clientName ??
-    cases.find((c: any) => c.id === selectedCaseId)?.caseType ??
+    selectedCase?.clientName ??
+    selectedCase?.caseType ??
     "Selected case";
 
   const stats = useMemo(() => {
@@ -313,43 +315,25 @@ export default function Evidence() {
             )}
 
             {activeView === "export" && (
-              <Card className="border-border/50 bg-card/50">
-                <CardHeader>
-                  <CardTitle>Export Evidence</CardTitle>
-                  <CardDescription>Choose a format for professional output</CardDescription>
-                </CardHeader>
-                <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <Card className="border-border/50 bg-background/40">
-                    <CardContent className="p-4 space-y-2">
-                      <p className="font-semibold">PDF Report</p>
-                      <p className="text-sm text-muted-foreground">Summary and detailed evidence list.</p>
-                      <Button size="sm" className="w-full">Export PDF</Button>
-                    </CardContent>
-                  </Card>
-                  <Card className="border-border/50 bg-background/40">
-                    <CardContent className="p-4 space-y-2">
-                      <p className="font-semibold">CSV Spreadsheet</p>
-                      <p className="text-sm text-muted-foreground">Tabular evidence data for analysis.</p>
-                      <Button size="sm" className="w-full">Export CSV</Button>
-                    </CardContent>
-                  </Card>
-                  <Card className="border-border/50 bg-background/40">
-                    <CardContent className="p-4 space-y-2">
-                      <p className="font-semibold">ZIP Archive</p>
-                      <p className="text-sm text-muted-foreground">Files plus metadata in one package.</p>
-                      <Button size="sm" className="w-full">Export ZIP</Button>
-                    </CardContent>
-                  </Card>
-                </CardContent>
-              </Card>
+              selectedCaseId ? (
+                <EvidenceExportUI caseId={selectedCaseId} />
+              ) : (
+                <Card>
+                  <CardContent className="p-12 text-center">
+                    <Download className="w-12 h-12 mx-auto mb-4 text-muted-foreground opacity-60" />
+                    <p className="text-lg font-semibold">Select a case above</p>
+                    <p className="text-muted-foreground mt-2">Exports are always scoped to one case.</p>
+                  </CardContent>
+                </Card>
+              )
             )}
 
             {activeView === "scoring" && (
               selectedCaseId ? (
                 <RelevanceScoringDashboard
                   caseId={selectedCaseId}
-                  caseDescription={""}
-                  legalArea={""}
+                  caseDescription={selectedCase?.caseSummary ?? ""}
+                  legalArea={selectedCase?.caseType ?? selectedCase?.legalAreas ?? ""}
                   keyIssues={[]}
                 />
               ) : (

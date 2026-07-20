@@ -31,6 +31,8 @@ The Electron main process starts the Express/tRPC server and React renderer toge
   inside an operator-configured `LOCAL_SCAN_ROOTS` allowlist.
 - Store actual scanner bytes under the owned case with SHA-256 provenance; scanner credentials expire after 15 minutes and cannot call other protected APIs.
 - Persist Gmail messages, attachments, local files, and Drive files under the same evidence contract; Google-native documents are exported to analyzable PDF while retaining their source identity.
+- Score case evidence against persisted case context and source-linked document analyses, with the score, matched terms, method, and reasoning retained in evidence metadata.
+- Export a case-scoped CSV index or ZIP evidence package containing provenance metadata, analyses, and every available managed source document.
 
 ### Document intelligence and Papertrail
 
@@ -151,6 +153,8 @@ The Flask password-login path stores users and hashed bearer sessions in the ign
 - A failed or missing email provider does not produce a false `Sent` state.
 - Bundle approval is tied to the exact persisted case snapshot. Later evidence, analysis, outreach, draft, or case changes invalidate that approval.
 - Bundle manifests include SHA-256 digests and omit credential-shaped fields and machine-local paths from structured exports.
+- GDPR exports omit password, reset-token, OAuth-token, API-key, secret, authorization, and cookie fields across every owner table. Optional privacy preferences persist per account and are included in export and erasure.
+- Audit retention uses a bounded 30-3650 day configuration, catches up after startup, and runs daily without deleting owner business data.
 
 See [Operator Runbook](docs/OPERATOR_RUNBOOK.md), [Security](docs/SECURITY.md), [Privacy](docs/PRIVACY.md), and [Threat Model](docs/THREAT_MODEL.md) before operating with real case data.
 
@@ -161,9 +165,9 @@ GitHub Actions repeats the Node checks on the supported Node 22 toolchain:
 
 - `npm run gate`: all blocking gates passed.
 - Server, Electron main-process, and shipped renderer TypeScript checks passed; no shipped runtime module disables type checking; ESLint passed.
-- Traceability reported 116 rows, 93 cited, and 0 broken references.
+- Traceability reported 116 rows, 91 cited, and 0 broken references.
 - Runtime no-excuses scan reported 0 suspect findings; account safety reported 0 high-severity findings.
-- Vitest reported 44 passing files and 275 passing tests, including controlled
+- Vitest reported 46 passing files and 287 passing tests, including controlled
   NOvA parsing/filter, unknown-metric scoring, and review-gated
   media/organization discovery, tenant isolation, case-draft persistence, and
   target-database readiness tests, with no skipped or todo tests.
@@ -189,22 +193,26 @@ desktop server to that registered OAuth callback port instead.
   only after success.
   Existing command-center, Google-status, closable-dialog, and password-control
   checks also remain covered.
+- The consolidated Evidence route was exercised at desktop and 390x844. It
+  exposed case-scoped CSV and ZIP exports, downloaded a real CSV, disabled the
+  unavailable PDF format, and kept batch scoring unavailable with a truthful
+  collection prompt when the selected case contained no evidence.
 - Packaged Electron scanner QA passed signup, shared-session authorization, empty-state rendering, disabled unsafe scan state, Settings navigation, and clean renderer console checks.
 - A packaged launch from a directory containing hostile development `.env` values still reported production mode, database readiness, and a random `127.0.0.1` port.
-- The current unsigned portable executable is 151,696,207 bytes with SHA-256
-  `2e4056b0d1ed636dda62c3a10b3bdc6349e7bc1ec4191f07c71f93a508000f49`.
+- The current unsigned portable executable is 151,771,576 bytes with SHA-256
+  `abfe23193e2b313a200d29a29529d5e0974c8970b723358546032c8247bc05bb`.
   Windows reports `NotSigned`, as intended. An isolated-profile launch applied
   all six migrations, installed 228 database relationship guards, served the
   renderer, and returned healthy production status on automatically selected
-  loopback port 61919. Packaged QA also verified signup,
+  loopback port 63917. Packaged QA also verified signup,
   Google evidence controls, truthful Settings exports, responsive layout, and a
   clean browser console.
-- PR #26 merged after the required Node and Python branch checks. Its protected-main
-  baseline CI run `29711247681` passed; Windows workflow `29711247694` passed the gate,
+- PR #27 merged after the required Node and Python branch checks. Its protected-main
+  baseline CI run `29712712369` passed; Windows workflow `29712712401` passed the gate,
   build, Electron ABI check, package, checksum, and upload stages.
 - The protected-main `LARO-Desktop-Windows` workflow artifact was uploaded with
   SHA-256 digest
-  `0ae183371e557fc775950f770646a330615bfb2b906ae874d71213207bfca061`.
+  `8472548c57b1b5835d77b7ce7b8898bc23d170f84c75567ba38f63c5b5503024`.
 
 Run the same checks locally:
 
@@ -293,6 +301,7 @@ unknown-publisher warning. Optional Store and direct-signing routes remain avail
 - [User Guide](docs/USER_GUIDE.md)
 - [Operator Runbook](docs/OPERATOR_RUNBOOK.md)
 - [Provider Reality Review](docs/PROVIDERS.md)
+- [Legacy Dashboard Port Audit](docs/LEGACY_DASHBOARD_PORT_AUDIT.md)
 - [Feature Flags](docs/FEATURE_FLAGS.md)
 - [Deployment](docs/DEPLOYMENT.md)
 - [Backup and Restore](docs/BACKUP_RESTORE.md)

@@ -14,9 +14,10 @@
 import { getDb } from "./db";
 import { auditLogs } from "./schema";
 import { lt } from "drizzle-orm";
+import { ENV } from "./_core/env";
 
 export const RETENTION_POLICY = {
-  auditLogDays: Number(process.env.AUDIT_RETENTION_DAYS || 365),
+  auditLogDays: ENV.AUDIT_RETENTION_DAYS,
 } as const;
 
 export interface RetentionReport {

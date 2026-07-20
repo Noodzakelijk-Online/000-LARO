@@ -40,6 +40,57 @@ function tableColumns(sqlite: any, table: string): string[] {
   }
 }
 
+const OMIT_FROM_EXPORT = Symbol("omit-from-export");
+const SENSITIVE_EXPORT_FIELDS = new Set([
+  "password",
+  "passwordhash",
+  "resetcodehash",
+  "accesstoken",
+  "refreshtoken",
+  "token",
+  "apikey",
+  "secret",
+  "clientsecret",
+  "authorization",
+  "cookie",
+]);
+
+function normalizedFieldName(key: string): string {
+  return key.replace(/[^a-z0-9]/gi, "").toLowerCase();
+}
+
+function redactExportValue(value: unknown, key?: string): unknown | typeof OMIT_FROM_EXPORT {
+  if (key && SENSITIVE_EXPORT_FIELDS.has(normalizedFieldName(key))) {
+    return OMIT_FROM_EXPORT;
+  }
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => redactExportValue(item))
+      .filter((item) => item !== OMIT_FROM_EXPORT);
+  }
+  if (value && typeof value === "object" && !(value instanceof Date)) {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .map(([entryKey, entryValue]) => [entryKey, redactExportValue(entryValue, entryKey)] as const)
+        .filter(([, entryValue]) => entryValue !== OMIT_FROM_EXPORT)
+    );
+  }
+  if (typeof value === "string" && key?.toLowerCase().includes("metadata")) {
+    try {
+      const parsed = JSON.parse(value);
+      const redacted = redactExportValue(parsed);
+      return JSON.stringify(redacted === OMIT_FROM_EXPORT ? null : redacted);
+    } catch {
+      return value;
+    }
+  }
+  return value;
+}
+
+function redactExportRows(rows: unknown[]): unknown[] {
+  return rows.map((row) => redactExportValue(row)).filter((row) => row !== OMIT_FROM_EXPORT);
+}
+
 /**
  * Export every row owned by the user. Returns a structured object keyed by table
  * name. Tables with a `userId` column are exported by owner; the user's own row
@@ -59,20 +110,15 @@ export async function exportUserData(userId: string): Promise<Record<string, any
     const cols = tableColumns(sqlite, table);
     try {
       if (table === "users" && cols.includes("id")) {
-        out.users = sqlite.prepare(`SELECT * FROM "users" WHERE id = ?`).all(userId);
+        out.users = redactExportRows(sqlite.prepare(`SELECT * FROM "users" WHERE id = ?`).all(userId));
       } else if (cols.includes("userId")) {
         const rows = sqlite.prepare(`SELECT * FROM "${table}" WHERE userId = ?`).all(userId);
-        if (rows.length > 0) out[table] = rows;
+        if (rows.length > 0) out[table] = redactExportRows(rows);
       }
     } catch (e) {
       // Skip tables we cannot read; do not fail the whole export.
       console.warn(`[GDPR] export: skipped ${table}:`, e instanceof Error ? e.message : e);
     }
-  }
-
-  // Redact password/token material from the export.
-  if (Array.isArray(out.users)) {
-    out.users = out.users.map((u: any) => ({ ...u, password: undefined, resetCodeHash: undefined }));
   }
   return out;
 }

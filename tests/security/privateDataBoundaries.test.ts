@@ -26,7 +26,7 @@ suite("private data boundaries", () => {
     ]);
     await app.db.insert(app.schema.emailAccounts).values([
       { id: "BOUNDARY_ACCOUNT_A", userId: A.id, provider: "gmail", email: A.email, accessToken: "encrypted-access-a", refreshToken: "encrypted-refresh-a", status: "connected" },
-      { id: "BOUNDARY_ACCOUNT_B", userId: B.id, provider: "gmail", email: B.email, accessToken: "encrypted-access-b", refreshToken: "encrypted-refresh-b", status: "connected" },
+      { id: "BOUNDARY_ACCOUNT_B", userId: B.id, provider: "gmail", email: B.email, accessToken: "encrypted-access-b", refreshToken: "encrypted-refresh-b", status: "connected", metadata: JSON.stringify({ accessToken: "nested-access-b", label: "connected account" }) },
     ]);
     await app.db.insert(app.schema.emailSyncJobs).values([
       { id: "BOUNDARY_JOB_A", accountId: "BOUNDARY_ACCOUNT_A", caseId: "BOUNDARY_CASE_A", status: "completed" },
@@ -75,6 +75,35 @@ suite("private data boundaries", () => {
     expect(jobs.map((job: any) => job.id)).toEqual(["BOUNDARY_JOB_B"]);
     expect(await app.makeCaller(B).emailMessages.getSyncJob({ jobId: "BOUNDARY_JOB_A" })).toBeNull();
     expect((await app.makeCaller(B).emailMessages.getSyncJob({ jobId: "BOUNDARY_JOB_B" }))?.id).toBe("BOUNDARY_JOB_B");
+  });
+
+  it("omits connected-account credentials from GDPR exports", async () => {
+    const { data: exported } = await app.makeCaller(B).gdpr.exportData();
+    const account = exported.email_accounts?.find((row: any) => row.id === "BOUNDARY_ACCOUNT_B");
+
+    expect(account).toMatchObject({ id: "BOUNDARY_ACCOUNT_B", email: B.email, status: "connected" });
+    expect(account).not.toHaveProperty("accessToken");
+    expect(account).not.toHaveProperty("refreshToken");
+    expect(JSON.stringify(exported)).not.toContain("encrypted-access-b");
+    expect(JSON.stringify(exported)).not.toContain("encrypted-refresh-b");
+    expect(JSON.stringify(exported)).not.toContain("nested-access-b");
+    expect(JSON.parse(account.metadata)).toEqual({ label: "connected account" });
+  });
+
+  it("persists privacy preferences per owner and includes them in export", async () => {
+    expect(await app.makeCaller(B).gdpr.getConsent()).toMatchObject({ marketing: false, analytics: false });
+    expect(await app.makeCaller(B).gdpr.updateConsent({ marketing: true })).toMatchObject({
+      success: true,
+      marketing: true,
+      analytics: false,
+    });
+    expect(await app.makeCaller(B).gdpr.getConsent()).toMatchObject({ marketing: true, analytics: false });
+    expect(await app.makeCaller(A).gdpr.getConsent()).toMatchObject({ marketing: false, analytics: false });
+
+    const { data: exported } = await app.makeCaller(B).gdpr.exportData();
+    expect(exported.user_preferences?.some((row: any) =>
+      row.key === 'privacy-consent' && JSON.parse(row.value).marketing === true
+    )).toBe(true);
   });
 
   it("keeps private documents and case-derived suggestions owner-scoped", async () => {

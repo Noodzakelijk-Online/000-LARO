@@ -11,6 +11,7 @@ import { WebSocketProvider } from "@/contexts/WebSocketContext";
 
 const Home = lazy(() => import("@/components/Home"));
 const Cases = lazy(() => import("@/components/Cases"));
+const Evidence = lazy(() => import("@/components/Evidence"));
 const Lawyers = lazy(() => import("@/components/Lawyers"));
 const LawyerProfile = lazy(() => import("@/components/LawyerProfile"));
 const OutreachAnalytics = lazy(() => import("@/components/OutreachAnalytics"));
@@ -41,6 +42,7 @@ export default function DashboardApp() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/cases" component={Cases} />
+      <Route path="/evidence" component={Evidence} />
       <Route path="/lawyers/:id" component={LawyerProfile} />
       <Route path="/lawyers" component={Lawyers} />
       <Route path="/outreach" component={OutreachAnalytics} />
