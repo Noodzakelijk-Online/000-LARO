@@ -7,6 +7,11 @@ versioning; dates are ISO. Version is sourced from `package.json` and surfaced b
 ## Unreleased
 
 ### Added
+- Added persisted desktop keyword-pull jobs with automatic UI recovery, live
+  Gmail/Drive/local phase reporting, reviewed-word and item counts, progress,
+  ETA, terminal results, and restart-time interruption-safe retry behavior.
+- Added one case Timeline workspace for source-linked legal events, source
+  documents, and operational activity, with vertical/horizontal event controls.
 - Added owner-scoped case-intake draft autosave with restoration across dialog
   close and reload, serialized saves, and clear-on-success semantics.
 - Added target database readiness checks for SQLite integrity, foreign keys,
@@ -25,6 +30,13 @@ versioning; dates are ISO. Version is sourced from `package.json` and surfaced b
   compact source controls that open the owning document.
 
 ### Fixed
+- Closed case-ID authorization gaps across auto-collection settings, logs,
+  keyword matches, local folders, manual runs, and job creation/status reads.
+- Replaced filename-based pull word counts with actual extracted-document word
+  counts and confined standalone-server local scans to `LOCAL_SCAN_ROOTS`.
+- Moved desktop Google/Microsoft OAuth into a sandboxed allowlisted child window
+  so callback Close and automatic-close behavior work under Electron, while
+  connection badges update through managed query polling without a page refresh.
 - Aligned tagged Windows delivery with the owner-selected no-certificate policy:
   unsigned releases are supported with checksums and explicit warnings, while
   configured signing providers still require a valid signature.

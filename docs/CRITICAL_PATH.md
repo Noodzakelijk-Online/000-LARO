@@ -17,7 +17,7 @@ account -> case intake -> evidence -> analysis/classification -> matching
 | --- | --- | --- |
 | Account and session | Implemented | `server/routers/index.ts`; `tests/e2e/workflow.e2e.test.ts`; authentication and isolation suites |
 | Case intake | Implemented | `server/routers/cases.ts`; acceptance AC1 |
-| Evidence ingestion and provenance | Implemented | `server/routers/evidenceFiles.ts`; local/S3 storage with SHA-256; file-safety and hardening suites |
+| Evidence ingestion and provenance | Implemented | `server/routers/evidenceFiles.ts`; local/S3 storage with SHA-256; case-authorized persisted keyword-pull jobs with live word/item/ETA progress; file-safety and hardening suites |
 | Legal classification | Implemented | `server/classification.ts`; acceptance AC2 |
 | Lawyer matching | Implemented | `server/novaDirectory.ts`; official NOvA read-only lookup with source provenance; `server/matching.ts`; controlled adapter tests and live manual probe |
 | Outreach preparation | Implemented | `workflow.initiateOutreach` advances the case and prepares idempotent review drafts in one action |
@@ -26,6 +26,11 @@ account -> case intake -> evidence -> analysis/classification -> matching
 | Response recording | Implemented | `workflow.recordResponse` enforces ownership and legal state transitions; no automatic third-party action |
 | Outcome and analytics | Implemented | Interested responses move the case to Matched; outreach analytics use owned persisted rows |
 | Export package | Implemented | ZIP package and provenance manifest are exercised by backend tests |
+
+The case Timeline workspace progressively exposes source-linked legal events,
+source documents, and operational activity. Legal events can be viewed
+vertically or horizontally and retain a compact control that opens the owned
+source document.
 
 ## Safety Invariants
 

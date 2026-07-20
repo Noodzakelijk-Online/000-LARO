@@ -14,7 +14,7 @@ import {
   ExternalLink
 } from "lucide-react";
 import { toast } from "sonner";
-import { useContext } from "react";
+import { useEffect, useState } from "react";
 
 // Get current user context (adjust based on your auth implementation)
 const useCurrentUser = () => {
@@ -41,12 +41,20 @@ interface PlatformConnection {
 export default function EvidenceConnectionsCard() {
   // Get current user
   const currentUser = useCurrentUser();
-  const utils = trpc.useUtils();
+  const [connectingPlatform, setConnectingPlatform] = useState<"gmail" | "google-drive" | null>(null);
   
   // Query connection status for all platforms
-  const { data: gmailStatus, isLoading: gmailLoading } = trpc.gmailEnhanced.getStatus.useQuery(undefined, { enabled: !!currentUser });
+  const { data: gmailStatus, isLoading: gmailLoading } = trpc.gmailEnhanced.getStatus.useQuery(undefined, {
+    enabled: !!currentUser,
+    refetchOnWindowFocus: true,
+    refetchInterval: connectingPlatform === "gmail" ? 1_500 : false,
+  });
   const { data: outlookStatus, isLoading: outlookLoading } = trpc.outlookEnhanced.getStatus.useQuery(undefined, { enabled: !!currentUser });
-  const { data: driveStatus, isLoading: driveLoading } = trpc.googleDrive.checkConnection.useQuery(undefined, { enabled: !!currentUser });
+  const { data: driveStatus, isLoading: driveLoading } = trpc.googleDrive.checkConnection.useQuery(undefined, {
+    enabled: !!currentUser,
+    refetchOnWindowFocus: true,
+    refetchInterval: connectingPlatform === "google-drive" ? 1_500 : false,
+  });
   const { data: oneDriveStatus, isLoading: oneDriveLoading } = trpc.oneDriveEnhanced.getStatus.useQuery(undefined, { enabled: !!currentUser });
   const { data: slackStatus, isLoading: slackLoading } = trpc.slackEnhanced.getStatus.useQuery(undefined, { enabled: !!currentUser });
   const { data: trelloStatus, isLoading: trelloLoading } = trpc.trelloEnhanced.getStatus.useQuery(undefined, { enabled: !!currentUser });
@@ -67,6 +75,17 @@ export default function EvidenceConnectionsCard() {
   const oneDriveDisconnectMutation = trpc.oneDriveEnhanced.disconnect.useMutation();
   const slackDisconnectMutation = trpc.slackEnhanced.disconnect.useMutation();
   const trelloDisconnectMutation = trpc.trelloEnhanced.disconnect.useMutation();
+
+  useEffect(() => {
+    if (connectingPlatform === "gmail" && gmailStatus?.connected) {
+      toast.success("Gmail successfully connected");
+      setConnectingPlatform(null);
+    }
+    if (connectingPlatform === "google-drive" && driveStatus?.connected) {
+      toast.success("Google Drive successfully connected");
+      setConnectingPlatform(null);
+    }
+  }, [connectingPlatform, driveStatus?.connected, gmailStatus?.connected]);
 
   const platforms: PlatformConnection[] = [
     {
@@ -111,39 +130,10 @@ export default function EvidenceConnectionsCard() {
         }
         authUrl = result.authUrl;
         
-        // Open OAuth in default system browser (handled by Electron setWindowOpenHandler)
+        // Electron opens provider URLs in a sandboxed child window; the web build uses a browser tab.
         window.open(authUrl, '_blank');
-        
-        toast.info('Opening authorization window in your browser. Please complete the OAuth flow.');
-
-        // Monitor connection status by polling
-        let attempts = 0;
-        const maxAttempts = 60; // 5 minutes
-        const checkConnection = setInterval(async () => {
-          attempts++;
-          try {
-            if (platformId === 'gmail') {
-              await utils.gmailEnhanced.getStatus.invalidate();
-              const status = await utils.gmailEnhanced.getStatus.fetch();
-              if (status?.connected) {
-                clearInterval(checkConnection);
-                toast.success('Gmail successfully connected!');
-              }
-            } else if (platformId === 'google-drive') {
-              await utils.googleDrive.checkConnection.invalidate();
-              const status = await utils.googleDrive.checkConnection.fetch();
-              if (status?.connected) {
-                clearInterval(checkConnection);
-                toast.success('Google Drive successfully connected!');
-              }
-            }
-          } catch(e) {
-            // Ignore fetch errors during polling
-          }
-          if (attempts >= maxAttempts) {
-            clearInterval(checkConnection);
-          }
-        }, 5000);
+        setConnectingPlatform(platformId);
+        toast.info('Opening authorization window. Please complete the OAuth flow.');
         return;
       }
 

@@ -39,6 +39,7 @@ describe("document intelligence units", () => {
     expect(analysis.amounts.length).toBeGreaterThan(0);
     expect(analysis.claims.length).toBeGreaterThan(0);
     expect(analysis.obligations.length).toBeGreaterThan(0);
+    expect(analysis.analyzedWords).toBeGreaterThan(0);
     expect(analysis.timelineEvents.length).toBeGreaterThan(0);
     expect(analysis.timelineEvents[0].date).toBe("2026-07-14");
     for (const finding of [

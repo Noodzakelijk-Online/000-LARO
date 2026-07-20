@@ -1,6 +1,6 @@
-# LARO User Guide (Phase 071)
+# LARO User Guide
 
-Date: 2026-07-06 · Branch `Phase-Imp`
+Date: 2026-07-20
 
 In-app help mirrors this guide (served by the `help.topics` endpoint).
 
@@ -15,14 +15,20 @@ lawyers, and prepares outreach. **You approve everything before anything is sent
 1. **Sign in / create account** — Settings has account + privacy controls.
 2. **Create a case** (Cases → New): client details + a description. LARO
    auto-classifies the case into legal areas.
-3. **Add evidence**: upload files, or connect Gmail/Drive (if configured). Each
-   item keeps its source + a content hash for provenance.
-4. **Review matched lawyers**: open the case to see ranked matches (expertise,
+3. **Add evidence**: upload files, or connect Gmail/Drive (if configured). A
+   desktop folder is selected through the native picker. A keyword pull
+   continues as a persisted job and shows its current source, extracted words,
+   reviewed items, progress, and time estimate. Each imported item keeps its
+   source and content hash for provenance.
+4. **Review the timeline**: open Timeline for source-linked legal events in a
+   vertical or horizontal view, the underlying source-document chronology, and
+   operational case activity. The source control on an event opens its document.
+5. **Review matched lawyers**: open the case to see ranked matches (expertise,
    availability, response time, distance). No one is contacted here.
-5. **Prepare & approve outreach**: prepare drafts, then review each. Before
+6. **Prepare & approve outreach**: prepare drafts, then review each. Before
    sending you see who will be contacted, that it's **not reversible**, and a
    disclaimer. Approving marks a draft ready — **nothing is sent automatically**.
-6. **Track & export**: follow status; export a case (JSON) or your whole account
+7. **Track & export**: follow status; export a case (JSON) or your whole account
    (Privacy → Export). You can also permanently delete your account + data.
 
 ## Privacy

@@ -10,7 +10,7 @@ import { ENV } from "./_core/env";
 import { invokeLLM } from "./llm";
 import { extractImageText } from "./ocr";
 
-export const DOCUMENT_ANALYSIS_VERSION = "2.1.0";
+export const DOCUMENT_ANALYSIS_VERSION = "2.2.0";
 const MAX_ANALYSIS_CHARS = 250_000;
 const MAX_PROVIDER_CHARS = 100_000;
 
@@ -50,6 +50,7 @@ export type DocumentAnalysisResult = {
   confidence: number;
   summary: string;
   analyzedChars: number;
+  analyzedWords: number;
   truncated: boolean;
   citations: Citation[];
   parties: CitedFinding[];
@@ -333,6 +334,7 @@ function deterministicAnalysis(extraction: ExtractionResult): DocumentAnalysisRe
     confidence: classification.confidence,
     summary: summarySegments.map((item) => item.quote).join(" ").slice(0, 900) || "No readable text was found.",
     analyzedChars: analyzedText.length,
+    analyzedWords: analyzedText.match(/[\p{L}\p{N}]+(?:['\u2019-][\p{L}\p{N}]+)*/gu)?.length ?? 0,
     truncated,
     citations,
     parties: extractParties(citations),

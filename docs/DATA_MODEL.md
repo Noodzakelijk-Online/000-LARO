@@ -1,6 +1,6 @@
 # Data Model, Ownership, and Persistence
 
-Current as of 2026-07-16.
+Current as of 2026-07-20.
 
 ## Topology
 
@@ -24,6 +24,10 @@ timeout. The scanner database declares its scan-to-file foreign key.
   remain owner-scoped.
 - Media and organization directory rows are owner-scoped. Their case matches
   reference the owning user, case, and target with cascading foreign keys.
+- Keyword evidence pulls are persisted in `keyword_pull_jobs`. Jobs reference
+  their owner and case with cascading foreign keys and retain source phase,
+  reviewed-word/item counters, ETA, terminal result, and failure detail so an
+  active pull can be recovered by the UI after navigation or reload.
 - Publicly discovered or manually imported targets begin as `pending`; only
   `approved` records are eligible for case matching. Revoking approval removes
   persisted matches for that target.

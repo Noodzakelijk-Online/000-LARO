@@ -19,7 +19,9 @@ import {
   DoorOpen,
   MessageSquareText,
   Scale,
-  Banknote
+  Banknote,
+  Rows3,
+  Columns3,
 } from "lucide-react";
 
 interface TimelineEvent {
@@ -43,6 +45,7 @@ export function CaseTimeline({ caseId }: CaseTimelineProps) {
   const [generating, setGenerating] = useState(false);
   const [timeline, setTimeline] = useState<any>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [layout, setLayout] = useState<"vertical" | "horizontal">("vertical");
   const generatedForCase = useRef<string | null>(null);
 
   const generateMutation = trpc.documentAnalysis.generateCaseTimeline.useMutation();
@@ -109,6 +112,47 @@ export function CaseTimeline({ caseId }: CaseTimelineProps) {
       month: 'long',
       day: 'numeric'
     });
+  };
+
+  const renderEventContent = (event: TimelineEvent) => {
+    const CategoryIcon = getCategoryIconComponent(event.category);
+    return (
+      <div className={`h-full rounded-md border p-4 ${getImportanceColor(event.importance)}`}>
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <div className="mb-1 flex items-center gap-2">
+              <CategoryIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <h3 className="font-semibold">{event.title}</h3>
+            </div>
+            <div className="mb-2 text-sm text-muted-foreground">{formatDate(event.date)}</div>
+            <p className="mb-2 text-sm">{event.description}</p>
+            <div className="flex items-start gap-2 text-xs text-muted-foreground">
+              <FileText className="h-3 w-3 shrink-0" aria-hidden="true" />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="truncate">{event.source.title}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 shrink-0"
+                    title="Open source document"
+                    aria-label={`Open source document ${event.source.title}`}
+                    onClick={() => openSource(event.source.evidenceId)}
+                  >
+                    <CircleHelp className="h-4 w-4" />
+                  </Button>
+                </div>
+                {event.source.citation?.quote && (
+                  <p className="mt-1 line-clamp-3">{event.source.citation.quote}</p>
+                )}
+              </div>
+            </div>
+          </div>
+          <Badge variant="outline" className="shrink-0 capitalize">{event.importance}</Badge>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -200,75 +244,73 @@ export function CaseTimeline({ caseId }: CaseTimelineProps) {
           {/* Timeline Events */}
           <Card>
             <CardHeader>
-              <CardTitle>Chronological Events</CardTitle>
-              <CardDescription>
-                {timeline.events.length} events sorted by date
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="relative">
-                {/* Timeline Line */}
-                <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-border" />
-
-                {/* Events */}
-                <div className="space-y-6">
-                  {timeline.events.map((event: TimelineEvent, idx: number) => {
-                    const CategoryIcon = getCategoryIconComponent(event.category);
-                    return (
-                    <div key={idx} className="relative pl-12">
-                      {/* Timeline Dot */}
-                      <div className={`absolute left-2 w-4 h-4 rounded-full border-2 border-background ${
-                        event.importance === 'critical' ? 'bg-red-500' :
-                        event.importance === 'high' ? 'bg-orange-500' :
-                        event.importance === 'medium' ? 'bg-yellow-500' :
-                        'bg-gray-400'
-                      }`} />
-
-                      {/* Event Card */}
-                      <div className={`border rounded-lg p-4 ${getImportanceColor(event.importance)}`}>
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <CategoryIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
-                              <h3 className="font-semibold">{event.title}</h3>
-                            </div>
-                            <div className="text-sm text-muted-foreground mb-2">
-                              {formatDate(event.date)}
-                            </div>
-                            <p className="text-sm mb-2">{event.description}</p>
-                            <div className="flex items-start gap-2 text-xs text-muted-foreground">
-                              <FileText className="h-3 w-3" />
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2">
-                                  <span className="truncate">{event.source.title}</span>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6 shrink-0"
-                                    title="Open source document"
-                                    aria-label={`Open source document ${event.source.title}`}
-                                    onClick={() => openSource(event.source.evidenceId)}
-                                  >
-                                    <CircleHelp className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                                {event.source.citation?.quote && (
-                                  <p className="mt-1 line-clamp-2">{event.source.citation.quote}</p>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          <Badge variant="outline" className="capitalize">
-                            {event.importance}
-                          </Badge>
-                        </div>
-                      </div>
-                    </div>
-                    );
-                  })}
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <CardTitle>Chronological Events</CardTitle>
+                  <CardDescription>{timeline.events.length} events sorted by date</CardDescription>
+                </div>
+                <div className="inline-flex rounded-md border border-border bg-background p-1" role="group" aria-label="Timeline layout">
+                  <Button
+                    type="button"
+                    variant={layout === "vertical" ? "secondary" : "ghost"}
+                    size="icon"
+                    className="h-8 w-8"
+                    title="Vertical timeline"
+                    aria-label="Show vertical timeline"
+                    aria-pressed={layout === "vertical"}
+                    onClick={() => setLayout("vertical")}
+                  >
+                    <Rows3 className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={layout === "horizontal" ? "secondary" : "ghost"}
+                    size="icon"
+                    className="h-8 w-8"
+                    title="Horizontal timeline"
+                    aria-label="Show horizontal timeline"
+                    aria-pressed={layout === "horizontal"}
+                    onClick={() => setLayout("horizontal")}
+                  >
+                    <Columns3 className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
+            </CardHeader>
+            <CardContent>
+              {layout === "vertical" ? (
+                <div className="relative">
+                  <div className="absolute bottom-0 left-4 top-0 w-0.5 bg-border" />
+                  <div className="space-y-6">
+                    {timeline.events.map((event: TimelineEvent, index: number) => (
+                      <div key={`${event.date}-${event.title}-${index}`} className="relative pl-12">
+                        <div className={`absolute left-2 h-4 w-4 rounded-full border-2 border-background ${
+                          event.importance === "critical" ? "bg-red-500" :
+                          event.importance === "high" ? "bg-orange-500" :
+                          event.importance === "medium" ? "bg-yellow-500" : "bg-gray-400"
+                        }`} />
+                        {renderEventContent(event)}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="overflow-x-auto pb-3">
+                  <div className="relative flex min-w-max gap-4 pt-10">
+                    <div className="absolute left-0 right-0 top-4 h-0.5 bg-border" />
+                    {timeline.events.map((event: TimelineEvent, index: number) => (
+                      <div key={`${event.date}-${event.title}-${index}`} className="relative w-80 shrink-0">
+                        <div className={`absolute -top-8 left-1/2 h-4 w-4 -translate-x-1/2 rounded-full border-2 border-background ${
+                          event.importance === "critical" ? "bg-red-500" :
+                          event.importance === "high" ? "bg-orange-500" :
+                          event.importance === "medium" ? "bg-yellow-500" : "bg-gray-400"
+                        }`} />
+                        {renderEventContent(event)}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
