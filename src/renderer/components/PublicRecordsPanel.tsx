@@ -45,11 +45,10 @@ export function PublicRecordsPanel({ caseId, companyName, kvkNumber }: PublicRec
     );
 
   const handleKvkLookup = async () => {
-    if (!searchKvk && !searchCompany) return;
+    if (!searchKvk) return;
 
     await kvkLookup.mutateAsync({
-      kvkNumber: searchKvk || undefined,
-      companyName: searchCompany || undefined,
+      kvkNumber: searchKvk,
     });
   };
 
@@ -89,30 +88,22 @@ export function PublicRecordsPanel({ caseId, companyName, kvkNumber }: PublicRec
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="kvk-number">KvK Number</Label>
-                  <Input
-                    id="kvk-number"
-                    placeholder="12345678"
-                    value={searchKvk}
-                    onChange={(e) => setSearchKvk(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="company-name">Company Name</Label>
-                  <Input
-                    id="company-name"
-                    placeholder="ABC BV"
-                    value={searchCompany}
-                    onChange={(e) => setSearchCompany(e.target.value)}
-                  />
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="kvk-number">KvK Number</Label>
+                <Input
+                  id="kvk-number"
+                  inputMode="numeric"
+                  pattern="[0-9]{8}"
+                  maxLength={8}
+                  placeholder="12345678"
+                  value={searchKvk}
+                  onChange={(e) => setSearchKvk(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                />
               </div>
 
               <Button
                 onClick={handleKvkLookup}
-                disabled={kvkLookup.isPending || (!searchKvk && !searchCompany)}
+                disabled={kvkLookup.isPending || searchKvk.length !== 8}
                 className="w-full"
               >
                 <Search className="w-4 h-4 mr-2" />
@@ -237,60 +228,6 @@ export function PublicRecordsPanel({ caseId, companyName, kvkNumber }: PublicRec
                             </CardContent>
                           </Card>
                         )}
-
-                      {/* LinkedIn Data */}
-                      {(kvkLookup.data.data?.linkedInUrl ||
-                        kvkLookup.data.data?.website ||
-                        kvkLookup.data.data?.employeeCount) && (
-                        <Card>
-                          <CardHeader>
-                            <CardTitle className="text-sm">Additional Information</CardTitle>
-                          </CardHeader>
-                          <CardContent className="space-y-2">
-                            {kvkLookup.data.data.companyName && (
-                              <div>
-                                <span className="text-sm text-muted-foreground">Company: </span>
-                                <span className="font-semibold">
-                                  {kvkLookup.data.data.companyName}
-                                </span>
-                              </div>
-                            )}
-                            {kvkLookup.data.data.website && (
-                              <div>
-                                <span className="text-sm text-muted-foreground">Website: </span>
-                                <a
-                                  href={kvkLookup.data.data.website}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-blue-500 hover:underline"
-                                >
-                                  {kvkLookup.data.data.website}
-                                </a>
-                              </div>
-                            )}
-                            {kvkLookup.data.data.employeeCount && (
-                              <div>
-                                <span className="text-sm text-muted-foreground">Employees: </span>
-                                <span className="font-semibold">
-                                  {kvkLookup.data.data.employeeCount.toLocaleString()}
-                                </span>
-                              </div>
-                            )}
-                            {kvkLookup.data.data.linkedInUrl && (
-                              <div>
-                                <a
-                                  href={kvkLookup.data.data.linkedInUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-blue-500 hover:underline text-sm"
-                                >
-                                  View LinkedIn Profile →
-                                </a>
-                              </div>
-                            )}
-                          </CardContent>
-                        </Card>
-                      )}
 
                       {/* Legal Significance */}
                       {kvkLookup.data.legalSignificance && (

@@ -10,14 +10,14 @@ acceptance. It supersedes the 2026-07-06 phase snapshot.
 
 | Gate | Result |
 |---|---|
-| Server, Electron main, and renderer TypeScript | Pass |
+| Server, Electron main, and renderer TypeScript | Pass; 0 shipped runtime `@ts-nocheck` bypasses |
 | ESLint | Pass |
 | Requirements traceability | 116 rows, 93 cited, 0 broken |
 | Runtime no-excuses scan | 0 suspect findings |
 | Account-safety scan | 0 high-severity findings |
 | Isolated backup/delete/restore/reopen drill | Pass |
 | Target database readiness | SQLite integrity, declared foreign keys, 228 legacy relationship guards, invariants, reconciliation, duplicates, and demo markers clean |
-| Vitest | 42 files, 271 tests passed, 0 todo |
+| Vitest | 44 files, 275 tests passed, 0 todo |
 | Python unittest discovery | 202 tests passed |
 | Runtime dependency audit | 0 known vulnerabilities |
 | Renderer, main, and server production builds | Pass |
@@ -26,8 +26,8 @@ acceptance. It supersedes the 2026-07-06 phase snapshot.
 | Packaged document intelligence and Outreach | Six migrations present, including persisted keyword-pull jobs; PDF, DOCX, native parser dependencies, and review-gated Outreach tables present; integrated server booted successfully |
 | Desktop scanner contract | Scoped 15-minute token; real bytes/hash; owner/MIME enforcement |
 | Branch CI policy | Current Node and Python checks are required before merge |
-| Protected-main CI | Actions run `29710137158`; Node and Python jobs passed |
-| Windows package workflow | Actions run `29710137156`; gate, build, ABI check, package, checksum, and artifact upload passed |
+| Protected-main baseline CI | Actions run `29711247681`; Node and Python jobs passed |
+| Windows package baseline | Actions run `29711247694`; gate, build, ABI check, package, checksum, and artifact upload passed |
 | Packaged matching assets | Seven aligned legal categories; invalid legacy dataset absent |
 | Dependency graph | One canonical Node workspace; 0 open Dependabot alerts |
 
@@ -107,11 +107,12 @@ real local account, moved from Home to Cases, and observed the notice after both
 renders with no console warning, console error, framework overlay, or horizontal
 overflow at 2560x1440.
 
-The current local portable artifact is 151,689,956 bytes with SHA-256
-`ce8baac8729583de42f3ff08cab1ee9ce645505288650ebb3505b83b3a3e8259`.
+The current local portable artifact is 151,696,207 bytes with SHA-256
+`2e4056b0d1ed636dda62c3a10b3bdc6349e7bc1ec4191f07c71f93a508000f49`.
 It launched with an explicit isolated user-data directory, created fresh local
 secrets and databases, applied all six packaged migrations, and served the
-application on loopback port 57690. SQLite integrity passed with zero foreign-key
+application on automatically selected loopback port 61919. `/api/health`
+returned `healthy`, database ready, and version `1.3.0`. SQLite integrity passed with zero foreign-key
 violations and all 228 required relationship guards persisted.
 Its packaged resources contain the current migrations, PDF/DOCX parsers, native
 parser dependency, consolidated managed-storage deletion, and seven-category
@@ -161,6 +162,9 @@ development renderer path from the launching shell.
 - Lawyer matching loads a valid curated terminology dataset whose seven category
   keys are checked against the specialization taxonomy. It no longer silently
   falls back around the truncated asset or claims unsupported 877k-case scoring.
+- KvK public-record lookup follows the current official open-dataset path and
+  response contract. The interface accepts the supported eight-digit identifier
+  and no longer presents unavailable LinkedIn enrichment as a lookup result.
 - The obsolete nested `assets` npm/Electron workspace was removed. It was not a
   runnable product surface and was the sole source of 72 stale dependency alerts.
 - `main` requires pull requests, strict Node/Python status checks, stale-review

@@ -1,5 +1,3 @@
-// @ts-nocheck
-
 import { getDb } from './db';
 import { eq, and, desc, gt, lt } from 'drizzle-orm';
 import { notifyOwner } from './notification';
@@ -358,14 +356,16 @@ async function collectFilesFromGoogleDrive(
   let downloaded = 0;
 
   try {
-    // 1. Get file list from folder
-    const files = await getGoogleDriveFileMetadata(folderId);
-    
-    // Get userId from case
+    // Resolve the owner before opening Drive so background collection cannot
+    // fall back to an unrelated connected Google account.
     const { cases } = await import('./schema');
     const caseData = await db.select().from(cases).where(eq(cases.id, caseId)).limit(1);
     if (!caseData[0]) throw new Error(`Case ${caseId} not found`);
     const userId = caseData[0].userId;
+    if (!userId) throw new Error(`Case ${caseId} has no owner`);
+
+    // 1. Get file list from folder
+    const files = await getGoogleDriveFileMetadata(folderId, userId);
     
     for (const file of files) {
       if (!file.name) continue;
@@ -428,12 +428,22 @@ async function collectFilesFromGoogleDrive(
           // Also insert into googleDriveFiles for tracking
           await db.insert(googleDriveFiles).values({
             id: uuidv4(),
+            userId,
             caseId,
-            driveId: file.id,
-            name: file.name,
-            mimeType: file.mimeType,
-            size: file.size,
-            status: 'completed',
+            googleFileId: file.id,
+            fileName: fileData.fileName,
+            mimeType: fileData.mimeType,
+            fileSize: fileData.size,
+            s3Key: fileData.key,
+            s3Url: fileData.url,
+            googleWebViewLink: file.webViewLink || null,
+            googleModifiedTime: fileData.modifiedTime,
+            evidenceType: determineEvidenceType(fileData.mimeType),
+            isIncluded: 'Yes',
+            metadata: JSON.stringify({
+              folderId,
+              sourceMimeType: fileData.sourceMimeType,
+            }),
           });
           
           downloaded++;
@@ -521,6 +531,10 @@ export async function runAutoCollectionForAllCases(): Promise<{
   const errors: string[] = [];
 
   for (const settings of enabledSettings) {
+    if (!settings.caseId) {
+      errors.push(`Auto-collection setting ${settings.id} has no case and was skipped`);
+      continue;
+    }
     try {
       console.log(`[AutoCollection] Processing case ${settings.caseId}...`);
       const result = await runAutoCollection(settings.caseId);

@@ -1,11 +1,11 @@
 # Technical Debt Register
 
-Updated: 2026-07-16
+Updated: 2026-07-20
 
 | # | Debt | Impact | Status / next step |
 | --- | --- | --- | --- |
 | D1 | All mounted routers are typed and connected to supported UI actions | - | Resolved |
-| D2 | Renderer TypeScript and ESLint are release-blocking | - | Resolved |
+| D2 | Server, Electron, and renderer TypeScript plus ESLint are release-blocking; shipped runtime files cannot use `@ts-nocheck` | - | Resolved and regression-tested |
 | D3 | Approved outreach uses provider, ownership, emergency-stop and idempotency gates | - | Resolved |
 | D4 | OAuth token encryption uses authenticated AES-256-GCM | - | Resolved |
 | D5 | CSRF origin checks, strict CORS and JWT revocation are implemented | - | Resolved |
@@ -21,6 +21,7 @@ Updated: 2026-07-16
 | D15 | Desktop scanner previously accepted false connection success and fabricated uploads | - | Resolved with session auth, folder consent, review selection and real evidence storage |
 | D16 | Full cross-browser and automated accessibility coverage is incomplete | Low | Expand in subsequent release cycles |
 | D17 | Evidence, case, and account deletion could leave managed objects after metadata deletion | - | Resolved; managed storage keys are deleted first and failures abort deletion |
+| D18 | KvK lookup used a stale query-string contract and a missing LinkedIn enrichment module | - | Resolved; uses the official open-dataset path contract, normalizes its response, and exposes only supported lookup controls |
 
 D10 is operationally contained without rewriting installed databases. A native
 foreign-key conversion remains migration work, not a release blocker while the
