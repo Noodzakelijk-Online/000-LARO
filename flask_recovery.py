@@ -53,6 +53,18 @@ def _resolved(path: Path) -> Path:
     return path.expanduser().resolve()
 
 
+def _normalized_config(config: FlaskRecoveryConfig) -> FlaskRecoveryConfig:
+    return FlaskRecoveryConfig(
+        root=_resolved(config.root),
+        ledger_database=_resolved(config.ledger_database),
+        auth_database=_resolved(config.auth_database),
+        upload_root=_resolved(config.upload_root),
+        token_root=_resolved(config.token_root),
+        session_secret=config.session_secret,
+        token_encryption_key=config.token_encryption_key,
+    )
+
+
 def _sqlite_path(value: str, root: Path) -> Path:
     raw = str(value or "").strip()
     if not raw:
@@ -355,6 +367,7 @@ def create_backup_set(
     allow_session_reset: bool = False,
 ) -> Dict[str, Any]:
     destination = _resolved(destination)
+    config = _normalized_config(config)
     _ensure_distinct(config)
     if destination.exists():
         raise RecoveryError(f"Recovery-set destination already exists: {destination}")
@@ -560,6 +573,8 @@ def validate_backup_set(
     allow_session_reset: bool = False,
 ) -> Dict[str, Any]:
     recovery_set = _resolved(recovery_set)
+    if config is not None:
+        config = _normalized_config(config)
     if not recovery_set.is_dir() or recovery_set.is_symlink():
         raise RecoveryError(f"Flask recovery set does not exist: {recovery_set}")
     manifest = _load_manifest(recovery_set)
@@ -639,6 +654,7 @@ def restore_backup_set(
 ) -> RestoreResult:
     if not confirm_stopped:
         raise RecoveryError("Restore requires --confirm-stopped after the Flask runtime has been stopped")
+    config = _normalized_config(config)
     _ensure_distinct(config)
     manifest = validate_backup_set(recovery_set, config, allow_session_reset=allow_session_reset)
     recovery_set = _resolved(recovery_set)

@@ -172,7 +172,7 @@ GitHub Actions repeats the Node and browser checks on the supported Node 22 tool
   NOvA parsing/filter, unknown-metric scoring, and review-gated
   media/organization discovery, tenant isolation, case-draft persistence, and
   target-database readiness tests, with no skipped or todo tests.
-- Full Python discovery reported 214 passing tests, including 12 coordinated
+- Full Python discovery reported 215 passing tests, including 13 coordinated
   Flask recovery tests. Warning-focused optimization and UCID tests also passed
   with deprecations promoted to errors.
 - The Vite 8 renderer, Electron 43 main process, and standalone server builds completed successfully.
