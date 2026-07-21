@@ -3,22 +3,39 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Mail, Phone, Globe, MapPin, Users, GitCompare, ExternalLink, Database } from "lucide-react";
+import { Search, Mail, Phone, Globe, MapPin, Users, GitCompare, ExternalLink, Database, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { useState } from "react";
 import LawyerComparisonView from "@/components/LawyerComparison";
 import SmartSearchFilters from "@/components/SmartSearchFilters";
 import { useLocation } from "wouter";
 
 export function LawyersDirectoryContent({ embedded = false }: { embedded?: boolean }) {
-  const { data, isLoading } = trpc.lawyers.list.useQuery();
   const [, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [filterLegalArea, setFilterLegalArea] = useState("");
   const [filterExperience, setFilterExperience] = useState("");
   const [filterAccepting, setFilterAccepting] = useState("");
+  const [officialOnly, setOfficialOnly] = useState(false);
+  const [page, setPage] = useState(1);
   const [comparisonMode, setComparisonMode] = useState(false);
   const [selectedLawyers, setSelectedLawyers] = useState<any[]>([]);
+  const pageSize = 24;
+
+  const { data, isLoading, isFetching, error } = trpc.lawyers.list.useQuery({
+    page,
+    limit: pageSize,
+    query: searchQuery.trim() || undefined,
+    legalArea: filterLegalArea.trim() || undefined,
+    experience: filterExperience
+      ? filterExperience as "0-5" | "6-10" | "11-20" | "20+"
+      : undefined,
+    accepting: filterAccepting
+      ? filterAccepting as "Yes" | "Limited" | "No" | "Unknown"
+      : undefined,
+    officialOnly,
+  });
 
   const parseStringArray = (value: unknown): string[] => {
     if (Array.isArray(value)) return value.map(String).filter(Boolean);
@@ -50,43 +67,9 @@ export function LawyersDirectoryContent({ embedded = false }: { embedded?: boole
   };
 
   const lawyers = data?.lawyers || [];
-  const officialRecordCount = lawyers.filter((lawyer: any) => Boolean(lawyer.officialProfileUrl)).length;
-  
-  const filteredLawyers = lawyers.filter((lawyer: any) => {
-    const areas = parseStringArray(lawyer.legalAreas);
-    const normalizedQuery = searchQuery.trim().toLowerCase();
-    // Search filter
-    const matchesSearch = !normalizedQuery || [
-      lawyer.name,
-      lawyer.firm,
-      lawyer.email,
-      lawyer.phone,
-      lawyer.website,
-      lawyer.address,
-      ...areas,
-    ].some((value) => String(value ?? "").toLowerCase().includes(normalizedQuery));
-    
-    // Legal area filter
-    const matchesLegalArea = !filterLegalArea || (() => {
-      return areas.some((area) => area.toLowerCase().includes(filterLegalArea.toLowerCase()));
-    })();
-    
-    // Experience filter
-    const matchesExperience = !filterExperience || (() => {
-      const years = parseInt(lawyer.experienceYears || "0");
-      if (filterExperience === "0-5") return years >= 0 && years <= 5;
-      if (filterExperience === "6-10") return years >= 6 && years <= 10;
-      if (filterExperience === "11-20") return years >= 11 && years <= 20;
-      if (filterExperience === "20+") return years > 20;
-      return true;
-    })();
-    
-    // Accepting cases filter
-    const matchesAccepting = !filterAccepting || 
-      lawyer.currentlyAccepting === filterAccepting;
-    
-    return matchesSearch && matchesLegalArea && matchesExperience && matchesAccepting;
-  });
+  const pagination = data?.pagination || { total: 0, totalPages: 0, page, limit: pageSize };
+  const firstResult = pagination.total === 0 ? 0 : (pagination.page - 1) * pagination.limit + 1;
+  const lastResult = Math.min(pagination.page * pagination.limit, pagination.total);
 
   return (
       <div className={embedded ? "space-y-6" : "p-8 space-y-8"}>
@@ -117,26 +100,43 @@ export function LawyersDirectoryContent({ embedded = false }: { embedded?: boole
                     setFilterExperience(filters.experience || "");
                     setFilterAccepting(filters.accepting || "");
                   }
+                  setPage(1);
                 }}
               />
             </div>
-            <Button 
-              variant={comparisonMode ? "default" : "outline"}
-              className={comparisonMode ? "bg-purple-600 hover:bg-purple-700" : "border-purple-500/30 hover:bg-purple-500/10 hover:border-purple-500/50"}
-              onClick={() => {
-                setComparisonMode(!comparisonMode);
-                if (comparisonMode) setSelectedLawyers([]);
-              }}
-            >
-              <GitCompare className="w-4 h-4 mr-2" />
-              {comparisonMode ? `Compare (${selectedLawyers.length}/3)` : "Compare Mode"}
-            </Button>
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex min-h-10 items-center gap-2 rounded-md border border-border/60 px-3 text-sm">
+                <Checkbox
+                  aria-label="Official NOvA only"
+                  checked={officialOnly}
+                  onCheckedChange={(checked) => {
+                    setOfficialOnly(checked === true);
+                    setPage(1);
+                  }}
+                />
+                Official NOvA only
+              </label>
+              <Button
+                variant={comparisonMode ? "default" : "outline"}
+                className={comparisonMode ? "bg-purple-600 hover:bg-purple-700" : "border-purple-500/30 hover:bg-purple-500/10 hover:border-purple-500/50"}
+                onClick={() => {
+                  setComparisonMode(!comparisonMode);
+                  if (comparisonMode) setSelectedLawyers([]);
+                }}
+              >
+                <GitCompare className="w-4 h-4 mr-2" />
+                {comparisonMode ? `Compare (${selectedLawyers.length}/3)` : "Compare Mode"}
+              </Button>
+            </div>
           </div>
 
           {/* Results Count */}
-          <div className="text-sm text-muted-foreground">
-            Showing {filteredLawyers.length} of {lawyers.length} lawyers
-            {officialRecordCount > 0 && `; ${officialRecordCount} linked to an official NOvA profile`}
+          <div className="flex min-h-5 items-center gap-2 text-sm text-muted-foreground" aria-live="polite">
+            <span>
+              Showing {firstResult}-{lastResult} of {pagination.total} lawyers
+              {(data?.officialRecordCount || 0) > 0 && `; ${data?.officialRecordCount} linked to an official NOvA profile`}
+            </span>
+            {isFetching && !isLoading && <Loader2 className="h-4 w-4 animate-spin" aria-label="Updating lawyer results" />}
           </div>
         </div>
 
@@ -146,7 +146,11 @@ export function LawyersDirectoryContent({ embedded = false }: { embedded?: boole
         )}
 
         {/* Lawyers Grid */}
-        {isLoading ? (
+        {error ? (
+          <div className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive" role="alert">
+            Lawyer records could not be loaded: {error.message}
+          </div>
+        ) : isLoading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[1, 2, 3, 4, 5, 6].map((i) => (
               <Skeleton key={i} className="h-96 w-full bg-card/50" />
@@ -154,7 +158,7 @@ export function LawyersDirectoryContent({ embedded = false }: { embedded?: boole
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredLawyers?.map((lawyer: any) => {
+            {lawyers.map((lawyer: any) => {
               const legalAreas = parseStringArray(lawyer.legalAreas);
               const languages = parseStringArray(lawyer.languages);
               
@@ -299,13 +303,39 @@ export function LawyersDirectoryContent({ embedded = false }: { embedded?: boole
           </div>
         )}
 
-        {filteredLawyers && filteredLawyers.length === 0 && (
+        {!error && !isLoading && lawyers.length === 0 && (
           <div className="text-center py-12">
             <div className="w-16 h-16 rounded-full bg-purple-500/10 flex items-center justify-center mx-auto mb-4">
               <Search className="w-8 h-8 text-purple-500" />
             </div>
             <p className="text-muted-foreground">No lawyers found matching your search.</p>
           </div>
+        )}
+
+        {!error && pagination.totalPages > 1 && (
+          <nav className="flex items-center justify-center gap-3" aria-label="Lawyer result pages">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={pagination.page <= 1 || isFetching}
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+            >
+              <ChevronLeft className="mr-1 h-4 w-4" />
+              Previous
+            </Button>
+            <span className="min-w-28 text-center text-sm text-muted-foreground">
+              Page {pagination.page} of {pagination.totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={pagination.page >= pagination.totalPages || isFetching}
+              onClick={() => setPage((current) => Math.min(pagination.totalPages, current + 1))}
+            >
+              Next
+              <ChevronRight className="ml-1 h-4 w-4" />
+            </Button>
+          </nav>
         )}
       </div>
   );

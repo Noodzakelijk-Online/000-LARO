@@ -2,18 +2,116 @@ import { z } from "zod";
 import { adminProcedure, protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { lawyers as lawyersTable } from '../schema';
+import { and, asc, eq, sql } from "drizzle-orm";
+
+const experienceFilter = z.enum(["0-5", "6-10", "11-20", "20+"]);
+const acceptingFilter = z.enum(["Yes", "Limited", "No", "Unknown"]);
+
+function likePattern(value: string): string {
+  return `%${value.trim().toLowerCase().replace(/[\\%_]/g, "\\$&")}%`;
+}
+
+function experienceCondition(filter: z.infer<typeof experienceFilter>) {
+  const numericYears = sql`CAST(TRIM(${lawyersTable.experienceYears}) AS INTEGER)`;
+  const isNumeric = sql`TRIM(COALESCE(${lawyersTable.experienceYears}, '')) <> ''
+    AND TRIM(${lawyersTable.experienceYears}) NOT GLOB '*[^0-9]*'`;
+
+  if (filter === "0-5") return sql`(${isNumeric}) AND ${numericYears} BETWEEN 0 AND 5`;
+  if (filter === "6-10") return sql`(${isNumeric}) AND ${numericYears} BETWEEN 6 AND 10`;
+  if (filter === "11-20") return sql`(${isNumeric}) AND ${numericYears} BETWEEN 11 AND 20`;
+  return sql`(${isNumeric}) AND ${numericYears} > 20`;
+}
+
+const officialProfileCondition = sql`TRIM(COALESCE(${lawyersTable.officialProfileUrl}, '')) <> ''`;
 
 export const lawyersRouter = router({
   list: protectedProcedure
     .input(z.object({
-      page: z.number().optional().default(1),
-      limit: z.number().optional().default(100),
+      page: z.number().int().min(1).optional().default(1),
+      limit: z.number().int().min(1).max(100).optional().default(24),
+      query: z.string().trim().max(200).optional(),
+      legalArea: z.string().trim().max(120).optional(),
+      experience: experienceFilter.optional(),
+      accepting: acceptingFilter.optional(),
+      officialOnly: z.boolean().optional().default(false),
     }).optional())
     .query(async ({ input }) => {
       const db = await getDb();
-      if (!db) return { lawyers: [] };
-      const results = await db.select().from(lawyersTable).limit(input?.limit || 100).offset(((input?.page || 1) - 1) * (input?.limit || 100));
-      return { lawyers: results };
+      const page = input?.page || 1;
+      const limit = input?.limit || 24;
+      if (!db) {
+        return {
+          lawyers: [],
+          pagination: { total: 0, totalPages: 0, page, limit },
+          officialRecordCount: 0,
+        };
+      }
+
+      const conditions: any[] = [];
+      if (input?.query) {
+        const pattern = likePattern(input.query);
+        conditions.push(sql`(
+          LOWER(COALESCE(${lawyersTable.name}, '')) LIKE ${pattern} ESCAPE '\\'
+          OR LOWER(COALESCE(${lawyersTable.firm}, '')) LIKE ${pattern} ESCAPE '\\'
+          OR LOWER(COALESCE(${lawyersTable.firmName}, '')) LIKE ${pattern} ESCAPE '\\'
+          OR LOWER(COALESCE(${lawyersTable.email}, '')) LIKE ${pattern} ESCAPE '\\'
+          OR LOWER(COALESCE(${lawyersTable.phone}, '')) LIKE ${pattern} ESCAPE '\\'
+          OR LOWER(COALESCE(${lawyersTable.website}, '')) LIKE ${pattern} ESCAPE '\\'
+          OR LOWER(COALESCE(${lawyersTable.address}, '')) LIKE ${pattern} ESCAPE '\\'
+          OR LOWER(COALESCE(${lawyersTable.city}, '')) LIKE ${pattern} ESCAPE '\\'
+          OR LOWER(COALESCE(${lawyersTable.legalAreas}, '')) LIKE ${pattern} ESCAPE '\\'
+        )`);
+      }
+      if (input?.legalArea) {
+        const pattern = likePattern(input.legalArea);
+        conditions.push(sql`(
+          (JSON_VALID(${lawyersTable.legalAreas}) AND EXISTS (
+            SELECT 1
+            FROM JSON_EACH(${lawyersTable.legalAreas}) AS area
+            WHERE LOWER(CAST(area.value AS TEXT)) LIKE ${pattern} ESCAPE '\\'
+          ))
+          OR (NOT JSON_VALID(${lawyersTable.legalAreas})
+            AND LOWER(COALESCE(${lawyersTable.legalAreas}, '')) LIKE ${pattern} ESCAPE '\\')
+        )`);
+      }
+      if (input?.experience) conditions.push(experienceCondition(input.experience));
+      if (input?.accepting) conditions.push(eq(lawyersTable.currentlyAccepting, input.accepting));
+      if (input?.officialOnly) conditions.push(officialProfileCondition);
+
+      const where = conditions.length > 0 ? and(...conditions) : undefined;
+      const offset = (page - 1) * limit;
+      const results = await db
+        .select()
+        .from(lawyersTable)
+        .where(where)
+        .orderBy(
+          sql`CASE WHEN ${officialProfileCondition} THEN 0 ELSE 1 END`,
+          asc(lawyersTable.name),
+          asc(lawyersTable.id),
+        )
+        .limit(limit)
+        .offset(offset);
+
+      const totalRows = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(lawyersTable)
+        .where(where);
+      const officialRows = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(lawyersTable)
+        .where(where ? and(where, officialProfileCondition) : officialProfileCondition);
+      const total = Number(totalRows[0]?.count || 0);
+
+      return {
+        lawyers: results,
+        pagination: {
+          total,
+          totalPages: Math.ceil(total / limit),
+          page,
+          limit,
+        },
+        officialRecordCount: Number(officialRows[0]?.count || 0),
+      };
     }),
 
   byId: protectedProcedure

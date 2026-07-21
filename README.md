@@ -168,7 +168,7 @@ GitHub Actions repeats the Node and browser checks on the supported Node 22 tool
 - Server, Electron main-process, and shipped renderer TypeScript checks passed; no shipped runtime module disables type checking; ESLint passed.
 - Traceability reported 116 rows, 91 cited, and 0 broken references.
 - Runtime no-excuses scan reported 0 suspect findings; account safety reported 0 high-severity findings.
-- Vitest reported 51 passing files and 326 passing tests, including controlled
+- Vitest reported 51 passing files and 328 passing tests, including controlled
   NOvA parsing/filter, unknown-metric scoring, and review-gated
   media/organization discovery, tenant isolation, case-draft persistence, and
   target-database readiness tests, with no skipped or todo tests.
@@ -326,6 +326,7 @@ unknown-publisher warning. Optional Store and direct-signing routes remain avail
 - [Operator Runbook](docs/OPERATOR_RUNBOOK.md)
 - [Provider Reality Review](docs/PROVIDERS.md)
 - [Legacy Dashboard Port Audit](docs/LEGACY_DASHBOARD_PORT_AUDIT.md)
+- [Lawyer Automation Dashboards Port Audit](docs/LAWYER_AUTOMATION_DASHBOARDS_PORT_AUDIT.md)
 - [Feature Flags](docs/FEATURE_FLAGS.md)
 - [Deployment](docs/DEPLOYMENT.md)
 - [Backup and Restore](docs/BACKUP_RESTORE.md)

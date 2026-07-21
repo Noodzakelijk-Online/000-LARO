@@ -55,6 +55,72 @@ suite('Phases 051–060 — services', () => {
     expect(search.cases.length).toBeGreaterThan(0);
   });
 
+  it('ports lawyer directory filtering with accurate totals before pagination', async () => {
+    await app.db.insert(app.schema.lawyers).values([
+      buildLawyer({
+        id: 'LWDIR1',
+        name: 'Ada Directory',
+        legalAreas: JSON.stringify(['Port Audit Employment']),
+        experienceYears: '12',
+        currentlyAccepting: 'Yes',
+        officialProfileUrl: 'https://zoekeenadvocaat.advocatenorde.nl/advocaten/ada',
+      }),
+      buildLawyer({
+        id: 'LWDIR2',
+        name: 'Bram Directory',
+        legalAreas: JSON.stringify(['Port Audit Employment']),
+        experienceYears: '3',
+        currentlyAccepting: 'Limited',
+        officialProfileUrl: null,
+      }),
+      buildLawyer({
+        id: 'LWDIR3',
+        name: 'Cato Directory',
+        legalAreas: JSON.stringify(['Port Audit Employment']),
+        experienceYears: '25',
+        currentlyAccepting: 'No',
+        officialProfileUrl: 'https://zoekeenadvocaat.advocatenorde.nl/advocaten/cato',
+      }),
+      buildLawyer({
+        id: 'LWDIR4',
+        name: 'Percent % Specialist',
+        legalAreas: 'Tax Law',
+        experienceYears: 'unknown',
+      }),
+    ] as any);
+
+    const caller = app.makeCaller(U);
+    const first = await caller.lawyers.list({ legalArea: 'Port Audit Employment', page: 1, limit: 2 });
+    const second = await caller.lawyers.list({ legalArea: 'Port Audit Employment', page: 2, limit: 2 });
+
+    expect(first.pagination).toMatchObject({ total: 3, totalPages: 2, page: 1, limit: 2 });
+    expect(first.officialRecordCount).toBe(2);
+    expect(first.lawyers).toHaveLength(2);
+    expect(second.lawyers).toHaveLength(1);
+    expect(new Set([...first.lawyers, ...second.lawyers].map((lawyer: any) => lawyer.id)).size).toBe(3);
+
+    const precise = await caller.lawyers.list({
+      query: 'Ada',
+      experience: '11-20',
+      accepting: 'Yes',
+      officialOnly: true,
+    });
+    expect(precise.pagination.total).toBe(1);
+    expect(precise.lawyers[0]?.id).toBe('LWDIR1');
+
+    const literalWildcard = await caller.lawyers.list({ query: '%' });
+    expect(literalWildcard.pagination.total).toBe(1);
+    expect(literalWildcard.lawyers[0]?.id).toBe('LWDIR4');
+
+    const numericExperience = await caller.lawyers.list({ experience: '0-5' });
+    expect(numericExperience.lawyers.some((lawyer: any) => lawyer.id === 'LWDIR4')).toBe(false);
+  });
+
+  it('keeps the lawyer directory behind authentication', async () => {
+    const anonymous = app.makeCaller(null);
+    await expect(anonymous.lawyers.list({ page: 1, limit: 10 })).rejects.toBeTruthy();
+  });
+
   it('Phase 059 — cases.update rejects an illegal status transition', async () => {
     const caller = app.makeCaller(U);
     const created = await app.db.insert(app.schema.cases).values({

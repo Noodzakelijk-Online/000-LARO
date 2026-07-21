@@ -7,6 +7,10 @@ versioning; dates are ISO. Version is sourced from `package.json` and surfaced b
 ## Unreleased
 
 ### Added
+- Added authenticated server-side lawyer directory search and pagination,
+  adapted from the predecessor dashboard after fixing its post-pagination
+  filtering error, with accurate totals, official NOvA-only filtering, stable
+  ordering, and mounted page controls.
 - Added coordinated Flask recovery sets for the legal ledger, authentication
   sessions, encrypted OAuth vault, and uploaded evidence, with stable-source
   checks, manifest inventories, external-secret compatibility binding,
