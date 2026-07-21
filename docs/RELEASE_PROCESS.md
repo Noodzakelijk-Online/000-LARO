@@ -103,6 +103,17 @@ with `status: "passed"`, a non-future `testedAt` timestamp, evidence references,
 and every mandatory check reported by `npm run release:check`. Generic approval
 notes and credential-presence screenshots are not sufficient.
 
+For the Google acceptance run, use LARO's owner-scoped audit history to retain
+the event IDs and timestamps for `provider.connected`,
+`evidence.source_opened`, and `provider.disconnect_revoked`. The final event is
+written only after Google returns a successful revocation or confirms that the
+grant is already invalid. `provider.disconnect_failed` proves only a failed
+attempt and explicitly records that local credentials were retained for retry;
+it cannot satisfy `disconnectRevoked`. Audit details intentionally exclude
+tokens, account email addresses, document URLs, and document contents. These
+events are supporting evidence only and never approve a release gate by
+themselves.
+
 ## Canary
 
 Risky behavior ships disabled. In particular, `outreach.send.enabled` defaults

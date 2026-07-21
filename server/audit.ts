@@ -91,9 +91,16 @@ export const AUDIT_ACTIONS = {
   EMAIL_SENT: "email.sent",
   EMAIL_RESPONSE_RECEIVED: "email.response_received",
 
+  // Provider connection actions
+  PROVIDER_CONNECTED: "provider.connected",
+  PROVIDER_DISCONNECTED: "provider.disconnected",
+  PROVIDER_DISCONNECT_REVOKED: "provider.disconnect_revoked",
+  PROVIDER_DISCONNECT_FAILED: "provider.disconnect_failed",
+
   // Evidence actions
   EVIDENCE_EXPORTED: "evidence.exported",
   EVIDENCE_SCORED: "evidence.scored",
+  EVIDENCE_SOURCE_OPENED: "evidence.source_opened",
   
   // Outreach actions
   OUTREACH_INITIATED: "outreach.initiated",

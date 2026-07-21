@@ -6,6 +6,7 @@ import { nanoid } from "nanoid";
 import crypto from "crypto";
 import { encryptToken, decryptToken } from "./emailOAuth";
 import { ENV } from "./_core/env";
+import { AUDIT_ACTIONS, createAuditLog } from "./audit";
 
 export interface OAuth2Config {
   clientId: string;
@@ -19,6 +20,7 @@ export interface OAuth2Tokens {
   refreshToken?: string;
   expiresIn: number; // seconds
   tokenType: string;
+  scope?: string;
 }
 
 export interface EmailAccountInfo {
@@ -239,6 +241,7 @@ export async function exchangeCodeForTokens(
       refreshToken: data.refresh_token,
       expiresIn: Number(data.expires_in) || 3600,
       tokenType: data.token_type || "Bearer",
+      scope: data.scope,
     };
   }
 
@@ -267,6 +270,7 @@ export async function exchangeCodeForTokens(
     refreshToken: data.refresh_token,
     expiresIn: Number(data.expires_in) || 3600,
     tokenType: data.token_type || "Bearer",
+    scope: data.scope,
   };
 }
 
@@ -300,14 +304,18 @@ export async function saveEmailAccount(
   provider: "gmail" | "outlook",
   tokens: OAuth2Tokens,
   accountInfo: EmailAccountInfo
-): Promise<void> {
+): Promise<string> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
   const existing = await db
     .select()
     .from(emailAccounts)
-    .where(and(eq(emailAccounts.userId, userId), eq(emailAccounts.email, accountInfo.email)))
+    .where(and(
+      eq(emailAccounts.userId, userId),
+      eq(emailAccounts.provider, provider),
+      eq(emailAccounts.email, accountInfo.email),
+    ))
     .limit(1);
 
   const row = {
@@ -328,11 +336,27 @@ export async function saveEmailAccount(
     updatedAt: new Date(),
   };
 
+  const accountId = existing[0]?.id ?? nanoid();
   if (existing[0]) {
     await db.update(emailAccounts).set(row).where(eq(emailAccounts.id, existing[0].id));
   } else {
-    await db.insert(emailAccounts).values({ id: nanoid(), ...row, createdAt: new Date() });
+    await db.insert(emailAccounts).values({ id: accountId, ...row, createdAt: new Date() });
   }
+
+  await createAuditLog({
+    userId,
+    action: AUDIT_ACTIONS.PROVIDER_CONNECTED,
+    entityType: "provider_connection",
+    entityId: accountId,
+    details: {
+      provider: provider === "gmail" ? "google" : "microsoft",
+      requestedScopes: getOAuth2Config(provider).scopes,
+      tokenReportedScopes: tokens.scope ? tokens.scope.split(/\s+/).filter(Boolean) : [],
+      refreshGrantStored: Boolean(tokens.refreshToken),
+    },
+  });
+
+  return accountId;
 }
 
 export async function refreshAccessToken(
@@ -363,6 +387,7 @@ export async function refreshAccessToken(
       refreshToken: data.refresh_token || refreshToken,
       expiresIn: Number(data.expires_in) || 3600,
       tokenType: data.token_type || "Bearer",
+      scope: data.scope,
     };
   }
 
@@ -387,5 +412,6 @@ export async function refreshAccessToken(
     refreshToken: data.refresh_token || refreshToken,
     expiresIn: Number(data.expires_in) || 3600,
     tokenType: data.token_type || "Bearer",
+    scope: data.scope,
   };
 }

@@ -4,8 +4,9 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
 import { and, eq, inArray } from 'drizzle-orm';
 import { bootTestApp, sqliteAvailable, type TestApp } from '../helpers/app';
-import { buildUser, buildLawyer } from '../factories';
+import { buildUser, buildLawyer, buildCase, buildEvidence } from '../factories';
 import { encryptToken } from '../../server/emailOAuth';
+import { saveEmailAccount } from '../../server/oauth2';
 
 const suite = sqliteAvailable ? describe : describe.skip;
 
@@ -89,6 +90,29 @@ suite('Phases 061–070', () => {
     expect(ownLocalSources).toHaveLength(1);
     expect(otherAccounts).toHaveLength(1);
     expect(otherSources).toHaveLength(1);
+
+    const [audit] = await app.db.select().from(app.schema.auditLogs)
+      .where(and(
+        eq(app.schema.auditLogs.userId, U.id),
+        eq(app.schema.auditLogs.action, 'provider.disconnect_revoked'),
+      ));
+    expect(audit).toBeTruthy();
+    expect(JSON.parse(audit.details)).toMatchObject({
+      provider: 'google',
+      accountCount: 1,
+      revocationOutcomes: ['revoked'],
+      localCredentialsRemoved: true,
+      localSourcesRemoved: true,
+    });
+    expect(audit.details).not.toContain('refresh-u');
+
+    await app.makeCaller(U).gmailEnhanced.disconnect();
+    const revocationAudits = await app.db.select().from(app.schema.auditLogs)
+      .where(and(
+        eq(app.schema.auditLogs.userId, U.id),
+        eq(app.schema.auditLogs.action, 'provider.disconnect_revoked'),
+      ));
+    expect(revocationAudits).toHaveLength(1);
   });
 
   it('rejects new Outlook OAuth connections while its collector is unavailable', async () => {
@@ -117,6 +141,18 @@ suite('Phases 061–070', () => {
       .where(and(eq(app.schema.evidenceSources.userId, U.id), eq(app.schema.evidenceSources.sourceType, 'Gmail')));
     expect(accounts).toHaveLength(1);
     expect(sources).toHaveLength(1);
+
+    const [audit] = await app.db.select().from(app.schema.auditLogs)
+      .where(and(
+        eq(app.schema.auditLogs.userId, U.id),
+        eq(app.schema.auditLogs.action, 'provider.disconnect_failed'),
+      ));
+    expect(JSON.parse(audit.details)).toMatchObject({
+      provider: 'google',
+      reason: 'upstream_revocation_failed',
+      localStateRetained: true,
+    });
+    expect(audit.details).not.toContain('refresh-retry');
   });
 
   it('removes a Google connection when the upstream token is already invalid', async () => {
@@ -131,6 +167,70 @@ suite('Phases 061–070', () => {
     const account = await app.db.select().from(app.schema.emailAccounts)
       .where(eq(app.schema.emailAccounts.id, 'GOOGLE_U61_INVALID'));
     expect(account).toHaveLength(0);
+
+    const [audit] = await app.db.select().from(app.schema.auditLogs)
+      .where(and(
+        eq(app.schema.auditLogs.userId, U.id),
+        eq(app.schema.auditLogs.entityId, 'GOOGLE_U61_INVALID'),
+      ));
+    expect(JSON.parse(audit.details).revocationOutcome).toBe('already_invalid');
+  });
+
+  it('records a Google connection without tokens or account PII in audit details', async () => {
+    const accountId = await saveEmailAccount(
+      U.id,
+      'gmail',
+      {
+        accessToken: 'connection-access-secret',
+        refreshToken: 'connection-refresh-secret',
+        expiresIn: 3600,
+        tokenType: 'Bearer',
+        scope: 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/drive.readonly',
+      },
+      { email: 'private-google-account@example.com', displayName: 'Private Owner' },
+    );
+
+    const [audit] = await app.db.select().from(app.schema.auditLogs)
+      .where(and(
+        eq(app.schema.auditLogs.userId, U.id),
+        eq(app.schema.auditLogs.entityId, accountId),
+      ));
+    const details = JSON.parse(audit.details);
+    expect(audit.action).toBe('provider.connected');
+    expect(details).toMatchObject({ provider: 'google', refreshGrantStored: true });
+    expect(details.requestedScopes).toContain('https://www.googleapis.com/auth/gmail.readonly');
+    expect(details.tokenReportedScopes).toContain('https://www.googleapis.com/auth/drive.readonly');
+    expect(audit.details).not.toContain('connection-access-secret');
+    expect(audit.details).not.toContain('connection-refresh-secret');
+    expect(audit.details).not.toContain('private-google-account@example.com');
+    expect(audit.details).not.toContain('Private Owner');
+  });
+
+  it('records a timeline source open only for owner-accessible evidence without storing its URL', async () => {
+    const caseId = 'CASE_SOURCE_AUDIT_61';
+    const evidenceId = 'EVIDENCE_SOURCE_AUDIT_61';
+    await app.db.insert(app.schema.cases).values(buildCase({ id: caseId, userId: U.id }));
+    await app.db.insert(app.schema.evidence).values(buildEvidence({
+      id: evidenceId,
+      caseId,
+      userId: U.id,
+      fileUrl: 'https://private.example.test/legal-document?id=secret',
+    }));
+
+    await expect(app.makeCaller(ADMIN).evidenceFiles.recordSourceOpened({ id: evidenceId }))
+      .rejects.toThrow('File not found');
+    await app.makeCaller(U).evidenceFiles.recordSourceOpened({ id: evidenceId });
+
+    const rows = await app.db.select().from(app.schema.auditLogs)
+      .where(eq(app.schema.auditLogs.action, 'evidence.source_opened'));
+    const audit = rows.find((row: any) => row.entityId === evidenceId);
+    expect(audit?.userId).toBe(U.id);
+    expect(JSON.parse(audit.details)).toEqual({
+      caseId,
+      accessMethod: 'source_url',
+      dispatchConfirmed: true,
+    });
+    expect(audit.details).not.toContain('private.example.test');
   });
 
   it('Phase 062 — pre-send review returns safety facts and never sends', async () => {

@@ -27,7 +27,7 @@ Descriptive words (mock/stub/placeholder/fake) needing human judgement. Triage o
 | `server/outreachSend.ts` | 16 | `* The email sender is injectable so tests exercise the full path with a fake` |
 | `server/outreachSend.ts` | 48 | `* `sender` is injectable (tests pass a fake); production uses systemEmail.` |
 | `server/routers/cases.ts` | 146 | `// empty GDPR stub.` |
-| `server/routers/enhancedConnections.ts` | 101 | `// Honest unavailability — no fake auth URL.` |
+| `server/routers/enhancedConnections.ts` | 102 | `// Honest unavailability — no fake auth URL.` |
 | `server/routers/extendedRouters.ts` | 6 | `* run. No fake success (Phase 014).` |
 | `server/routers/extendedRouters.ts` | 211 | `// provider is configured there is nothing to sync (honest, not a fake OK).` |
 | `server/routers/index.ts` | 359 | `// stub): computes genuine clarifications the user must resolve BEFORE outreach` |

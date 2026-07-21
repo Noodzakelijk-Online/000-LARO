@@ -24,7 +24,9 @@ export function decryptToken(text: string): string {
  * Revoke a Google OAuth grant. Google returns HTTP 400 when the supplied token
  * is already invalid, which is a safe terminal state for a disconnect request.
  */
-export async function revokeGoogleToken(token: string): Promise<void> {
+export type GoogleRevocationOutcome = 'revoked' | 'already_invalid' | 'not_applicable';
+
+export async function revokeGoogleToken(token: string): Promise<Exclude<GoogleRevocationOutcome, 'not_applicable'>> {
   if (!token) {
     throw new Error('Google token is unavailable for revocation');
   }
@@ -39,21 +41,23 @@ export async function revokeGoogleToken(token: string): Promise<void> {
   if (!response.ok && response.status !== 400) {
     throw new Error(`Google token revocation failed (HTTP ${response.status})`);
   }
+
+  return response.status === 400 ? 'already_invalid' : 'revoked';
 }
 
 /** Revoke the refresh token when present; it represents the durable grant. */
 export async function revokeStoredGoogleTokens(tokens: {
   accessToken?: string | null;
   refreshToken?: string | null;
-}): Promise<void> {
+}): Promise<GoogleRevocationOutcome> {
   const encryptedToken = tokens.refreshToken || tokens.accessToken;
-  if (!encryptedToken) return;
+  if (!encryptedToken) return 'not_applicable';
 
   const token = decryptToken(encryptedToken);
   if (!token) {
     throw new Error('Stored Google token could not be decrypted');
   }
-  await revokeGoogleToken(token);
+  return revokeGoogleToken(token);
 }
 
 /**
