@@ -1,7 +1,7 @@
 # Final Verification Report
 
 Date: 2026-07-21
-Verification target: protected `main` commit `63b6c4f311042c3b1e49e02e0546e61ac6dfc884`
+Verification target: protected `main` commit `21fc0135ec06568b05c12866faf38fa017a6c041`
 
 This report separates reproducible repository evidence from target-environment
 acceptance. It supersedes the 2026-07-06 phase snapshot.
@@ -18,7 +18,7 @@ acceptance. It supersedes the 2026-07-06 phase snapshot.
 | Renderer accessibility | 15 routes x 2 viewports; 0 serious/critical axe violations, unnamed controls, overflows, request failures, page errors, or console errors |
 | Isolated backup/delete/restore/reopen drill | Pass |
 | Target database readiness | SQLite integrity, declared foreign keys, 237 legacy relationship guards, invariants, reconciliation, duplicates, and demo markers clean |
-| Vitest | 52 files, 332 tests passed, 0 todo |
+| Vitest | 53 files, 340 tests passed, 0 todo |
 | Python unittest discovery | 222 tests passed |
 | Runtime dependency audit | 0 known vulnerabilities |
 | Renderer, main, and server production builds | Pass |
@@ -27,8 +27,8 @@ acceptance. It supersedes the 2026-07-06 phase snapshot.
 | Packaged document intelligence and Outreach | Seven migrations present, including persisted keyword-pull jobs and the legacy-import archive; PDF, DOCX, native parser dependencies, and review-gated Outreach tables present; integrated server booted successfully |
 | Desktop scanner contract | Scoped 15-minute token; real bytes/hash; owner/MIME enforcement |
 | Branch CI policy | Node, Python, and renderer-accessibility checks run before merge |
-| Protected-main baseline CI | Actions run `29814494142`; Node, Python, and renderer-accessibility jobs passed |
-| Windows package baseline | Actions run `29814494132`; gate, build, ABI check, package, single-instance profile lock, checksum, and artifact upload passed |
+| Protected-main baseline CI | Actions run `29819449370`; Node, Python, and renderer-accessibility jobs passed |
+| Windows package baseline | Actions run `29819449360`; gate, build, ABI check, package, single-instance profile lock, checksum, and artifact upload passed |
 | Packaged matching assets | Seven aligned legal categories; invalid legacy dataset absent |
 | Dependency graph | One canonical Node workspace; 0 open Dependabot alerts |
 
@@ -119,8 +119,8 @@ dark-theme recommendation contrast defect found during this pass was corrected
 and visually rechecked.
 
 The current protected-main portable artifact is GitHub Actions artifact
-`8489044861` from run `29814494132`. Its executable is 151,847,718 bytes with
-SHA-256 `8adba81efd7890f98eaa483b6cd3181a1d90a49258c7b68b55d9b1527117daf8`;
+`8490999899` from run `29819449360`. Its executable is 151,837,682 bytes with
+SHA-256 `758e15fdecc83d03f66d83d0933c4224476b123c001039eb62b30be95b4a568b`;
 the downloaded executable matches its packaged checksum sidecar. The workflow
 passed the production gate, build, Electron ABI/database-binding check,
 portable packaging, packaged single-instance profile lock, artifact staging,
@@ -165,6 +165,11 @@ development renderer path from the launching shell.
 - Supported Gmail, Drive, local-folder, and direct uploads persist retrievable
   bytes and trigger versioned local analysis. Google-native documents are
   exported to PDF instead of being passed through an invalid media download.
+- The desktop Google grant is limited to Gmail read, Drive read, and account
+  email identity. Disconnect revokes the durable refresh grant before local
+  encrypted credentials are erased; a provider or network failure retains the
+  owner-scoped credential for retry. Unfinished Microsoft collectors cannot
+  start a new OAuth connection or appear configured.
 - Evidence, case, and account deletion remove owned managed-storage objects
   before metadata and abort on storage or database failure instead of silently
   leaving partial data.
@@ -192,12 +197,12 @@ development renderer path from the launching shell.
 |---|---|---|
 | Trusted public Windows distribution | Deliberately out of scope | Configure Store or certificate signing only if platform publisher trust becomes a requirement; unsigned tagged delivery remains supported with a checksum and warning |
 | Public branding | Awaiting owner confirmation | Product owner confirms `build/icon.png` / `public/laro-logo.png` as the approved public mark |
-| Live providers | Not exercised with production accounts | Target Google OAuth, storage/LLM as used, and outbound email credentials pass consent, send, callback, and audit checks |
+| Live providers | Not exercised with production accounts | Every intended provider has a complete `providerChecks` record covering the mandatory Google, email, storage, LLM, or Telegram behaviors printed by `npm run release:check` |
 
 These external states are represented in `release-acceptance.json`. Normal
 development builds may retain pending gates, but the tagged release workflow
-requires reviewed approver, timestamp, evidence, and provider-scope records
-before it can publish.
+requires a reviewed approver, timestamp, evidence, provider scope, and complete
+provider-specific checks before it can publish.
 
 ## Residual engineering work
 
