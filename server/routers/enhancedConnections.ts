@@ -7,6 +7,7 @@ import { ENV } from '../_core/env';
 import { beginOAuthFlow } from '../oauth2';
 import { revokeStoredGoogleTokens } from '../emailOAuth';
 import { TRPCError } from '@trpc/server';
+import { AUDIT_ACTIONS, createAuditLog } from '../audit';
 
 /**
  * Phase 012 — external provider reality review.
@@ -126,12 +127,26 @@ const createEnhancedConnectionRouter = (providerName: string) => {
               const accounts = await db.select().from(emailAccounts).where(
                 and(eq(emailAccounts.userId, ctx.user.id), eq(emailAccounts.provider, oauthProvider))
               );
+              const revocationOutcomes: string[] = [];
               if (oauthProvider === 'gmail') {
                 try {
                   for (const account of accounts) {
-                    await revokeStoredGoogleTokens(account);
+                    revocationOutcomes.push(await revokeStoredGoogleTokens(account));
                   }
                 } catch (error) {
+                  await createAuditLog({
+                    userId: ctx.user.id,
+                    action: AUDIT_ACTIONS.PROVIDER_DISCONNECT_FAILED,
+                    entityType: 'provider_connection',
+                    entityId: 'google',
+                    details: {
+                      provider: 'google',
+                      route: `${providerName}.disconnect`,
+                      accountCount: accounts.length,
+                      reason: 'upstream_revocation_failed',
+                      localStateRetained: true,
+                    },
+                  });
                   throw new TRPCError({
                     code: 'PRECONDITION_FAILED',
                     message: 'Google did not confirm token revocation; the local connection was retained so disconnect can be retried.',
@@ -151,6 +166,25 @@ const createEnhancedConnectionRouter = (providerName: string) => {
                   inArray(evidenceSources.sourceType, sharedSources),
                 )
               );
+              const revocationConfirmed = revocationOutcomes.some(
+                (outcome) => outcome === 'revoked' || outcome === 'already_invalid'
+              );
+              await createAuditLog({
+                userId: ctx.user.id,
+                action: revocationConfirmed
+                  ? AUDIT_ACTIONS.PROVIDER_DISCONNECT_REVOKED
+                  : AUDIT_ACTIONS.PROVIDER_DISCONNECTED,
+                entityType: 'provider_connection',
+                entityId: oauthProvider === 'gmail' ? 'google' : oauthProvider,
+                details: {
+                  provider: oauthProvider === 'gmail' ? 'google' : oauthProvider,
+                  route: `${providerName}.disconnect`,
+                  accountCount: accounts.length,
+                  revocationOutcomes: oauthProvider === 'gmail' ? revocationOutcomes : ['not_applicable'],
+                  localCredentialsRemoved: true,
+                  localSourcesRemoved: true,
+                },
+              });
               return { success: true };
             }
             await db.delete(evidenceSources).where(

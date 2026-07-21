@@ -21,6 +21,7 @@ import {
   MAX_EVIDENCE_FILE_BYTES,
 } from "../../shared/evidenceFiles";
 import { TRPCError } from "@trpc/server";
+import { AUDIT_ACTIONS, createAuditLog } from "../audit";
 
 export const evidenceFilesRouter = router({
 
@@ -171,20 +172,37 @@ export const evidenceFilesRouter = router({
       const file = await getEvidenceFile(userId, input.id);
       if (!file) throw new Error("File not found");
 
-      if (typeof file.metadata === "string") {
-        try {
-          const storageKey = JSON.parse(file.metadata)?.storageKey;
-          if (typeof storageKey === "string" && storageKey) {
-            return { url: await storageGet(storageKey) };
-          }
-        } catch {
-          // Fall through to a legacy URL when metadata is not managed storage.
-        }
-      }
+      const storageKey = managedStorageKeyFromMetadata(file.metadata);
+      if (storageKey) return { url: await storageGet(storageKey) };
 
       if ((file as any).fileUrl) return { url: (file as any).fileUrl };
 
       return { url: null, message: "File not available for download" };
+    }),
+
+  // Record only after the renderer successfully dispatches the source URL.
+  recordSourceOpened: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const file = await getEvidenceFile(ctx.user.id, input.id);
+      if (!file) throw new Error("File not found");
+      const managed = Boolean(managedStorageKeyFromMetadata(file.metadata));
+      if (!managed && !(file as any).fileUrl) {
+        throw new Error("File not available for download");
+      }
+
+      await createAuditLog({
+        userId: ctx.user.id,
+        action: AUDIT_ACTIONS.EVIDENCE_SOURCE_OPENED,
+        entityType: "evidence",
+        entityId: file.id,
+        details: {
+          caseId: file.caseId,
+          accessMethod: managed ? "managed_storage" : "source_url",
+          dispatchConfirmed: true,
+        },
+      });
+      return { success: true as const };
     }),
 
   // Also search evidence_files table (desktop scanner uploads go here)

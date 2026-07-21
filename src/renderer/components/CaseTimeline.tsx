@@ -50,6 +50,7 @@ export function CaseTimeline({ caseId }: CaseTimelineProps) {
 
   const generateMutation = trpc.documentAnalysis.generateCaseTimeline.useMutation();
   const sourceMutation = trpc.evidenceFiles.getDownloadUrl.useMutation();
+  const sourceOpenedMutation = trpc.evidenceFiles.recordSourceOpened.useMutation();
 
   const handleGenerateTimeline = async () => {
     try {
@@ -71,6 +72,7 @@ export function CaseTimeline({ caseId }: CaseTimelineProps) {
       const source = await sourceMutation.mutateAsync({ id: evidenceId });
       if (!source.url) throw new Error(source.message || "The source file is not available.");
       await getElectronAPI().openExternal(source.url);
+      await sourceOpenedMutation.mutateAsync({ id: evidenceId });
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "The source file could not be opened.");
     }

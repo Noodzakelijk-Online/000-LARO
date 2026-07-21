@@ -17,6 +17,7 @@ import { createEvidenceFile } from "../evidence";
 import { analyzeStoredEvidence } from "../documentAnalysisService";
 import { supportsDocumentAnalysisMime } from "../documentIntelligence";
 import { revokeStoredGoogleTokens } from "../emailOAuth";
+import { AUDIT_ACTIONS, createAuditLog } from "../audit";
 
 async function ingestDriveEvidence(options: {
   userId: string;
@@ -138,11 +139,25 @@ export const googleDriveRouter = router({
       const accounts = await db.select().from(emailAccounts).where(
         and(eq(emailAccounts.userId, ctx.user.id), eq(emailAccounts.provider, "gmail"))
       );
+      const revocationOutcomes: string[] = [];
       try {
         for (const account of accounts) {
-          await revokeStoredGoogleTokens(account);
+          revocationOutcomes.push(await revokeStoredGoogleTokens(account));
         }
       } catch (error) {
+        await createAuditLog({
+          userId: ctx.user.id,
+          action: AUDIT_ACTIONS.PROVIDER_DISCONNECT_FAILED,
+          entityType: "provider_connection",
+          entityId: "google",
+          details: {
+            provider: "google",
+            route: "googleDrive.disconnect",
+            accountCount: accounts.length,
+            reason: "upstream_revocation_failed",
+            localStateRetained: true,
+          },
+        });
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
           message: "Google did not confirm token revocation; the local connection was retained so disconnect can be retried.",
@@ -153,6 +168,24 @@ export const googleDriveRouter = router({
       await db
         .delete(emailAccounts)
         .where(and(eq(emailAccounts.userId, ctx.user.id), eq(emailAccounts.provider, "gmail")));
+      const revocationConfirmed = revocationOutcomes.some(
+        (outcome) => outcome === "revoked" || outcome === "already_invalid"
+      );
+      await createAuditLog({
+        userId: ctx.user.id,
+        action: revocationConfirmed
+          ? AUDIT_ACTIONS.PROVIDER_DISCONNECT_REVOKED
+          : AUDIT_ACTIONS.PROVIDER_DISCONNECTED,
+        entityType: "provider_connection",
+        entityId: "google",
+        details: {
+          provider: "google",
+          route: "googleDrive.disconnect",
+          accountCount: accounts.length,
+          revocationOutcomes,
+          localCredentialsRemoved: true,
+        },
+      });
       return { success: true };
     }),
 

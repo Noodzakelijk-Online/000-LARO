@@ -10,9 +10,10 @@ import {
   getAccountInfo,
   refreshAccessToken,
   consumeOAuthState,
+  saveEmailAccount,
 } from "../oauth2";
-import crypto from "crypto";
 import { encryptToken, decryptToken, revokeStoredGoogleTokens } from "../emailOAuth";
+import { AUDIT_ACTIONS, createAuditLog } from "../audit";
 
 export const emailAccountsRouter = router({
   getAuthUrl: protectedProcedure
@@ -38,21 +39,7 @@ export const emailAccountsRouter = router({
       const tokens = await exchangeCodeForTokens(input.provider, input.code, state.codeVerifier);
       const accountInfo = await getAccountInfo(input.provider, tokens.accessToken);
 
-      const id = crypto.randomBytes(16).toString("hex");
-      const accessEnc = encryptToken(tokens.accessToken);
-      const refreshEnc = tokens.refreshToken ? encryptToken(tokens.refreshToken) : null;
-
-      await db.insert(emailAccounts).values({
-        id,
-        userId: ctx.user.id,
-        provider: input.provider,
-        email: accountInfo.email,
-        accessToken: accessEnc,
-        refreshToken: refreshEnc,
-        status: "connected",
-        connectedAt: new Date(),
-        tokenExpiry: new Date(Date.now() + (tokens.expiresIn || 3600) * 1000),
-      });
+      const id = await saveEmailAccount(ctx.user.id, input.provider, tokens, accountInfo);
 
       return { success: true as const, accountId: id, email: accountInfo.email };
     }),
@@ -111,10 +98,23 @@ export const emailAccountsRouter = router({
         .where(and(eq(emailAccounts.id, input.accountId), eq(emailAccounts.userId, ctx.user.id)))
         .limit(1);
       if (!acc) throw new Error("Not found");
+      let revocationOutcome = "not_applicable";
       if (acc.provider === "gmail") {
         try {
-          await revokeStoredGoogleTokens(acc);
+          revocationOutcome = await revokeStoredGoogleTokens(acc);
         } catch (error) {
+          await createAuditLog({
+            userId: ctx.user.id,
+            action: AUDIT_ACTIONS.PROVIDER_DISCONNECT_FAILED,
+            entityType: "provider_connection",
+            entityId: acc.id,
+            details: {
+              provider: "google",
+              route: "emailAccounts.revoke",
+              reason: "upstream_revocation_failed",
+              localStateRetained: true,
+            },
+          });
           throw new TRPCError({
             code: "PRECONDITION_FAILED",
             message: "Google did not confirm token revocation; the local connection was retained so disconnect can be retried.",
@@ -123,6 +123,21 @@ export const emailAccountsRouter = router({
         }
       }
       await db.delete(emailAccounts).where(eq(emailAccounts.id, acc.id));
+      const revocationConfirmed = revocationOutcome === "revoked" || revocationOutcome === "already_invalid";
+      await createAuditLog({
+        userId: ctx.user.id,
+        action: revocationConfirmed
+          ? AUDIT_ACTIONS.PROVIDER_DISCONNECT_REVOKED
+          : AUDIT_ACTIONS.PROVIDER_DISCONNECTED,
+        entityType: "provider_connection",
+        entityId: acc.id,
+        details: {
+          provider: acc.provider === "gmail" ? "google" : acc.provider,
+          route: "emailAccounts.revoke",
+          revocationOutcome,
+          localCredentialsRemoved: true,
+        },
+      });
       return { success: true as const };
     }),
 
