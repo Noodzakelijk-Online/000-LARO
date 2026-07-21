@@ -2,9 +2,11 @@ import { z } from 'zod';
 import { router, protectedProcedure } from '../_core/trpc';
 import { getDb } from '../db';
 import { emailAccounts, evidenceSources } from '../schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import { ENV } from '../_core/env';
 import { beginOAuthFlow } from '../oauth2';
+import { revokeStoredGoogleTokens } from '../emailOAuth';
+import { TRPCError } from '@trpc/server';
 
 /**
  * Phase 012 — external provider reality review.
@@ -12,7 +14,7 @@ import { beginOAuthFlow } from '../oauth2';
  * getOAuthUrl no longer returns a blanket dummy auth URL for every provider.
  * It reports the provider's REAL availability:
  *  - Google-backed providers (Gmail, Google Drive) require GOOGLE_CLIENT_ID/SECRET.
- *  - Microsoft-backed providers (Outlook, OneDrive) require MICROSOFT_CLIENT_ID/SECRET.
+ *  - Microsoft-backed providers remain unavailable until their collectors are implemented.
  *  - Slack is not implemented.
  * When a provider is unconfigured or unsupported, the response is
  * `{ success: false, available: false, reason }` so the UI can show an honest
@@ -32,9 +34,12 @@ function providerAvailability(providerName: string): ProviderConfig {
         : { configured: false, reason: 'Google OAuth is not configured (GOOGLE_CLIENT_ID/SECRET missing).' };
     case 'outlook':
     case 'onedrive':
-      return msReady
-        ? { configured: true, connectPath: 'outlook' }
-        : { configured: false, reason: 'Microsoft OAuth is not configured (MICROSOFT_CLIENT_ID/SECRET missing).' };
+      return {
+        configured: false,
+        reason: msReady
+          ? 'Microsoft evidence collection is not release-capable yet; no account was connected.'
+          : 'Microsoft evidence collection is unavailable and its OAuth credentials are not configured.',
+      };
     case 'slack':
     default:
       return { configured: false, reason: `${providerName} integration is not implemented yet.` };
@@ -112,6 +117,42 @@ const createEnhancedConnectionRouter = (providerName: string) => {
         try {
           const db = await getDb();
           if (db) {
+            const oauthProvider = providerName === 'Gmail' || providerName === 'GoogleDrive'
+              ? 'gmail'
+              : providerName === 'Outlook' || providerName === 'OneDrive'
+                ? 'outlook'
+                : null;
+            if (oauthProvider) {
+              const accounts = await db.select().from(emailAccounts).where(
+                and(eq(emailAccounts.userId, ctx.user.id), eq(emailAccounts.provider, oauthProvider))
+              );
+              if (oauthProvider === 'gmail') {
+                try {
+                  for (const account of accounts) {
+                    await revokeStoredGoogleTokens(account);
+                  }
+                } catch (error) {
+                  throw new TRPCError({
+                    code: 'PRECONDITION_FAILED',
+                    message: 'Google did not confirm token revocation; the local connection was retained so disconnect can be retried.',
+                    cause: error,
+                  });
+                }
+              }
+              await db.delete(emailAccounts).where(
+                and(eq(emailAccounts.userId, ctx.user.id), eq(emailAccounts.provider, oauthProvider))
+              );
+              const sharedSources = oauthProvider === 'gmail'
+                ? ['Gmail', 'GoogleDrive']
+                : ['Outlook', 'OneDrive'];
+              await db.delete(evidenceSources).where(
+                and(
+                  eq(evidenceSources.userId, ctx.user.id),
+                  inArray(evidenceSources.sourceType, sharedSources),
+                )
+              );
+              return { success: true };
+            }
             await db.delete(evidenceSources).where(
               and(
                 eq(evidenceSources.userId, ctx.user.id),
@@ -121,6 +162,7 @@ const createEnhancedConnectionRouter = (providerName: string) => {
           }
           return { success: true };
         } catch (error) {
+          if (error instanceof TRPCError) throw error;
           throw new Error(`Failed to disconnect ${providerName}`);
         }
       }),

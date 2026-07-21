@@ -42,8 +42,8 @@ describe('OAuth Redirect URI Configuration', () => {
     expect(config.clientId).toBeTruthy();
     expect(config.clientSecret).toBeTruthy();
     expect(config.redirectUri).toBeTruthy();
-    expect(config.scopes).toContain('https://www.googleapis.com/auth/gmail.send');
     expect(config.scopes).toContain('https://www.googleapis.com/auth/gmail.readonly');
+    expect(config.scopes).not.toContain('https://www.googleapis.com/auth/gmail.send');
   });
 
   it('should have valid Outlook OAuth configuration', () => {
@@ -51,7 +51,8 @@ describe('OAuth Redirect URI Configuration', () => {
     
     // Outlook credentials may not be set yet, but structure should be valid
     expect(config.redirectUri).toBeTruthy();
-    expect(config.scopes).toContain('https://graph.microsoft.com/Mail.Send');
     expect(config.scopes).toContain('https://graph.microsoft.com/Mail.Read');
+    expect(config.scopes).toContain('offline_access');
+    expect(config.scopes).not.toContain('https://graph.microsoft.com/Mail.Send');
   });
 });

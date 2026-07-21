@@ -72,7 +72,6 @@ export function getGmailOAuthConfig() {
     redirectUri: `${process.env.OAUTH_REDIRECT_BASE_URL || 'http://localhost:3000'}/api/oauth/gmail/callback`,
     scopes: [
       'https://www.googleapis.com/auth/gmail.readonly',
-      'https://www.googleapis.com/auth/gmail.labels',
     ],
   };
 }

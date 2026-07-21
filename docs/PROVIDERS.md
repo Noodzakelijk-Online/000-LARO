@@ -1,11 +1,11 @@
 # External Provider Status
 
-Date: 2026-07-13
+Date: 2026-07-21
 
 | Provider | Purpose | Required configuration | Current status |
 |---|---|---|---|
 | Google Gmail and Drive | Read-only evidence intake | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, consent | Available; encrypted PKCE OAuth and account-backed live status |
-| Microsoft Outlook and OneDrive | Mail/file evidence | `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, consent | Partial; OAuth available, collection depth varies by surface |
+| Microsoft Outlook and OneDrive | Mail/file evidence | not applicable until collection is complete | Unavailable; OAuth primitives exist, but no release-capable evidence collector is mounted |
 | Forge-compatible LLM | Provider-backed legal analysis | `FORGE_API_URL`, `FORGE_API_KEY` | Available when configured; otherwise fails closed |
 | Local Ollama | Flask deep document reading | loopback `LARO_OLLAMA_*` | Optional; citation-gated local analysis |
 | SMTP or SendGrid | Transactional email and approved sending | `SMTP_*` or `SENDGRID_API_KEY` | Available when configured; no console success in production |
@@ -15,4 +15,14 @@ Date: 2026-07-13
 | Slack | Message evidence | not applicable | Unavailable |
 | Rechtspraak | Court-record context and matching taxonomy | bundled datasets/public API | Bundled taxonomy and 5,400-case keyword analysis active; live lookup remains partial |
 
-Provider configuration is not connection success. The UI must show connected only after persisted account state confirms OAuth completion.
+Google requests only Gmail read, Drive read, and account-email identity scopes.
+It does not request Gmail send or label-write access. Outlook OAuth does not
+request `Mail.Send`, and the product keeps Microsoft connection unavailable
+until a real owner-scoped collector and target-account acceptance exist.
+
+Provider configuration is not connection success. The UI shows Google as
+connected only after persisted account state confirms OAuth completion. A
+disconnect removes the shared Gmail/Drive credential and source connection
+records for that owner only after Google confirms revocation. If Google is
+unreachable or returns a non-terminal failure, LARO retains the encrypted
+credential so the owner can retry instead of silently leaving an active grant.

@@ -16,6 +16,7 @@ import { assertCaseOwnership } from "../_core/authz";
 import { createEvidenceFile } from "../evidence";
 import { analyzeStoredEvidence } from "../documentAnalysisService";
 import { supportsDocumentAnalysisMime } from "../documentIntelligence";
+import { revokeStoredGoogleTokens } from "../emailOAuth";
 
 async function ingestDriveEvidence(options: {
   userId: string;
@@ -133,6 +134,22 @@ export const googleDriveRouter = router({
     .mutation(async ({ ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+
+      const accounts = await db.select().from(emailAccounts).where(
+        and(eq(emailAccounts.userId, ctx.user.id), eq(emailAccounts.provider, "gmail"))
+      );
+      try {
+        for (const account of accounts) {
+          await revokeStoredGoogleTokens(account);
+        }
+      } catch (error) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Google did not confirm token revocation; the local connection was retained so disconnect can be retried.",
+          cause: error,
+        });
+      }
+
       await db
         .delete(emailAccounts)
         .where(and(eq(emailAccounts.userId, ctx.user.id), eq(emailAccounts.provider, "gmail")));

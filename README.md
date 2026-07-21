@@ -123,7 +123,8 @@ Copy `.env.example` to `.env`; never commit real secrets. The template is groupe
 | Desktop data | `DATABASE_URL`, `LOCAL_STORAGE_DIR`, `AWS_S3_*` |
 | Standalone local scan | `LOCAL_SCAN_ROOTS` (path-delimited allowlist; desktop uses the native folder picker) |
 | Provider-backed desktop AI | `FORGE_API_URL`, `FORGE_API_KEY` |
-| Optional connectors | `MICROSOFT_*`, `TELEGRAM_BOT_TOKEN`, `SENDGRID_API_KEY`, `SMTP_*` |
+| Optional active connectors | `TELEGRAM_BOT_TOKEN`, `SENDGRID_API_KEY`, `SMTP_*` |
+| Reserved Microsoft connector config | `MICROSOFT_*` (collection remains unavailable until implemented and accepted) |
 | Flask server | `LARO_FLASK_PORT`, `LARO_HOST`, `LARO_DEBUG`, `SECRET_KEY` |
 | Flask ledger | `LARO_LEDGER_DATABASE_URL`, `LARO_UPLOAD_ROOT`, `LARO_MAX_UPLOAD_BYTES`, `LARO_BUNDLE_MAX_BYTES` |
 | Flask identity and vault | `LARO_AUTH_DATABASE_PATH`, `LARO_LOCAL_ACCOUNT_EMAIL`, `LARO_TOKEN_STORE_DIR`, `LARO_TOKEN_ENCRYPTION_KEY` |
@@ -144,6 +145,11 @@ GOOGLE_REDIRECT_URI=http://127.0.0.1:8768/api/google/oauth/callback
 ```
 
 After OAuth succeeds, the UI updates its connection state without a manual page refresh. Pulls run as durable jobs and report persisted source, document, word, character, elapsed-time, and ETA progress. Imported records retain their original URI and read audit. Raw refresh credentials are encrypted in the ignored local `tokens/` vault; the ledger stores connection metadata and a token fingerprint, not the raw token.
+
+The production Electron connector requests only Gmail read, Drive read, and
+account-email identity access. Disconnect revokes the durable Google grant
+before deleting the owner-scoped encrypted credential; a provider failure keeps
+the credential available for a safe retry.
 
 The Flask password-login path stores users and hashed bearer sessions in the ignored SQLite auth database. It does not seed sample accounts. Password reset tokens are stored only as SHA-256 digests, expire after 15 minutes, are single-use, invalidate existing sessions, and are delivered only through configured SMTP or an application-injected delivery hook.
 
@@ -171,11 +177,11 @@ GitHub Actions repeats the Node and browser checks on the supported Node 22 tool
 - Server, Electron main-process, and shipped renderer TypeScript checks passed; no shipped runtime module disables type checking; ESLint passed.
 - Traceability reported 117 rows, 92 cited, and 0 broken references.
 - Runtime no-excuses scan reported 0 suspect findings; account safety reported 0 high-severity findings.
-- Vitest reported 52 passing files and 332 passing tests, including controlled
+- Vitest reported 53 passing files and 340 passing tests, including controlled
   NOvA parsing/filter, unknown-metric scoring, and review-gated
   media/organization discovery, tenant isolation, case-draft persistence, and
   target-database readiness tests, with no skipped or todo tests.
-- Full Python discovery reported 215 passing tests, including 13 coordinated
+- Full Python discovery reported 222 passing tests, including 13 coordinated
   Flask recovery tests. Warning-focused optimization and UCID tests also passed
   with deprecations promoted to errors.
 - The Vite 8 renderer, Electron 43 main process, and standalone server builds completed successfully.

@@ -13,7 +13,8 @@
       "approvedBy": null,
       "approvedAt": null,
       "evidence": [],
-      "providerScope": []
+      "providerScope": [],
+      "providerChecks": {}
     }
   }
 }
