@@ -48,6 +48,7 @@
     "rebuild:node": "npm rebuild better-sqlite3",
     "rebuild:electron": "electron-rebuild -f -w better-sqlite3",
     "verify:electron-native": "cross-env ELECTRON_RUN_AS_NODE=1 electron scripts/verify-electron-sqlite.cjs",
+    "release:prepare": "node scripts/prepare-release-acceptance.mjs",
     "release:check": "node scripts/release-acceptance.mjs",
     "traceability": "node scripts/traceability.mjs --write",
     "gate": "node scripts/stabilization-gate.mjs",

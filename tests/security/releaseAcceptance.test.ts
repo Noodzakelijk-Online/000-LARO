@@ -1,5 +1,5 @@
 import { spawnSync } from 'child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -91,5 +91,54 @@ describe('release acceptance provider evidence', () => {
     const result = validate(record({ ...approval(), providerScope: [...providerScope], providerChecks }));
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('All recorded external acceptance gates are approved.');
+  });
+
+  it('prepares an unapproved provider draft with exact checks and brand hashes', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'laro-acceptance-draft-'));
+    temporaryDirectories.push(directory);
+    const output = join(directory, 'draft.json');
+    const result = spawnSync(process.execPath, [
+      join(ROOT, 'scripts/prepare-release-acceptance.mjs'),
+      '--providers', 'google,outboundEmail',
+      '--output', output,
+    ], { cwd: ROOT, encoding: 'utf8' });
+
+    expect(result.status).toBe(0);
+    const draft = JSON.parse(readFileSync(output, 'utf8'));
+    expect(draft.gates.publicBrand.status).toBe('pending');
+    expect(draft.gates.liveProviders.status).toBe('pending');
+    expect(draft.gates.liveProviders.providerScope).toEqual(['google', 'outboundEmail']);
+    expect(draft.gates.liveProviders.providerChecks.google.requiredChecks).toEqual(providerRequirements.google);
+    expect(draft.gates.liveProviders.providerChecks.google.checks).toEqual([]);
+    expect(draft.gates.publicBrand.assets).toHaveLength(2);
+    for (const asset of draft.gates.publicBrand.assets) {
+      expect(asset.sha256).toMatch(/^[a-f0-9]{64}$/);
+      expect(asset.bytes).toBeGreaterThan(0);
+    }
+    expect(result.stdout).toContain('No gate was approved and no provider credential was read or stored.');
+  });
+
+  it('refuses unsupported providers and preserves an existing draft by default', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'laro-acceptance-draft-'));
+    temporaryDirectories.push(directory);
+    const output = join(directory, 'draft.json');
+    writeFileSync(output, 'owner draft');
+
+    const unsupported = spawnSync(process.execPath, [
+      join(ROOT, 'scripts/prepare-release-acceptance.mjs'),
+      '--providers', 'google,unknown',
+      '--output', join(directory, 'unsupported.json'),
+    ], { cwd: ROOT, encoding: 'utf8' });
+    const existing = spawnSync(process.execPath, [
+      join(ROOT, 'scripts/prepare-release-acceptance.mjs'),
+      '--providers', 'google',
+      '--output', output,
+    ], { cwd: ROOT, encoding: 'utf8' });
+
+    expect(unsupported.status).toBe(1);
+    expect(unsupported.stderr).toContain('Unsupported providers: unknown');
+    expect(existing.status).toBe(1);
+    expect(existing.stderr).toContain('Output already exists');
+    expect(readFileSync(output, 'utf8')).toBe('owner draft');
   });
 });

@@ -82,8 +82,19 @@ environment. Confirm no `.env`, database, upload, token, or unrelated developmen
 asset appears in the package. Confirm the checksum and, when signing is enabled,
 the signature before rollout.
 Confirm that `build/icon.png` is the product-owner-approved public LARO mark.
-Before tagging, update `release-acceptance.json` in a reviewed pull request. A
-pending record is valid for normal development but blocks every tagged release.
+Prepare a non-approved local draft for only the providers intended for release:
+
+```powershell
+npm run release:prepare -- --providers google,outboundEmail
+```
+
+The command records the exact mandatory checks and current brand-asset hashes in
+`release-acceptance.draft.json`. It does not read credentials, approve a gate, or
+overwrite the canonical record. Complete each live check with representative
+non-sensitive data, add auditable evidence references, obtain owner approval,
+then move the reviewed values into `release-acceptance.json` through a pull
+request. A pending canonical record is valid for normal development but blocks
+every tagged release.
 
 An approved `liveProviders` gate must use the supported provider identifiers
 `google`, `outboundEmail`, `inboundEmail`, `s3`, `forgeLlm`, or `telegram`.
