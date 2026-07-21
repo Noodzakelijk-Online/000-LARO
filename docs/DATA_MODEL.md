@@ -1,6 +1,6 @@
 # Data Model, Ownership, and Persistence
 
-Current as of 2026-07-20.
+Current as of 2026-07-21.
 
 ## Topology
 
@@ -10,8 +10,9 @@ Current as of 2026-07-20.
   prepared SQLite statements.
 - Managed evidence bytes: AWS S3 when configured, otherwise the Electron
   user-data upload directory.
-- The optional Flask command-center runtime retains a separate ledger database;
-  it does not silently share Electron records.
+- A legacy Flask command-center workspace retains a separate ledger until its
+  owner-bound one-way migration. Imported source rows live in
+  `legacy_import_runs` and `legacy_import_records`; there is no silent sharing.
 
 Both SQLite connections enable WAL, foreign-key enforcement, and a 5-second busy
 timeout. The scanner database declares its scan-to-file foreign key.

@@ -1,17 +1,19 @@
 # LARO Architecture
 
-Updated: 2026-07-20
+Updated: 2026-07-21
 
-LARO contains two supported local-first runtimes. They share a repository and selected provider configuration, but they currently have separate schemas and databases. This is an explicit transitional constraint, not an implied synchronization mechanism.
+LARO has one production runtime: Electron with Express/tRPC and React. The Flask
+command center remains a legacy review and migration source for existing
+source-linked ledgers; it is not a concurrent production authority.
 
 ## Runtime Map
 
 | Runtime | Responsibility | Entry point | Persistence |
 | --- | --- | --- | --- |
 | Electron + Express/tRPC + React | Desktop case workflows, provider connections, evidence storage, matching, controlled outreach, and administration | `src-main/index.ts`, `server/index.ts`, `src/renderer/main.tsx` | Drizzle over SQLite plus local disk or S3 evidence storage |
-| Flask Case Command Center | Legal ledger, document intelligence, source-linked timelines, Papertrail, bundles, matching, and outreach preparation | `app.py`, `legal_ledger.py`, `frontend/` | SQLAlchemy over SQLite plus local uploads, auth database, and encrypted token vault |
+| Legacy Flask migration source | Review/export existing legal-ledger data before owner-bound migration | `app.py`, `legal_ledger.py`, `frontend/` | SQLAlchemy over SQLite plus local uploads, auth database, and encrypted token vault |
 
-The Electron process starts the Express/tRPC API and React renderer together. The same API can run standalone through `npm run dev:server` or Docker. The Flask runtime binds to loopback by default on port 8768 so both runtimes can operate concurrently.
+The Electron process starts the Express/tRPC API and React renderer together. The same API can run standalone through `npm run dev:server` or Docker. Flask remains loopback-only for pre-migration review and must be stopped while migration is applied.
 
 ## Desktop Flow
 
@@ -71,7 +73,12 @@ Important boundaries:
 
 ## Data Ownership
 
-The desktop and Flask schemas are not automatically synchronized. A case created in one runtime is not guaranteed to appear in the other. Until a reviewed migration or replication contract exists, operators must treat each runtime as authoritative only for its documented workflows.
+Electron is authoritative for production records. `flask:migrate-to-desktop`
+maps one explicitly selected Flask owner to one existing desktop account,
+copies verified evidence bytes, and retains every owner-scoped source row in
+hash-addressed archive tables. Changed sources cannot reuse an imported source
+ID. Passwords, sessions, OAuth vault tokens, global directories, and actionable
+send state do not cross the boundary.
 
 Private records are scoped as follows:
 
@@ -96,7 +103,7 @@ Private records are scoped as follows:
 
 - Electron is the primary desktop distribution target.
 - Docker packages only the standalone Express/tRPC API, not Electron or Flask.
-- Flask is a separate local process launched by `run_local.ps1`.
+- Flask is a separate legacy-review process launched by `run_local.ps1`; it is not included in the Windows desktop artifact.
 - SQLite files, uploads, token vaults, and generated secrets are runtime state and are ignored by Git.
 - Desktop packaging allowlists the two matcher datasets and excludes the legacy
   development service under `assets`.
@@ -106,7 +113,7 @@ Private records are scoped as follows:
 
 ## Current Architectural Risks
 
-1. The two runtimes can drift because they do not share a database or generated cross-runtime contract.
+1. An unmigrated Flask workspace remains a separate legacy recovery responsibility until the operator completes and verifies the one-way migration.
 2. Several old prototype HTML and documentation files remain for traceability and are not supported entry points.
 3. Some desktop schema fields still store numeric values as text and need reviewed migrations.
 4. Database integrity remains partly application-enforced; additional foreign keys require migration planning.

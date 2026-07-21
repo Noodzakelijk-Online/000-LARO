@@ -6,7 +6,17 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { analyzeStoredEvidence, parseDocumentAnalysisResult } from "../documentAnalysisService";
 import { DOCUMENT_ANALYSIS_VERSION, supportedDocumentAnalysisMimeTypes } from "../documentIntelligence";
 import { getDb } from "../db";
-import { documentAnalyses, evidence } from "../schema";
+import { documentAnalyses, evidence, timeline as persistedTimeline } from "../schema";
+
+function parseTimelineMetadata(value: string | null): Record<string, unknown> {
+  if (!value) return {};
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
 
 export const documentAnalysisRouter = router({
   capabilities: protectedProcedure.query(() => ({
@@ -56,14 +66,25 @@ export const documentAnalysisRouter = router({
     .mutation(async ({ ctx, input }) => {
       await assertCaseOwnership(input.caseId, ctx.user.id);
       const db = await getDb();
-      const rows = await db
-        .select({ analysis: documentAnalyses, evidenceTitle: evidence.title })
-        .from(documentAnalyses)
-        .innerJoin(evidence, eq(documentAnalyses.evidenceId, evidence.id))
-        .where(and(eq(documentAnalyses.caseId, input.caseId), eq(documentAnalyses.userId, ctx.user.id)))
-        .orderBy(asc(documentAnalyses.createdAt));
+      const [rows, persistedRows, evidenceRows] = await Promise.all([
+        db
+          .select({ analysis: documentAnalyses, evidenceTitle: evidence.title })
+          .from(documentAnalyses)
+          .innerJoin(evidence, eq(documentAnalyses.evidenceId, evidence.id))
+          .where(and(eq(documentAnalyses.caseId, input.caseId), eq(documentAnalyses.userId, ctx.user.id)))
+          .orderBy(asc(documentAnalyses.createdAt)),
+        db
+          .select()
+          .from(persistedTimeline)
+          .where(and(eq(persistedTimeline.caseId, input.caseId), eq(persistedTimeline.userId, ctx.user.id)))
+          .orderBy(asc(persistedTimeline.eventAt)),
+        db
+          .select({ id: evidence.id, title: evidence.title })
+          .from(evidence)
+          .where(and(eq(evidence.caseId, input.caseId), eq(evidence.userId, ctx.user.id))),
+      ]);
 
-      const events = rows.flatMap(({ analysis, evidenceTitle }) => {
+      const analyzedEvents = rows.flatMap(({ analysis, evidenceTitle }) => {
         const result = parseDocumentAnalysisResult(analysis.result);
         const citations = new Map(result.citations.map((citation) => [citation.id, citation]));
         return result.timelineEvents.map((event) => ({
@@ -75,7 +96,34 @@ export const documentAnalysisRouter = router({
             citation: citations.get(event.citations[0]) ?? null,
           },
         }));
-      }).sort((left, right) => left.date.localeCompare(right.date));
+      });
+      const evidenceTitles = new Map(evidenceRows.map((item) => [item.id, item.title]));
+      const storedEvents = persistedRows.flatMap((event) => {
+        const metadata = parseTimelineMetadata(event.metadata);
+        const evidenceId = typeof metadata.evidenceId === "string" ? metadata.evidenceId : null;
+        const evidenceTitle = evidenceId ? evidenceTitles.get(evidenceId) : null;
+        if (!event.eventAt || !evidenceId || !evidenceTitle) return [];
+        const legacySource = metadata.legacySource && typeof metadata.legacySource === "object"
+          ? metadata.legacySource as Record<string, unknown>
+          : {};
+        return [{
+          date: event.eventAt.toISOString().slice(0, 10),
+          title: event.title || "Imported legal event",
+          text: event.description || "",
+          description: event.description || "",
+          actor: typeof legacySource.actor === "string" ? legacySource.actor : null,
+          importance: "medium" as const,
+          category: "legal" as const,
+          citations: [] as string[],
+          source: { evidenceId, title: evidenceTitle, citation: null },
+        }];
+      });
+      const uniqueEvents = new Map<string, (typeof analyzedEvents)[number] | (typeof storedEvents)[number]>();
+      for (const event of [...analyzedEvents, ...storedEvents]) {
+        const key = `${event.date}|${event.title.trim().toLowerCase()}|${event.source.evidenceId}`;
+        if (!uniqueEvents.has(key)) uniqueEvents.set(key, event);
+      }
+      const events = [...uniqueEvents.values()].sort((left, right) => left.date.localeCompare(right.date));
 
       const parseTime = (value: string) => {
         const match = value.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
@@ -90,9 +138,9 @@ export const documentAnalysisRouter = router({
         duration_days: durationDays,
         key_dates: [...new Set(events.map((event) => event.date))],
         summary: events.length
-          ? `${events.length} source-linked event${events.length === 1 ? "" : "s"} from ${rows.length} analyzed document${rows.length === 1 ? "" : "s"}.`
+          ? `${events.length} source-linked event${events.length === 1 ? "" : "s"} from ${new Set(events.map((event) => event.source.evidenceId)).size} document${new Set(events.map((event) => event.source.evidenceId)).size === 1 ? "" : "s"}.`
           : "No dated events are available. Analyze case documents first.",
-        gaps: rows.length === 0 ? ["No analyzed source documents are available for this case."] : [],
+        gaps: events.length === 0 ? ["No analyzed or imported source-linked events are available for this case."] : [],
       };
     }),
 });

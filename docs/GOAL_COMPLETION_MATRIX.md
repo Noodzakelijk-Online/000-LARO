@@ -67,7 +67,7 @@ Ledger reconciled: 2026-07-15.
 | 050 | Responsive & browser compatibility | **Implemented** | The supported Electron/Chromium surface is audited across 30 route/viewport combinations for content, overflow, errors, request failures, and accessibility. Firefox/Safari are not packaged-app targets. `docs/RESPONSIVE_COMPAT.md`. |
 | 051 | Performance baseline & indexing | **Implemented** | cases(userId,status)/urgency/updatedAt indexes; `docs/PERFORMANCE.md`. |
 | 052 | Large dataset & pagination testing | **Implemented** | `phase051_060.test.ts` — complete non-overlapping pagination over 55 rows + filters. |
-| 053 | Backup & restore procedures | **Implemented for both supported runtimes** | Electron recovery binds SQLite, token keys, and local evidence or S3 inventory; `flask_recovery.py` coordinates the Flask ledger, auth database, OAuth vault, and uploads with destructive drills for both paths; `docs/BACKUP_RESTORE.md`; tested. |
+| 053 | Backup & restore procedures | **Implemented for production and legacy migration source** | Electron recovery binds SQLite, token keys, and local evidence or S3 inventory; `flask_recovery.py` coordinates the Flask ledger, auth database, OAuth vault, and uploads with destructive drills for both paths; `docs/BACKUP_RESTORE.md`; tested. |
 | 054 | Data reconciliation & repair | **Implemented** | `server/reconcile.ts` orphan detect+repair; tested; `docs/DATA_RECONCILIATION.md`. |
 | 055 | Product analytics local-first | **Implemented** | `server/analytics.ts` real metrics wired into `analytics.*`; `docs/ANALYTICS.md`. |
 | 056 | Local operation without forced billing | **Implemented** | `billing.status` reports a local unmetered plan; usage is observational and core actions have no payment or quota gate; `docs/SAAS_READINESS.md`. |
@@ -135,6 +135,7 @@ Ledger reconciled: 2026-07-15.
 | 113 | Regression baseline | **Implemented** | `scripts/regression-baseline.mjs` + `docs/regression-baseline.json` enroll every currently blocking test file and fail if any enrolled file is removed. |
 | 114 | Maintenance & refactoring review | **Implemented** | `docs/MAINTENANCE_REVIEW.md` — completed refactors (shared retry/system-state) + maintainability backlog. |
 | 115 | Final human-operator readiness | **Implemented** | `scripts/operator-readiness.mjs` (all green) + `docs/OPERATOR_READINESS.md`. D1 (14 routers) + D3 (gated real send) now done; end-to-end path exists behind the safety flag. |
+| 116 | Flask runtime consolidation | **Implemented** | `scripts/migrate_flask_ledger.py`, migration `0006`, authenticated archive history, and `docs/FLASK_TO_DESKTOP_MIGRATION.md` make Electron authoritative while preserving owner-scoped source rows and verified evidence without transferring sessions, vault tokens, or live-send state. |
 
 ## Current reconciliation
 

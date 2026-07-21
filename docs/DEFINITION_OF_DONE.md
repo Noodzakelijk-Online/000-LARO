@@ -1,6 +1,6 @@
 # Feature-Level Definition of Done
 
-Current as of 2026-07-16.
+Current as of 2026-07-21.
 
 A feature is done only when all applicable conditions hold:
 
@@ -32,7 +32,8 @@ A feature is done only when all applicable conditions hold:
 | Response tracking and analytics | Done | Enabled inbound provider must pass live threading acceptance |
 | Evidence, case, and account managed-object erasure | Done | Target backup, storage credentials, and retention policy reviewed |
 | Scanner | Done | Clean-profile native folder and byte/hash acceptance |
-| Operator diagnostics and recovery | Done for both supported runtimes | Electron database/key/evidence and Flask ledger/auth/vault/upload drills pass; target backups and external secrets must still be escrowed and validated |
+| Operator diagnostics and recovery | Done for production and legacy migration source | Electron database/key/evidence and Flask ledger/auth/vault/upload drills pass; target backups and external secrets must still be escrowed and validated |
+| Legacy Flask retirement | Done | Dry-run and owner-bound apply preserve source hashes, archive unmapped rows, verify copied evidence, and leave Electron authoritative |
 | Local usage telemetry | Done | Counts operations and quantities only; never prices, quotas, or blocks core actions |
 
 ## Release Boundary

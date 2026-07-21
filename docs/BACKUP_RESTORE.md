@@ -158,7 +158,9 @@ npm run flask:recovery:drill
 ```
 
 `npm run gate` and `npm run readiness` run both the Electron recovery drill and
-the Flask ledger/auth/vault/upload drill. The two runtimes are therefore
-independently recoverable, but they still use separate databases and identities;
-their backups are not interchangeable or a transactionally consistent combined
-snapshot.
+the Flask ledger/auth/vault/upload drill. Production Electron and the legacy
+Flask migration source are independently recoverable; their backups are not
+interchangeable or a transactionally consistent combined snapshot. Preserve
+both sets until the owner-bound migration is verified, then retain the Flask set
+as the immutable source record. See
+[Flask To Desktop Migration](FLASK_TO_DESKTOP_MIGRATION.md).

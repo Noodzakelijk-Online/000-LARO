@@ -87,6 +87,9 @@ export default function Settings() {
     { limit: 200 },
     { enabled: section === "security" },
   );
+  const legacyImports = trpc.legacyImports.listRuns.useQuery(undefined, {
+    enabled: section === "security",
+  });
 
   const activeMeta = useMemo(() => NAV_ITEMS.find((item) => item.id === section), [section]);
 
@@ -332,6 +335,46 @@ export default function Settings() {
                   <History className="mr-2 h-4 w-4" />
                   {isDownloadingActivity ? "Preparing..." : "Download activity"}
                 </Button>
+              </CardContent>
+            </Card>
+            <Card className="border-border/50 bg-card/50 shadow-sm lg:col-span-2">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><HardDrive className="h-5 w-5" />Legacy workspace imports</CardTitle>
+                <CardDescription>Owner-bound Flask migrations retained with source hashes and provenance</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {legacyImports.isLoading ? (
+                  <p className="text-sm text-muted-foreground">Loading migration history...</p>
+                ) : legacyImports.error ? (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>Migration history could not be loaded.</AlertDescription>
+                  </Alert>
+                ) : (legacyImports.data?.length ?? 0) === 0 ? (
+                  <p className="text-sm text-muted-foreground">No Flask workspace has been migrated into this account.</p>
+                ) : (
+                  <div className="divide-y divide-border/50 border-y border-border/50">
+                    {legacyImports.data?.map((run) => (
+                      <div key={run.id} className="grid gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">{run.sourceInstanceId}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {run.casesImported} cases, {run.recordsImported} archived records, {run.filesCopied} files
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                          <Badge variant={run.missingFiles > 0 ? "destructive" : "outline"}>
+                            {run.missingFiles > 0 ? `${run.missingFiles} unavailable files` : "Files verified"}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            {run.completedAt ? new Date(run.completedAt).toLocaleString() : run.status}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">Archived source rows are included in the Account archive above.</p>
               </CardContent>
             </Card>
           </div>
