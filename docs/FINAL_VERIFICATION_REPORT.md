@@ -1,7 +1,7 @@
 # Final Verification Report
 
-Date: 2026-07-20
-Verification target: the production-readiness changes in this report's commit
+Date: 2026-07-21
+Verification target: protected `main` commit `63b6c4f311042c3b1e49e02e0546e61ac6dfc884`
 
 This report separates reproducible repository evidence from target-environment
 acceptance. It supersedes the 2026-07-06 phase snapshot.
@@ -12,23 +12,23 @@ acceptance. It supersedes the 2026-07-06 phase snapshot.
 |---|---|
 | Server, Electron main, and renderer TypeScript | Pass; 0 shipped runtime `@ts-nocheck` bypasses |
 | ESLint | Pass |
-| Requirements traceability | 116 rows, 91 cited, 0 broken |
+| Requirements traceability | 117 rows, 92 cited, 0 broken |
 | Runtime no-excuses scan | 0 suspect findings |
 | Account-safety scan | 0 high-severity findings |
 | Renderer accessibility | 15 routes x 2 viewports; 0 serious/critical axe violations, unnamed controls, overflows, request failures, page errors, or console errors |
 | Isolated backup/delete/restore/reopen drill | Pass |
-| Target database readiness | SQLite integrity, declared foreign keys, 228 legacy relationship guards, invariants, reconciliation, duplicates, and demo markers clean |
-| Vitest | 46 files, 287 tests passed, 0 todo |
-| Python unittest discovery | 202 tests passed |
+| Target database readiness | SQLite integrity, declared foreign keys, 237 legacy relationship guards, invariants, reconciliation, duplicates, and demo markers clean |
+| Vitest | 52 files, 332 tests passed, 0 todo |
+| Python unittest discovery | 222 tests passed |
 | Runtime dependency audit | 0 known vulnerabilities |
 | Renderer, main, and server production builds | Pass |
 | Portable Windows packaging | Pass with tracked LARO icon; unsigned by policy |
 | Packaged `/api/health` | `healthy`, database ready, version 1.3.0 |
-| Packaged document intelligence and Outreach | Six migrations present, including persisted keyword-pull jobs; PDF, DOCX, native parser dependencies, and review-gated Outreach tables present; integrated server booted successfully |
+| Packaged document intelligence and Outreach | Seven migrations present, including persisted keyword-pull jobs and the legacy-import archive; PDF, DOCX, native parser dependencies, and review-gated Outreach tables present; integrated server booted successfully |
 | Desktop scanner contract | Scoped 15-minute token; real bytes/hash; owner/MIME enforcement |
 | Branch CI policy | Node, Python, and renderer-accessibility checks run before merge |
-| Protected-main baseline CI | Actions run `29715727941`; Node and Python jobs passed |
-| Windows package baseline | Actions run `29715727914`; gate, build, ABI check, package, checksum, and artifact upload passed |
+| Protected-main baseline CI | Actions run `29814494142`; Node, Python, and renderer-accessibility jobs passed |
+| Windows package baseline | Actions run `29814494132`; gate, build, ABI check, package, single-instance profile lock, checksum, and artifact upload passed |
 | Packaged matching assets | Seven aligned legal categories; invalid legacy dataset absent |
 | Dependency graph | One canonical Node workspace; 0 open Dependabot alerts |
 
@@ -118,20 +118,25 @@ disabled with a collection prompt while the case had no evidence. The inherited
 dark-theme recommendation contrast defect found during this pass was corrected
 and visually rechecked.
 
-The current local portable artifact is 151,773,047 bytes with SHA-256
-`3d68bea313f916a1a9c635127d65336149615127a5af2277a830d85cfbe04ab0`.
-It launched with an explicit isolated user-data directory, created fresh local
-secrets and databases, applied all six packaged migrations, and served the
-application on pinned loopback port 63918. `/api/health`
-returned `healthy`, database ready, and version `1.3.0`. SQLite integrity passed with zero foreign-key
-violations and all 228 required relationship guards persisted.
-Its packaged resources contain the current migrations, PDF/DOCX parsers, native
-parser dependency, consolidated managed-storage deletion, and seven-category
-matching data. Windows reports
-`NotSigned`, matching the selected unsigned internal distribution policy.
+The current protected-main portable artifact is GitHub Actions artifact
+`8489044861` from run `29814494132`. Its executable is 151,847,718 bytes with
+SHA-256 `8adba81efd7890f98eaa483b6cd3181a1d90a49258c7b68b55d9b1527117daf8`;
+the downloaded executable matches its packaged checksum sidecar. The workflow
+passed the production gate, build, Electron ABI/database-binding check,
+portable packaging, packaged single-instance profile lock, artifact staging,
+and upload. Windows reports `NotSigned`, matching the selected unsigned
+internal distribution policy.
 
-The same CI artifact was launched with `NODE_ENV=development` deliberately
-injected by its parent process. It still served `/api/health` as `healthy`,
+Packaged clean-profile evidence for this release line also verified fresh local
+secrets and databases, all seven packaged migrations, healthy version `1.3.0`
+startup, SQLite integrity with zero foreign-key violations, and all 237 required
+relationship guards. Packaged resources contain the current migrations,
+PDF/DOCX parsers, native parser dependency, consolidated managed-storage
+deletion, legacy-import archive schema, and seven-category matching data.
+
+An earlier isolated package from the same release line was launched with
+`NODE_ENV=development` deliberately injected by its parent process. It still
+served `/api/health` as `healthy`,
 `production`, version `1.3.0`, opened only the dashboard window, and created no
 DevTools or startup-error window. Packaged builds therefore cannot inherit a
 development renderer path from the launching shell.
@@ -196,7 +201,10 @@ before it can publish.
 
 ## Residual engineering work
 
-- The Electron and Flask runtimes still have separate schemas and databases.
+- Existing Flask ledgers remain separate immutable migration sources until the
+  operator completes the documented offline, owner-bound migration. Electron is
+  the sole production authority afterward; concurrent or bidirectional editing
+  is unsupported.
 - Historical tables use non-destructive database relationship triggers until a
   future backup-tested migration can replace them with native foreign keys;
   reconciliation remains the explicit repair path for pre-existing drift.
