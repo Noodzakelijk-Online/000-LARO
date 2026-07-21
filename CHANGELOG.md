@@ -7,6 +7,10 @@ versioning; dates are ISO. Version is sourced from `package.json` and surfaced b
 ## Unreleased
 
 ### Added
+- Added an offline, owner-bound Flask-to-desktop migration with dry-run default,
+  automatic target snapshot, deterministic operational mappings, source/file
+  SHA-256 binding, complete redacted legacy-row archival, managed evidence copy,
+  identity-remap approval, idempotency, and authenticated migration history.
 - Added authenticated server-side lawyer directory search and pagination,
   adapted from the predecessor dashboard after fixing its post-pagination
   filtering error, with accurate totals, official NOvA-only filtering, stable

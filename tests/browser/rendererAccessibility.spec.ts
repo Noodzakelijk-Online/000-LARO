@@ -1,5 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
+import Database from "better-sqlite3";
+import { resolve } from "node:path";
 
 const ROUTES = [
   "/",
@@ -34,6 +36,7 @@ async function createAccount(page: Page) {
   await page.getByRole("button", { name: "Sign Up", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await page.waitForLoadState("networkidle");
+  return email;
 }
 
 function formatViolations(
@@ -101,4 +104,44 @@ test("all supported routes pass the blocking renderer accessibility audit", asyn
   expect(pageErrors, "renderer page errors").toEqual([]);
   expect(requestFailures, "renderer request failures").toEqual([]);
   expect(consoleErrors, "renderer console errors").toEqual([]);
+});
+
+test("Settings presents an owned Flask migration without responsive overflow", async ({ page }) => {
+  const email = await createAccount(page);
+  const database = new Database(resolve(".laro-a11y.sqlite"));
+  try {
+    const user = database.prepare("SELECT id FROM users WHERE email = ?").get(email) as { id: string } | undefined;
+    expect(user?.id).toBeTruthy();
+    const now = Date.now();
+    database.prepare(
+      `INSERT INTO legacy_import_runs
+       (id, sourceRuntime, sourceInstanceId, userId, sourceUserId, sourceUserEmail,
+        status, sourceSnapshotHash, recordsImported, casesImported, filesCopied,
+        missingFiles, summary, startedAt, completedAt)
+       VALUES (?, 'flask', ?, ?, ?, ?, 'completed', ?, 37, 2, 5, 0, '{}', ?, ?)`,
+    ).run(
+      `A11Y_LEGACY_${now}`,
+      "reviewed-workspace",
+      user!.id,
+      "flask-a11y-owner",
+      email,
+      "a".repeat(64),
+      now - 1_000,
+      now,
+    );
+  } finally {
+    database.close();
+  }
+
+  for (const viewport of VIEWPORTS) {
+    await page.setViewportSize(viewport);
+    await page.goto("/settings", { waitUntil: "domcontentloaded" });
+    await page.getByRole("button", { name: "Security" }).click();
+    await expect(page.getByText("reviewed-workspace")).toBeVisible();
+    await expect(page.getByText("2 cases, 37 archived records, 5 files")).toBeVisible();
+    await expect(page.getByText("Files verified")).toBeVisible();
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1))
+      .toBe(true);
+  }
 });

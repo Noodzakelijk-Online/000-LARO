@@ -1,13 +1,13 @@
 # Documentation Truthfulness Audit
 
-Updated: 2026-07-20
+Updated: 2026-07-21
 
 Current operational claims were checked against source, release gates, database
 tests, packaged runtime evidence, and protected-main workflows.
 
 | Document | Current claim | Evidence | Verdict |
 | --- | --- | --- | --- |
-| `README.md` | Electron/tRPC and Flask compatibility runtimes are distinguished | Runtime entry points and build scripts | Accurate |
+| `README.md` | Electron is authoritative and Flask is a legacy migration source | Packaging allowlist, migration script, runtime entry points, and owner-bound tests | Accurate |
 | `SECURITY.md` | Secrets are excluded and OAuth tokens use AES-256-GCM | Packaging manifest and token crypto tests | Accurate |
 | `PRIVACY.md` | Export, managed-object erasure, preferences, and retention are real | GDPR, storage-failure, preference, and retention tests | Accurate |
 | `API_USAGE_AUDIT.md` | Mounted renderer contracts are typed; unavailable providers fail honestly | `AppRouter`, renderer typecheck, provider tests | Accurate |

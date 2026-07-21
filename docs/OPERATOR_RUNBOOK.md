@@ -53,3 +53,15 @@ set coordinates the ledger, auth sessions, OAuth vault, and uploads while keepin
 every previous target beside the restored path. Keep the matching external
 `SECRET_KEY` and optional `LARO_TOKEN_ENCRYPTION_KEY` in independent secret
 escrow; neither raw value is copied into the set.
+
+## Legacy Flask Migration
+
+Electron is the production authority. Before retiring an existing Flask
+workspace, create and validate both complete recovery sets, stop both runtimes,
+and run `npm run flask:migrate-to-desktop -- ...` without `--apply`. Review the
+owner mapping, counts, snapshot hash, and file issues, then repeat with
+`--apply`. Reopen Desktop and verify cases, evidence downloads, timelines,
+deadlines, and **Settings > Security > Legacy workspace imports**. Keep Flask
+stopped afterward. The full command, identity-remap exception, missing-file
+policy, and rollback sequence are in
+[Flask To Desktop Migration](FLASK_TO_DESKTOP_MIGRATION.md).

@@ -6,14 +6,17 @@ LARO assists with organization and preparation. It is not a lawyer, does not pro
 
 ## Current Architecture
 
-This repository contains two supported runtimes while the platform is being consolidated. They share a repository and can share selected credentials, but they are not yet one application and do not share a database.
+This repository has one production runtime: the Electron desktop application.
+The Flask command center is retained as a legacy review and migration source so
+existing source-linked ledgers can be moved without treating two databases as
+concurrent authorities.
 
 | Runtime | Primary use | Source | Default address | Persistence |
 | --- | --- | --- | --- | --- |
 | Electron desktop + Express/tRPC | Desktop case workflow, connectors, matching, controlled outreach, administration | `src-main/`, `src/renderer/`, `server/` | `http://localhost:3000` inside Electron | SQLite via Drizzle plus local or S3 evidence storage |
-| Flask Case Command Center | Source-linked legal ledger, document intelligence, Papertrail, evidence timelines, bundles, matching, and outreach preparation | `app.py`, `legal_ledger.py`, `frontend/` | `http://127.0.0.1:8768/case_command_center.html` | `instance/laro_ledger.sqlite3` plus ignored local uploads and token vault |
+| Legacy Flask migration source | Review/export an existing source-linked legal ledger before owner-bound migration | `app.py`, `legal_ledger.py`, `frontend/` | `http://127.0.0.1:8768/case_command_center.html` | `instance/laro_ledger.sqlite3` plus ignored local uploads and token vault |
 
-The Electron main process starts the Express/tRPC server and React renderer together. `npm run dev:server` runs only that API server. The Flask launcher binds to loopback by default and uses `LARO_FLASK_PORT=8768`, so both runtimes can run at the same time.
+The Electron main process starts the Express/tRPC server and React renderer together. `npm run dev:server` runs only that API server. The Flask launcher remains loopback-only for legacy review. Stop both applications before applying the one-way Flask-to-desktop migration; after migration, Electron is authoritative.
 
 ## Capabilities
 
@@ -52,7 +55,7 @@ The Electron main process starts the Express/tRPC server and React renderer toge
 - Apply official legal-area, city/postcode, radius, specialization-association, and financed-legal-aid filters. City/postcode sharing is explicit; LARO does not send case prose or a client's stored address to NOvA.
 - Use one desktop Outreach workspace for analytics, lawyers, media, and organizations. Media and organization candidates remain pending until a user approves or rejects their public source.
 - Discover or manually import media/organization candidates from bounded public searches, deduplicate them per owner and category, and rank only approved records against the selected case. Discovery sends canonical legal-area queries, never case prose, and does not claim exhaustive internet coverage.
-- The Flask Case Command Center retains its own reviewable target directory. Flask and Electron outreach records are not silently synchronized.
+- Legacy Flask outreach records are archived during migration but are never inserted into a live desktop send queue.
 - Track outreach totals, progress, responses, acceptance, and pending work per case.
 - Prepare and approve outreach drafts without sending them automatically.
 - Send an approved desktop-runtime lawyer outreach only when the global emergency stop is released, `outreach.send.enabled` is enabled, the caller owns the case, a real email provider is configured, and the idempotency guard has not already recorded the send.
@@ -61,7 +64,7 @@ The Electron main process starts the Express/tRPC server and React renderer toge
 
 - Windows 10/11 for the primary desktop and PowerShell workflow.
 - Node.js 22.12 or newer in the Node 22 LTS line. CI, Electron 43, and the native-module rebuild scripts use this baseline.
-- Python 3.11 or newer for the Flask Case Command Center.
+- Python 3.11 or newer only when reviewing, recovering, or migrating a legacy Flask workspace.
 - C++ build tools may be needed if npm cannot obtain a compatible native binary.
 - Optional: a local [Ollama](https://ollama.com/) installation for deeper local document reading.
 - Optional: provider credentials for Google, Microsoft, S3, Trello, Telegram, AI models, or outbound email.
@@ -91,7 +94,7 @@ npm run build            # renderer, main process, and server builds
 npm run dist:win         # Windows package
 ```
 
-## Flask Quick Start
+## Legacy Flask Review
 
 From the repository root in PowerShell:
 
@@ -107,7 +110,7 @@ Open [http://127.0.0.1:8768/case_command_center.html](http://127.0.0.1:8768/case
 .\run_local.ps1 -Port 8770
 ```
 
-The convenience session bootstrap is loopback-only and accepts only `LARO_LOCAL_ACCOUNT_EMAIL` (default `robert.local@laro`). It is not a remote authentication mechanism. Use the password route for additional accounts.
+The convenience session bootstrap is loopback-only and accepts only `LARO_LOCAL_ACCOUNT_EMAIL` (default `robert.local@laro`). It is not a remote authentication mechanism. Do not operate Flask and Electron as parallel authoritative workspaces. Follow [Flask To Desktop Migration](docs/FLASK_TO_DESKTOP_MIGRATION.md) after review.
 
 ## Configuration
 
@@ -132,7 +135,7 @@ Keep `LARO_HOST` and `LARO_OLLAMA_BASE_URL` on loopback for the local Flask work
 
 ### Google Gmail and Drive
 
-For the Flask runtime, configure a Google OAuth client with this callback:
+For legacy Flask review before migration, configure a Google OAuth client with this callback:
 
 ```text
 GOOGLE_CLIENT_ID=
@@ -161,14 +164,14 @@ See [Operator Runbook](docs/OPERATOR_RUNBOOK.md), [Security](docs/SECURITY.md), 
 
 ## Verification
 
-The current production-readiness candidate was verified locally on 2026-07-20.
+The current production-readiness candidate was verified locally on 2026-07-21.
 GitHub Actions repeats the Node and browser checks on the supported Node 22 toolchain:
 
 - `npm run gate`: all blocking gates passed.
 - Server, Electron main-process, and shipped renderer TypeScript checks passed; no shipped runtime module disables type checking; ESLint passed.
-- Traceability reported 116 rows, 91 cited, and 0 broken references.
+- Traceability reported 117 rows, 92 cited, and 0 broken references.
 - Runtime no-excuses scan reported 0 suspect findings; account safety reported 0 high-severity findings.
-- Vitest reported 51 passing files and 328 passing tests, including controlled
+- Vitest reported 52 passing files and 332 passing tests, including controlled
   NOvA parsing/filter, unknown-metric scoring, and review-gated
   media/organization discovery, tenant isolation, case-draft persistence, and
   target-database readiness tests, with no skipped or todo tests.
@@ -276,8 +279,9 @@ npm run flask:recovery:drill
 Stop Flask and its workers before maintenance. External `SECRET_KEY` and
 `LARO_TOKEN_ENCRYPTION_KEY` values are compatibility-bound but never copied into
 the set; retain them in independent secret escrow. Both runtimes now have
-blocking destructive recovery drills, but remain separate applications with
-independent databases and identity/session models.
+blocking destructive recovery drills. The owner-bound migration archives the
+Flask ledger into Electron without migrating Flask sessions or OAuth vault
+credentials; Electron is the production authority after migration.
 
 CI runs Node and Python gates for pushes and pull requests to `main`. The release
 workflows target Node 22. Current Windows builds are unsigned artifacts; no Store
@@ -309,7 +313,7 @@ unknown-publisher warning. Optional Store and direct-signing routes remain avail
 
 ## Known Limitations
 
-- The Electron and Flask runtimes currently use separate schemas and databases; changes in one do not automatically appear in the other.
+- Existing Flask workspaces require the documented offline, owner-bound migration. There is no live bidirectional synchronization, and Flask must remain stopped after migration.
 - Legacy prototype files remain in `frontend/` and `docs/` for traceability. Only the entry points documented above are supported runtime surfaces; historical snapshots must not be treated as current behavior.
 - Several provider integrations are optional or partial and remain unavailable until valid credentials and user OAuth consent are present. Trello OAuth is intentionally disabled until server-side token storage is implemented.
 - Outreach target discovery is a review aid, not a complete or continuously verified directory of every lawyer, journalist, program, lobby, or advocacy organization.
@@ -327,6 +331,7 @@ unknown-publisher warning. Optional Store and direct-signing routes remain avail
 - [Provider Reality Review](docs/PROVIDERS.md)
 - [Legacy Dashboard Port Audit](docs/LEGACY_DASHBOARD_PORT_AUDIT.md)
 - [Lawyer Automation Dashboards Port Audit](docs/LAWYER_AUTOMATION_DASHBOARDS_PORT_AUDIT.md)
+- [Flask To Desktop Migration](docs/FLASK_TO_DESKTOP_MIGRATION.md)
 - [Feature Flags](docs/FEATURE_FLAGS.md)
 - [Deployment](docs/DEPLOYMENT.md)
 - [Backup and Restore](docs/BACKUP_RESTORE.md)

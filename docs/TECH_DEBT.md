@@ -1,6 +1,6 @@
 # Technical Debt Register
 
-Updated: 2026-07-20
+Updated: 2026-07-21
 
 | # | Debt | Impact | Status / next step |
 | --- | --- | --- | --- |
@@ -30,7 +30,7 @@ Updated: 2026-07-20
 | D24 | Database-only backups could validate successfully without preserving or checking the key required to decrypt provider tokens | - | Resolved with manifest-bound backup sets, bundled desktop keys, external-secret compatibility checks, rollback-safe paired restore, explicit legacy override, and a blocking paired recovery drill |
 | D25 | Electron backup sets did not preserve locally managed legal evidence bytes | - | Resolved with versioned local-file inventories, managed-key coverage, stable-source rescans, S3 inventory binding, rollback-safe storage restore, and a blocking database/key/evidence drill |
 | D26 | Flask ledger, auth, token-vault, and upload recovery is still separate from the Electron backup CLI | - | Resolved with a manifest-bound four-member recovery set, external-secret compatibility checks, upload-reference coverage, path rebasing, rollback-safe restore, and a blocking destructive drill |
-| D27 | Electron and Flask remain separate application runtimes with independent databases and authentication/session models | Medium | Consolidate only through a migration that preserves the current source-linked ledger and owner boundaries; recovery is now independently complete for both runtimes |
+| D27 | Electron and Flask previously remained concurrent application runtimes with independent databases and authentication/session models | - | Resolved by making Electron authoritative and adding an offline owner-bound migration that operationally maps supported records, archives every owner-scoped source row with hashes/redaction, copies verified evidence, rejects changed reruns, and never migrates sessions or vault credentials |
 
 D10 is operationally contained without rewriting installed databases. A native
 foreign-key conversion remains migration work, not a release blocker while the

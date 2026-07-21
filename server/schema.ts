@@ -571,6 +571,65 @@ export const auditLogs = sqliteTable("audit_logs", {
 
 export type InsertAuditLog = typeof auditLogs.$inferInsert;
 
+export const legacyImportRuns = sqliteTable(
+  "legacy_import_runs",
+  {
+    id: text("id").primaryKey(),
+    sourceRuntime: text("sourceRuntime").notNull(),
+    sourceInstanceId: text("sourceInstanceId").notNull(),
+    userId: text("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+    sourceUserId: text("sourceUserId").notNull(),
+    sourceUserEmail: text("sourceUserEmail"),
+    status: text("status").notNull(),
+    sourceSnapshotHash: text("sourceSnapshotHash").notNull(),
+    recordsImported: integer("recordsImported").notNull(),
+    casesImported: integer("casesImported").notNull(),
+    filesCopied: integer("filesCopied").notNull(),
+    missingFiles: integer("missingFiles").notNull(),
+    summary: text("summary").notNull(),
+    startedAt: integer("startedAt", { mode: "timestamp" }).notNull(),
+    completedAt: integer("completedAt", { mode: "timestamp" }),
+  },
+  (table) => ({
+    sourceUserUnique: uniqueIndex("legacy_import_runs_source_user_unique").on(
+      table.sourceRuntime,
+      table.sourceInstanceId,
+      table.userId,
+    ),
+    userCompletedIdx: index("legacy_import_runs_user_completed_idx").on(table.userId, table.completedAt),
+  }),
+);
+
+export const legacyImportRecords = sqliteTable(
+  "legacy_import_records",
+  {
+    id: text("id").primaryKey(),
+    runId: text("runId").notNull().references(() => legacyImportRuns.id, { onDelete: "cascade" }),
+    userId: text("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+    caseId: text("caseId").references(() => cases.id, { onDelete: "set null" }),
+    sourceRuntime: text("sourceRuntime").notNull(),
+    sourceInstanceId: text("sourceInstanceId").notNull(),
+    sourceTable: text("sourceTable").notNull(),
+    sourceRecordId: text("sourceRecordId").notNull(),
+    sourceHash: text("sourceHash").notNull(),
+    payloadHash: text("payloadHash").notNull(),
+    redactedFields: text("redactedFields").notNull(),
+    payload: text("payload").notNull(),
+    importedAt: integer("importedAt", { mode: "timestamp" }).notNull(),
+  },
+  (table) => ({
+    sourceUnique: uniqueIndex("legacy_import_records_source_unique").on(
+      table.sourceRuntime,
+      table.sourceInstanceId,
+      table.sourceTable,
+      table.sourceRecordId,
+      table.userId,
+    ),
+    runTableIdx: index("legacy_import_records_run_table_idx").on(table.runId, table.sourceTable),
+    userCaseIdx: index("legacy_import_records_user_case_idx").on(table.userId, table.caseId),
+  }),
+);
+
 export const bulkImportJobs = sqliteTable("bulk_import_jobs", {
   id: text("id").primaryKey(),
   userId: text("userId"),

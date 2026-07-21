@@ -41,6 +41,7 @@
     "flask:validate": "python scripts/flask_recovery.py validate",
     "flask:restore": "python scripts/flask_recovery.py restore",
     "flask:recovery:drill": "python scripts/flask_recovery_drill.py",
+    "flask:migrate-to-desktop": "python scripts/migrate_flask_ledger.py",
     "serve": "npm run rebuild:node && npm run build:server && cross-env NODE_ENV=production node dist/server/server/index.js",
     "docker:build": "docker build -t laro-server .",
     "docker:run": "docker run --rm -p 3000:3000 --env-file .env laro-server",

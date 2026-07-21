@@ -36,6 +36,7 @@ import { featureFlagsRouter } from "./featureFlags";
 import { helpRouter } from "./help";
 import { onboardingRouter } from "./onboarding";
 import { teamsRouter } from "./teams";
+import { legacyImportsRouter } from "./legacyImports";
 import {
   adminAnalyticsRouter, outreachAnalyticsRouter,
   evidenceAggregationRouter, enrichmentRouter, evidenceRouter,
@@ -105,6 +106,7 @@ export const appRouter = router({
   help: helpRouter, // Phase 071/072
   onboarding: onboardingRouter, // Phase 105
   teams: teamsRouter, // Phase 106
+  legacyImports: legacyImportsRouter,
   // Phase 010 (D1) — routers the renderer referenced but that had no backend.
   adminAnalytics: adminAnalyticsRouter,
   outreachAnalytics: outreachAnalyticsRouter,
