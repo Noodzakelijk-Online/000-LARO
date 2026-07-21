@@ -1,14 +1,16 @@
 # Manual Verification Evidence
 
-Current as of 2026-07-16. This document supersedes the 2026-07-06 phase
+Current as of 2026-07-21. This document supersedes the 2026-07-06 phase
 snapshot; exact release evidence is maintained in
 `docs/FINAL_VERIFICATION_REPORT.md`.
 
 ## Verified Locally
 
 - The blocking gate covers server, Electron main, and renderer TypeScript;
-  ESLint; traceability; no-excuses and account-safety scans; recovery; runtime
-  dependency audit; production builds; and the complete Node test baseline.
+  ESLint; traceability; no-excuses and account-safety scans; both recovery
+  drills; and the complete Node test baseline. Runtime dependency audit,
+  browser accessibility, production builds, and packaging are separate release
+  checks.
 - Production readiness has run with strong target-like secrets and an explicit
   clean database, including integrity, foreign-key, invariant, reconciliation,
   duplicate, and demo-marker checks.

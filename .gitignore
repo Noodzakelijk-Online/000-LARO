@@ -18,6 +18,8 @@ out/
 .env.production.local
 
 release/
+release-acceptance.draft.json
+release-acceptance.local.json
 db-backups/
 flask-backups/
 *.exe

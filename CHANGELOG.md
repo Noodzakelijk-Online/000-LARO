@@ -14,6 +14,9 @@ versioning; dates are ISO. Version is sourced from `package.json` and surfaced b
   credential and refreshing status immediately.
 
 ### Added
+- Added a non-destructive release-acceptance draft command that records exact
+  provider checks and brand-asset hashes without reading credentials, approving
+  gates, overwriting the canonical record, or replacing an existing draft.
 - Added an offline, owner-bound Flask-to-desktop migration with dry-run default,
   automatic target snapshot, deterministic operational mappings, source/file
   SHA-256 binding, complete redacted legacy-row archival, managed evidence copy,
