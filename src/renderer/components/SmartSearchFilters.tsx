@@ -352,7 +352,7 @@ export default function SmartSearchFilters({
           </div>
           <p className="text-xs text-muted-foreground">
             {searchType === "lawyers"
-              ? "Search checks the loaded directory by name, firm, contact details, address, and legal areas."
+              ? "Search checks the full persisted directory by name, firm, contact details, address, and legal areas."
               : "Keyword match runs on every search. With 2+ characters, LARO can expand natural-language queries using your configured AI provider."}
           </p>
         </CardContent>
