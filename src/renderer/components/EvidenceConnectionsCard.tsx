@@ -5,9 +5,6 @@ import { trpc } from "@/lib/trpc";
 import { 
   Mail, 
   Cloud, 
-  MessageSquare, 
-  Trello as TrelloIcon, 
-  Send,
   CheckCircle2,
   XCircle,
   Loader2,
@@ -24,7 +21,7 @@ const useCurrentUser = () => {
 
 /**
  * Evidence Connections Card
- * Displays OAuth connection buttons and status for all evidence collection platforms
+ * Displays the shared Google evidence grant as Gmail and Drive capabilities.
  */
 
 interface PlatformConnection {
@@ -41,40 +38,27 @@ interface PlatformConnection {
 export default function EvidenceConnectionsCard() {
   // Get current user
   const currentUser = useCurrentUser();
+  const utils = trpc.useContext();
   const [connectingPlatform, setConnectingPlatform] = useState<"gmail" | "google-drive" | null>(null);
   
-  // Query connection status for all platforms
+  // Query both capabilities because they share one owner-scoped Google grant.
   const { data: gmailStatus, isLoading: gmailLoading } = trpc.gmailEnhanced.getStatus.useQuery(undefined, {
     enabled: !!currentUser,
     refetchOnWindowFocus: true,
     refetchInterval: connectingPlatform === "gmail" ? 1_500 : false,
   });
-  const { data: outlookStatus, isLoading: outlookLoading } = trpc.outlookEnhanced.getStatus.useQuery(undefined, { enabled: !!currentUser });
   const { data: driveStatus, isLoading: driveLoading } = trpc.googleDrive.checkConnection.useQuery(undefined, {
     enabled: !!currentUser,
     refetchOnWindowFocus: true,
     refetchInterval: connectingPlatform === "google-drive" ? 1_500 : false,
   });
-  const { data: oneDriveStatus, isLoading: oneDriveLoading } = trpc.oneDriveEnhanced.getStatus.useQuery(undefined, { enabled: !!currentUser });
-  const { data: slackStatus, isLoading: slackLoading } = trpc.slackEnhanced.getStatus.useQuery(undefined, { enabled: !!currentUser });
-  const { data: trelloStatus, isLoading: trelloLoading } = trpc.trelloEnhanced.getStatus.useQuery(undefined, { enabled: !!currentUser });
-  const { data: telegramStatus, isLoading: telegramLoading } = trpc.telegramEnhanced.getStatus.useQuery(undefined, { enabled: !!currentUser });
-
   // OAuth URL mutations
   const gmailOAuthMutation = trpc.gmailEnhanced.getOAuthUrl.useMutation();
-  const outlookOAuthMutation = trpc.outlookEnhanced.getOAuthUrl.useMutation();
   const driveOAuthMutation = trpc.googleDriveEnhanced.getOAuthUrl.useMutation();
-  const oneDriveOAuthMutation = trpc.oneDriveEnhanced.getOAuthUrl.useMutation();
-  const slackOAuthMutation = trpc.slackEnhanced.getOAuthUrl.useMutation();
-  const trelloOAuthMutation = trpc.trelloEnhanced.getOAuthUrl.useMutation();
 
   // Disconnect mutations
   const gmailDisconnectMutation = trpc.gmailEnhanced.disconnect.useMutation();
-  const outlookDisconnectMutation = trpc.outlookEnhanced.disconnect.useMutation();
   const driveDisconnectMutation = trpc.googleDriveEnhanced.disconnect.useMutation();
-  const oneDriveDisconnectMutation = trpc.oneDriveEnhanced.disconnect.useMutation();
-  const slackDisconnectMutation = trpc.slackEnhanced.disconnect.useMutation();
-  const trelloDisconnectMutation = trpc.trelloEnhanced.disconnect.useMutation();
 
   useEffect(() => {
     if (connectingPlatform === "gmail" && gmailStatus?.connected) {
@@ -117,8 +101,6 @@ export default function EvidenceConnectionsCard() {
     }
 
     try {
-      let authUrl: string | undefined;
-
       // Google OAuth covers both Gmail and Drive; request the protected URL from tRPC.
       if (platformId === 'gmail' || platformId === 'google-drive') {
         const result = platformId === 'gmail'
@@ -128,30 +110,14 @@ export default function EvidenceConnectionsCard() {
           toast.error(result.reason || 'Google OAuth is unavailable.');
           return;
         }
-        authUrl = result.authUrl;
-        
         // Electron opens provider URLs in a sandboxed child window; the web build uses a browser tab.
-        window.open(authUrl, '_blank');
+        window.open(result.authUrl, '_blank');
         setConnectingPlatform(platformId);
         toast.info('Opening authorization window. Please complete the OAuth flow.');
         return;
       }
 
-      // For other platforms, use the enhanced routers
-      switch (platformId) {
-        case 'outlook':
-          const outlookResult = await outlookOAuthMutation.mutateAsync();
-          authUrl = outlookResult.authUrl;
-          break;        
-        default:
-          toast.error('Unknown platform');
-          return;
-      }
-
-      if (authUrl) {
-        window.open(authUrl, '_blank');
-        toast.info('Opening authorization window. Please complete the OAuth flow.');
-      }
+      toast.error('Unknown platform');
     } catch (error) {
       toast.error(`Failed to connect: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -171,6 +137,10 @@ export default function EvidenceConnectionsCard() {
           return;
       }
 
+      await Promise.all([
+        utils.gmailEnhanced.getStatus.invalidate(),
+        utils.googleDrive.checkConnection.invalidate(),
+      ]);
       toast.success(`Disconnected from ${platformId}`);
     } catch (error) {
       toast.error(`Failed to disconnect: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -191,14 +161,14 @@ export default function EvidenceConnectionsCard() {
     return `${days}d ago`;
   };
 
-  const isLoading = gmailLoading || outlookLoading || driveLoading || oneDriveLoading || slackLoading || trelloLoading || telegramLoading;
+  const isLoading = gmailLoading || driveLoading;
 
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-2xl">Evidence Collection Sources</CardTitle>
         <CardDescription>
-          Connect your accounts to automatically collect evidence from multiple platforms
+          Connect Google once to collect selected Gmail and Drive evidence
         </CardDescription>
       </CardHeader>
       <CardContent>

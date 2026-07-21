@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { emailAccounts, emailSyncJobs } from "../schema";
@@ -11,23 +12,11 @@ import {
   consumeOAuthState,
 } from "../oauth2";
 import crypto from "crypto";
-import { encryptToken, decryptToken } from "../emailOAuth";
-
-async function revokeGmailToken(accessToken: string): Promise<void> {
-  try {
-    await fetch("https://oauth2.googleapis.com/revoke", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ token: accessToken }),
-    });
-  } catch (e) {
-    console.warn("[EMAIL_ACCOUNTS] revoke Gmail:", e);
-  }
-}
+import { encryptToken, decryptToken, revokeStoredGoogleTokens } from "../emailOAuth";
 
 export const emailAccountsRouter = router({
   getAuthUrl: protectedProcedure
-    .input(z.object({ provider: z.enum(["gmail", "outlook"]) }))
+    .input(z.object({ provider: z.literal("gmail") }))
     .mutation(async ({ input, ctx }) => ({
       authUrl: getAuthorizationUrl(input.provider, ctx.user.id),
     })),
@@ -35,7 +24,7 @@ export const emailAccountsRouter = router({
   connectAccount: protectedProcedure
     .input(
       z.object({
-        provider: z.enum(["gmail", "outlook"]),
+        provider: z.literal("gmail"),
         code: z.string(),
         state: z.string(),
       })
@@ -122,11 +111,15 @@ export const emailAccountsRouter = router({
         .where(and(eq(emailAccounts.id, input.accountId), eq(emailAccounts.userId, ctx.user.id)))
         .limit(1);
       if (!acc) throw new Error("Not found");
-      if (acc.provider === "gmail" && acc.accessToken) {
+      if (acc.provider === "gmail") {
         try {
-          await revokeGmailToken(decryptToken(acc.accessToken));
-        } catch {
-          /* ignore */
+          await revokeStoredGoogleTokens(acc);
+        } catch (error) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Google did not confirm token revocation; the local connection was retained so disconnect can be retried.",
+            cause: error,
+          });
         }
       }
       await db.delete(emailAccounts).where(eq(emailAccounts.id, acc.id));

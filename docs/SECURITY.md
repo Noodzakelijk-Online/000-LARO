@@ -10,12 +10,18 @@ Date: 2026-07-20
   Standalone production startup refuses insecure placeholder secrets.
 - Session cookies are HTTP-only, CSRF origins and credentialed CORS are restricted, and session revocation is checked. Scanner JWTs expire after 15 minutes and are authorized only for evidence upload.
 - Case-scoped operations use authenticated ownership checks. Lawyer creation is admin-only; lawyer reads, local messages, transactional email tests, and agent controls require authentication.
-- OAuth authorization URLs are created by protected tRPC procedures. Google and Microsoft flows use encrypted, time-limited state plus PKCE; the callback no longer accepts a caller-supplied user ID.
+- OAuth authorization URLs are created by protected tRPC procedures. OAuth flows use encrypted, time-limited state plus PKCE; the callback no longer accepts a caller-supplied user ID. The enabled Google evidence connector requests read-only Gmail/Drive scopes and account email only; delegated mail sending and label writes are excluded.
 - OAuth tokens use authenticated AES-256-GCM storage. Callback pages escape provider data and use a nonce-bound script under a route-specific CSP.
-- Desktop Google and Microsoft authorization runs in a dedicated sandboxed,
+- Desktop provider authorization runs in a dedicated sandboxed,
   context-isolated, Node-disabled child window. Top-level navigation is limited
   to the approved provider hosts and LARO's loopback callback, allowing the
   callback Close control to close a LARO-owned window.
+- Microsoft evidence collection remains unavailable until a complete collector
+  passes owner-scoping and live-account acceptance; configured credentials do
+  not make that unfinished surface appear connected.
+- Desktop Google disconnect revokes the durable refresh grant before deleting
+  owner-scoped encrypted credentials and shared Gmail/Drive connection records.
+  Provider or network failure retains the local credential for a safe retry.
 - Trello OAuth is disabled until server-side encrypted token persistence exists. No token is reflected into HTML or posted to an arbitrary origin.
 - Electron keeps Node integration disabled, enables context isolation and renderer sandboxing, and permits external navigation only to HTTPS, `mailto:`, or loopback HTTP URLs.
 - Production startup fails if the database cannot initialize. The API binds to loopback by default; Docker explicitly opts into `0.0.0.0`.

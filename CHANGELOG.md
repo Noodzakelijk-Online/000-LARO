@@ -6,6 +6,13 @@ versioning; dates are ISO. Version is sourced from `package.json` and surfaced b
 
 ## Unreleased
 
+### Changed
+- Reduced Google OAuth to Gmail/Drive read access plus account email, removed
+  delegated Gmail/Outlook send and Gmail label-write scopes, made incomplete
+  Microsoft collection explicitly unavailable, and made Google disconnect
+  confirm upstream revocation before erasing the owner's shared encrypted
+  credential and refreshing status immediately.
+
 ### Added
 - Added an offline, owner-bound Flask-to-desktop migration with dry-run default,
   automatic target snapshot, deterministic operational mappings, source/file

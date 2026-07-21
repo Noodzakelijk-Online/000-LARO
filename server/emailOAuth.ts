@@ -21,6 +21,42 @@ export function decryptToken(text: string): string {
 }
 
 /**
+ * Revoke a Google OAuth grant. Google returns HTTP 400 when the supplied token
+ * is already invalid, which is a safe terminal state for a disconnect request.
+ */
+export async function revokeGoogleToken(token: string): Promise<void> {
+  if (!token) {
+    throw new Error('Google token is unavailable for revocation');
+  }
+
+  const response = await fetch('https://oauth2.googleapis.com/revoke', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ token }),
+    signal: AbortSignal.timeout(15_000),
+  });
+
+  if (!response.ok && response.status !== 400) {
+    throw new Error(`Google token revocation failed (HTTP ${response.status})`);
+  }
+}
+
+/** Revoke the refresh token when present; it represents the durable grant. */
+export async function revokeStoredGoogleTokens(tokens: {
+  accessToken?: string | null;
+  refreshToken?: string | null;
+}): Promise<void> {
+  const encryptedToken = tokens.refreshToken || tokens.accessToken;
+  if (!encryptedToken) return;
+
+  const token = decryptToken(encryptedToken);
+  if (!token) {
+    throw new Error('Stored Google token could not be decrypted');
+  }
+  await revokeGoogleToken(token);
+}
+
+/**
  * Refresh a Gmail access token using the refresh token
  */
 export async function refreshGmailToken(refreshToken: string) {
@@ -75,7 +111,7 @@ export async function refreshOutlookToken(refreshToken: string) {
       client_secret: clientSecret,
       refresh_token: refreshToken,
       grant_type:    'refresh_token',
-      scope:         'https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/User.Read offline_access',
+      scope:         'https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/User.Read offline_access',
     }),
   });
 

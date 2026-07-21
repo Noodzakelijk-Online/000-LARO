@@ -60,12 +60,9 @@ export function getOAuth2Config(provider: 'gmail' | 'outlook'): OAuth2Config {
       clientSecret: ENV.GOOGLE_CLIENT_SECRET || process.env.GOOGLE_OAUTH_CLIENT_SECRET || '',
       redirectUri: `${redirectBase}/api/oauth/gmail/callback`,
       scopes: [
-        'https://www.googleapis.com/auth/gmail.send',
         'https://www.googleapis.com/auth/gmail.readonly',
         'https://www.googleapis.com/auth/userinfo.email',
-        'https://www.googleapis.com/auth/userinfo.profile',
-        'https://www.googleapis.com/auth/drive.readonly', // Google Drive read access
-        'https://www.googleapis.com/auth/drive.metadata.readonly', // Google Drive metadata
+        'https://www.googleapis.com/auth/drive.readonly',
       ],
     };
   } else {
@@ -74,9 +71,9 @@ export function getOAuth2Config(provider: 'gmail' | 'outlook'): OAuth2Config {
       clientSecret: ENV.MICROSOFT_CLIENT_SECRET || process.env.MICROSOFT_OAUTH_CLIENT_SECRET || '',
       redirectUri: `${redirectBase}/api/oauth/outlook/callback`,
       scopes: [
-        'https://graph.microsoft.com/Mail.Send',
         'https://graph.microsoft.com/Mail.Read',
         'https://graph.microsoft.com/User.Read',
+        'offline_access',
       ],
     };
   }

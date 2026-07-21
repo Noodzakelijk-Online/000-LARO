@@ -58,6 +58,8 @@ counts only and does not print case or user data.
 - [ ] Google, storage, LLM, and outreach providers show their intended state.
 - [ ] Every provider intended to be enabled has target-account evidence. Missing
       optional providers remain disabled and visibly unavailable.
+- [ ] Each approved provider has a complete `providerChecks` entry in
+      `release-acceptance.json`; configuration presence alone is not evidence.
 - [ ] For internal unsigned distribution, the artifact reports `NotSigned`, its
       SHA-256 matches the reviewed checksum, and the recipient accepts the normal
       Windows publisher warning.

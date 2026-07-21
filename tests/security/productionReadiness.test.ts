@@ -125,6 +125,29 @@ describe('production readiness regressions', () => {
     expect(consumeOAuthState(state!, 'gmail').userId).toBe('USER_TEST');
   });
 
+  it('requests evidence-read OAuth permissions without delegated mail sending or label writes', async () => {
+    const { getOAuth2Config } = await import('../../server/oauth2');
+    const { getGmailOAuthConfig } = await import('../../server/gmailService');
+    const google = getOAuth2Config('gmail');
+    const microsoft = getOAuth2Config('outlook');
+    const legacyGoogle = getGmailOAuthConfig();
+    const refreshSource = readFileSync(join(ROOT, 'server/emailOAuth.ts'), 'utf8');
+
+    expect(google.scopes).toEqual([
+      'https://www.googleapis.com/auth/gmail.readonly',
+      'https://www.googleapis.com/auth/userinfo.email',
+      'https://www.googleapis.com/auth/drive.readonly',
+    ]);
+    expect(legacyGoogle.scopes).toEqual(['https://www.googleapis.com/auth/gmail.readonly']);
+    expect(microsoft.scopes).toEqual([
+      'https://graph.microsoft.com/Mail.Read',
+      'https://graph.microsoft.com/User.Read',
+      'offline_access',
+    ]);
+    expect(refreshSource).not.toContain('Mail.Send');
+    expect(JSON.stringify({ google, microsoft, legacyGoogle })).not.toMatch(/gmail\.send|gmail\.labels|Mail\.Send/);
+  });
+
   it('opens OAuth in a sandboxed closeable desktop window and refreshes connection state', () => {
     const main = readFileSync(join(ROOT, 'src-main/index.ts'), 'utf8');
     const callback = readFileSync(join(ROOT, 'server/oauth2Callbacks.ts'), 'utf8');

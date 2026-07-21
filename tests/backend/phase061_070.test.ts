@@ -1,9 +1,11 @@
 /**
  * Phases 061–070 — DB-backed behavioural tests (real temp DB).
  */
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
+import { and, eq, inArray } from 'drizzle-orm';
 import { bootTestApp, sqliteAvailable, type TestApp } from '../helpers/app';
 import { buildUser, buildLawyer } from '../factories';
+import { encryptToken } from '../../server/emailOAuth';
 
 const suite = sqliteAvailable ? describe : describe.skip;
 
@@ -19,6 +21,7 @@ suite('Phases 061–070', () => {
     await app.db.insert(app.schema.lawyers).values(buildLawyer({ id: 'LWYR_61', legalAreas: JSON.stringify(['Employment Law']) }));
   });
   afterAll(() => app?.cleanup());
+  afterEach(() => vi.unstubAllGlobals());
 
   it('Phase 061 — invariants pass on a clean DB', async () => {
     const res = await app.makeCaller(ADMIN).admin.invariants();
@@ -39,6 +42,95 @@ suite('Phases 061–070', () => {
       expect(typeof item.configured).toBe('boolean');
       expect(Array.isArray(item.requiredEnv)).toBe(true);
     }
+  });
+
+  it('disconnects a shared Google connection without retaining owner tokens or cross-owner deletion', async () => {
+    const revoke = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+    vi.stubGlobal('fetch', revoke);
+    await app.db.insert(app.schema.emailAccounts).values([
+      {
+        id: 'GOOGLE_U61', userId: U.id, provider: 'gmail', email: U.email,
+        accessToken: encryptToken('access-u'), refreshToken: encryptToken('refresh-u'), status: 'connected',
+      },
+      {
+        id: 'GOOGLE_ADMIN61', userId: ADMIN.id, provider: 'gmail', email: ADMIN.email,
+        accessToken: encryptToken('access-admin'), refreshToken: encryptToken('refresh-admin'), status: 'connected',
+      },
+    ] as any);
+    await app.db.insert(app.schema.evidenceSources).values([
+      { id: 'SOURCE_GMAIL_U61', userId: U.id, sourceType: 'Gmail', status: 'connected' },
+      { id: 'SOURCE_DRIVE_U61', userId: U.id, sourceType: 'GoogleDrive', status: 'connected' },
+      { id: 'SOURCE_LOCAL_U61', userId: U.id, sourceType: 'LocalFolder', status: 'connected' },
+      { id: 'SOURCE_GMAIL_ADMIN61', userId: ADMIN.id, sourceType: 'Gmail', status: 'connected' },
+    ] as any);
+
+    await app.makeCaller(U).gmailEnhanced.disconnect();
+
+    expect(revoke).toHaveBeenCalledTimes(1);
+    const revokeBody = revoke.mock.calls[0][1]?.body as URLSearchParams;
+    expect(revokeBody.get('token')).toBe('refresh-u');
+
+    const ownAccounts = await app.db.select().from(app.schema.emailAccounts)
+      .where(eq(app.schema.emailAccounts.userId, U.id));
+    const otherAccounts = await app.db.select().from(app.schema.emailAccounts)
+      .where(eq(app.schema.emailAccounts.userId, ADMIN.id));
+    const ownGoogleSources = await app.db.select().from(app.schema.evidenceSources)
+      .where(and(
+        eq(app.schema.evidenceSources.userId, U.id),
+        inArray(app.schema.evidenceSources.sourceType, ['Gmail', 'GoogleDrive']),
+      ));
+    const ownLocalSources = await app.db.select().from(app.schema.evidenceSources)
+      .where(and(eq(app.schema.evidenceSources.userId, U.id), eq(app.schema.evidenceSources.sourceType, 'LocalFolder')));
+    const otherSources = await app.db.select().from(app.schema.evidenceSources)
+      .where(eq(app.schema.evidenceSources.userId, ADMIN.id));
+
+    expect(ownAccounts).toHaveLength(0);
+    expect(ownGoogleSources).toHaveLength(0);
+    expect(ownLocalSources).toHaveLength(1);
+    expect(otherAccounts).toHaveLength(1);
+    expect(otherSources).toHaveLength(1);
+  });
+
+  it('rejects new Outlook OAuth connections while its collector is unavailable', async () => {
+    await expect(
+      app.makeCaller(U).emailAccounts.getAuthUrl({ provider: 'outlook' } as never)
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  });
+
+  it('retains Google credentials and sources when upstream revocation fails', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 503 }));
+    await app.db.insert(app.schema.emailAccounts).values({
+      id: 'GOOGLE_U61_RETRY', userId: U.id, provider: 'gmail', email: U.email,
+      accessToken: encryptToken('access-retry'), refreshToken: encryptToken('refresh-retry'), status: 'connected',
+    } as any);
+    await app.db.insert(app.schema.evidenceSources).values({
+      id: 'SOURCE_GMAIL_U61_RETRY', userId: U.id, sourceType: 'Gmail', status: 'connected',
+    } as any);
+
+    await expect(app.makeCaller(U).gmailEnhanced.disconnect()).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+    });
+
+    const accounts = await app.db.select().from(app.schema.emailAccounts)
+      .where(and(eq(app.schema.emailAccounts.userId, U.id), eq(app.schema.emailAccounts.provider, 'gmail')));
+    const sources = await app.db.select().from(app.schema.evidenceSources)
+      .where(and(eq(app.schema.evidenceSources.userId, U.id), eq(app.schema.evidenceSources.sourceType, 'Gmail')));
+    expect(accounts).toHaveLength(1);
+    expect(sources).toHaveLength(1);
+  });
+
+  it('removes a Google connection when the upstream token is already invalid', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 400 }));
+    await app.db.insert(app.schema.emailAccounts).values({
+      id: 'GOOGLE_U61_INVALID', userId: U.id, provider: 'gmail', email: U.email,
+      accessToken: encryptToken('already-invalid'), status: 'connected',
+    } as any);
+
+    await app.makeCaller(U).emailAccounts.revoke({ accountId: 'GOOGLE_U61_INVALID' });
+
+    const account = await app.db.select().from(app.schema.emailAccounts)
+      .where(eq(app.schema.emailAccounts.id, 'GOOGLE_U61_INVALID'));
+    expect(account).toHaveLength(0);
   });
 
   it('Phase 062 — pre-send review returns safety facts and never sends', async () => {

@@ -85,6 +85,13 @@ Confirm that `build/icon.png` is the product-owner-approved public LARO mark.
 Before tagging, update `release-acceptance.json` in a reviewed pull request. A
 pending record is valid for normal development but blocks every tagged release.
 
+An approved `liveProviders` gate must use the supported provider identifiers
+`google`, `outboundEmail`, `inboundEmail`, `s3`, `forgeLlm`, or `telegram`.
+For every identifier in `providerScope`, add a matching `providerChecks` entry
+with `status: "passed"`, a non-future `testedAt` timestamp, evidence references,
+and every mandatory check reported by `npm run release:check`. Generic approval
+notes and credential-presence screenshots are not sufficient.
+
 ## Canary
 
 Risky behavior ships disabled. In particular, `outreach.send.enabled` defaults

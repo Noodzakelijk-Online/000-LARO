@@ -5,6 +5,14 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const GATE_NAMES = ['publicBrand', 'liveProviders'];
+export const PROVIDER_REQUIREMENTS = Object.freeze({
+  google: ['credentials', 'oauthConsent', 'gmailRead', 'driveRead', 'evidencePersisted', 'sourceLinkOpened', 'disconnectRevoked'],
+  outboundEmail: ['credentials', 'approvedSend', 'singleDelivery', 'auditRecorded', 'duplicateBlocked'],
+  inboundEmail: ['credentials', 'replyReceived', 'threadedToOutreach', 'analyticsUpdated'],
+  s3: ['credentials', 'put', 'read', 'hashMatched', 'delete', 'backupInventory'],
+  forgeLlm: ['credentials', 'sourceLinkedResult', 'invalidCitationRejected', 'failureClosed'],
+  telegram: ['credentials', 'messageRead', 'evidencePersisted', 'sourceLinkOpened'],
+});
 
 function argumentValue(args, flag) {
   const index = args.indexOf(flag);
@@ -12,14 +20,80 @@ function argumentValue(args, flag) {
 }
 
 function validApproval(gate) {
+  const approvedAt = typeof gate?.approvedAt === 'string' ? Date.parse(gate.approvedAt) : NaN;
   return gate?.status === 'approved'
     && typeof gate.approvedBy === 'string'
     && gate.approvedBy.trim().length > 0
-    && typeof gate.approvedAt === 'string'
-    && Number.isFinite(Date.parse(gate.approvedAt))
+    && Number.isFinite(approvedAt)
+    && approvedAt <= Date.now() + 5 * 60_000
     && Array.isArray(gate.evidence)
     && gate.evidence.length > 0
     && gate.evidence.every((entry) => typeof entry === 'string' && entry.trim().length > 0);
+}
+
+function isNonEmptyStringArray(value) {
+  return Array.isArray(value)
+    && value.length > 0
+    && value.every((entry) => typeof entry === 'string' && entry.trim().length > 0);
+}
+
+function validateProviderApproval(gate) {
+  const errors = [];
+  if (!isNonEmptyStringArray(gate?.providerScope)) {
+    return ['liveProviders approval requires a non-empty providerScope'];
+  }
+
+  const scope = gate.providerScope;
+  if (new Set(scope).size !== scope.length) {
+    errors.push('liveProviders.providerScope must not contain duplicates');
+  }
+  const unsupported = scope.filter((provider) => !(provider in PROVIDER_REQUIREMENTS));
+  if (unsupported.length > 0) {
+    errors.push(`liveProviders.providerScope contains unsupported providers: ${unsupported.join(', ')}`);
+  }
+
+  const providerChecks = gate.providerChecks;
+  if (!providerChecks || typeof providerChecks !== 'object' || Array.isArray(providerChecks)) {
+    errors.push('liveProviders approval requires a providerChecks object');
+    return errors;
+  }
+
+  const unexpectedChecks = Object.keys(providerChecks).filter((provider) => !scope.includes(provider));
+  if (unexpectedChecks.length > 0) {
+    errors.push(`liveProviders.providerChecks contains providers outside providerScope: ${unexpectedChecks.join(', ')}`);
+  }
+
+  const now = Date.now();
+  for (const provider of scope) {
+    if (!(provider in PROVIDER_REQUIREMENTS)) continue;
+    const result = providerChecks[provider];
+    if (!result || typeof result !== 'object' || Array.isArray(result)) {
+      errors.push(`liveProviders.providerChecks.${provider} is required`);
+      continue;
+    }
+    if (result.status !== 'passed') {
+      errors.push(`liveProviders.providerChecks.${provider}.status must be passed`);
+    }
+    const testedAt = typeof result.testedAt === 'string' ? Date.parse(result.testedAt) : NaN;
+    if (!Number.isFinite(testedAt) || testedAt > now + 5 * 60_000) {
+      errors.push(`liveProviders.providerChecks.${provider}.testedAt must be a valid non-future timestamp`);
+    }
+    if (!isNonEmptyStringArray(result.evidence)) {
+      errors.push(`liveProviders.providerChecks.${provider}.evidence must contain at least one reference`);
+    }
+    if (!isNonEmptyStringArray(result.checks)) {
+      errors.push(`liveProviders.providerChecks.${provider}.checks must be a non-empty list`);
+      continue;
+    }
+    if (new Set(result.checks).size !== result.checks.length) {
+      errors.push(`liveProviders.providerChecks.${provider}.checks must not contain duplicates`);
+    }
+    const missing = PROVIDER_REQUIREMENTS[provider].filter((check) => !result.checks.includes(check));
+    if (missing.length > 0) {
+      errors.push(`liveProviders.providerChecks.${provider} is missing checks: ${missing.join(', ')}`);
+    }
+  }
+  return errors;
 }
 
 export function validateReleaseAcceptance({ record, packageVersion, tag, requireApproved = false }) {
@@ -48,12 +122,7 @@ export function validateReleaseAcceptance({ record, packageVersion, tag, require
   }
 
   const providerGate = record?.gates?.liveProviders;
-  if (providerGate?.status === 'approved'
-      && (!Array.isArray(providerGate.providerScope)
-        || providerGate.providerScope.length === 0
-        || providerGate.providerScope.some((provider) => typeof provider !== 'string' || provider.trim().length === 0))) {
-    errors.push('liveProviders approval requires a non-empty providerScope');
-  }
+  if (providerGate?.status === 'approved') errors.push(...validateProviderApproval(providerGate));
   if (requireApproved && pending.length > 0) {
     errors.push(`release acceptance pending: ${pending.join(', ')}`);
   }
@@ -82,6 +151,12 @@ export function runReleaseAcceptance(args = process.argv.slice(2)) {
     console.log(`Pending external gates: ${result.pending.join(', ')}`);
   } else {
     console.log('All recorded external acceptance gates are approved.');
+  }
+  if (result.pending.includes('liveProviders') || args.includes('--show-provider-requirements')) {
+    console.log('Provider acceptance requirements:');
+    for (const [provider, checks] of Object.entries(PROVIDER_REQUIREMENTS)) {
+      console.log(`  - ${provider}: ${checks.join(', ')}`);
+    }
   }
   return 0;
 }
