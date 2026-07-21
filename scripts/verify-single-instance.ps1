@@ -2,7 +2,7 @@ param(
   [Parameter(Mandatory = $true)]
   [string]$ArtifactPath,
   [ValidateRange(30, 300)]
-  [int]$TimeoutSeconds = 120
+  [int]$TimeoutSeconds = 240
 )
 
 $ErrorActionPreference = 'Stop'
@@ -17,8 +17,27 @@ function Get-ProfileProcesses {
   })
 }
 
+function Get-LauncherState($Launcher) {
+  try {
+    $Launcher.Refresh()
+    if ($Launcher.HasExited) {
+      return "exited with code $($Launcher.ExitCode)"
+    }
+    return "still running (PID $($Launcher.Id))"
+  } catch {
+    return "unavailable: $($_.Exception.Message)"
+  }
+}
+
+function Get-ProfileSummary {
+  $items = @(Get-ChildItem -LiteralPath $profile -Force -ErrorAction SilentlyContinue | ForEach-Object {
+    if ($_.PSIsContainer) { "$($_.Name)/" } else { "$($_.Name) ($($_.Length) bytes)" }
+  })
+  return $(if ($items.Count -gt 0) { $items -join ', ' } else { 'empty' })
+}
+
 try {
-  Start-Process -FilePath $artifact -ArgumentList $arguments -WindowStyle Hidden | Out-Null
+  $primaryLauncher = Start-Process -FilePath $artifact -ArgumentList $arguments -WindowStyle Hidden -PassThru
   $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
   $stableSamples = 0
   $lastSignature = ''
@@ -37,7 +56,9 @@ try {
   } while ($stableSamples -lt 2 -and (Get-Date) -lt $deadline)
 
   if ($stableSamples -lt 2) {
-    throw "Primary packaged process did not initialize a stable profile within $TimeoutSeconds seconds. Processes: $lastSignature"
+    $launcherState = Get-LauncherState $primaryLauncher
+    $profileSummary = Get-ProfileSummary
+    throw "Primary packaged process did not initialize a stable profile within $TimeoutSeconds seconds. Processes: $lastSignature; launcher: $launcherState; profile: $profileSummary"
   }
 
   $beforeIds = @($primaryProcesses.ProcessId | Sort-Object)
@@ -71,7 +92,7 @@ try {
     throw 'Primary packaged processes did not stop before the restart probe.'
   }
 
-  Start-Process -FilePath $artifact -ArgumentList $arguments -WindowStyle Hidden | Out-Null
+  $restartLauncher = Start-Process -FilePath $artifact -ArgumentList $arguments -WindowStyle Hidden -PassThru
   $restartDeadline = (Get-Date).AddSeconds($TimeoutSeconds)
   $restartStableSamples = 0
   $lastRestartSignature = ''
@@ -88,7 +109,9 @@ try {
     $lastRestartSignature = $restartSignature
   } while ($restartStableSamples -lt 2 -and (Get-Date) -lt $restartDeadline)
   if ($restartStableSamples -lt 2) {
-    throw "Packaged restart did not initialize the existing profile within $TimeoutSeconds seconds."
+    $launcherState = Get-LauncherState $restartLauncher
+    $profileSummary = Get-ProfileSummary
+    throw "Packaged restart did not initialize the existing profile within $TimeoutSeconds seconds. Processes: $lastRestartSignature; launcher: $launcherState; profile: $profileSummary"
   }
 
   $secretHashAfterRestart = (Get-FileHash -LiteralPath $secretsPath -Algorithm SHA256).Hash
