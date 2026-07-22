@@ -44,6 +44,10 @@ import { assertSecurityConfig, ENV } from './_core/env';
 import { listenHttpServer } from './listen';
 import { APP_VERSION } from './_core/version';
 import { initializeRealtimeServer } from './realtime';
+import {
+  normalizePublicPathPrefix,
+  publicPathPrefixMiddleware,
+} from './publicPathPrefix';
 
 // ─── Environment ──────────────────────────────────────────────────────────────
 
@@ -54,9 +58,14 @@ const isDev = process.env.NODE_ENV === 'development';
 
 const app = express();
 const httpServer = createServer(app);
-initializeRealtimeServer(httpServer);
+const publicPathPrefix = normalizePublicPathPrefix(process.env.PUBLIC_PATH_PREFIX);
+initializeRealtimeServer(httpServer, `${publicPathPrefix}/socket.io`);
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
+
+// A shared-domain gateway may expose this API below a dedicated prefix. Strip
+// it before routing while leaving direct loopback health checks unchanged.
+app.use(publicPathPrefixMiddleware);
 
 // Phase 080 (D5) — strict CORS (never `*` with credentials) + CSRF origin guard.
 app.use(corsMiddleware);

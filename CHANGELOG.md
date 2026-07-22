@@ -14,6 +14,11 @@ versioning; dates are ISO. Version is sourced from `package.json` and surfaced b
   credential and refreshing status immediately.
 
 ### Added
+- Added a restartable Windows ngrok API deployment that keeps Docker on host
+  loopback, supports exact path routing on an existing shared dev domain,
+  persists only non-secret gateway settings, verifies local and public health,
+  routes the authenticated realtime endpoint under the same prefix, and safely
+  stops only LARO's validated tunnel process.
 - Added a non-destructive release-acceptance draft command that records exact
   provider checks and brand-asset hashes without reading credentials, approving
   gates, overwriting the canonical record, or replacing an existing draft.
