@@ -1,38 +1,35 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { sendSystemEmail } from "../systemEmail";
+import { resolveOutboundEmailConfiguration } from "../emailConfig";
 function resolveProvider() {
-  const from = process.env.EMAIL_FROM || process.env.SMTP_FROM || "noreply@laro.local";
-  const missingVars: string[] = [];
-
-  if (process.env.SENDGRID_API_KEY) {
+  const configuration = resolveOutboundEmailConfiguration();
+  const from = configuration.from || "noreply@laro.local";
+  if (configuration.provider === "sendgrid") {
     return {
       provider: "sendgrid" as const,
       name: "SendGrid",
-      configured: true,
+      configured: configuration.configured,
       from,
-      missingVars: [] as string[],
+      missingVars: configuration.missingVars,
     };
   }
-  if (process.env.SMTP_HOST) {
+  if (configuration.provider === "smtp") {
     return {
       provider: "smtp" as const,
       name: "SMTP",
-      configured: true,
+      configured: configuration.configured,
       from,
-      missingVars: [] as string[],
+      missingVars: configuration.missingVars,
     };
   }
-
-  if (process.env.EMAIL_PROVIDER === "sendgrid") missingVars.push("SENDGRID_API_KEY");
-  if (process.env.EMAIL_PROVIDER === "smtp") missingVars.push("SMTP_HOST");
 
   return {
     provider: "console" as const,
     name: "Console (Development)",
     configured: false,
     from: from || "Not configured",
-    missingVars,
+    missingVars: configuration.missingVars,
   };
 }
 

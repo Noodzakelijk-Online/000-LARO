@@ -178,7 +178,7 @@ GitHub Actions repeats the Node and browser checks on the supported Node 22 tool
 - Server, Electron main-process, and shipped renderer TypeScript checks passed; no shipped runtime module disables type checking; ESLint passed.
 - Traceability reported 117 rows, 92 cited, and 0 broken references.
 - Runtime no-excuses scan reported 0 suspect findings; account safety reported 0 high-severity findings.
-- Vitest reported 54 passing files and 349 passing tests, including controlled
+- Vitest reported 55 passing files and 354 passing tests, including controlled
   NOvA parsing/filter, unknown-metric scoring, and review-gated
   media/organization discovery, tenant isolation, case-draft persistence, and
   target-database readiness tests, with no skipped or todo tests.
@@ -280,6 +280,15 @@ publish the Electron interface. Register
 `https://example.ngrok-free.dev/laro/api/oauth/gmail/callback` on the Google web
 OAuth client. See [Deployment](docs/DEPLOYMENT.md) for the exact traffic-policy,
 secret-handling, and verification requirements.
+
+On Windows, configure live Google and SMTP secrets through DPAPI-protected,
+non-echoing prompts instead of placing them in `.env`:
+
+```powershell
+.\scripts\configure-live-providers.ps1 -Google -Smtp
+.\scripts\configure-live-providers.ps1 -Status
+.\scripts\start-ngrok-api.ps1 -SkipBuild
+```
 
 Windows desktop packaging uses:
 

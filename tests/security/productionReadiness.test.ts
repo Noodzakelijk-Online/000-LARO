@@ -317,6 +317,12 @@ describe('production readiness regressions', () => {
     const compose = readFileSync(join(ROOT, 'docker-compose.yml'), 'utf8');
     const ngrokLauncher = readFileSync(join(ROOT, 'scripts/start-ngrok-api.ps1'), 'utf8');
     const ngrokStopper = readFileSync(join(ROOT, 'scripts/stop-ngrok-api.ps1'), 'utf8');
+    const providerSetup = readFileSync(join(ROOT, 'scripts/configure-live-providers.ps1'), 'utf8');
+    const gitignore = readFileSync(join(ROOT, '.gitignore'), 'utf8');
+    const emailConfig = readFileSync(join(ROOT, 'server/emailConfig.ts'), 'utf8');
+    const emailRouter = readFileSync(join(ROOT, 'server/routers/email.ts'), 'utf8');
+    const adminRouter = readFileSync(join(ROOT, 'server/routers/admin.ts'), 'utf8');
+    const systemRouter = readFileSync(join(ROOT, 'server/_core/systemRouter.ts'), 'utf8');
     expect(server).toContain('!ENV.SERVER_ONLY');
     expect(database.indexOf('migrate(_db')).toBeLessThan(database.lastIndexOf('ensureSupportTicketsTable(sqlite)'));
     expect(compose).toContain('127.0.0.1:3000:3000');
@@ -324,6 +330,8 @@ describe('production readiness regressions', () => {
     expect(compose).toContain('ALLOWED_ORIGINS: ${LARO_PUBLIC_ORIGIN:-}');
     expect(compose).toContain('OAUTH_REDIRECT_BASE_URL: ${LARO_PUBLIC_BASE_URL:-http://127.0.0.1:3000}');
     expect(compose).toContain('PUBLIC_PATH_PREFIX: ${LARO_PUBLIC_PATH_PREFIX:-}');
+    expect(compose).toContain('GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}');
+    expect(compose).toContain('SMTP_PASS: ${SMTP_PASS:-}');
     expect(ngrokLauncher).toContain('http://127.0.0.1:4040/api/tunnels');
     expect(ngrokLauncher).toContain('Wait-ForHttpsTunnel -Process $ngrokProcess -ExpectedUrl $InternalUrl');
     expect(ngrokLauncher).toContain('Copy-Item -LiteralPath $examplePath -Destination $envPath');
@@ -334,9 +342,22 @@ describe('production readiness regressions', () => {
     expect(ngrokLauncher).toContain('LARO_NGROK_GATEWAY_URL');
     expect(ngrokLauncher).toContain('if (-not $httpsTunnel)');
     expect(ngrokLauncher).toContain('Wait-ForJsonEndpoint -Uri "$publicBaseUrl/api/health"');
+    expect(ngrokLauncher).toContain('Import-ProtectedProviderConfig');
+    expect(ngrokLauncher).toContain('Unprotect-Secret -ProtectedValue');
     expect(ngrokStopper).toContain('$process.ProcessName -ne "ngrok"');
     expect(ngrokStopper).toContain('$processDetails.CommandLine -notmatch "laro-api"');
     expect(ngrokStopper).toContain('docker compose stop laro-server');
+    expect(providerSetup).toContain('Read-Host "Google web OAuth client secret" -AsSecureString');
+    expect(providerSetup).toContain('Read-Host "SMTP password or Gmail app password" -AsSecureString');
+    expect(providerSetup).toContain('ConvertFrom-SecureString -SecureString $Value');
+    expect(providerSetup).toContain('/inheritance:r');
+    expect(gitignore).toContain('.laro-provider-config.json');
+    expect(emailConfig).toContain('required.filter((name) => !present(environment[name]))');
+    expect(emailRouter).toContain('resolveOutboundEmailConfiguration()');
+    expect(adminRouter).toContain('email: resolveOutboundEmailConfiguration().configured');
+    expect(systemRouter).toContain('configured: outboundEmail.configured');
+    expect(readFileSync(join(ROOT, 'server/systemEmail.ts'), 'utf8')).toContain('tls: { minVersion: "TLSv1.2" }');
+    expect(providerSetup).toContain('$normalized = $plainText -replace "\\s", ""');
   });
 
   it('allows an isolated development API port instead of hardcoding the proxy target', () => {

@@ -8,7 +8,7 @@ Date: 2026-07-21
 | Microsoft Outlook and OneDrive | Mail/file evidence | not applicable until collection is complete | Unavailable; OAuth primitives exist, but no release-capable evidence collector is mounted |
 | Forge-compatible LLM | Provider-backed legal analysis | `FORGE_API_URL`, `FORGE_API_KEY` | Available when configured; otherwise fails closed |
 | Local Ollama | Flask deep document reading | loopback `LARO_OLLAMA_*` | Optional; citation-gated local analysis |
-| SMTP or SendGrid | Transactional email and approved sending | `SMTP_*` or `SENDGRID_API_KEY` | Available when configured; no console success in production |
+| SMTP or SendGrid | Transactional email and approved sending | complete authenticated `SMTP_*`, or `SENDGRID_API_KEY` plus sender | Available when configured; no console success in production |
 | AWS S3 | Evidence object storage | bucket and workload/IAM credentials | Optional; real local-disk fallback |
 | Telegram | Message evidence | `TELEGRAM_BOT_TOKEN` | Available when configured |
 | Trello | Board evidence | API credentials plus secure token persistence | Disabled; secure token persistence is not implemented |
@@ -26,3 +26,10 @@ disconnect removes the shared Gmail/Drive credential and source connection
 records for that owner only after Google confirms revocation. If Google is
 unreachable or returns a non-terminal failure, LARO retains the encrypted
 credential so the owner can retry instead of silently leaving an active grant.
+
+For the Windows ngrok API deployment, `scripts/configure-live-providers.ps1`
+stores Google and authenticated SMTP secrets with DPAPI `CurrentUser`
+protection in an ignored local file. `scripts/start-ngrok-api.ps1` injects those
+values into Docker at startup without copying them into `.env`. Configuration
+presence is only a prerequisite: it does not satisfy the live acceptance checks
+in `release-acceptance.json`.
