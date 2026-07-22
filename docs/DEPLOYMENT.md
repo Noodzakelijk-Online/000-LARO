@@ -98,6 +98,39 @@ Remote Socket.IO clients must use the same prefix, for example
 `path: "/laro/socket.io"`. Direct desktop operation continues to use the
 default `/socket.io` path because it has no public prefix.
 
+### Protected live-provider configuration on Windows
+
+Do not put Google client secrets or SMTP passwords in chat, scripts, or the
+project `.env`. Configure them at the operator workstation through hidden
+prompts:
+
+```powershell
+# Configure either provider separately, or both in one invocation.
+.\scripts\configure-live-providers.ps1 -Google -Smtp
+
+# Show configuration booleans only; no secret is decrypted or displayed.
+.\scripts\configure-live-providers.ps1 -Status
+
+# Import the protected settings and restart the API.
+.\scripts\start-ngrok-api.ps1 -SkipBuild
+```
+
+The command stores provider secrets in ignored `.laro-provider-config.json`
+using Windows DPAPI `CurrentUser` protection, restricts that file to the current
+Windows account and `SYSTEM`, and prints only configured/not-configured status.
+The launcher decrypts values in memory and passes them to the container; it does
+not copy provider secrets into `.env` or runtime metadata. The protected file is
+bound to the Windows user profile and is intentionally excluded from backups and
+source control. Re-enter and rotate the credentials after moving to another
+machine or Windows account.
+
+For Gmail SMTP, use `smtp.gmail.com`, port `587`, the sending Gmail address, and
+a Google app password. A normal Google account password must not be used. LARO
+treats SMTP as operational only when host, user, password, and sender are all
+present; diagnostics and the sender use the same readiness rule. Spaces copied
+from Google's app-password display are removed before protection, and port 587
+requires STARTTLS with TLS 1.2 or newer.
+
 ## Notes
 
 - The desktop app is packaged separately with `npm run dist:*` (electron-builder).

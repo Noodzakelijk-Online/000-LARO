@@ -2,6 +2,7 @@ import { router, publicProcedure, protectedProcedure } from './trpc';
 import { ENV } from './env';
 import { capabilitiesFor, normalizeRole } from './roles';
 import { APP_VERSION } from './version';
+import { resolveOutboundEmailConfiguration } from '../emailConfig';
 
 export const systemRouter = router({
   health: publicProcedure.query(() => ({
@@ -41,6 +42,7 @@ export const systemRouter = router({
 
   providerChecklist: protectedProcedure.query(() => {
     const has = (v: string | undefined) => !!(v && v.length > 0);
+    const outboundEmail = resolveOutboundEmailConfiguration();
     const items = [
       { provider: 'AI analysis (Forge-compatible LLM)', category: 'ai', requiredEnv: ['FORGE_API_KEY'],
         configured: has(ENV.forgeApiKey),
@@ -52,8 +54,12 @@ export const systemRouter = router({
       { provider: 'AWS S3 (evidence storage)', category: 'storage', requiredEnv: ['AWS_S3_BUCKET', 'AWS_S3_ACCESS_KEY', 'AWS_S3_SECRET_KEY'],
         configured: has(ENV.AWS_S3_BUCKET) && has(ENV.AWS_S3_ACCESS_KEY) && has(ENV.AWS_S3_SECRET_KEY),
         note: 'Optional — falls back to local disk storage.' },
-      { provider: 'Email send (SendGrid/SMTP)', category: 'email', requiredEnv: ['SENDGRID_API_KEY | SMTP_HOST'],
-        configured: has(ENV.SENDGRID_API_KEY) || has(process.env.SMTP_HOST) },
+      { provider: 'Email send (SendGrid/SMTP)', category: 'email',
+        requiredEnv: ['SENDGRID_API_KEY + EMAIL_FROM | SMTP_HOST + SMTP_USER + SMTP_PASS + SMTP_FROM'],
+        configured: outboundEmail.configured,
+        note: outboundEmail.missingVars.length > 0
+          ? `Incomplete configuration; missing ${outboundEmail.missingVars.join(', ')}.`
+          : undefined },
       { provider: 'Trello', category: 'evidence', requiredEnv: [], configured: false,
         note: 'Unavailable — secure server-side token persistence is not implemented.' },
       { provider: 'Telegram', category: 'evidence', requiredEnv: ['TELEGRAM_BOT_TOKEN'], configured: has(ENV.TELEGRAM_BOT_TOKEN) },

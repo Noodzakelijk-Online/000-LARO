@@ -11,6 +11,7 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $envPath = Join-Path $root ".env"
 $runtimePath = Join-Path $root ".laro-ngrok.json"
+$providerConfigPath = Join-Path $root ".laro-provider-config.json"
 $ngrokLogPath = Join-Path $env:TEMP "laro-ngrok.log"
 
 function Set-EnvValue {
@@ -64,6 +65,52 @@ function New-LocalSecret {
         $generator.Dispose()
     }
     return -join ($bytes | ForEach-Object { $_.ToString("x2") })
+}
+
+function Unprotect-Secret {
+    param([Parameter(Mandatory)] [string]$ProtectedValue)
+
+    $secureValue = ConvertTo-SecureString -String $ProtectedValue
+    $pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureValue)
+    try {
+        return [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer)
+    } finally {
+        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer)
+    }
+}
+
+function Import-ProtectedProviderConfig {
+    if (-not (Test-Path -LiteralPath $providerConfigPath)) { return }
+
+    $config = Get-Content -LiteralPath $providerConfigPath -Raw | ConvertFrom-Json
+    if ($config.schemaVersion -ne 1) {
+        throw "Unsupported provider configuration version."
+    }
+    if ($config.google) {
+        if (-not $config.google.clientId -or -not $config.google.clientSecretProtected) {
+            throw "Protected Google provider configuration is incomplete."
+        }
+        $env:GOOGLE_CLIENT_ID = $config.google.clientId
+        $env:GOOGLE_CLIENT_SECRET = Unprotect-Secret -ProtectedValue $config.google.clientSecretProtected
+    }
+    if ($config.outboundEmail) {
+        if (
+            $config.outboundEmail.provider -ne "smtp" -or
+            -not $config.outboundEmail.host -or
+            -not $config.outboundEmail.user -or
+            -not $config.outboundEmail.passwordProtected -or
+            -not $config.outboundEmail.from
+        ) {
+            throw "Protected outbound-email configuration is incomplete or unsupported."
+        }
+        $env:EMAIL_PROVIDER = "smtp"
+        $env:SMTP_HOST = $config.outboundEmail.host
+        $env:SMTP_PORT = [string]$config.outboundEmail.port
+        $env:SMTP_USER = $config.outboundEmail.user
+        $env:SMTP_PASS = Unprotect-Secret -ProtectedValue $config.outboundEmail.passwordProtected
+        $env:SMTP_FROM = $config.outboundEmail.from
+        $env:SMTP_STARTTLS = if ($config.outboundEmail.startTls) { "true" } else { "false" }
+    }
 }
 
 function Wait-ForJsonEndpoint {
@@ -136,6 +183,7 @@ foreach ($name in "JWT_SECRET", "COOKIE_SECRET") {
     }
 }
 Set-EnvValue -Path $envPath -Name "NODE_ENV" -Value "production"
+Import-ProtectedProviderConfig
 
 if (-not $GatewayUrl) { $GatewayUrl = Get-EnvValue -Path $envPath -Name "LARO_NGROK_GATEWAY_URL" }
 if (-not $PathPrefix) { $PathPrefix = Get-EnvValue -Path $envPath -Name "LARO_NGROK_PATH_PREFIX" }

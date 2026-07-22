@@ -8,6 +8,7 @@ import { runRetentionSweep, previewRetentionSweep, RETENTION_POLICY } from "../r
 import { getAllFlags } from "../featureFlags";
 import { createAuditLog } from "../audit";
 import { APP_VERSION } from "../_core/version";
+import { resolveOutboundEmailConfiguration } from "../emailConfig";
 
 /**
  * Phase 036 — admin/operator diagnostics.
@@ -40,7 +41,7 @@ export const adminRouter = router({
         s3: !!ENV.AWS_S3_BUCKET,
         google: !!(ENV.GOOGLE_CLIENT_ID && ENV.GOOGLE_CLIENT_SECRET),
         microsoft: !!(ENV.MICROSOFT_CLIENT_ID && ENV.MICROSOFT_CLIENT_SECRET),
-        email: !!(ENV.SENDGRID_API_KEY || ENV.AWS_SES_ACCESS_KEY),
+        email: resolveOutboundEmailConfiguration().configured,
       },
     };
   }),

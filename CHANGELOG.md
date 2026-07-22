@@ -14,6 +14,9 @@ versioning; dates are ISO. Version is sourced from `package.json` and surfaced b
   credential and refreshing status immediately.
 
 ### Added
+- Added Windows DPAPI-protected setup for Google OAuth and authenticated SMTP
+  credentials, with non-echoing prompts, boolean-only status output, restricted
+  local file permissions, and automatic injection into the ngrok API container.
 - Added a restartable Windows ngrok API deployment that keeps Docker on host
   loopback, supports exact path routing on an existing shared dev domain,
   persists only non-secret gateway settings, verifies local and public health,
@@ -62,6 +65,9 @@ versioning; dates are ISO. Version is sourced from `package.json` and surfaced b
   compact source controls that open the owning document.
 
 ### Fixed
+- Unified outbound-email readiness across the sender, provider checklist, and
+  admin diagnostics, and stopped treating a lone SMTP host or sender-less
+  SendGrid key as a complete production configuration.
 - Normalized directly supplied Flask recovery paths before containment checks so
   Windows short/long profile aliases cannot reject evidence inside the same root.
 - Unified direct Flask, launcher, environment-template, and recovery upload-root

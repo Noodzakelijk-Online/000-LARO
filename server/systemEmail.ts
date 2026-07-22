@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
 import { ENV } from "./_core/env";
+import { resolveOutboundEmailConfiguration } from "./emailConfig";
 
 /**
  * System (transactional) email sender — used for app-generated mail like
@@ -24,7 +25,7 @@ export interface SystemEmailResult {
 }
 
 function fromAddress(): string {
-  return process.env.EMAIL_FROM || process.env.SMTP_FROM || "noreply@laro.local";
+  return resolveOutboundEmailConfiguration().from || "noreply@laro.local";
 }
 
 async function sendViaSendGrid(email: SystemEmail): Promise<void> {
@@ -52,10 +53,13 @@ async function sendViaSendGrid(email: SystemEmail): Promise<void> {
 
 async function sendViaSmtp(email: SystemEmail): Promise<void> {
   const port = Number(process.env.SMTP_PORT) || 587;
+  const startTls = process.env.SMTP_STARTTLS !== "false";
   const transport = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
     port,
     secure: port === 465,
+    requireTLS: port !== 465 && startTls,
+    tls: { minVersion: "TLSv1.2" },
     auth:
       process.env.SMTP_USER && process.env.SMTP_PASS
         ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
@@ -73,17 +77,21 @@ async function sendViaSmtp(email: SystemEmail): Promise<void> {
 }
 
 export async function sendSystemEmail(email: SystemEmail): Promise<SystemEmailResult> {
-  if (ENV.SENDGRID_API_KEY) {
+  const configuration = resolveOutboundEmailConfiguration();
+  if (configuration.provider === "sendgrid" && configuration.configured) {
     await sendViaSendGrid(email);
     return { delivered: true, provider: "sendgrid" };
   }
-  if (process.env.SMTP_HOST) {
+  if (configuration.provider === "smtp" && configuration.configured) {
     await sendViaSmtp(email);
     return { delivered: true, provider: "smtp" };
   }
 
   if (ENV.isProd) {
-    console.warn('[systemEmail] No transactional email provider is configured; message was not sent.');
+    const detail = configuration.missingVars.length > 0
+      ? ` Missing: ${configuration.missingVars.join(", ")}.`
+      : "";
+    console.warn(`[systemEmail] No complete transactional email provider is configured; message was not sent.${detail}`);
     return { delivered: false, provider: "unconfigured" };
   }
 
