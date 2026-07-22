@@ -1,0 +1,427 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  AlertCircle,
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  CircleHelp,
+  Columns3,
+  FileQuestion,
+  Focus,
+  GitBranch,
+  List,
+  Loader2,
+  Map as MapIcon,
+  Minus,
+  Plus,
+  Rows3,
+  RotateCcw,
+} from "lucide-react";
+import { trpc } from "@/lib/trpc";
+import { getElectronAPI } from "@/lib/electronApiShim";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+
+type RouteId = "employment" | "termination" | "communication" | "legal" | "financial" | "other";
+type Relationship = "attachment_of" | "references" | "responds_to" | "related";
+
+type ReconstructionNode = {
+  id: string;
+  title: string;
+  date: string;
+  route: RouteId;
+  summary: string;
+  actor: string | null;
+  documentType: string;
+  source: string | null;
+  eventCount: number;
+  analysisStatus: "complete" | "missing";
+  confidence: number | null;
+};
+
+type ReconstructionEdge = {
+  id: string;
+  from: string;
+  to: string;
+  relationship: Relationship;
+  evidence: "explicit" | "inferred";
+  confidence: number;
+  basis: string[];
+};
+
+type Reconstruction = {
+  schemaVersion: 1;
+  nodes: ReconstructionNode[];
+  edges: ReconstructionEdge[];
+  routes: Array<{ id: RouteId; label: string; documentCount: number; eventCount: number }>;
+  warnings: string[];
+};
+
+const ROUTE_COLORS: Record<RouteId, string> = {
+  communication: "#38bdf8",
+  legal: "#f97316",
+  financial: "#22c55e",
+  employment: "#a78bfa",
+  termination: "#ef4444",
+  other: "#94a3b8",
+};
+
+const RELATIONSHIP_LABELS: Record<Relationship, string> = {
+  attachment_of: "Attachment to",
+  references: "Referenced by",
+  responds_to: "Responded to by",
+  related: "Potentially related to",
+};
+
+function truncate(value: string, length: number): string {
+  return value.length <= length ? value : `${value.slice(0, length - 1).trimEnd()}…`;
+}
+
+function formatDate(value: string): string {
+  if (value === "Undated") return value;
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function connectedIds(selectedId: string | null, edges: ReconstructionEdge[]): Set<string> {
+  if (!selectedId) return new Set();
+  const connected = new Set([selectedId]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const edge of edges) {
+      if (connected.has(edge.from) && !connected.has(edge.to)) {
+        connected.add(edge.to);
+        changed = true;
+      }
+      if (connected.has(edge.to) && !connected.has(edge.from)) {
+        connected.add(edge.from);
+        changed = true;
+      }
+    }
+  }
+  return connected;
+}
+
+export function CaseReconstruction({ caseId }: { caseId: string }) {
+  const [reconstruction, setReconstruction] = useState<Reconstruction | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [orientation, setOrientation] = useState<"horizontal" | "vertical">("horizontal");
+  const [view, setView] = useState<"map" | "list">("map");
+  const [showInferred, setShowInferred] = useState(true);
+  const [minimumConfidence, setMinimumConfidence] = useState(52);
+  const [routeFilter, setRouteFilter] = useState<RouteId | "all">("all");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [traceSelected, setTraceSelected] = useState(false);
+  const [zoom, setZoom] = useState(1);
+  const loadedCase = useRef<string | null>(null);
+  const generateMutation = trpc.documentAnalysis.generateCaseTimeline.useMutation();
+  const sourceMutation = trpc.evidenceFiles.getDownloadUrl.useMutation();
+  const sourceOpenedMutation = trpc.evidenceFiles.recordSourceOpened.useMutation();
+
+  const load = async () => {
+    try {
+      setErrorMessage(null);
+      const result = await generateMutation.mutateAsync({ caseId });
+      const next = result.reconstruction as Reconstruction;
+      setReconstruction(next);
+      setSelectedId((current) => current && next.nodes.some((node) => node.id === current)
+        ? current
+        : next.nodes[0]?.id ?? null);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "The document reconstruction could not be generated.");
+    }
+  };
+
+  useEffect(() => {
+    if (loadedCase.current === caseId) return;
+    loadedCase.current = caseId;
+    void load();
+  }, [caseId]);
+
+  const openSource = async (evidenceId: string) => {
+    try {
+      setErrorMessage(null);
+      const source = await sourceMutation.mutateAsync({ id: evidenceId });
+      if (!source.url) throw new Error(source.message || "The source file is not available.");
+      await getElectronAPI().openExternal(source.url);
+      await sourceOpenedMutation.mutateAsync({ id: evidenceId });
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "The source file could not be opened.");
+    }
+  };
+
+  const visibleNodes = useMemo(() => reconstruction?.nodes.filter((node) =>
+    routeFilter === "all" || node.route === routeFilter) ?? [], [reconstruction, routeFilter]);
+  const visibleNodeIds = useMemo(() => new Set(visibleNodes.map((node) => node.id)), [visibleNodes]);
+  const visibleEdges = useMemo(() => reconstruction?.edges.filter((edge) =>
+    visibleNodeIds.has(edge.from) && visibleNodeIds.has(edge.to) &&
+    (showInferred || edge.evidence === "explicit") && edge.confidence * 100 >= minimumConfidence) ?? [],
+  [reconstruction, visibleNodeIds, showInferred, minimumConfidence]);
+  const tracedIds = useMemo(() => traceSelected ? connectedIds(selectedId, visibleEdges) : new Set<string>(),
+    [traceSelected, selectedId, visibleEdges]);
+  const selectedNode = reconstruction?.nodes.find((node) => node.id === selectedId) ?? null;
+  const selectedEdges = visibleEdges.filter((edge) => edge.from === selectedId || edge.to === selectedId);
+
+  if (!reconstruction && generateMutation.isPending) {
+    return (
+      <div className="flex min-h-64 items-center justify-center gap-3 text-sm text-muted-foreground">
+        <Loader2 className="h-5 w-5 animate-spin" /> Reconstructing the document history…
+      </div>
+    );
+  }
+
+  if (!reconstruction) {
+    return (
+      <div className="space-y-4">
+        {errorMessage ? (
+          <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Reconstruction failed</AlertTitle><AlertDescription>{errorMessage}</AlertDescription></Alert>
+        ) : null}
+        <Button onClick={() => void load()} disabled={generateMutation.isPending}>
+          <RotateCcw className="mr-2 h-4 w-4" /> Retry reconstruction
+        </Button>
+      </div>
+    );
+  }
+
+  if (!reconstruction.nodes.length) {
+    return (
+      <div className="border border-dashed border-border p-8 text-center">
+        <FileQuestion className="mx-auto h-8 w-8 text-muted-foreground" />
+        <h3 className="mt-3 font-medium">No documents to reconstruct</h3>
+        <p className="mt-1 text-sm text-muted-foreground">Pull or upload evidence for this case. It will appear here automatically.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {errorMessage ? (
+        <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Document action failed</AlertTitle><AlertDescription>{errorMessage}</AlertDescription></Alert>
+      ) : null}
+
+      <div className="grid gap-3 border-b border-border/60 pb-4 sm:grid-cols-3">
+        <div><div className="text-xs text-muted-foreground">Documents</div><div className="text-2xl font-semibold">{reconstruction.nodes.length}</div></div>
+        <div><div className="text-xs text-muted-foreground">Verified links</div><div className="text-2xl font-semibold">{reconstruction.edges.filter((edge) => edge.evidence === "explicit").length}</div></div>
+        <div><div className="text-xs text-muted-foreground">Suggested links</div><div className="text-2xl font-semibold">{reconstruction.edges.filter((edge) => edge.evidence === "inferred").length}</div></div>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-3 border-b border-border/60 pb-4">
+        <div className="inline-flex rounded-md border border-border bg-background p-1" role="group" aria-label="Reconstruction view">
+          <Button type="button" variant={view === "map" ? "secondary" : "ghost"} size="icon" className="h-8 w-8" title="Document map" aria-label="Show document map" aria-pressed={view === "map"} onClick={() => setView("map")}><MapIcon className="h-4 w-4" /></Button>
+          <Button type="button" variant={view === "list" ? "secondary" : "ghost"} size="icon" className="h-8 w-8" title="Accessible document list" aria-label="Show document list" aria-pressed={view === "list"} onClick={() => setView("list")}><List className="h-4 w-4" /></Button>
+        </div>
+        {view === "map" ? (
+          <>
+            <div className="inline-flex rounded-md border border-border bg-background p-1" role="group" aria-label="Map orientation">
+              <Button type="button" variant={orientation === "horizontal" ? "secondary" : "ghost"} size="icon" className="h-8 w-8" title="Horizontal map" aria-label="Show horizontal map" aria-pressed={orientation === "horizontal"} onClick={() => setOrientation("horizontal")}><Columns3 className="h-4 w-4" /></Button>
+              <Button type="button" variant={orientation === "vertical" ? "secondary" : "ghost"} size="icon" className="h-8 w-8" title="Vertical map" aria-label="Show vertical map" aria-pressed={orientation === "vertical"} onClick={() => setOrientation("vertical")}><Rows3 className="h-4 w-4" /></Button>
+            </div>
+            <div className="inline-flex rounded-md border border-border bg-background p-1" role="group" aria-label="Map zoom">
+              <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="Zoom out" aria-label="Zoom out" onClick={() => setZoom((value) => Math.max(0.65, Number((value - 0.15).toFixed(2))))}><Minus className="h-4 w-4" /></Button>
+              <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="Reset zoom" aria-label="Reset zoom" onClick={() => setZoom(1)}><Focus className="h-4 w-4" /></Button>
+              <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="Zoom in" aria-label="Zoom in" onClick={() => setZoom((value) => Math.min(1.6, Number((value + 0.15).toFixed(2))))}><Plus className="h-4 w-4" /></Button>
+            </div>
+          </>
+        ) : null}
+        <label className="min-w-44 text-xs text-muted-foreground">
+          Route
+          <select className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground" value={routeFilter} onChange={(event) => setRouteFilter(event.target.value as RouteId | "all")}>
+            <option value="all">All routes</option>
+            {reconstruction.routes.map((route) => <option key={route.id} value={route.id}>{route.label} ({route.documentCount})</option>)}
+          </select>
+        </label>
+        <label className="min-w-44 text-xs text-muted-foreground">
+          Minimum link confidence: {minimumConfidence}%
+          <input className="mt-2 block w-full accent-orange-500" type="range" min="50" max="95" step="1" value={minimumConfidence} onChange={(event) => setMinimumConfidence(Number(event.target.value))} />
+        </label>
+        <label className="flex h-9 items-center gap-2 text-sm">
+          <Switch checked={showInferred} onCheckedChange={setShowInferred} aria-label="Show inferred links" /> Suggested links
+        </label>
+        <label className="flex h-9 items-center gap-2 text-sm">
+          <Switch checked={traceSelected} onCheckedChange={setTraceSelected} aria-label="Trace selected document chain" /> Trace selection
+        </label>
+        <Button type="button" variant="outline" size="sm" className="ml-auto" onClick={() => void load()} disabled={generateMutation.isPending}>
+          {generateMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RotateCcw className="mr-2 h-4 w-4" />} Refresh
+        </Button>
+      </div>
+
+      <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs text-muted-foreground" aria-label="Route legend">
+        {reconstruction.routes.map((route) => (
+          <button key={route.id} type="button" className="flex items-center gap-2 hover:text-foreground" onClick={() => setRouteFilter((value) => value === route.id ? "all" : route.id)}>
+            <span className="h-2.5 w-6 rounded-full" style={{ backgroundColor: ROUTE_COLORS[route.id] }} />
+            {route.label} ({route.documentCount})
+          </button>
+        ))}
+        <span className="flex items-center gap-2"><span className="w-6 border-t-2 border-dashed border-slate-500" /> Suggested relationship</span>
+      </div>
+
+      {view === "map" ? (
+        <ReconstructionMap
+          nodes={visibleNodes}
+          edges={visibleEdges}
+          routes={reconstruction.routes.filter((route) => routeFilter === "all" || route.id === routeFilter)}
+          orientation={orientation}
+          zoom={zoom}
+          selectedId={selectedId}
+          tracedIds={tracedIds}
+          traceSelected={traceSelected}
+          onSelect={setSelectedId}
+          onOpenSource={(id) => void openSource(id)}
+        />
+      ) : (
+        <div className="divide-y divide-border border-y border-border">
+          {visibleNodes.map((node) => (
+            <article key={node.id} className={`grid gap-3 py-4 sm:grid-cols-[9rem_1fr_auto] ${selectedId === node.id ? "bg-muted/30" : ""}`}>
+              <div><div className="text-sm font-medium">{formatDate(node.date)}</div><div className="mt-1 text-xs" style={{ color: ROUTE_COLORS[node.route] }}>{reconstruction.routes.find((route) => route.id === node.route)?.label}</div></div>
+              <button type="button" className="min-w-0 text-left" onClick={() => setSelectedId(node.id)}><div className="font-medium">{node.title}</div><p className="mt-1 text-sm leading-6 text-muted-foreground">{node.summary}</p></button>
+              <Button type="button" variant="ghost" size="icon" title="Open source document" aria-label={`Open source document ${node.title}`} onClick={() => void openSource(node.id)}><CircleHelp className="h-4 w-4" /></Button>
+            </article>
+          ))}
+        </div>
+      )}
+
+      {selectedNode ? (
+        <section className="border-t border-border pt-4" aria-live="polite">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="h-3 w-3 rounded-full" style={{ backgroundColor: ROUTE_COLORS[selectedNode.route] }} />
+                <h3 className="font-semibold">{selectedNode.title}</h3>
+                <Badge variant="outline">{formatDate(selectedNode.date)}</Badge>
+                {selectedNode.analysisStatus === "missing" ? <Badge variant="destructive">Analysis needed</Badge> : null}
+              </div>
+              <p className="mt-2 max-w-4xl text-sm leading-6 text-muted-foreground">{selectedNode.summary}</p>
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                <span>{selectedNode.documentType}</span>
+                {selectedNode.actor ? <span>Actor: {selectedNode.actor}</span> : null}
+                <span>{selectedNode.eventCount} dated event{selectedNode.eventCount === 1 ? "" : "s"}</span>
+                {selectedNode.confidence !== null ? <span>Analysis confidence: {selectedNode.confidence}%</span> : null}
+              </div>
+            </div>
+            <Button type="button" variant="outline" size="sm" title="Open source document" onClick={() => void openSource(selectedNode.id)}><CircleHelp className="mr-2 h-4 w-4" /> Source</Button>
+          </div>
+          {selectedEdges.length ? (
+            <div className="mt-4 grid gap-2 lg:grid-cols-2">
+              {selectedEdges.map((edge) => {
+                const incoming = edge.to === selectedNode.id;
+                const other = reconstruction.nodes.find((node) => node.id === (incoming ? edge.from : edge.to));
+                return (
+                  <button key={edge.id} type="button" className="flex items-start gap-3 border border-border/70 p-3 text-left hover:bg-muted/40" onClick={() => setSelectedId(other?.id ?? null)}>
+                    {incoming ? <ArrowDownToLine className="mt-0.5 h-4 w-4 shrink-0" /> : <ArrowUpFromLine className="mt-0.5 h-4 w-4 shrink-0" />}
+                    <span className="min-w-0 flex-1"><span className="block text-sm font-medium">{RELATIONSHIP_LABELS[edge.relationship]} {other?.title}</span><span className="mt-1 block text-xs text-muted-foreground">{edge.basis.join(" ")}</span></span>
+                    <Badge variant={edge.evidence === "explicit" ? "default" : "outline"}>{Math.round(edge.confidence * 100)}%</Badge>
+                  </button>
+                );
+              })}
+            </div>
+          ) : <p className="mt-3 text-sm text-muted-foreground">No relationship survives the current filters for this document.</p>}
+        </section>
+      ) : null}
+
+      {reconstruction.warnings.map((warning) => (
+        <Alert key={warning}><GitBranch className="h-4 w-4" /><AlertTitle>Interpretation note</AlertTitle><AlertDescription>{warning}</AlertDescription></Alert>
+      ))}
+    </div>
+  );
+}
+
+function ReconstructionMap({
+  nodes,
+  edges,
+  routes,
+  orientation,
+  zoom,
+  selectedId,
+  tracedIds,
+  traceSelected,
+  onSelect,
+  onOpenSource,
+}: {
+  nodes: ReconstructionNode[];
+  edges: ReconstructionEdge[];
+  routes: Array<{ id: RouteId; label: string }>;
+  orientation: "horizontal" | "vertical";
+  zoom: number;
+  selectedId: string | null;
+  tracedIds: Set<string>;
+  traceSelected: boolean;
+  onSelect: (id: string) => void;
+  onOpenSource: (id: string) => void;
+}) {
+  const routeIndex = new Map(routes.map((route, index) => [route.id, index]));
+  const width = orientation === "horizontal" ? Math.max(940, nodes.length * 230 + 220) : Math.max(760, routes.length * 250 + 230);
+  const height = orientation === "horizontal" ? Math.max(400, routes.length * 155 + 150) : Math.max(560, nodes.length * 150 + 160);
+  const positions = new Map(nodes.map((node, index) => [node.id, orientation === "horizontal"
+    ? { x: 150 + index * 230, y: 90 + (routeIndex.get(node.route) ?? 0) * 155 }
+    : { x: 145 + (routeIndex.get(node.route) ?? 0) * 250, y: 95 + index * 150 }]));
+
+  const routeExtents = new Map<RouteId, { min: number; max: number; lane: number }>();
+  for (const node of nodes) {
+    const point = positions.get(node.id)!;
+    const value = orientation === "horizontal" ? point.x : point.y;
+    const lane = orientation === "horizontal" ? point.y : point.x;
+    const current = routeExtents.get(node.route);
+    routeExtents.set(node.route, current
+      ? { min: Math.min(current.min, value), max: Math.max(current.max, value), lane }
+      : { min: value - 35, max: value + 35, lane });
+  }
+
+  return (
+    <div className="overflow-auto border-y border-border bg-slate-950/40" style={{ maxHeight: "70vh" }} tabIndex={0} aria-label="Scrollable document reconstruction map">
+      <svg width={width * zoom} height={height * zoom} viewBox={`0 0 ${width} ${height}`} role="img" aria-labelledby="reconstruction-map-title reconstruction-map-description">
+        <title id="reconstruction-map-title">Document history reconstruction</title>
+        <desc id="reconstruction-map-description">Documents are stations ordered by date. Colored lines group event categories. Solid connectors come from provider metadata or document references; dashed connectors are inferred similarities.</desc>
+        <defs><marker id="reconstruction-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#cbd5e1" /></marker></defs>
+        {routes.map((route) => {
+          const extent = routeExtents.get(route.id);
+          if (!extent) return null;
+          return orientation === "horizontal" ? (
+            <g key={route.id}><line x1={extent.min} y1={extent.lane} x2={extent.max} y2={extent.lane} stroke={ROUTE_COLORS[route.id]} strokeWidth="8" strokeLinecap="round" opacity="0.78" /><text x="20" y={extent.lane + 5} fill={ROUTE_COLORS[route.id]} fontSize="12" fontWeight="600">{route.label}</text></g>
+          ) : (
+            <g key={route.id}><line x1={extent.lane} y1={extent.min} x2={extent.lane} y2={extent.max} stroke={ROUTE_COLORS[route.id]} strokeWidth="8" strokeLinecap="round" opacity="0.78" /><text x={extent.lane} y="30" fill={ROUTE_COLORS[route.id]} fontSize="12" fontWeight="600" textAnchor="middle">{route.label}</text></g>
+          );
+        })}
+        {edges.map((edge) => {
+          const from = positions.get(edge.from);
+          const to = positions.get(edge.to);
+          if (!from || !to) return null;
+          const mid = orientation === "horizontal" ? (from.x + to.x) / 2 : (from.y + to.y) / 2;
+          const path = orientation === "horizontal"
+            ? `M ${from.x} ${from.y} C ${mid} ${from.y}, ${mid} ${to.y}, ${to.x} ${to.y}`
+            : `M ${from.x} ${from.y} C ${from.x} ${mid}, ${to.x} ${mid}, ${to.x} ${to.y}`;
+          const active = !traceSelected || (tracedIds.has(edge.from) && tracedIds.has(edge.to));
+          return <path key={edge.id} d={path} fill="none" stroke={edge.evidence === "explicit" ? "#f8fafc" : "#94a3b8"} strokeWidth={edge.evidence === "explicit" ? 2.5 : 2} strokeDasharray={edge.evidence === "inferred" ? "7 6" : undefined} markerEnd="url(#reconstruction-arrow)" opacity={active ? 0.8 : 0.12}><title>{RELATIONSHIP_LABELS[edge.relationship]} · {Math.round(edge.confidence * 100)}% · {edge.basis.join(" ")}</title></path>;
+        })}
+        {nodes.map((node) => {
+          const point = positions.get(node.id)!;
+          const selected = node.id === selectedId;
+          const active = !traceSelected || tracedIds.has(node.id);
+          const box = orientation === "horizontal"
+            ? { x: point.x - 92, y: point.y + 18 }
+            : { x: point.x + 18, y: point.y - 45 };
+          return (
+            <g key={node.id} opacity={active ? 1 : 0.2}>
+              <circle cx={point.x} cy={point.y} r={selected ? 12 : 9} fill="#0f172a" stroke={ROUTE_COLORS[node.route]} strokeWidth={selected ? 5 : 4} />
+              <foreignObject x={box.x} y={box.y} width="185" height="108">
+                <div className={`h-[100px] border bg-slate-950/95 p-2 text-slate-100 shadow-lg ${selected ? "border-white" : "border-slate-700"}`}>
+                  <button type="button" className="block w-full text-left" onClick={() => onSelect(node.id)} title={`${node.title}. ${node.summary}`}>
+                    <span className="block truncate text-xs font-semibold">{node.title}</span>
+                    <span className="mt-1 block h-9 overflow-hidden text-[10px] leading-[18px] text-slate-400">{truncate(node.summary, 92)}</span>
+                  </button>
+                  <span className="mt-1 flex items-center justify-between gap-2 text-[10px] text-slate-400">
+                    <span>{formatDate(node.date)}</span>
+                    <button type="button" className="grid h-6 w-6 place-items-center text-slate-200 hover:bg-slate-800" title="Open source document" aria-label={`Open source document ${node.title}`} onClick={() => onOpenSource(node.id)}><CircleHelp className="h-4 w-4" /></button>
+                  </span>
+                </div>
+              </foreignObject>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}

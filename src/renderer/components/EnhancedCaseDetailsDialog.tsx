@@ -67,6 +67,7 @@ import { CollectionMonitoringDashboard } from "@/components/CollectionMonitoring
 import ProgressTrackingDashboard from "@/components/ProgressTrackingDashboard";
 import { AutomatedDocumentAnalysis } from "@/components/AutomatedDocumentAnalysis";
 import { CaseTimeline } from "@/components/CaseTimeline";
+import { CaseReconstruction } from "@/components/CaseReconstruction";
 import { exportCaseSummary, printCaseSummary } from "@/lib/export";
 import { getElectronAPI, isElectron } from "@/lib/electronApiShim";
 import CaseStatusWorkflow from "@/components/CaseStatusWorkflow";
@@ -991,12 +992,16 @@ export default function EnhancedCaseDetailsDialog({
                     <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
                       <GitBranch className="w-5 h-5 text-orange-500" /> Evidence Timeline
                     </h2>
-                    <Tabs defaultValue="events" className="w-full">
+                      <Tabs defaultValue="reconstruction" className="w-full">
                       <TabsList className="h-auto w-full justify-start gap-1 border border-border/30 bg-card/40 p-1">
+                        <TabsTrigger value="reconstruction" className="text-xs">Document map</TabsTrigger>
                         <TabsTrigger value="events" className="text-xs">Legal events</TabsTrigger>
                         <TabsTrigger value="sources" className="text-xs">Source documents</TabsTrigger>
                         <TabsTrigger value="activity" className="text-xs">Case activity</TabsTrigger>
                       </TabsList>
+                      <TabsContent value="reconstruction" className="mt-4">
+                        <CaseReconstruction caseId={caseId} />
+                      </TabsContent>
                       <TabsContent value="events" className="mt-4">
                         <CaseTimeline caseId={caseId} />
                       </TabsContent>

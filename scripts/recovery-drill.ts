@@ -3,8 +3,14 @@ import { tmpdir } from 'os';
 import { dirname, join } from 'path';
 
 const workDir = mkdtempSync(join(tmpdir(), 'laro-recovery-drill-'));
+const storagePath = join(workDir, 'uploads');
 process.env.NODE_ENV = 'test';
 process.env.DATABASE_URL = join(workDir, 'live.sqlite');
+process.env.LOCAL_STORAGE_DIR = storagePath;
+delete process.env.JWT_SECRET;
+delete process.env.COOKIE_SECRET;
+delete process.env.AWS_S3_BUCKET;
+delete process.env.AWS_S3_ENDPOINT;
 
 async function main() {
   const [{ getDb, closeDatabaseForMaintenance }, backup, schema] = await Promise.all([
@@ -19,7 +25,6 @@ async function main() {
     jwtSecret: 'a'.repeat(64),
     cookieSecret: 'b'.repeat(64),
   };
-  const storagePath = join(workDir, 'uploads');
   const storageKey = 'evidence/recovery/source.txt';
   const evidencePath = join(storagePath, ...storageKey.split('/'));
   const originalEvidence = 'recovery drill evidence bytes';

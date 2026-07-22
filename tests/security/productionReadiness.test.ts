@@ -46,6 +46,14 @@ describe('production readiness regressions', () => {
     expect(strongSecrets.stdout).toContain('No blockers. Warnings, if any, are advisory.');
   });
 
+  it('keeps the recovery drill isolated from target production credentials and storage', () => {
+    const drill = readFileSync(join(ROOT, 'scripts/recovery-drill.ts'), 'utf8');
+    expect(drill).toContain('process.env.LOCAL_STORAGE_DIR = storagePath');
+    expect(drill).toContain('delete process.env.JWT_SECRET');
+    expect(drill).toContain('delete process.env.COOKIE_SECRET');
+    expect(drill).toContain('delete process.env.AWS_S3_BUCKET');
+  });
+
   it('fails closed when provider-backed AI is not configured', async () => {
     delete process.env.FORGE_API_KEY;
     vi.resetModules();
@@ -62,6 +70,7 @@ describe('production readiness regressions', () => {
     const analysisUi = readFileSync(join(ROOT, 'src/renderer/components/AutomatedDocumentAnalysis.tsx'), 'utf8');
     const caseUi = readFileSync(join(ROOT, 'src/renderer/components/EnhancedCaseDetailsDialog.tsx'), 'utf8');
     const timelineUi = readFileSync(join(ROOT, 'src/renderer/components/CaseTimeline.tsx'), 'utf8');
+    const reconstructionUi = readFileSync(join(ROOT, 'src/renderer/components/CaseReconstruction.tsx'), 'utf8');
     const migration = readFileSync(join(ROOT, 'drizzle/0002_unknown_silver_samurai.sql'), 'utf8');
     const main = readFileSync(join(ROOT, 'src-main/index.ts'), 'utf8');
 
@@ -93,6 +102,12 @@ describe('production readiness regressions', () => {
     expect(caseUi).toContain('{ id: "analysis", label: "Analysis"');
     expect(caseUi).toContain('<CaseTimeline caseId={caseId} />');
     expect(timelineUi).toContain('title="Open source document"');
+    expect(caseUi).toContain('<CaseReconstruction caseId={caseId} />');
+    expect(reconstructionUi).toContain('Suggested links');
+    expect(reconstructionUi).toContain('Open source document');
+    expect(reconstructionUi).toContain('Trace selection');
+    expect(analysisUi).toContain('Analyze all pending');
+    expect(analysisUi).toContain('documentAnalysis.byCase.useQuery');
     expect(migration).toContain('CREATE TABLE `document_analyses`');
     expect(migration).not.toContain('__new_');
     const migrationFiles = readdirSync(join(ROOT, 'drizzle')).filter((file) => /^(?:000[2-9]|00[1-9]\d).*\.sql$/.test(file));

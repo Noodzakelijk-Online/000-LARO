@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { assertCaseOwnership } from "../_core/authz";
+import { buildCaseReconstruction } from "../caseReconstruction";
 import { protectedProcedure, router } from "../_core/trpc";
 import { analyzeStoredEvidence, parseDocumentAnalysisResult } from "../documentAnalysisService";
 import { DOCUMENT_ANALYSIS_VERSION, supportedDocumentAnalysisMimeTypes } from "../documentIntelligence";
@@ -61,6 +62,30 @@ export const documentAnalysisRouter = router({
       return row ? { id: row.id, result: parseDocumentAnalysisResult(row.result), updatedAt: row.updatedAt } : null;
     }),
 
+  byCase: protectedProcedure
+    .input(z.object({ caseId: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      await assertCaseOwnership(input.caseId, ctx.user.id);
+      const db = await getDb();
+      const rows = await db
+        .select()
+        .from(documentAnalyses)
+        .where(and(eq(documentAnalyses.caseId, input.caseId), eq(documentAnalyses.userId, ctx.user.id)))
+        .orderBy(desc(documentAnalyses.updatedAt));
+      return rows.map((row) => {
+        const result = parseDocumentAnalysisResult(row.result);
+        return {
+          id: row.id,
+          evidenceId: row.evidenceId,
+          documentType: result.documentType,
+          summary: result.summary,
+          confidence: result.confidence,
+          providerStatus: result.providerStatus,
+          updatedAt: row.updatedAt,
+        };
+      });
+    }),
+
   generateCaseTimeline: protectedProcedure
     .input(z.object({ caseId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
@@ -79,7 +104,15 @@ export const documentAnalysisRouter = router({
           .where(and(eq(persistedTimeline.caseId, input.caseId), eq(persistedTimeline.userId, ctx.user.id)))
           .orderBy(asc(persistedTimeline.eventAt)),
         db
-          .select({ id: evidence.id, title: evidence.title })
+          .select({
+            id: evidence.id,
+            title: evidence.title,
+            description: evidence.description,
+            source: evidence.source,
+            type: evidence.type,
+            metadata: evidence.metadata,
+            createdAt: evidence.createdAt,
+          })
           .from(evidence)
           .where(and(eq(evidence.caseId, input.caseId), eq(evidence.userId, ctx.user.id))),
       ]);
@@ -124,6 +157,22 @@ export const documentAnalysisRouter = router({
         if (!uniqueEvents.has(key)) uniqueEvents.set(key, event);
       }
       const events = [...uniqueEvents.values()].sort((left, right) => left.date.localeCompare(right.date));
+      const analysesByEvidence = new Map(
+        rows.map(({ analysis }) => [analysis.evidenceId, parseDocumentAnalysisResult(analysis.result)])
+      );
+      const reconstruction = buildCaseReconstruction({
+        documents: evidenceRows.map((item) => ({
+          evidenceId: item.id,
+          title: item.title,
+          description: item.description,
+          source: item.source,
+          type: item.type,
+          metadata: item.metadata,
+          createdAt: item.createdAt,
+          analysis: analysesByEvidence.get(item.id) ?? null,
+        })),
+        events,
+      });
 
       const parseTime = (value: string) => {
         const match = value.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
@@ -141,6 +190,7 @@ export const documentAnalysisRouter = router({
           ? `${events.length} source-linked event${events.length === 1 ? "" : "s"} from ${new Set(events.map((event) => event.source.evidenceId)).size} document${new Set(events.map((event) => event.source.evidenceId)).size === 1 ? "" : "s"}.`
           : "No dated events are available. Analyze case documents first.",
         gaps: events.length === 0 ? ["No analyzed or imported source-linked events are available for this case."] : [],
+        reconstruction,
       };
     }),
 });
