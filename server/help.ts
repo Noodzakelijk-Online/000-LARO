@@ -20,7 +20,7 @@ export const HELP_TOPICS: HelpTopic[] = [
   { id: "evidence", title: "Add evidence", step: 2,
     body: "Attach documents or connect Gmail/Drive (if configured) to collect supporting materials. Each item keeps its source and a content hash for provenance." },
   { id: "document-map", title: "Reconstruct the document history", step: 3,
-    body: "Open a case and choose Timeline, then Document map. Documents are dated stations and event categories are colored routes. Solid links come from source metadata or literal references. Dashed links are review-only similarity suggestions with confidence and supporting reasons. Select a station to trace its chain or open the source document." },
+    body: "Open a case and choose Timeline, then Document map. Documents are dated stations and event categories are colored routes. Solid links come from source metadata or literal references. Dashed links are review-only similarity suggestions with confidence and supporting reasons. Focus the map on an analyzed participant or legal topic, then select a station to review its dated actions, trace its chain, or open the source document." },
   { id: "matching", title: "Review matched lawyers", step: 4,
     body: "Open a case to see ranked lawyer matches based on expertise, availability, response time and distance. No lawyer is contacted at this stage." },
   { id: "approval", title: "Prepare and approve outreach", step: 5,

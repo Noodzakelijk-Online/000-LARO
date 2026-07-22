@@ -27,8 +27,10 @@ lawyers, and prepares outreach. **You approve everything before anything is sent
    metadata or literal references, and dashed arrows are similarity suggestions.
    Select a station to read its summary and relationship basis, use the question
    mark control to open the source, and enable Trace selection to follow the
-   connected history. Legal events, source chronology, and operational activity
-   remain available in the adjacent tabs.
+   connected history. Use Focus to isolate documents involving one analyzed
+   participant or legal topic; selecting a station also reveals the dated actions
+   retained from that document. Legal events, source chronology, and operational
+   activity remain available in the adjacent tabs.
 5. **Review matched lawyers**: open the case to see ranked matches (expertise,
    availability, response time, distance). No one is contacted here.
 6. **Prepare & approve outreach**: prepare drafts, then review each. Before

@@ -57,6 +57,8 @@ The Electron main process starts the Express/tRPC server and React renderer toge
 - Trace a selected document backward and forward, filter routes, switch between
   horizontal and vertical maps, zoom, and use an accessible chronological list;
   each station retains a direct source-document control.
+- Focus the reconstruction on one source-derived participant or legal topic and
+  inspect every dated action retained for the selected document.
 - Browse source-linked legal events horizontally or vertically, source documents,
   and operational case activity from one Timeline workspace.
 - Generate source-linked case summaries, lawyer briefings, red-line drafts, and approval-bound case bundles.

@@ -48,6 +48,14 @@ export type ReconstructionNode = {
   eventCount: number;
   analysisStatus: "complete" | "missing";
   confidence: number | null;
+  participants: string[];
+  topics: string[];
+  actions: Array<{
+    date: string;
+    title: string;
+    description: string;
+    actor: string | null;
+  }>;
 };
 
 export type ReconstructionEdge = {
@@ -61,7 +69,7 @@ export type ReconstructionEdge = {
 };
 
 export type CaseReconstruction = {
-  schemaVersion: 1;
+  schemaVersion: 2;
   nodes: ReconstructionNode[];
   edges: ReconstructionEdge[];
   routes: Array<{
@@ -348,6 +356,12 @@ export function buildCaseReconstruction(options: {
     const documentEvents = (eventsByDocument.get(document.evidenceId) ?? [])
       .sort((left, right) => left.date.localeCompare(right.date));
     const analysis = document.analysis;
+    const participants = [...new Set([
+      ...documentEvents.map((event) => event.actor).filter((actor): actor is string => Boolean(actor?.trim())),
+      ...(analysis?.parties.map((party) => party.text).filter(Boolean) ?? []),
+    ])].sort((left, right) => left.localeCompare(right));
+    const topics = [...new Set(analysis?.legalIssues.map((issue) => issue.text).filter(Boolean) ?? [])]
+      .sort((left, right) => left.localeCompare(right));
     return {
       id: document.evidenceId,
       title: document.title,
@@ -360,6 +374,14 @@ export function buildCaseReconstruction(options: {
       eventCount: documentEvents.length,
       analysisStatus: analysis ? "complete" : "missing",
       confidence: analysis?.confidence ?? null,
+      participants,
+      topics,
+      actions: documentEvents.map((event) => ({
+        date: event.date,
+        title: event.title,
+        description: event.description,
+        actor: event.actor,
+      })),
     };
   }).sort((left, right) => left.date.localeCompare(right.date) || left.title.localeCompare(right.title) || left.id.localeCompare(right.id));
 
@@ -390,5 +412,5 @@ export function buildCaseReconstruction(options: {
       : null,
   ].filter((item): item is string => Boolean(item));
 
-  return { schemaVersion: 1, nodes, edges, routes, warnings };
+  return { schemaVersion: 2, nodes, edges, routes, warnings };
 }

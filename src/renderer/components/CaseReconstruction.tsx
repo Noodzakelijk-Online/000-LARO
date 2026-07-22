@@ -38,6 +38,9 @@ type ReconstructionNode = {
   eventCount: number;
   analysisStatus: "complete" | "missing";
   confidence: number | null;
+  participants: string[];
+  topics: string[];
+  actions: Array<{ date: string; title: string; description: string; actor: string | null }>;
 };
 
 type ReconstructionEdge = {
@@ -51,7 +54,7 @@ type ReconstructionEdge = {
 };
 
 type Reconstruction = {
-  schemaVersion: 1;
+  schemaVersion: 2;
   nodes: ReconstructionNode[];
   edges: ReconstructionEdge[];
   routes: Array<{ id: RouteId; label: string; documentCount: number; eventCount: number }>;
@@ -114,6 +117,7 @@ export function CaseReconstruction({ caseId }: { caseId: string }) {
   const [showInferred, setShowInferred] = useState(true);
   const [minimumConfidence, setMinimumConfidence] = useState(52);
   const [routeFilter, setRouteFilter] = useState<RouteId | "all">("all");
+  const [focusFilter, setFocusFilter] = useState("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [traceSelected, setTraceSelected] = useState(false);
   const [zoom, setZoom] = useState(1);
@@ -154,8 +158,32 @@ export function CaseReconstruction({ caseId }: { caseId: string }) {
     }
   };
 
-  const visibleNodes = useMemo(() => reconstruction?.nodes.filter((node) =>
-    routeFilter === "all" || node.route === routeFilter) ?? [], [reconstruction, routeFilter]);
+  const focusOptions = useMemo(() => {
+    if (!reconstruction) return [];
+    const counts = new Map<string, { label: string; group: "Participant" | "Topic"; count: number }>();
+    for (const node of reconstruction.nodes) {
+      for (const participant of node.participants) {
+        const id = `participant:${participant}`;
+        const current = counts.get(id);
+        counts.set(id, { label: participant, group: "Participant", count: (current?.count ?? 0) + 1 });
+      }
+      for (const topic of node.topics) {
+        const id = `topic:${topic}`;
+        const current = counts.get(id);
+        counts.set(id, { label: topic, group: "Topic", count: (current?.count ?? 0) + 1 });
+      }
+    }
+    return [...counts.entries()]
+      .map(([id, option]) => ({ id, ...option }))
+      .sort((left, right) => left.group.localeCompare(right.group) || right.count - left.count || left.label.localeCompare(right.label));
+  }, [reconstruction]);
+  const visibleNodes = useMemo(() => reconstruction?.nodes.filter((node) => {
+    if (routeFilter !== "all" && node.route !== routeFilter) return false;
+    if (focusFilter === "all") return true;
+    const [kind, ...parts] = focusFilter.split(":");
+    const value = parts.join(":");
+    return kind === "participant" ? node.participants.includes(value) : node.topics.includes(value);
+  }) ?? [], [reconstruction, routeFilter, focusFilter]);
   const visibleNodeIds = useMemo(() => new Set(visibleNodes.map((node) => node.id)), [visibleNodes]);
   const visibleEdges = useMemo(() => reconstruction?.edges.filter((edge) =>
     visibleNodeIds.has(edge.from) && visibleNodeIds.has(edge.to) &&
@@ -165,6 +193,10 @@ export function CaseReconstruction({ caseId }: { caseId: string }) {
     [traceSelected, selectedId, visibleEdges]);
   const selectedNode = reconstruction?.nodes.find((node) => node.id === selectedId) ?? null;
   const selectedEdges = visibleEdges.filter((edge) => edge.from === selectedId || edge.to === selectedId);
+
+  useEffect(() => {
+    if (selectedId && !visibleNodeIds.has(selectedId)) setSelectedId(visibleNodes[0]?.id ?? null);
+  }, [selectedId, visibleNodeIds, visibleNodes]);
 
   if (!reconstruction && generateMutation.isPending) {
     return (
@@ -234,6 +266,22 @@ export function CaseReconstruction({ caseId }: { caseId: string }) {
             {reconstruction.routes.map((route) => <option key={route.id} value={route.id}>{route.label} ({route.documentCount})</option>)}
           </select>
         </label>
+        <label className="min-w-52 text-xs text-muted-foreground">
+          Focus
+          <select className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground" value={focusFilter} onChange={(event) => setFocusFilter(event.target.value)}>
+            <option value="all">All participants and topics</option>
+            {focusOptions.filter((option) => option.group === "Participant").length ? (
+              <optgroup label="Participants">
+                {focusOptions.filter((option) => option.group === "Participant").map((option) => <option key={option.id} value={option.id}>{option.label} ({option.count})</option>)}
+              </optgroup>
+            ) : null}
+            {focusOptions.filter((option) => option.group === "Topic").length ? (
+              <optgroup label="Legal topics">
+                {focusOptions.filter((option) => option.group === "Topic").map((option) => <option key={option.id} value={option.id}>{option.label} ({option.count})</option>)}
+              </optgroup>
+            ) : null}
+          </select>
+        </label>
         <label className="min-w-44 text-xs text-muted-foreground">
           Minimum link confidence: {minimumConfidence}%
           <input className="mt-2 block w-full accent-orange-500" type="range" min="50" max="95" step="1" value={minimumConfidence} onChange={(event) => setMinimumConfidence(Number(event.target.value))} />
@@ -259,7 +307,13 @@ export function CaseReconstruction({ caseId }: { caseId: string }) {
         <span className="flex items-center gap-2"><span className="w-6 border-t-2 border-dashed border-slate-500" /> Suggested relationship</span>
       </div>
 
-      {view === "map" ? (
+      {!visibleNodes.length ? (
+        <div className="border border-dashed border-border p-8 text-center">
+          <Focus className="mx-auto h-8 w-8 text-muted-foreground" />
+          <h3 className="mt-3 font-medium">No documents match this focus</h3>
+          <Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => { setRouteFilter("all"); setFocusFilter("all"); }}>Clear filters</Button>
+        </div>
+      ) : view === "map" ? (
         <ReconstructionMap
           nodes={visibleNodes}
           edges={visibleEdges}
@@ -301,6 +355,12 @@ export function CaseReconstruction({ caseId }: { caseId: string }) {
                 <span>{selectedNode.eventCount} dated event{selectedNode.eventCount === 1 ? "" : "s"}</span>
                 {selectedNode.confidence !== null ? <span>Analysis confidence: {selectedNode.confidence}%</span> : null}
               </div>
+              {selectedNode.participants.length || selectedNode.topics.length ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {selectedNode.participants.map((participant) => <Badge key={`participant:${participant}`} variant="secondary">{participant}</Badge>)}
+                  {selectedNode.topics.map((topic) => <Badge key={`topic:${topic}`} variant="outline">{topic}</Badge>)}
+                </div>
+              ) : null}
             </div>
             <Button type="button" variant="outline" size="sm" title="Open source document" onClick={() => void openSource(selectedNode.id)}><CircleHelp className="mr-2 h-4 w-4" /> Source</Button>
           </div>
@@ -319,6 +379,20 @@ export function CaseReconstruction({ caseId }: { caseId: string }) {
               })}
             </div>
           ) : <p className="mt-3 text-sm text-muted-foreground">No relationship survives the current filters for this document.</p>}
+          {selectedNode.actions.length ? (
+            <div className="mt-4 border-t border-border/60 pt-4">
+              <h4 className="text-sm font-medium">Dated actions in this document</h4>
+              <div className="mt-2 grid gap-2 lg:grid-cols-2">
+                {selectedNode.actions.map((action, index) => (
+                  <div key={`${action.date}:${action.title}:${index}`} className="border-l-2 border-border pl-3 text-sm">
+                    <div className="flex flex-wrap items-center gap-2"><span className="font-medium">{action.title}</span><Badge variant="outline">{formatDate(action.date)}</Badge></div>
+                    <p className="mt-1 leading-5 text-muted-foreground">{action.description}</p>
+                    {action.actor ? <p className="mt-1 text-xs text-muted-foreground">Actor: {action.actor}</p> : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </section>
       ) : null}
 

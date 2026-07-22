@@ -44,7 +44,10 @@ Important boundaries:
   confidence. The graph does not persist a second evidence authority.
 - The React renderer owns deterministic SVG route layout and transient view
   state only. It provides horizontal/vertical maps plus a chronological list,
-  while all station and source identities come from the server response.
+  while all station and source identities come from the server response. Its
+  focus facets use source-derived analyzed parties and legal issues, and each
+  station carries the dated source-linked actions already retained for that
+  document; no separate NLP index or evidence authority is introduced.
 - Desktop Outreach consolidates analytics, the official NOvA lawyer directory,
   and owner-scoped media/organization directories. Public discovery is bounded,
   sends legal-area terms rather than case prose, and persists candidates behind
