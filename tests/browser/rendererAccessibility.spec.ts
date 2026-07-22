@@ -52,6 +52,42 @@ function formatViolations(
     .join("\n");
 }
 
+function analysisResult(options: { party: string; date: string; title: string; text: string }) {
+  return {
+    schemaVersion: 2,
+    analysisVersion: "2.2.0",
+    contentHash: options.title.toLowerCase().replace(/\s+/g, "-").padEnd(64, "0").slice(0, 64),
+    status: "complete",
+    extractionMethod: "plain_text",
+    extractionConfidence: null,
+    providerStatus: "not_requested",
+    providerMessage: null,
+    documentType: "administrative decision",
+    confidence: 88,
+    summary: options.text,
+    analyzedChars: options.text.length,
+    analyzedWords: options.text.split(/\s+/).length,
+    truncated: false,
+    citations: [{ id: "src-1", quote: options.text, start: 0, end: options.text.length, lineStart: 1, lineEnd: 1 }],
+    parties: [{ text: options.party, citations: ["src-1"] }],
+    dates: [{ text: options.date, normalized: options.date, citations: ["src-1"] }],
+    amounts: [],
+    claims: [],
+    obligations: [],
+    legalIssues: [{ text: "administrative law", citations: ["src-1"] }],
+    riskFlags: [],
+    timelineEvents: [{
+      date: options.date,
+      title: options.title,
+      text: options.text,
+      actor: options.party,
+      importance: "high",
+      category: "legal",
+      citations: ["src-1"],
+    }],
+  };
+}
+
 test("all supported routes pass the blocking renderer accessibility audit", async ({ page }) => {
   const consoleErrors: string[] = [];
   const pageErrors: string[] = [];
@@ -144,4 +180,73 @@ test("Settings presents an owned Flask migration without responsive overflow", a
       .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1))
       .toBe(true);
   }
+});
+
+test("document reconstruction focuses source-linked participants, topics, and actions", async ({ page }) => {
+  const email = await createAccount(page);
+  const database = new Database(resolve(".laro-a11y.sqlite"));
+  const now = Math.floor(Date.now() / 1_000);
+  const caseId = `A11Y_RECONSTRUCTION_${now}`;
+  try {
+    const user = database.prepare("SELECT id FROM users WHERE email = ?").get(email) as { id: string } | undefined;
+    expect(user?.id).toBeTruthy();
+    database.prepare(
+      `INSERT INTO cases (id, userId, clientName, caseType, caseSummary, urgency, status, legalAreas, createdAt, updatedAt)
+       VALUES (?, ?, 'Focused reconstruction', 'Administrative dispute', 'Source-linked timeline QA', 'High', 'active', '["administrative law"]', ?, ?)`,
+    ).run(caseId, user!.id, now, now);
+
+    const documents = [
+      {
+        id: `${caseId}_DECISION`, title: "Municipal decision.txt", party: "Gemeente Utrecht",
+        date: "2026-07-14", action: "Municipal decision issued",
+        text: "Gemeente Utrecht issued the administrative decision on 2026-07-14.",
+      },
+      {
+        id: `${caseId}_OBJECTION`, title: "Objection.txt", party: "Jan de Vries",
+        date: "2026-07-20", action: "Objection submitted",
+        text: "Jan de Vries submitted an objection under administrative law on 2026-07-20.",
+      },
+    ];
+    const insertEvidence = database.prepare(
+      `INSERT INTO evidence (id, caseId, userId, type, source, title, description, mimeType, metadata, relevant, createdAt, updatedAt)
+       VALUES (?, ?, ?, 'document', 'manual', ?, ?, 'text/plain', '{}', 1, ?, ?)`,
+    );
+    const insertAnalysis = database.prepare(
+      `INSERT INTO document_analyses
+       (id, evidenceId, caseId, userId, analysisVersion, contentHash, status, extractionMethod, providerStatus,
+        documentType, confidence, summary, result, analyzedChars, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, '2.2.0', ?, 'complete', 'plain_text', 'not_requested',
+        'administrative decision', 88, ?, ?, ?, ?, ?)`,
+    );
+    for (const [index, document] of documents.entries()) {
+      const createdAt = now + index;
+      const result = analysisResult({ party: document.party, date: document.date, title: document.action, text: document.text });
+      insertEvidence.run(document.id, caseId, user!.id, document.title, document.text, createdAt, createdAt);
+      insertAnalysis.run(
+        `${document.id}_ANALYSIS`, document.id, caseId, user!.id, result.contentHash,
+        result.summary, JSON.stringify(result), result.analyzedChars, createdAt, createdAt,
+      );
+    }
+  } finally {
+    database.close();
+  }
+
+  await page.goto("/cases", { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "View Your Case Details" }).click();
+  await page.getByRole("button", { name: "Timeline", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Evidence Timeline" })).toBeVisible();
+  const focus = page.getByLabel("Focus");
+  await expect(focus).toContainText("Gemeente Utrecht (1)");
+  await expect(focus).toContainText("administrative law (2)");
+  await focus.selectOption({ label: "Jan de Vries (1)" });
+  await expect(page.getByText("Objection.txt", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Municipal decision.txt", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Dated actions in this document")).toBeVisible();
+  await expect(page.getByText("Objection submitted", { exact: true })).toBeVisible();
+
+  for (const viewport of VIEWPORTS) {
+    await page.setViewportSize(viewport);
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+  }
+  await page.screenshot({ path: "test-results/case-reconstruction-focus.png", fullPage: false });
 });

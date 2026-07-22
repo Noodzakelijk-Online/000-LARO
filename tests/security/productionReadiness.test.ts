@@ -106,6 +106,8 @@ describe('production readiness regressions', () => {
     expect(reconstructionUi).toContain('Suggested links');
     expect(reconstructionUi).toContain('Open source document');
     expect(reconstructionUi).toContain('Trace selection');
+    expect(reconstructionUi).toContain('All participants and topics');
+    expect(reconstructionUi).toContain('Dated actions in this document');
     expect(analysisUi).toContain('Analyze all pending');
     expect(analysisUi).toContain('documentAnalysis.byCase.useQuery');
     expect(migration).toContain('CREATE TABLE `document_analyses`');

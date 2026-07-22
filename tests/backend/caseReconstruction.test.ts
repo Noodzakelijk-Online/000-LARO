@@ -77,12 +77,21 @@ describe("case document reconstruction", () => {
       ],
     });
 
-    expect(result.schemaVersion).toBe(1);
+    expect(result.schemaVersion).toBe(2);
     expect(result.nodes.map((node) => node.id)).toEqual(["decision", "objection", "attachment", "unanalyzed"]);
     expect(result.nodes.find((node) => node.id === "unanalyzed")).toMatchObject({
       date: "2026-07-22",
       analysisStatus: "missing",
       summary: "Imported image",
+    });
+    expect(result.nodes.find((node) => node.id === "decision")).toMatchObject({
+      participants: expect.arrayContaining(["Gemeente Utrecht"]),
+      topics: expect.arrayContaining(["administrative law"]),
+      actions: [expect.objectContaining({
+        date: "2026-07-14",
+        title: "Besluit",
+        actor: "Gemeente Utrecht",
+      })],
     });
     expect(result.edges).toEqual(expect.arrayContaining([
       expect.objectContaining({ from: "decision", to: "attachment", relationship: "attachment_of", evidence: "explicit", confidence: 1 }),

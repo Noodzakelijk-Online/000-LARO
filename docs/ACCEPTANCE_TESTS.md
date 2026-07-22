@@ -26,6 +26,7 @@ temporary SQLite databases; they do not contact external people or accounts.
 | AC19 | Recover the Flask legal ledger, auth sessions, OAuth vault, and referenced uploads while preserving every previous path | `test_flask_recovery.py` and blocking Flask recovery drill | Automated |
 | AC20 | Migrate exactly one Flask owner into Electron without cross-owner records, provenance loss, secret transfer, duplicate imports, or live-send activation | `test_flask_to_desktop_migration.py` and `tests/backend/legacyImports.test.ts` | Automated |
 | AC21 | Reconstruct every owned case document as a source-linked station while distinguishing explicit links from confidence-labelled suggestions | `tests/backend/caseReconstruction.test.ts`, document-intelligence and production-readiness suites | Automated |
+| AC22 | Focus a reconstruction by source-derived participant or legal topic and retain the selected document's dated actions | `tests/backend/caseReconstruction.test.ts`, renderer accessibility suite | Automated |
 
 ## Target-Environment Acceptance
 
