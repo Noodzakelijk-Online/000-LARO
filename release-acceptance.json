@@ -3,18 +3,70 @@
   "version": "1.3.0",
   "gates": {
     "publicBrand": {
-      "status": "pending",
-      "approvedBy": null,
-      "approvedAt": null,
-      "evidence": []
+      "status": "approved",
+      "approvedBy": "LARO product owner",
+      "approvedAt": "2026-07-21T20:39:19.3350341Z",
+      "evidence": [
+        "codex-task:019f0b03-ca19-7f62-8f85-61a772f45256:owner-approved-proposed-logo",
+        "sha256:build/icon.png:134ca32789b6dd24f0c39d461f0c405f1e1156475dceb0fa4e525373ab200a0f",
+        "sha256:public/laro-logo.png:134ca32789b6dd24f0c39d461f0c405f1e1156475dceb0fa4e525373ab200a0f"
+      ],
+      "assets": [
+        {
+          "path": "build/icon.png",
+          "bytes": 18586,
+          "sha256": "134ca32789b6dd24f0c39d461f0c405f1e1156475dceb0fa4e525373ab200a0f"
+        },
+        {
+          "path": "public/laro-logo.png",
+          "bytes": 18586,
+          "sha256": "134ca32789b6dd24f0c39d461f0c405f1e1156475dceb0fa4e525373ab200a0f"
+        }
+      ]
     },
     "liveProviders": {
       "status": "pending",
       "approvedBy": null,
       "approvedAt": null,
-      "evidence": [],
-      "providerScope": [],
-      "providerChecks": {}
+      "evidence": [
+        "codex-task:019f0b03-ca19-7f62-8f85-61a772f45256:owner-selected-google-plus-outbound-email"
+      ],
+      "scopeSelectedBy": "LARO product owner",
+      "scopeSelectedAt": "2026-07-22T06:32:50.8382650Z",
+      "providerScope": [
+        "google",
+        "outboundEmail"
+      ],
+      "providerChecks": {
+        "google": {
+          "status": "pending",
+          "testedAt": null,
+          "evidence": [],
+          "checks": [],
+          "requiredChecks": [
+            "credentials",
+            "oauthConsent",
+            "gmailRead",
+            "driveRead",
+            "evidencePersisted",
+            "sourceLinkOpened",
+            "disconnectRevoked"
+          ]
+        },
+        "outboundEmail": {
+          "status": "pending",
+          "testedAt": null,
+          "evidence": [],
+          "checks": [],
+          "requiredChecks": [
+            "credentials",
+            "approvedSend",
+            "singleDelivery",
+            "auditRecorded",
+            "duplicateBlocked"
+          ]
+        }
+      }
     }
   }
 }

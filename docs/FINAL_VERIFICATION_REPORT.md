@@ -196,8 +196,8 @@ development renderer path from the launching shell.
 | Gate | Current state | Required evidence |
 |---|---|---|
 | Trusted public Windows distribution | Deliberately out of scope | Configure Store or certificate signing only if platform publisher trust becomes a requirement; unsigned tagged delivery remains supported with a checksum and warning |
-| Public branding | Awaiting owner confirmation | Product owner confirms `build/icon.png` / `public/laro-logo.png` as the approved public mark |
-| Live providers | Not exercised with production accounts | Every intended provider has a complete `providerChecks` record covering the mandatory Google, email, storage, LLM, or Telegram behaviors printed by `npm run release:check` |
+| Public branding | Approved on 2026-07-21 | Owner-approved LARO timeline mark is stored in `build/icon.png` / `public/laro-logo.png`; release acceptance binds both files to SHA-256 `134ca32789b6dd24f0c39d461f0c405f1e1156475dceb0fa4e525373ab200a0f` |
+| Live providers | Google and outbound email selected; live checks pending | Complete the recorded Google checks (`credentials`, consent, Gmail/Drive read, evidence/source opening, revocation) and outbound-email checks (approved single delivery, audit record, duplicate blocking) with owner-controlled production accounts |
 
 These external states are represented in `release-acceptance.json`. Normal
 development builds may retain pending gates, but the tagged release workflow
