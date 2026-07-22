@@ -34,11 +34,14 @@ function userRoom(userId: string): string {
   return `user:${userId}`;
 }
 
-export function initializeRealtimeServer(httpServer: HttpServer): Server {
+export function initializeRealtimeServer(
+  httpServer: HttpServer,
+  path = "/socket.io"
+): Server {
   if (realtimeServer) return realtimeServer;
 
   const io = new Server(httpServer, {
-    path: "/socket.io",
+    path,
     serveClient: false,
   });
 

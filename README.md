@@ -178,7 +178,7 @@ GitHub Actions repeats the Node and browser checks on the supported Node 22 tool
 - Server, Electron main-process, and shipped renderer TypeScript checks passed; no shipped runtime module disables type checking; ESLint passed.
 - Traceability reported 117 rows, 92 cited, and 0 broken references.
 - Runtime no-excuses scan reported 0 suspect findings; account safety reported 0 high-severity findings.
-- Vitest reported 53 passing files and 342 passing tests, including controlled
+- Vitest reported 54 passing files and 349 passing tests, including controlled
   NOvA parsing/filter, unknown-metric scoring, and review-gated
   media/organization discovery, tenant isolation, case-draft persistence, and
   target-database readiness tests, with no skipped or todo tests.
@@ -259,6 +259,28 @@ docker compose up --build
 
 SQLite and local evidence persist in the `laro-data` volume. Health endpoints are available at `/api/live`, `/api/ready`, and `/api/health`.
 
+For the supported Windows API deployment through an existing ngrok gateway,
+keep the container on host loopback and route a dedicated path to LARO's private
+Agent Endpoint:
+
+```powershell
+.\scripts\start-ngrok-api.ps1 `
+  -GatewayUrl https://example.ngrok-free.dev `
+  -PathPrefix /laro
+
+# Later starts reuse the validated tunnel and saved, ignored local settings.
+.\scripts\start-ngrok-api.ps1 -SkipBuild
+
+# Stops only the verified LARO tunnel process and API container.
+.\scripts\stop-ngrok-api.ps1
+```
+
+This publishes the API below `https://example.ngrok-free.dev/laro`; it does not
+publish the Electron interface. Register
+`https://example.ngrok-free.dev/laro/api/oauth/gmail/callback` on the Google web
+OAuth client. See [Deployment](docs/DEPLOYMENT.md) for the exact traffic-policy,
+secret-handling, and verification requirements.
+
 Windows desktop packaging uses:
 
 ```powershell
@@ -326,7 +348,7 @@ unknown-publisher warning. Optional Store and direct-signing routes remain avail
 - Outreach target discovery is a review aid, not a complete or continuously verified directory of every lawyer, journalist, program, lobby, or advocacy organization.
 - Real external sending is intentionally disabled by default and should remain disabled until the target environment, provider, approval UI, emergency stop, and audit trail have been reviewed.
 - The current lockfile audits cleanly; run `npm run audit:deps` again for every release because registry advisories change over time.
-- Dashboard routes are loaded on demand. The production entry chunk is about 274 KB before gzip (85 KB gzip); the largest route chunk is about 230 KB before gzip.
+- Dashboard routes are loaded on demand. The production entry chunk is about 276 KB before gzip (85 KB gzip); the largest route chunk is about 444 KB before gzip.
 - The internal portable Windows artifact is not Authenticode-signed and must not be distributed as a trusted public installer. No Store or paid-certificate route is currently active; Windows may display an unknown-publisher warning for internal builds.
 - Historical phase and verification documents in `docs/` are dated snapshots. Prefer current code, tests, this README, and a fresh `npm run gate` when status statements differ.
 

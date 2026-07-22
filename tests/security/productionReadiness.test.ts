@@ -314,8 +314,29 @@ describe('production readiness regressions', () => {
   it('keeps API-only deployments explicit and runs compatibility schema repair after migrations', () => {
     const server = readFileSync(join(ROOT, 'server/index.ts'), 'utf8');
     const database = readFileSync(join(ROOT, 'server/db.ts'), 'utf8');
+    const compose = readFileSync(join(ROOT, 'docker-compose.yml'), 'utf8');
+    const ngrokLauncher = readFileSync(join(ROOT, 'scripts/start-ngrok-api.ps1'), 'utf8');
+    const ngrokStopper = readFileSync(join(ROOT, 'scripts/stop-ngrok-api.ps1'), 'utf8');
     expect(server).toContain('!ENV.SERVER_ONLY');
     expect(database.indexOf('migrate(_db')).toBeLessThan(database.lastIndexOf('ensureSupportTicketsTable(sqlite)'));
+    expect(compose).toContain('127.0.0.1:3000:3000');
+    expect(compose).toContain('LARO_APP_VERSION: ${LARO_APP_VERSION:-unknown}');
+    expect(compose).toContain('ALLOWED_ORIGINS: ${LARO_PUBLIC_ORIGIN:-}');
+    expect(compose).toContain('OAUTH_REDIRECT_BASE_URL: ${LARO_PUBLIC_BASE_URL:-http://127.0.0.1:3000}');
+    expect(compose).toContain('PUBLIC_PATH_PREFIX: ${LARO_PUBLIC_PATH_PREFIX:-}');
+    expect(ngrokLauncher).toContain('http://127.0.0.1:4040/api/tunnels');
+    expect(ngrokLauncher).toContain('Wait-ForHttpsTunnel -Process $ngrokProcess -ExpectedUrl $InternalUrl');
+    expect(ngrokLauncher).toContain('Copy-Item -LiteralPath $examplePath -Destination $envPath');
+    expect(ngrokLauncher).not.toContain('npm.cmd run setup');
+    expect(ngrokLauncher).toContain('$env:LARO_PUBLIC_ORIGIN = $publicOrigin');
+    expect(ngrokLauncher).toContain('$env:LARO_PUBLIC_BASE_URL = $publicBaseUrl');
+    expect(ngrokLauncher).toContain('$env:LARO_APP_VERSION = $packageMetadata.version');
+    expect(ngrokLauncher).toContain('LARO_NGROK_GATEWAY_URL');
+    expect(ngrokLauncher).toContain('if (-not $httpsTunnel)');
+    expect(ngrokLauncher).toContain('Wait-ForJsonEndpoint -Uri "$publicBaseUrl/api/health"');
+    expect(ngrokStopper).toContain('$process.ProcessName -ne "ngrok"');
+    expect(ngrokStopper).toContain('$processDetails.CommandLine -notmatch "laro-api"');
+    expect(ngrokStopper).toContain('docker compose stop laro-server');
   });
 
   it('allows an isolated development API port instead of hardcoding the proxy target', () => {
@@ -495,7 +516,8 @@ describe('production readiness regressions', () => {
     const dashboard = readFileSync(join(ROOT, 'src/renderer/DashboardApp.tsx'), 'utf8');
     const notificationCenter = readFileSync(join(ROOT, 'src/renderer/components/NotificationCenter.tsx'), 'utf8');
     const vite = readFileSync(join(ROOT, 'vite.config.ts'), 'utf8');
-    expect(server).toContain('initializeRealtimeServer(httpServer)');
+    expect(server).toContain('initializeRealtimeServer(httpServer, `${publicPathPrefix}/socket.io`)');
+    expect(realtime).toContain('path = "/socket.io"');
     expect(realtime).toContain('jwt.verify(token, ENV.JWT_SECRET)');
     expect(realtime).toContain('isTokenRevoked(decoded.userId, decoded.iat)');
     expect(realtime).toContain('socket.join(userRoom(userId))');

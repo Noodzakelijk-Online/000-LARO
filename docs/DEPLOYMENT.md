@@ -48,6 +48,56 @@ scheduled-job status), and `admin.diagnostics`/`admin.tableCounts` for operators
 migrations, integration config) and **exits non-zero** on production-critical
 problems, so it can gate a deploy.
 
+## Desktop plus API through ngrok
+
+The API can remain on the operator workstation while ngrok provides the public
+HTTPS endpoint. The Docker port is bound to `127.0.0.1`, so it is not exposed
+directly to the local network. When the account's free dev domain already hosts
+another application, LARO uses a private `laro.internal` endpoint and an exact
+`/laro/*` gateway rule. Unmatched traffic continues to the existing upstream.
+
+```powershell
+# First run builds the image. A configured ngrok account is required.
+.\scripts\start-ngrok-api.ps1 `
+  -GatewayUrl https://example.ngrok-free.dev `
+  -PathPrefix /laro
+```
+
+The command creates strong standalone `JWT_SECRET` and `COOKIE_SECRET` values
+in the ignored local `.env` when they are absent. It never commits or prints
+them. Provider credentials remain owner-supplied secrets in that ignored file.
+Runtime URL/PID metadata is written to ignored `.laro-ngrok.json`. Install
+`ngrok/laro-path-policy.yml` on the existing public Agent Endpoint once; the
+launcher then verifies `https://<dev-domain>/laro/api/health` on every start.
+The validated gateway settings are retained in the ignored `.env`, so later
+starts need no arguments. The launcher also reuses a healthy LARO tunnel.
+
+```powershell
+# Restart or re-verify the existing deployment.
+.\scripts\start-ngrok-api.ps1 -SkipBuild
+
+# Stop only LARO's verified ngrok process and API container.
+.\scripts\stop-ngrok-api.ps1
+```
+
+The stop command validates both the recorded PID and the `laro-api` command
+line before terminating ngrok. It does not operate on Dockerized ngrok agents,
+so a separately hosted service on the same gateway remains untouched.
+
+For Google OAuth through the public API, register this redirect URI on the LARO
+web OAuth client after the ngrok URL is known:
+
+```text
+https://<ngrok-domain>/laro/api/oauth/gmail/callback
+```
+
+The assigned free dev domain remains stable. No additional paid domain is
+required for this path-routed configuration.
+
+Remote Socket.IO clients must use the same prefix, for example
+`path: "/laro/socket.io"`. Direct desktop operation continues to use the
+default `/socket.io` path because it has no public prefix.
+
 ## Notes
 
 - The desktop app is packaged separately with `npm run dist:*` (electron-builder).
