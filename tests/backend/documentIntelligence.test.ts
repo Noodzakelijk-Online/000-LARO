@@ -142,12 +142,22 @@ suite("persisted document analysis and source-linked timeline", () => {
     expect(timeline.events[0].date).toBe("2026-07-14");
     expect(timeline.events[0].source.title).toBe("Besluit gemeente.txt");
     expect(timeline.events[0].source.citation?.quote).toContain("14 juli 2026");
+    expect(timeline.reconstruction.nodes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: uploaded.id, title: "Besluit gemeente.txt", analysisStatus: "complete" }),
+    ]));
+    expect(timeline.reconstruction.nodes[0].summary).toContain("Gemeente Utrecht");
+    const caseAnalyses = await caller.documentAnalysis.byCase({ caseId: "CASE_DOC_ANALYSIS" });
+    expect(caseAnalyses).toEqual([
+      expect.objectContaining({ evidenceId: uploaded.id, documentType: first.result.documentType }),
+    ]);
 
     await expect(app.makeCaller(other).documentAnalysis.analyzeEvidence({
       evidenceId: uploaded.id,
       deepAnalysis: false,
       force: false,
     })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(app.makeCaller(other).documentAnalysis.byCase({ caseId: "CASE_DOC_ANALYSIS" }))
+      .rejects.toMatchObject({ code: "FORBIDDEN" });
 
     const [uploadedRow] = await app.db.select().from(app.schema.evidence).where(eq(app.schema.evidence.id, uploaded.id));
     const storageKey = JSON.parse(uploadedRow.metadata).storageKey;

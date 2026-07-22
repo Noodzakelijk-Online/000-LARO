@@ -1,6 +1,6 @@
 # LARO User Guide
 
-Date: 2026-07-20
+Date: 2026-07-22
 
 In-app help mirrors this guide (served by the `help.topics` endpoint).
 
@@ -20,9 +20,15 @@ lawyers, and prepares outreach. **You approve everything before anything is sent
    continues as a persisted job and shows its current source, extracted words,
    reviewed items, progress, and time estimate. Each imported item keeps its
    source and content hash for provenance.
-4. **Review the timeline**: open Timeline for source-linked legal events in a
-   vertical or horizontal view, the underlying source-document chronology, and
-   operational case activity. The source control on an event opens its document.
+   In the case Analysis tab, use Analyze all pending to process existing stored
+   documents without uploading them again.
+4. **Review the timeline**: open Timeline and start with Document map. Documents
+   are stations, colors separate event routes, solid arrows come from source
+   metadata or literal references, and dashed arrows are similarity suggestions.
+   Select a station to read its summary and relationship basis, use the question
+   mark control to open the source, and enable Trace selection to follow the
+   connected history. Legal events, source chronology, and operational activity
+   remain available in the adjacent tabs.
 5. **Review matched lawyers**: open the case to see ranked matches (expertise,
    availability, response time, distance). No one is contacted here.
 6. **Prepare & approve outreach**: prepare drafts, then review each. Before

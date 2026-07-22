@@ -42,9 +42,21 @@ The Electron main process starts the Express/tRPC server and React renderer toge
 - Extract readable text and create review-only suggestions for events, claims, evidence links, contradictions, deadlines, obligations, and missing evidence.
 - Analyze TXT, CSV, HTML, EML, PDF, DOCX, and JPEG/PNG/GIF/WebP/BMP image evidence locally in the desktop runtime; Dutch and English image OCR feeds the same versioned summaries, parties, dates, amounts, claims, obligations, legal issues, risks, and source spans. Scanned PDFs must first be converted to images.
 - Run local citation extraction automatically for supported Gmail, Drive, and folder imports; optional deep analysis is accepted only when every finding cites a real extracted source segment.
+- Analyze one or all pending stored case documents from the Analysis workspace;
+  documents uploaded through the normal Evidence flow do not need to be
+  uploaded again.
 - Run full-source deterministic comparisons or optional loopback-only Ollama analysis in bounded batches.
 - Reject uncited model observations; retained suggestions include literal source support and remain unconfirmed until reviewed.
 - Build who-said-or-did-what-and-when timelines with actor, action, affected party, event type, date, summary, and direct document access.
+- Reconstruct the case history as a metro-style document map: every real case
+  document is a dated station, event categories form route lines, and provider
+  metadata or literal document references form solid directional links.
+- Show similarity-based relationships only as dashed suggestions with a
+  confidence threshold and reviewable basis. LARO does not relabel similarity
+  as proven influence or causation.
+- Trace a selected document backward and forward, filter routes, switch between
+  horizontal and vertical maps, zoom, and use an accessible chronological list;
+  each station retains a direct source-document control.
 - Browse source-linked legal events horizontally or vertically, source documents,
   and operational case activity from one Timeline workspace.
 - Generate source-linked case summaries, lawyer briefings, red-line drafts, and approval-bound case bundles.
@@ -335,6 +347,7 @@ unknown-publisher warning. Optional Store and direct-signing routes remain avail
 | `src-main/` | Electron lifecycle, native integrations, scanner, and secure local secret bootstrap |
 | `src/renderer/` | React desktop interface |
 | `server/` | Express/tRPC API, Drizzle data layer, providers, matching, workflow, safety, and operations |
+| `server/caseReconstruction.ts` | Deterministic document-route, explicit-link, and review-only inferred-link construction |
 | `shared/` | Shared contracts and constants |
 | `drizzle/` | Desktop/server SQLite migrations |
 | `frontend/` | Flask command-center, evidence, timeline, Papertrail, and outreach pages |
@@ -355,6 +368,9 @@ unknown-publisher warning. Optional Store and direct-signing routes remain avail
 - Legacy prototype files remain in `frontend/` and `docs/` for traceability. Only the entry points documented above are supported runtime surfaces; historical snapshots must not be treated as current behavior.
 - Several provider integrations are optional or partial and remain unavailable until valid credentials and user OAuth consent are present. Trello OAuth is intentionally disabled until server-side token storage is implemented.
 - Outreach target discovery is a review aid, not a complete or continuously verified directory of every lawyer, journalist, program, lobby, or advocacy organization.
+- Dashed document-map links are review suggestions based on shared analyzed
+  parties, legal issues, terms, route, and chronology. They are not findings of
+  legal or factual causation; unanalysed documents remain visible and flagged.
 - Real external sending is intentionally disabled by default and should remain disabled until the target environment, provider, approval UI, emergency stop, and audit trail have been reviewed.
 - The current lockfile audits cleanly; run `npm run audit:deps` again for every release because registry advisories change over time.
 - Dashboard routes are loaded on demand. The production entry chunk is about 276 KB before gzip (85 KB gzip); the largest route chunk is about 444 KB before gzip.

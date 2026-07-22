@@ -1,6 +1,6 @@
 # LARO Architecture
 
-Updated: 2026-07-21
+Updated: 2026-07-22
 
 LARO has one production runtime: Electron with Express/tRPC and React. The Flask
 command center remains a legacy review and migration source for existing
@@ -36,6 +36,15 @@ Important boundaries:
   enrichment is discarded when any finding cites an unknown source span.
 - Gmail messages, attachments, local files, and Drive files use the same managed
   evidence storage. Google-native documents are exported to PDF before analysis.
+- `server/caseReconstruction.ts` derives a case document graph from owned
+  evidence and versioned analyses. Gmail thread/attachment metadata and literal
+  source references create explicit edges. Shared parties, legal issues, terms,
+  route, and chronology may create one bounded inferred predecessor per
+  document; those edges remain labelled suggestions with their basis and
+  confidence. The graph does not persist a second evidence authority.
+- The React renderer owns deterministic SVG route layout and transient view
+  state only. It provides horizontal/vertical maps plus a chronological list,
+  while all station and source identities come from the server response.
 - Desktop Outreach consolidates analytics, the official NOvA lawyer directory,
   and owner-scoped media/organization directories. Public discovery is bounded,
   sends legal-area terms rather than case prose, and persists candidates behind

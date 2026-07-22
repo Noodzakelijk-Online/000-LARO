@@ -1,6 +1,6 @@
 # Acceptance Test Matrix
 
-Current as of 2026-07-21. Automated criteria exercise real tRPC procedures and
+Current as of 2026-07-22. Automated criteria exercise real tRPC procedures and
 temporary SQLite databases; they do not contact external people or accounts.
 
 | ID | Criterion | Evidence | Status |
@@ -25,6 +25,7 @@ temporary SQLite databases; they do not contact external people or accounts.
 | AC18 | Keep outreach directory records and matches tenant-scoped | `tests/backend/outreachDirectory.test.ts` | Automated |
 | AC19 | Recover the Flask legal ledger, auth sessions, OAuth vault, and referenced uploads while preserving every previous path | `test_flask_recovery.py` and blocking Flask recovery drill | Automated |
 | AC20 | Migrate exactly one Flask owner into Electron without cross-owner records, provenance loss, secret transfer, duplicate imports, or live-send activation | `test_flask_to_desktop_migration.py` and `tests/backend/legacyImports.test.ts` | Automated |
+| AC21 | Reconstruct every owned case document as a source-linked station while distinguishing explicit links from confidence-labelled suggestions | `tests/backend/caseReconstruction.test.ts`, document-intelligence and production-readiness suites | Automated |
 
 ## Target-Environment Acceptance
 

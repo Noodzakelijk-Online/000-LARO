@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Upload, FileText, CheckCircle2, AlertTriangle, Loader2, Calendar, Users, DollarSign, MapPin, Scale, Clock } from "lucide-react";
+import { Upload, FileText, CheckCircle2, AlertTriangle, Loader2, Calendar, Users, DollarSign, MapPin, Scale, Clock, Files, Play } from "lucide-react";
 
 interface AutomatedDocumentAnalysisProps {
   caseId: string;
@@ -34,6 +34,35 @@ type AnalysisView = {
   obligations: string[];
 };
 
+function toAnalysisView(result: any, fileName: string): AnalysisView {
+  return {
+    detected_type: result.documentType,
+    confidence: result.confidence,
+    relevance_to_case: result.riskFlags.length > 0 || result.obligations.length > 2
+      ? "high"
+      : result.legalIssues.length === 0
+        ? "low"
+        : "medium",
+    summary: result.summary,
+    extracted_entities: {
+      parties: result.parties.map((item: any) => item.text).slice(0, 12),
+      dates: result.dates.map((item: any) => item.text),
+      amounts: result.amounts.map((item: any) => item.text),
+      locations: [],
+      key_terms: result.legalIssues.map((item: any) => item.text).slice(0, 15),
+    },
+    red_flags: result.riskFlags.map((item: any) => item.text),
+    matches_evidence_item: fileName,
+    provider_status: result.providerStatus,
+    provider_message: result.providerMessage,
+    extraction_method: result.extractionMethod,
+    extraction_confidence: result.extractionConfidence,
+    citation_count: result.citations.length,
+    claims: result.claims.map((item: any) => item.text),
+    obligations: result.obligations.map((item: any) => item.text),
+  };
+}
+
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
   const chunkSize = 32_768;
@@ -50,10 +79,20 @@ export function AutomatedDocumentAnalysis({ caseId, onAnalysisComplete }: Automa
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<AnalysisView | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [activeEvidenceId, setActiveEvidenceId] = useState<string | null>(null);
+  const [batchProgress, setBatchProgress] = useState<{ completed: number; total: number } | null>(null);
 
   const capabilities = trpc.documentAnalysis.capabilities.useQuery();
+  const caseFiles = trpc.evidenceFiles.byCase.useQuery({ caseId });
+  const caseAnalyses = trpc.documentAnalysis.byCase.useQuery({ caseId });
   const uploadFile = trpc.evidenceFiles.upload.useMutation();
   const analyzeMutation = trpc.documentAnalysis.analyzeEvidence.useMutation();
+
+  const analyzedIds = new Set((caseAnalyses.data ?? []).map((item) => item.evidenceId));
+  const supportedMimeTypes = new Set(capabilities.data?.supportedMimeTypes ?? []);
+  const analyzableFiles = (caseFiles.data ?? []).filter((file) =>
+    typeof file.mimeType === "string" && supportedMimeTypes.has(file.mimeType.toLowerCase().split(";")[0].trim()));
+  const pendingFiles = analyzableFiles.filter((file) => !analyzedIds.has(file.id));
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -88,46 +127,50 @@ export function AutomatedDocumentAnalysis({ caseId, onAnalysisComplete }: Automa
         evidenceId: uploadResult.id,
         deepAnalysis: true,
       });
-      const result = analysis.result;
-
-      const parties = result.parties.map((item) => item.text).slice(0, 12);
-      const keyTerms = result.legalIssues.map((item) => item.text).slice(0, 15);
-
-      const view: AnalysisView = {
-        detected_type: result.documentType,
-        confidence: result.confidence,
-        relevance_to_case: result.riskFlags.length > 0 || result.obligations.length > 2
-          ? "high"
-          : result.legalIssues.length === 0
-            ? "low"
-            : "medium",
-        summary: result.summary,
-        extracted_entities: {
-          parties,
-          dates: result.dates.map((item) => item.text),
-          amounts: result.amounts.map((item) => item.text),
-          locations: [],
-          key_terms: keyTerms,
-        },
-        red_flags: result.riskFlags.map((item) => item.text),
-        matches_evidence_item: selectedFile.name,
-        provider_status: result.providerStatus,
-        provider_message: result.providerMessage,
-        extraction_method: result.extractionMethod,
-        extraction_confidence: result.extractionConfidence,
-        citation_count: result.citations.length,
-        claims: result.claims.map((item) => item.text),
-        obligations: result.obligations.map((item) => item.text),
-      };
-
+      const view = toAnalysisView(analysis.result, selectedFile.name);
       setAnalyzing(false);
       setAnalysisResult(view);
+      await Promise.all([caseFiles.refetch(), caseAnalyses.refetch()]);
       onAnalysisComplete?.(uploadResult.id);
     } catch (error) {
       console.error("Error uploading/analyzing document:", error);
       setErrorMessage(error instanceof Error ? error.message : "Document analysis failed.");
       setUploading(false);
       setAnalyzing(false);
+    }
+  };
+
+  const analyzeExistingEvidence = async (file: (typeof analyzableFiles)[number]): Promise<boolean> => {
+    try {
+      setAnalyzing(true);
+      setActiveEvidenceId(file.id);
+      setErrorMessage(null);
+      const analysis = await analyzeMutation.mutateAsync({ evidenceId: file.id, deepAnalysis: true });
+      setAnalysisResult(toAnalysisView(analysis.result, file.fileName || file.title));
+      await caseAnalyses.refetch();
+      onAnalysisComplete?.(file.id);
+      return true;
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Document analysis failed.");
+      return false;
+    } finally {
+      setAnalyzing(false);
+      setActiveEvidenceId(null);
+    }
+  };
+
+  const analyzeAllPending = async () => {
+    const queue = [...pendingFiles];
+    setBatchProgress({ completed: 0, total: queue.length });
+    try {
+      for (let index = 0; index < queue.length; index += 1) {
+        const completed = await analyzeExistingEvidence(queue[index]);
+        if (!completed) break;
+        setBatchProgress({ completed: index + 1, total: queue.length });
+      }
+    } finally {
+      await caseAnalyses.refetch();
+      setBatchProgress(null);
     }
   };
 
@@ -183,6 +226,56 @@ export function AutomatedDocumentAnalysis({ caseId, onAnalysisComplete }: Automa
           <p className="text-xs text-muted-foreground">
             Local source extraction is always used, including Dutch and English OCR for images. Deep analysis is {capabilities.data?.deepAnalysisConfigured ? "configured" : "not configured"}; findings remain linked to extracted source passages.
           </p>
+          <div className="border-t border-border pt-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2 font-medium"><Files className="h-4 w-4" /> Case documents</div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {analyzableFiles.length} supported, {pendingFiles.length} awaiting analysis
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!pendingFiles.length || analyzing || Boolean(batchProgress)}
+                onClick={() => void analyzeAllPending()}
+              >
+                {batchProgress ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
+                {batchProgress ? `Analyzing ${Math.min(batchProgress.completed + 1, batchProgress.total)} of ${batchProgress.total}` : "Analyze all pending"}
+              </Button>
+            </div>
+            {caseFiles.isLoading || caseAnalyses.isLoading ? (
+              <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading case documents…</div>
+            ) : analyzableFiles.length ? (
+              <div className="mt-3 divide-y divide-border border-y border-border">
+                {analyzableFiles.map((file) => {
+                  const analysis = (caseAnalyses.data ?? []).find((item) => item.evidenceId === file.id);
+                  const running = activeEvidenceId === file.id;
+                  return (
+                    <div key={file.id} className="flex items-center gap-3 py-3">
+                      <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium">{file.fileName || file.title}</div>
+                        <div className="mt-0.5 text-xs text-muted-foreground">
+                          {analysis ? `${analysis.documentType} · ${analysis.confidence}% confidence` : "Analysis pending"}
+                        </div>
+                      </div>
+                      {analysis ? (
+                        <Button type="button" variant="ghost" size="sm" disabled={analyzing || Boolean(batchProgress)} onClick={() => void analyzeExistingEvidence(file)}>Reanalyze</Button>
+                      ) : (
+                        <Button type="button" variant="outline" size="sm" disabled={analyzing || Boolean(batchProgress)} onClick={() => void analyzeExistingEvidence(file)}>
+                          {running ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />} Analyze
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="mt-3 text-sm text-muted-foreground">No supported stored documents are available for this case.</p>
+            )}
+          </div>
           {errorMessage && (
             <Alert variant="destructive">
               <AlertTriangle className="h-4 w-4" />

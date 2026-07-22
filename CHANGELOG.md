@@ -14,6 +14,13 @@ versioning; dates are ISO. Version is sourced from `package.json` and surfaced b
   credential and refreshing status immediately.
 
 ### Added
+- Added a source-linked metro-style case reconstruction that displays every
+  evidence document as a dated station, separates provider/reference-backed
+  links from confidence-labelled inferred relationships, supports route and
+  confidence filters, horizontal/vertical layouts, zoom, chain tracing, an
+  accessible list view, and direct source access without mock data.
+- Added per-document and one-click batch analysis for supported evidence already
+  stored on a case, removing the previous duplicate-upload requirement.
 - Added Windows DPAPI-protected setup for Google OAuth and authenticated SMTP
   credentials, with non-echoing prompts, boolean-only status output, restricted
   local file permissions, and automatic injection into the ngrok API container.
@@ -65,6 +72,9 @@ versioning; dates are ISO. Version is sourced from `package.json` and surfaced b
   compact source controls that open the owning document.
 
 ### Fixed
+- Isolated the backup/restore drill from target production JWT, cookie, S3, and
+  local-storage settings so production readiness tests its own fixture instead
+  of rejecting or redirecting it.
 - Unified outbound-email readiness across the sender, provider checklist, and
   admin diagnostics, and stopped treating a lone SMTP host or sender-less
   SendGrid key as a complete production configuration.
