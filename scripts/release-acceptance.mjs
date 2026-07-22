@@ -1,10 +1,12 @@
 #!/usr/bin/env node
-import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { readFileSync, statSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const GATE_NAMES = ['publicBrand', 'liveProviders'];
+const BRAND_ASSET_PATHS = ['build/icon.png', 'public/laro-logo.png'];
 export const PROVIDER_REQUIREMENTS = Object.freeze({
   google: ['credentials', 'oauthConsent', 'gmailRead', 'driveRead', 'evidencePersisted', 'sourceLinkOpened', 'disconnectRevoked'],
   outboundEmail: ['credentials', 'approvedSend', 'singleDelivery', 'auditRecorded', 'duplicateBlocked'],
@@ -35,6 +37,47 @@ function isNonEmptyStringArray(value) {
   return Array.isArray(value)
     && value.length > 0
     && value.every((entry) => typeof entry === 'string' && entry.trim().length > 0);
+}
+
+function currentBrandAssets() {
+  return BRAND_ASSET_PATHS.map((path) => {
+    const absolutePath = join(ROOT, path);
+    return {
+      path,
+      bytes: statSync(absolutePath).size,
+      sha256: createHash('sha256').update(readFileSync(absolutePath)).digest('hex'),
+    };
+  });
+}
+
+function validatePublicBrandApproval(gate, expectedAssets) {
+  if (!Array.isArray(gate?.assets)) {
+    return ['publicBrand approval requires immutable asset hashes'];
+  }
+
+  const errors = [];
+  const expectedPaths = expectedAssets.map((asset) => asset.path);
+  const unexpected = gate.assets
+    .map((asset) => asset?.path)
+    .filter((path) => typeof path !== 'string' || !expectedPaths.includes(path));
+  if (unexpected.length > 0) {
+    errors.push(`publicBrand.assets contains unexpected paths: ${unexpected.join(', ')}`);
+  }
+
+  for (const expected of expectedAssets) {
+    const recorded = gate.assets.find((asset) => asset?.path === expected.path);
+    if (!recorded) {
+      errors.push(`publicBrand.assets is missing ${expected.path}`);
+      continue;
+    }
+    if (recorded.bytes !== expected.bytes) {
+      errors.push(`publicBrand asset size mismatch: ${expected.path}`);
+    }
+    if (recorded.sha256 !== expected.sha256) {
+      errors.push(`publicBrand asset hash mismatch: ${expected.path}`);
+    }
+  }
+  return errors;
 }
 
 function validateProviderApproval(gate) {
@@ -96,7 +139,13 @@ function validateProviderApproval(gate) {
   return errors;
 }
 
-export function validateReleaseAcceptance({ record, packageVersion, tag, requireApproved = false }) {
+export function validateReleaseAcceptance({
+  record,
+  packageVersion,
+  tag,
+  requireApproved = false,
+  expectedBrandAssets = currentBrandAssets(),
+}) {
   const errors = [];
   const pending = [];
 
@@ -119,6 +168,10 @@ export function validateReleaseAcceptance({ record, packageVersion, tag, require
     } else if (!validApproval(gate)) {
       errors.push(`${gateName} approval requires approvedBy, approvedAt, and at least one evidence reference`);
     }
+  }
+
+  if (record?.gates?.publicBrand?.status === 'approved') {
+    errors.push(...validatePublicBrandApproval(record.gates.publicBrand, expectedBrandAssets));
   }
 
   const providerGate = record?.gates?.liveProviders;

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">LARO logo</title>
+  <desc id="desc">An L-shaped evidence timeline with four connected source nodes.</desc>
+  <rect width="512" height="512" rx="96" fill="#090f20"/>
+  <rect x="28" y="28" width="456" height="456" rx="72" fill="none" stroke="#1f2a44" stroke-width="4"/>
+  <path
+    d="M160 124V340Q160 372 192 372H364"
+    fill="none"
+    stroke="#f8fafc"
+    stroke-width="44"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <circle cx="160" cy="124" r="31" fill="#f97316" stroke="#090f20" stroke-width="10"/>
+  <circle cx="160" cy="238" r="22" fill="#14b8a6" stroke="#090f20" stroke-width="10"/>
+  <circle cx="264" cy="372" r="22" fill="#14b8a6" stroke="#090f20" stroke-width="10"/>
+  <circle cx="364" cy="372" r="31" fill="#f97316" stroke="#090f20" stroke-width="10"/>
+</svg>

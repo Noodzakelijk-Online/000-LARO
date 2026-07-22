@@ -1,5 +1,6 @@
 import { spawnSync } from 'child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
+import { createHash } from 'crypto';
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -21,11 +22,26 @@ function approval() {
   };
 }
 
+function brandAssets() {
+  return ['build/icon.png', 'public/laro-logo.png'].map((path) => {
+    const absolutePath = join(ROOT, path);
+    return {
+      path,
+      bytes: statSync(absolutePath).size,
+      sha256: createHash('sha256').update(readFileSync(absolutePath)).digest('hex'),
+    };
+  });
+}
+
+function publicBrandApproval() {
+  return { ...approval(), assets: brandAssets() };
+}
+
 function record(liveProviders: Record<string, unknown>) {
   return {
     schemaVersion: 1,
     version: packageVersion,
-    gates: { publicBrand: approval(), liveProviders },
+    gates: { publicBrand: publicBrandApproval(), liveProviders },
   };
 }
 
@@ -49,6 +65,14 @@ afterEach(() => {
 });
 
 describe('release acceptance provider evidence', () => {
+  it('rejects public-brand approval after a shipped asset changes', () => {
+    const candidate = record({ status: 'pending', providerScope: [], providerChecks: {} });
+    (candidate.gates.publicBrand.assets[0] as { sha256: string }).sha256 = '0'.repeat(64);
+    const result = validate(candidate);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('publicBrand asset hash mismatch: build/icon.png');
+  });
+
   it('rejects generic provider approval without provider-specific results', () => {
     const result = validate(record({ ...approval(), providerScope: ['google'] }));
     expect(result.status).toBe(1);
